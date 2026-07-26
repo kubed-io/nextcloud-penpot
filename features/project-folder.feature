@@ -24,8 +24,8 @@
 #   - Nextcloud → Penpot: whatever you can name a folder, Penpot will accept.
 #     The only real check is non-empty. The guard here is cheap reassurance.
 #   - Penpot → Nextcloud: a project named "Has/Slash" CANNOT be a folder of that
-#     name. This is the case that actually breaks, and §6.36's names-always-match
-#     invariant genuinely cannot hold for it.
+#     name. In `nested` mode that's invalid and reported (below); in `keyed` mode
+#     it isn't a problem at all, because the "/" is the path (saga §6.53).
 #
 # @todo — no lib/Listener/ exists yet.
 
@@ -88,6 +88,14 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     Then the rename is refused with an explanation naming the limit
     And Penpot is never contacted
 
+  Scenario: In nested mode the app never sends a slash to Penpot
+    Given the mapping's folder mode is "nested"
+    When a project is created or renamed through this app
+    Then the resulting Penpot project name never contains "/"
+    # A Nextcloud folder name can't contain "/" anyway, so this is automatic for
+    # renames — but it must also hold for the create path (§6.39's guard), which
+    # is where a name could otherwise be composed rather than typed.
+
   Scenario: A folder tagged as a project must have a usable name first
     Given a plain folder inside the Team Folder whose name is unusable as a project name
     When a user applies the app's project tag to it
@@ -99,20 +107,27 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     # NOTE: creating a project from a tagged folder is itself still gated on the
     # open §6.7/§6.15 fork; only the guard's shape is settled here.
 
-  # ── a name Nextcloud cannot represent (saga §6.51) — PROVISIONAL ───────────
-  # ⚠️ NOT RATIFIED. The evidence is solid; the answer is a first draft. Open:
-  # is refusing the whole project too blunt? does the same rule apply to FILE
-  # names? is there a middle path (mirror-but-flag)? should the app offer to
-  # rename it in Penpot? Do not build against these scenarios yet.
+  # ── "/" in a project name: INVALID IN NESTED MODE (saga §6.53) ─────────────
+  # Everything below is scoped to `nested` mode — the default, where Nextcloud
+  # nests freely and a "/" in a project name would mean nothing. In `keyed` mode
+  # a "/" is not an error at all: it IS the path. That's the whole point of
+  # making folder mode a per-mapping choice (admin-mapping.feature).
+  #
   # Checked live against Nextcloud's IFilenameValidator: the ONLY forbidden
   # characters are "\" and "/" (plus ".."/"." as segments, ".htaccess", and the
   # .part/.filepart extensions). Everything else — "a:b", "a*b", "CON",
   # ".hidden" — is a perfectly legal folder name. So this is a two-character
   # problem, not a general sanitisation problem.
+  #
+  # THE APP REJECTS IT AT THE SOURCE where it can: it owns project creation
+  # (§6.39's guard) and project renames (§6.36), so a "/" never enters Penpot
+  # through this app in nested mode. The scenarios below cover the only case left
+  # — a name typed directly in Penpot's own UI.
 
   @todo
-  Scenario: A Penpot project whose name contains a slash is skipped, with a clear reason
-    Given a Penpot project named "Has/Slash"
+  Scenario: In nested mode, a project whose name contains a slash is skipped with a clear reason
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash"
     When the pull runs
     Then no folder is created for that project
     And no files from that project are mirrored
@@ -121,7 +136,8 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   @todo
   Scenario: One unmappable project does not block the rest of the team
-    Given a Penpot project named "Has/Slash"
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash"
     And other projects with ordinary names in the same team
     When the pull runs
     Then every other project is mirrored normally
@@ -129,7 +145,8 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   @todo
   Scenario: Renaming the project in Penpot fixes it on the next pull
-    Given a Penpot project named "Has/Slash" that was skipped
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash" that was skipped
     When it is renamed to "Has Slash" in Penpot
     And the pull runs
     Then a folder named "Has Slash" is created
@@ -137,14 +154,16 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   @todo
   Scenario: The app never invents a substitute name
-    Given a Penpot project named "Has/Slash"
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash"
     When the pull runs
     Then no folder named "Has-Slash" or "Has Slash" is created for it
     # Sanitising is REJECTED (saga §6.51): "foo/bar" and "foo-bar" would both
     # become "foo-bar", silently collapsing two distinct projects into one folder
     # with no way to tell which is which. That breaks the names-always-match rule
     # invisibly, which is worse than refusing visibly. Inferring a parent folder
-    # from the "/" is the §6.50 path-model, which was considered and rejected.
+    # from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), not
+    # something to fall back into because one name happened to contain a slash.
 
   # ── copying: deliberately disabled ──────────────────────────────────────────
 

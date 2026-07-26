@@ -22,6 +22,11 @@
 # Penpot itself can't offer, and it costs us nothing: "walk up until you find the
 # key" is the same lookup as "check one level up," minus the early exit.
 #
+# THIS FILE DESCRIBES `nested` MODE — the default (saga §6.53). A mapping can
+# instead be created in `keyed` mode, where a project's NAME is its path and free
+# nesting does not apply. The two are mutually exclusive and the choice is
+# immutable per mapping; keyed mode is designed but not yet specced or built.
+#
 # THE MECHANISM IS CONFIRMED LIVE (saga §6.21): Files-Metadata attaches to
 # folders exactly as to files — same Node type, same fileid space. Tested
 # write/persist/read-back against a REAL production Team Folder (groupfolder 5),

@@ -31,12 +31,10 @@
 
 ## Status: **OPEN** — 2026-07-26
 
-> **First contact is nearly complete, but the chapter is NOT closed.** The `/`
-> question (§6.50/§6.51) is still being worked through — Dr K has unanswered
-> questions and unmade decisions there, and it touches the mapping model deeply
-> enough that closing around it would bake in a half-considered answer.
+> **First contact is essentially complete**; the chapter stays open until Dr K
+> says otherwise.
 >
-> **Settled and stable:**
+> **Settled:**
 >
 > - **§6.49 — the trash correction.** §6.26 wrongly concluded Penpot's 7-day
 >   grace window was unreachable by API. It isn't; the commands are team-scoped
@@ -46,16 +44,19 @@
 > - **§6.52 — deletion rebuilt on that.** §6.34's service-account trash project
 >   is **withdrawn**: Penpot's own trash preserves more, with no admin setting
 >   and no bespoke machinery. Deletion is now one behaviour, honestly described.
-> - **§6.50 — free nesting stands.** Penpot stays flat, Nextcloud nests
->   (§6.29). `/`-as-path is parked with no feature file.
+> - **§6.50 — free nesting is the default.** Penpot stays flat, Nextcloud nests
+>   (§6.29) — now scoped as `nested` mode by §6.53.
+> - **§6.53 — the `/` question, RESOLVED.** Not a global pick between two models:
+>   **folder mode is a per-mapping, immutable choice.** `nested` (the default,
+>   §6.29) forbids `/` in project names and lets Nextcloud nest freely; `keyed`
+>   makes a project's name its path and drops free nesting. The two are mutually
+>   exclusive by construction — which is exactly why the `/` problem dissolved
+>   rather than needing an awkward exception.
 >
-> **STILL OPEN — the `/` question (§6.51).** A first answer is written (refuse the
-> project, report why, never sanitise) and specced in `project-folder.feature`,
-> but it is **provisional**. It has not been ratified, and the surrounding
-> questions — what a user is actually expected to do, whether refusal is too
-> blunt, how this interacts with file names as well as project names — are open.
+> **`keyed` mode is designed but deliberately NOT specced or built** — no feature
+> file. Only the *fork* is locked; the mode itself waits for a later chapter.
 >
-> Current state: a complete architecture (§6.1–§6.52), an executable spec (23
+> Current state: a complete architecture (§6.1–§6.53), an executable spec (23
 > feature files, ~260 scenarios), and a working first slice shipped green to CI.
 >
 > **Read §6.18–§6.52 first** — they carry the current decisions; earlier sections
@@ -3241,6 +3242,401 @@ what a project folder's *location* means. Revisit only once the core mirror is
 built and stable, and only with an explicit answer to "does the name control the
 path, or does the user?" — those cannot both be true.
 
+### 6.49 — Correction: **§6.26 WAS WRONG. Penpot's trash IS reachable by API — and the trash bin (§6.34) is now unnecessary**
+
+> Chasing Dr K's naming question sent me to Penpot's own docs, which describe a
+> **Trash with Restore** in the dashboard. §6.26 concluded no such API existed.
+> §6.26 was wrong, and the error is worth naming precisely because it's the kind
+> I'd otherwise repeat.
+
+**How I got it wrong.** §6.26 probed for trash commands *by guessing names* —
+`restore-file`, `get-trash`, `undelete-file`, and a dozen more, all 404. From
+that I concluded "no API reaches the grace window." But **absence of evidence
+from a guessed-name sweep is not evidence of absence.** The real commands are
+namespaced by *team*, not by file, and no reasonable guess would have found them:
+
+```
+get-team-deleted-files       {team-id}         → the trash listing
+restore-deleted-team-files   {team-id, ids[]}  → restore (SSE)
+permanently-delete-team-files{team-id, ids[]}  → hard delete (SSE)
+```
+
+Confirmed by reading Penpot's actual source
+(`backend/src/app/rpc/commands/files.clj`), then verified live. The Trash
+feature shipped in **2.13**; we run 2.17.0, so it was there the whole time.
+
+**Verified end to end, twice:**
+
+```
+duplicate-file "RestoreProbe2"  → created
+delete-file                     → 204, gone from get-project-files
+get-team-deleted-files          → lists it (with all 5 earlier probe deletions)
+restore-deleted-team-files      → event: progress {index 1, total 1}, event: end
+→ back in get-project-files, SAME id, revn 5, get-file returns 200
+```
+
+**One real gotcha:** the first restore call reported success while `deleted_at`
+was still set — the SSE returns before the transaction settles. A second call
+cleared it. **Any client must re-read to confirm, not trust the `end` event.**
+(The source explains why the restore is thorough: it clears `deleted_at` across
+`file`, `file_media_object`, `file_change`, `file_data`, `file_thumbnail`,
+`file_tagged_object_thumbnail` **and the containing project** — so restoring a
+file resurrects its project too if that was deleted.)
+
+**What this changes, and it's a lot:**
+
+1. **§6.34's trash bin is now unnecessary — and should be dropped.** Its entire
+   justification was: "Penpot's own grace period is unreachable, so our only
+   alternative to `delete-file` is moving files to a service-account project."
+   That premise is false. Penpot has a real trash with a real restore that
+   preserves **id, history, links, everything** — strictly better than our
+   move-to-a-robot's-team scheme, with none of its downsides (no design vanishing
+   into a private team, no origin bookkeeping, no shared-library caveat).
+2. **§6.41's "best-effort restore" is demoted to a last resort.** With the bin
+   off, deleting no longer means "rebuild from the archive, lose the history" —
+   it means "it's in Penpot's trash for ~7 days; restore it there." Import from
+   our archive is only needed *after* that window closes.
+3. **The restore hierarchy simplifies.** §6.46's six-row table collapses: rows 1
+   and 2 merge into "restore it in Penpot's trash — via the UI *or* via our
+   own API call," and we can now *drive* it rather than only pointing at it.
+4. **§6.20's finding still stands** and is unaffected: a **purged** file (past
+   the window, or `permanently-delete-team-files`) still cannot be resurrected
+   at its original id. The grace window is the difference between recoverable
+   and not.
+
+**The lesson for the rest of this saga:** when a vendor's *documentation*
+describes a feature and my probe says it's absent, the probe is the thing to
+doubt. Read the source next time — it took one file to answer definitively what
+a dozen guessed names could not.
+
+**Consequences for the trash-bin design are recorded but NOT yet rewritten into
+§6.34 and the features** — that's a deliberate, sizeable edit that belongs with
+the nesting decision in §6.50, so both land together.
+
+### 6.50 — The nesting fork, reopened: `/`-as-path vs. free nesting (Dr K's call, evidence gathered)
+
+> **Dr K:** *"I'm honestly open to only doing this and rewriting our whole nested
+> idea … I want to go with the option that most fits with the intended penpot
+> model … probably just picking one would make all the logic and code simply less
+> and more straightforward and expectable."*
+
+§6.48 parked this as a "maybe." Dr K has reopened it as a real fork, and the
+final clause is the right instinct: **the two models should not coexist.** Here
+is the evidence, then a recommendation.
+
+**What Penpot itself intends — from their own documentation, verbatim:**
+
+> *"Projects are containers that help you organize and group related design files
+> together. **Think of them as folders in a file system.** You can create as many
+> projects as you need to organize your work by client, product, feature, or any
+> other structure that fits your workflow."*
+
+And on files: *"Files are your design documents… Files can be created within a
+project."* There is **no mention of nesting, paths, or hierarchy anywhere** in
+the projects-and-files guide. The organizational axes Penpot suggests are *"by
+client, product, feature"* — i.e. **one flat level, chosen per workspace.**
+
+**So the honest reading: Penpot's intended model is a flat, single-level folder
+space.** The `/` character is permitted in a name the same way `🎨` and a leading
+space are permitted — because the field is `[:string {:max 250}]` and nothing
+more. It is **not** an S3-style key convention:
+
+- Penpot's own docs never suggest it.
+- Nothing in the API treats `/` specially (§6.38: `a/b/c`, `/leading`,
+  `trailing/`, and *duplicate* names all create fine; a rename into an existing
+  name returns 204).
+- The dashboard renders projects as a **flat sidebar list**, so `foo/bar` and
+  `foo/baz` appear as two unrelated entries whose names happen to share a prefix
+  — they are not grouped.
+- Penpot ships a real hierarchy feature for the *other* level (pages/boards
+  inside a file), which is where they put structure deliberately.
+
+**Recommendation: keep free nesting (§6.29). Do not adopt `/`-as-path.**
+
+The reasoning, weighed against Dr K's own criterion ("most fits the intended
+Penpot model"):
+
+1. **`/`-as-path invents a convention Penpot doesn't have**, then makes our app
+   depend on users honouring it. §6.38 proved Penpot enforces nothing — so every
+   guarantee (uniqueness, valid segments, no collisions on rename) becomes ours
+   to police, in a namespace the source system lets users freely break. That is
+   the opposite of "less logic."
+2. **It makes Penpot's flat list the master of Nextcloud's tree.** A user who
+   organises folders in Nextcloud would find their layout overwritten whenever
+   someone renames a project in Penpot. §6.29's split — *Penpot owns membership,
+   Nextcloud owns layout* — is what lets each system be good at what it actually
+   is.
+3. **It fails the don't-lose-data test in a way free nesting doesn't.** Dr K's
+   own example is the tell: renaming `/foo/baz/buz/fuz/nuz/cuz` → `/foo/baz/buz/fuz`
+   requires us to unmap a folder, remap another, move files up, and conditionally
+   delete a directory *only if* it contains nothing but `.penpot` files. That is
+   a delicate destructive cascade triggered by a **text edit in another system** —
+   exactly the class of action §6.1 exists to prevent.
+4. **Free nesting already delivers the benefit Dr K wants**, without the cost.
+   "Any folder in the structure could have any kind of files — markdown, text,
+   Grafana, n8n" is *already true* under §6.29, because ordinary Nextcloud folders
+   may sit anywhere among project folders. The tree Dr K described is buildable
+   today; the only difference is **who authors it** — the user, rather than a
+   naming convention.
+5. **The n8n/Grafana comparison actually argues against it.** Grafana has real
+   nested folders and we mirror them structurally; n8n has none and we *don't*
+   fake them (§6.3 notes n8n's tag→folder trick as weight Grafana didn't need).
+   Penpot is the n8n case: flat by design. Faking depth from a string is
+   precisely the n8n-era hack the family moved away from.
+
+**What we keep from the idea anyway.** §6.38's exception stands and is the one
+place `/` still matters: a project genuinely named `Has/Slash` can't be a folder
+name, so it's sanitised, the id stays authoritative, and the divergence is
+reported (open question #35). Users who *type* `foo/bar` get a folder literally
+named `foo bar` (or similar) — surprising-but-safe, and far better than silently
+restructuring their Nextcloud tree.
+
+**If Dr K still wants it**, the honest shape is an **admin-level, per-team,
+mutually-exclusive** setting — *"Flat projects"* (default, §6.29) vs. *"Paths
+from project names"* — precisely because the two models cannot both be
+authoritative about location. But it should be a **later chapter**, built on a
+working flat mirror, not a rewrite of the core before any of it exists.
+
+**Status: RATIFIED, then SCOPED by §6.53.** Free nesting stands as the
+**default** (`nested` mode). `/`-as-path was not rejected outright after all —
+§6.53 preserves it as `keyed` mode, an explicit per-mapping alternative, because
+Dr K identified the thing this section missed: the two models are mutually
+exclusive, so the right move is to make the choice explicit rather than pick one
+globally.
+
+> **Dr K:** *"let's leave the door open for that maybe later, we don't even need
+> a feature file for it yet. let's stick to no nesting concept on penpot side, we
+> make nesting in the nextcloud side, so we stuck to what we already decided."*
+
+§6.29 is unchanged and remains the model: **Penpot stays flat, Nextcloud nests
+freely.** The `/`-as-path idea is parked — deliberately with **no feature file**,
+because writing a spec for an unratified model is how a "maybe" quietly becomes
+an expectation. §6.48 and this section are its whole record; that's enough for a
+future chapter to pick it up.
+
+One consequence worth stating, since it's the thing that would have to change if
+the door is ever opened: `/`-as-path only makes sense if **projects are forced
+back to sitting directly under their team folder** (Dr K's own observation). A
+name can't dictate a path while the user is also free to move the folder
+anywhere. So adopting it later isn't additive — it's a trade of §6.29 for a
+different model, and that's exactly why it's one-or-the-other rather than both.
+
+### 6.51 — ~~Decision (PROVISIONAL)~~: a `/` in a project name is REFUSED — **scoped by §6.53**
+
+> **⚠️ SUPERSEDED IN FRAMING by §6.53.** The evidence and the reasoning below are
+> correct and still apply — but only *within `nested` mode*. §6.53 makes folder
+> mode a per-mapping choice, so "a `/` is not allowed" is no longer a global rule
+> with an awkward exception; it is simply what `nested` mode means. In `keyed`
+> mode a `/` is not an error at all — it's the path.
+
+With §6.50 settled, the leftover from §6.38 needs a real answer: Penpot allows
+`/` in a project name, Nextcloud cannot use it in a folder name. Dr K laid out
+the options — sanitise declaratively, error out, or infer a parent folder — and
+flagged the flaw in the first one himself.
+
+**What Nextcloud actually forbids, checked live** (`IFilenameValidator` on the
+running instance, rather than assumed):
+
+| Rule | Value |
+|---|---|
+| Forbidden characters | **`\` and `/` only** |
+| Forbidden names | `.htaccess`, and `..` / `.` as path segments |
+| Forbidden extensions | `.filepart`, `.part` |
+
+Everything else passes — `a:b`, `a*b`, `a?b`, `CON`, `.hidden` are all valid
+Nextcloud folder names. **So the problem is far narrower than §6.38 implied:
+exactly two characters, and `\` is vanishingly rare in a design project name.**
+
+**Why sanitising is rejected — Dr K's own objection, and it's decisive.**
+Mapping `/` → `-` is not reversible: `foo/bar` and `foo-bar` both become
+`foo-bar`, so two distinct Penpot projects collide into one Nextcloud folder,
+and we cannot tell from the folder name which project it came from. That breaks
+§6.36's names-always-match invariant *silently*, which is the worst way to break
+it. Any escape scheme clever enough to be reversible (percent-encoding, a
+lookalike Unicode solidus) produces folder names a human wouldn't recognise or
+be able to type — trading a visible problem for an invisible one.
+
+**Why "infer a parent folder" is rejected here:** that IS `/`-as-path (§6.50),
+just applied to one project instead of all of them. Doing it only for names that
+happen to contain `/` would make the mapping model depend on a character in a
+string — the least predictable possible rule.
+
+**The decision: refuse the mapping for that project, loudly, and mirror
+everything else.**
+
+- The project is **skipped** — no folder is created, no files mirrored.
+- The admin is told exactly which project and why: *"Penpot project 'Has/Slash'
+  cannot be mirrored: '/' is not allowed in a Nextcloud folder name. Rename it in
+  Penpot to include it."*
+- **The rest of the team mirrors normally.** One awkwardly-named project must not
+  block a whole team's sync.
+- The fix is one rename in Penpot, by someone who can see both systems — and
+  because §6.36 already propagates project renames, the folder appears on the
+  next pull with no further action.
+
+**Why refusing is the right call rather than a cop-out.** This is a genuine
+name collision between two systems' rules, and the only lossless resolutions
+require a human to choose a new name. Guessing on their behalf either loses
+information (sanitising) or restructures their folder tree (path inference).
+Refusing is the only option that is **honest, reversible, and non-destructive** —
+and it costs the user one rename for a name that is, by Penpot's own docs, not a
+convention they promote anyway.
+
+**Scope note:** this applies to **project and team names → folder names**. It
+does *not* apply to Penpot **file** names, which become `.penpot` *files*: those
+hit the same two forbidden characters but a file that can't be named is a
+different, narrower problem, and the same refuse-and-report rule extends to it
+naturally. Worth a scenario when the pull is built.
+
+**Status: RESOLVED by §6.53.** The open questions this section left — is
+refusing too blunt, is there a middle path — dissolved once the fork was scoped
+to the mapping. In `nested` mode a `/` is invalid *by definition of the mode*,
+and the app rejects it **at the source** (it owns project creation and renames,
+§6.36/§6.39), so the refuse-and-report path below only ever fires for a name
+typed directly in Penpot's UI. That's a narrow validation failure, not an
+architectural compromise. In `keyed` mode the question doesn't arise.
+
+Still worth carrying forward: whether Penpot **file** names (which become
+`.penpot` files) need the same guard. Same two forbidden characters, narrower
+blast radius — see open question #48.
+
+### 6.52 — Decision (locked): deletion and restore, rebuilt on Penpot's own trash (replaces §6.34)
+
+§6.49 established that Penpot's trash is a real, API-reachable feature. This is
+the deletion design that follows from it — simpler than §6.34's, with no admin
+setting and no bespoke machinery.
+
+**Three layers, each owning what it's actually good at:**
+
+| Layer | Owns | Restore preserves |
+|---|---|---|
+| **Nextcloud trash** | The local mirror | Everything local (§6.37/§6.45) |
+| **Penpot trash** (~7 days) | The design itself | **id, revision, history, links** |
+| **Our `.penpot` archive** | A copy of the bytes | Design only — new id, no history |
+
+**Deleting in Penpot is now simply `delete-file`.** It is not destructive in the
+way §6.34 assumed: it puts the design in Penpot's trash, where it stays
+recoverable for ~7 days. So the confirmation text changes from a warning about
+permanence to a plain statement of fact — *"this moves the design to Penpot's
+trash, where it can be restored for about a week."*
+
+**Restoring calls `restore-deleted-team-files`** and gets everything back. That
+makes the app's restore *equal* to what a human gets in Penpot's own UI, rather
+than a lesser imitation of it — which is what §6.34 was straining to achieve.
+
+**The three consequential rules:**
+
+1. **Always try Penpot's trash first.** Before offering an import-based restore,
+   check `get-team-deleted-files`. If the design is there, restore it losslessly
+   and say so. Import is only correct once that window has closed.
+2. **Confirm the restore by re-reading, never by the SSE `end` event** (§6.49's
+   gotcha: the first call reported success with `deleted_at` still set). A
+   restore that silently didn't happen is worse than one that errors.
+3. **Permanent deletion is a separate, explicit act.**
+   `permanently-delete-team-files` is the only truly irreversible call, and it
+   should be surfaced as such — not reachable from an ordinary delete.
+
+**What this removes from the design entirely:** the trash-bin admin setting, the
+trash-project configuration, the origin-project bookkeeping, the
+"is this a shared library?" warning, and the §6.34/§6.41 two-tier framing of
+"safe vs. best-effort" deletion. Deletion is now **one behaviour** with one
+honest description. That's a meaningful reduction in surface area, and it came
+from getting a fact right rather than from designing harder.
+
+**§6.41's measurements still stand** — an import-based restore really does bring
+back name, pages, assets and `revn` while losing the id and history. It is simply
+demoted from "the default outcome with the bin off" to "the last resort after the
+grace window."
+
+**One thing genuinely lost, worth naming:** §6.34's bin would have preserved a
+design *indefinitely*; Penpot's trash expires. After ~7 days the only recovery is
+our archive (and only for `sync` files). That's a real difference — but it is
+Penpot's own retention policy, applied consistently to everyone, rather than a
+parallel retention scheme only our app knows about. Documenting it beats
+overriding it.
+
+### 6.53 — Decision (locked): folder mode is a per-mapping, immutable choice — and it dissolves the `/` problem
+
+> **Dr K:** *"we allow slashes in penpot names and now we can't have arbitrary
+> nesting in nextcloud side and it is project must be directly under team so that
+> the slashes in the name can be truly meaningful — OR we never allow a slash in
+> the name and we take any meaning of slash away … this may be a team specific
+> setting on the team mapping. This option would be for sure immutable on the
+> mapping."*
+
+This resolves §6.50 and §6.51 together, and it's a better answer than either of
+mine. I framed the fork as *"which model do we pick globally?"* and then had to
+invent an awkward refusal rule for the leftover case. Dr K reframed it correctly:
+**the two models are mutually exclusive, so make the choice explicit, scope it to
+the mapping, and the leftover case stops existing.**
+
+**The key insight, stated plainly:** the `/` problem only exists because we were
+trying to support *both* models at once. Each model on its own is coherent:
+
+- If `/` is **structural**, it must mean a path — so projects sit directly under
+  the team folder and the name defines the tree.
+- If `/` is **meaningless**, it must not appear in a name at all — so Nextcloud
+  is free to nest however it likes.
+
+What is incoherent is a project name containing a `/` in a world where `/` means
+nothing. §6.51 spent a whole section designing a refusal for exactly that
+contradiction. Remove the contradiction and the refusal becomes a simple
+validation rule instead of a design problem.
+
+**The decision: `folder_mode` on the team mapping, chosen at create, immutable.**
+
+| Mode | Penpot side | Nextcloud side | `/` in a project name |
+|---|---|---|---|
+| **`nested`** *(default)* | Flat — projects are plain names | Arbitrary nesting under the team folder (§6.29) | **Rejected** — validated on create/rename |
+| **`keyed`** | Projects named as paths (`foo/bar`) | Mirrors the path exactly; projects sit where the key says | **Required to be meaningful** — it *is* the path |
+
+**Why per-mapping (per-team) rather than global.** Different teams genuinely
+work differently, and this is a naming-standard decision that belongs to whoever
+owns the team's content — not to whoever installed the app. A design team that
+already types `client/project` in Penpot gets `keyed`; a team that organises in
+Nextcloud gets `nested`. Neither is imposed on the other.
+
+**Why immutable.** Flipping the mode on a live mapping would mean restructuring
+every folder under it *and* rewriting every project name in Penpot — a bulk,
+destructive, two-sided migration triggered by a dropdown. This follows the
+established house precedent exactly: both sibling apps make a mapping's
+structural fields immutable after create (`MappingService` refuses to change the
+folder, the Team Folder flag, or the subfolder-sync setting: *"delete it and add
+a new one"*). Mode is the same kind of field. **Changing your mind means removing
+the mapping and re-adding it**, which is honest about the cost.
+
+**What `keyed` mode means concretely** (not built — this is the design, and it is
+gated on the same "later chapter" caution as §6.48):
+
+- A project named `foo/bar/baz` mirrors to `Team/foo/bar/baz/`, where `foo` and
+  `bar` are ordinary Nextcloud folders inferred from the key, and `baz` is the
+  project folder carrying the id and the tag.
+- **Moving a project folder IS renaming it** — its path relative to the team
+  folder is its name, so a move calls `rename-project` with the new key.
+- Intermediate folders are app-inferred, not app-owned: they hold whatever the
+  user puts in them, and are only removed when empty of everything (the
+  don't-lose-data rule Dr K already articulated — never delete a folder that
+  holds anything but the `.penpot` files that made it).
+- Free nesting (§6.29) does **not** apply: an arbitrary folder can't sit between
+  the team and a project, because position *is* the name.
+
+**What `nested` mode means** — exactly today's locked design (§6.29, §6.30,
+§6.36), with one addition: **a `/` in a project name is rejected at the source.**
+Because the app owns project renames (§6.36) and project creation
+(§6.39's guard), it can refuse the character *before* it enters Penpot. The only
+uncovered case is a name typed directly in Penpot's UI — which §6.51's
+refuse-and-report handles, now as a narrow validation failure rather than an
+architectural compromise.
+
+**Status: the FORK is locked** — folder mode is a per-mapping, immutable choice,
+and `nested` is the default. **`keyed` mode itself is NOT built and NOT specced
+beyond this section**, deliberately: §6.48's caution stands, and there is no
+feature file for it. What this section buys now is that `nested` mode's `/` rule
+stops being an awkward exception and becomes what it actually is — the price of
+choosing the mode where `/` carries no meaning.
+
+**This closes open question #35** and supersedes §6.51's provisional framing.
+
 ## Open questions for the next chapter
 
 Struck items are now answered (see Course 5); the rest are still open.
@@ -3415,10 +3811,11 @@ Struck items are now answered (see Course 5); the rest are still open.
     (`move-files`). Confirmed working in both directions during the §6.34 trash
     probe, but never exercised as the *user-facing drag* it's specced as —
     including the "drag out of a project, back to Drafts" direction.
-35. **New (§6.38):** decide the exact sanitisation rule for a Penpot project name
-    Nextcloud can't use as a folder name (`Has/Slash` confirmed creatable). What
-    character substitution, and how the divergence surfaces to the user, is
-    undecided — only that the id stays authoritative.
+35. ~~Decide the sanitisation rule for a Penpot project name Nextcloud can't use
+    as a folder name.~~ **CLOSED — §6.53.** There is no sanitisation: in `nested`
+    mode a `/` is invalid and rejected at the source (the app owns creation and
+    renames); in `keyed` mode it's the path. A name typed directly in Penpot's UI
+    that violates the mode is refused and reported (§6.51).
 36. ~~Determine whether `get-projects` returning soft-deleted projects is
     eventual-consistency or a filtering bug.~~ **Answered — §6.42: it's a bug.**
     `get-projects` never filters `deleted_at`; `get-all-projects` does,
@@ -3456,12 +3853,11 @@ Struck items are now answered (see Course 5); the rest are still open.
 43. **New (§6.44), operational:** trashed files carry a `.dTIMESTAMP` suffix on
     their on-disk name (`foo.penpot.d1785087619`). Match trash entries by fileid
     or metadata, **never by filename** — a filename match will silently miss.
-44. ~~(§6.48) `/` in a project name as an inferred Nextcloud path, parked.~~
-    **Reopened as a real fork — §6.50.** Evidence gathered (Penpot's own docs
-    describe projects as flat "folders in a file system", suggest organising *"by
-    client, product, feature"*, and never mention nesting or paths).
-    **Recommendation: keep free nesting, don't adopt `/`-as-path.** Awaiting
-    Dr K's ratification.
+44. ~~(§6.48/§6.50) `/` in a project name as an inferred Nextcloud path.~~
+    **RESOLVED — §6.53.** Not one-or-the-other globally: folder mode is a
+    **per-mapping, immutable** choice. `nested` (default, §6.29) forbids `/` in
+    project names; `keyed` makes the name a path and drops free nesting. The two
+    are mutually exclusive by construction, which is what dissolved the problem.
 45. **New (§6.49), BLOCKING the chapter close:** rewrite §6.34 (drop the
     service-account trash bin) and §6.41 (demote best-effort restore to a last
     resort) around the corrected trash finding, then update `delete.feature`,
@@ -3472,315 +3868,20 @@ Struck items are now answered (see Course 5); the rest are still open.
     settles. A second call cleared it. **Any client must re-read to confirm a
     restore**, never trust the `end` event alone. Worth checking whether this is
     a race or requires a retry, before the restore path ships.
-47. **New (§6.49):** restoring a file also restores its **containing project**
+47. **New (§6.53):** `keyed` mode is designed but **not specced and not built** —
+    no feature file, deliberately (§6.48's caution). Before it is, decide: how
+    intermediate inferred folders are distinguished from user folders; what a
+    move-out-of-the-team means when position is the name; and whether a project
+    key collision (two projects both named `foo/bar` — Penpot allows it) is
+    refused or disambiguated.
+48. **New (§6.51):** do Penpot **file** names need the same `/` guard as project
+    names? They become `.penpot` *files*, hitting the same two forbidden
+    characters with a narrower blast radius. Probably the same refuse-and-report
+    rule, but it needs a scenario when the pull is built.
+49. **New (§6.49):** restoring a file also restores its **containing project**
     (the source clears `deleted_at` on `project` too). Confirm what that means
     for the pull when a whole project was deleted and one file is restored —
     does the project folder reappear with only that file in it?
-
-### 6.49 — Correction: **§6.26 WAS WRONG. Penpot's trash IS reachable by API — and the trash bin (§6.34) is now unnecessary**
-
-> Chasing Dr K's naming question sent me to Penpot's own docs, which describe a
-> **Trash with Restore** in the dashboard. §6.26 concluded no such API existed.
-> §6.26 was wrong, and the error is worth naming precisely because it's the kind
-> I'd otherwise repeat.
-
-**How I got it wrong.** §6.26 probed for trash commands *by guessing names* —
-`restore-file`, `get-trash`, `undelete-file`, and a dozen more, all 404. From
-that I concluded "no API reaches the grace window." But **absence of evidence
-from a guessed-name sweep is not evidence of absence.** The real commands are
-namespaced by *team*, not by file, and no reasonable guess would have found them:
-
-```
-get-team-deleted-files       {team-id}         → the trash listing
-restore-deleted-team-files   {team-id, ids[]}  → restore (SSE)
-permanently-delete-team-files{team-id, ids[]}  → hard delete (SSE)
-```
-
-Confirmed by reading Penpot's actual source
-(`backend/src/app/rpc/commands/files.clj`), then verified live. The Trash
-feature shipped in **2.13**; we run 2.17.0, so it was there the whole time.
-
-**Verified end to end, twice:**
-
-```
-duplicate-file "RestoreProbe2"  → created
-delete-file                     → 204, gone from get-project-files
-get-team-deleted-files          → lists it (with all 5 earlier probe deletions)
-restore-deleted-team-files      → event: progress {index 1, total 1}, event: end
-→ back in get-project-files, SAME id, revn 5, get-file returns 200
-```
-
-**One real gotcha:** the first restore call reported success while `deleted_at`
-was still set — the SSE returns before the transaction settles. A second call
-cleared it. **Any client must re-read to confirm, not trust the `end` event.**
-(The source explains why the restore is thorough: it clears `deleted_at` across
-`file`, `file_media_object`, `file_change`, `file_data`, `file_thumbnail`,
-`file_tagged_object_thumbnail` **and the containing project** — so restoring a
-file resurrects its project too if that was deleted.)
-
-**What this changes, and it's a lot:**
-
-1. **§6.34's trash bin is now unnecessary — and should be dropped.** Its entire
-   justification was: "Penpot's own grace period is unreachable, so our only
-   alternative to `delete-file` is moving files to a service-account project."
-   That premise is false. Penpot has a real trash with a real restore that
-   preserves **id, history, links, everything** — strictly better than our
-   move-to-a-robot's-team scheme, with none of its downsides (no design vanishing
-   into a private team, no origin bookkeeping, no shared-library caveat).
-2. **§6.41's "best-effort restore" is demoted to a last resort.** With the bin
-   off, deleting no longer means "rebuild from the archive, lose the history" —
-   it means "it's in Penpot's trash for ~7 days; restore it there." Import from
-   our archive is only needed *after* that window closes.
-3. **The restore hierarchy simplifies.** §6.46's six-row table collapses: rows 1
-   and 2 merge into "restore it in Penpot's trash — via the UI *or* via our
-   own API call," and we can now *drive* it rather than only pointing at it.
-4. **§6.20's finding still stands** and is unaffected: a **purged** file (past
-   the window, or `permanently-delete-team-files`) still cannot be resurrected
-   at its original id. The grace window is the difference between recoverable
-   and not.
-
-**The lesson for the rest of this saga:** when a vendor's *documentation*
-describes a feature and my probe says it's absent, the probe is the thing to
-doubt. Read the source next time — it took one file to answer definitively what
-a dozen guessed names could not.
-
-**Consequences for the trash-bin design are recorded but NOT yet rewritten into
-§6.34 and the features** — that's a deliberate, sizeable edit that belongs with
-the nesting decision in §6.50, so both land together.
-
-### 6.50 — The nesting fork, reopened: `/`-as-path vs. free nesting (Dr K's call, evidence gathered)
-
-> **Dr K:** *"I'm honestly open to only doing this and rewriting our whole nested
-> idea … I want to go with the option that most fits with the intended penpot
-> model … probably just picking one would make all the logic and code simply less
-> and more straightforward and expectable."*
-
-§6.48 parked this as a "maybe." Dr K has reopened it as a real fork, and the
-final clause is the right instinct: **the two models should not coexist.** Here
-is the evidence, then a recommendation.
-
-**What Penpot itself intends — from their own documentation, verbatim:**
-
-> *"Projects are containers that help you organize and group related design files
-> together. **Think of them as folders in a file system.** You can create as many
-> projects as you need to organize your work by client, product, feature, or any
-> other structure that fits your workflow."*
-
-And on files: *"Files are your design documents… Files can be created within a
-project."* There is **no mention of nesting, paths, or hierarchy anywhere** in
-the projects-and-files guide. The organizational axes Penpot suggests are *"by
-client, product, feature"* — i.e. **one flat level, chosen per workspace.**
-
-**So the honest reading: Penpot's intended model is a flat, single-level folder
-space.** The `/` character is permitted in a name the same way `🎨` and a leading
-space are permitted — because the field is `[:string {:max 250}]` and nothing
-more. It is **not** an S3-style key convention:
-
-- Penpot's own docs never suggest it.
-- Nothing in the API treats `/` specially (§6.38: `a/b/c`, `/leading`,
-  `trailing/`, and *duplicate* names all create fine; a rename into an existing
-  name returns 204).
-- The dashboard renders projects as a **flat sidebar list**, so `foo/bar` and
-  `foo/baz` appear as two unrelated entries whose names happen to share a prefix
-  — they are not grouped.
-- Penpot ships a real hierarchy feature for the *other* level (pages/boards
-  inside a file), which is where they put structure deliberately.
-
-**Recommendation: keep free nesting (§6.29). Do not adopt `/`-as-path.**
-
-The reasoning, weighed against Dr K's own criterion ("most fits the intended
-Penpot model"):
-
-1. **`/`-as-path invents a convention Penpot doesn't have**, then makes our app
-   depend on users honouring it. §6.38 proved Penpot enforces nothing — so every
-   guarantee (uniqueness, valid segments, no collisions on rename) becomes ours
-   to police, in a namespace the source system lets users freely break. That is
-   the opposite of "less logic."
-2. **It makes Penpot's flat list the master of Nextcloud's tree.** A user who
-   organises folders in Nextcloud would find their layout overwritten whenever
-   someone renames a project in Penpot. §6.29's split — *Penpot owns membership,
-   Nextcloud owns layout* — is what lets each system be good at what it actually
-   is.
-3. **It fails the don't-lose-data test in a way free nesting doesn't.** Dr K's
-   own example is the tell: renaming `/foo/baz/buz/fuz/nuz/cuz` → `/foo/baz/buz/fuz`
-   requires us to unmap a folder, remap another, move files up, and conditionally
-   delete a directory *only if* it contains nothing but `.penpot` files. That is
-   a delicate destructive cascade triggered by a **text edit in another system** —
-   exactly the class of action §6.1 exists to prevent.
-4. **Free nesting already delivers the benefit Dr K wants**, without the cost.
-   "Any folder in the structure could have any kind of files — markdown, text,
-   Grafana, n8n" is *already true* under §6.29, because ordinary Nextcloud folders
-   may sit anywhere among project folders. The tree Dr K described is buildable
-   today; the only difference is **who authors it** — the user, rather than a
-   naming convention.
-5. **The n8n/Grafana comparison actually argues against it.** Grafana has real
-   nested folders and we mirror them structurally; n8n has none and we *don't*
-   fake them (§6.3 notes n8n's tag→folder trick as weight Grafana didn't need).
-   Penpot is the n8n case: flat by design. Faking depth from a string is
-   precisely the n8n-era hack the family moved away from.
-
-**What we keep from the idea anyway.** §6.38's exception stands and is the one
-place `/` still matters: a project genuinely named `Has/Slash` can't be a folder
-name, so it's sanitised, the id stays authoritative, and the divergence is
-reported (open question #35). Users who *type* `foo/bar` get a folder literally
-named `foo bar` (or similar) — surprising-but-safe, and far better than silently
-restructuring their Nextcloud tree.
-
-**If Dr K still wants it**, the honest shape is an **admin-level, per-team,
-mutually-exclusive** setting — *"Flat projects"* (default, §6.29) vs. *"Paths
-from project names"* — precisely because the two models cannot both be
-authoritative about location. But it should be a **later chapter**, built on a
-working flat mirror, not a rewrite of the core before any of it exists.
-
-**Status: RATIFIED — free nesting stands, `/`-as-path is rejected for now.**
-
-> **Dr K:** *"let's leave the door open for that maybe later, we don't even need
-> a feature file for it yet. let's stick to no nesting concept on penpot side, we
-> make nesting in the nextcloud side, so we stuck to what we already decided."*
-
-§6.29 is unchanged and remains the model: **Penpot stays flat, Nextcloud nests
-freely.** The `/`-as-path idea is parked — deliberately with **no feature file**,
-because writing a spec for an unratified model is how a "maybe" quietly becomes
-an expectation. §6.48 and this section are its whole record; that's enough for a
-future chapter to pick it up.
-
-One consequence worth stating, since it's the thing that would have to change if
-the door is ever opened: `/`-as-path only makes sense if **projects are forced
-back to sitting directly under their team folder** (Dr K's own observation). A
-name can't dictate a path while the user is also free to move the folder
-anywhere. So adopting it later isn't additive — it's a trade of §6.29 for a
-different model, and that's exactly why it's one-or-the-other rather than both.
-
-### 6.51 — Decision (PROVISIONAL, not ratified): a `/` in a project name is REFUSED, not sanitised
-
-With §6.50 settled, the leftover from §6.38 needs a real answer: Penpot allows
-`/` in a project name, Nextcloud cannot use it in a folder name. Dr K laid out
-the options — sanitise declaratively, error out, or infer a parent folder — and
-flagged the flaw in the first one himself.
-
-**What Nextcloud actually forbids, checked live** (`IFilenameValidator` on the
-running instance, rather than assumed):
-
-| Rule | Value |
-|---|---|
-| Forbidden characters | **`\` and `/` only** |
-| Forbidden names | `.htaccess`, and `..` / `.` as path segments |
-| Forbidden extensions | `.filepart`, `.part` |
-
-Everything else passes — `a:b`, `a*b`, `a?b`, `CON`, `.hidden` are all valid
-Nextcloud folder names. **So the problem is far narrower than §6.38 implied:
-exactly two characters, and `\` is vanishingly rare in a design project name.**
-
-**Why sanitising is rejected — Dr K's own objection, and it's decisive.**
-Mapping `/` → `-` is not reversible: `foo/bar` and `foo-bar` both become
-`foo-bar`, so two distinct Penpot projects collide into one Nextcloud folder,
-and we cannot tell from the folder name which project it came from. That breaks
-§6.36's names-always-match invariant *silently*, which is the worst way to break
-it. Any escape scheme clever enough to be reversible (percent-encoding, a
-lookalike Unicode solidus) produces folder names a human wouldn't recognise or
-be able to type — trading a visible problem for an invisible one.
-
-**Why "infer a parent folder" is rejected here:** that IS `/`-as-path (§6.50),
-just applied to one project instead of all of them. Doing it only for names that
-happen to contain `/` would make the mapping model depend on a character in a
-string — the least predictable possible rule.
-
-**The decision: refuse the mapping for that project, loudly, and mirror
-everything else.**
-
-- The project is **skipped** — no folder is created, no files mirrored.
-- The admin is told exactly which project and why: *"Penpot project 'Has/Slash'
-  cannot be mirrored: '/' is not allowed in a Nextcloud folder name. Rename it in
-  Penpot to include it."*
-- **The rest of the team mirrors normally.** One awkwardly-named project must not
-  block a whole team's sync.
-- The fix is one rename in Penpot, by someone who can see both systems — and
-  because §6.36 already propagates project renames, the folder appears on the
-  next pull with no further action.
-
-**Why refusing is the right call rather than a cop-out.** This is a genuine
-name collision between two systems' rules, and the only lossless resolutions
-require a human to choose a new name. Guessing on their behalf either loses
-information (sanitising) or restructures their folder tree (path inference).
-Refusing is the only option that is **honest, reversible, and non-destructive** —
-and it costs the user one rename for a name that is, by Penpot's own docs, not a
-convention they promote anyway.
-
-**Scope note:** this applies to **project and team names → folder names**. It
-does *not* apply to Penpot **file** names, which become `.penpot` *files*: those
-hit the same two forbidden characters but a file that can't be named is a
-different, narrower problem, and the same refuse-and-report rule extends to it
-naturally. Worth a scenario when the pull is built.
-
-**Status: PROVISIONAL.** This is a first answer, not a ratified decision — Dr K
-has open questions here. What is solid is the *evidence*: Nextcloud forbids
-exactly `\` and `/`, and sanitising is provably lossy (two distinct projects
-collapse into one folder name). What is still genuinely open:
-
-- Is refusing the whole project too blunt? It protects correctness but leaves a
-  user staring at a project that simply doesn't appear.
-- Does the same rule extend to Penpot **file** names (which become `.penpot`
-  files), or do files deserve different handling?
-- Is there a middle path — mirror the project but flag it, rather than skip it?
-- Should the app offer to rename it in Penpot on the user's behalf, given that
-  §6.36 already propagates project renames?
-
-Open question #35 stays OPEN until these are answered.
-
-### 6.52 — Decision (locked): deletion and restore, rebuilt on Penpot's own trash (replaces §6.34)
-
-§6.49 established that Penpot's trash is a real, API-reachable feature. This is
-the deletion design that follows from it — simpler than §6.34's, with no admin
-setting and no bespoke machinery.
-
-**Three layers, each owning what it's actually good at:**
-
-| Layer | Owns | Restore preserves |
-|---|---|---|
-| **Nextcloud trash** | The local mirror | Everything local (§6.37/§6.45) |
-| **Penpot trash** (~7 days) | The design itself | **id, revision, history, links** |
-| **Our `.penpot` archive** | A copy of the bytes | Design only — new id, no history |
-
-**Deleting in Penpot is now simply `delete-file`.** It is not destructive in the
-way §6.34 assumed: it puts the design in Penpot's trash, where it stays
-recoverable for ~7 days. So the confirmation text changes from a warning about
-permanence to a plain statement of fact — *"this moves the design to Penpot's
-trash, where it can be restored for about a week."*
-
-**Restoring calls `restore-deleted-team-files`** and gets everything back. That
-makes the app's restore *equal* to what a human gets in Penpot's own UI, rather
-than a lesser imitation of it — which is what §6.34 was straining to achieve.
-
-**The three consequential rules:**
-
-1. **Always try Penpot's trash first.** Before offering an import-based restore,
-   check `get-team-deleted-files`. If the design is there, restore it losslessly
-   and say so. Import is only correct once that window has closed.
-2. **Confirm the restore by re-reading, never by the SSE `end` event** (§6.49's
-   gotcha: the first call reported success with `deleted_at` still set). A
-   restore that silently didn't happen is worse than one that errors.
-3. **Permanent deletion is a separate, explicit act.**
-   `permanently-delete-team-files` is the only truly irreversible call, and it
-   should be surfaced as such — not reachable from an ordinary delete.
-
-**What this removes from the design entirely:** the trash-bin admin setting, the
-trash-project configuration, the origin-project bookkeeping, the
-"is this a shared library?" warning, and the §6.34/§6.41 two-tier framing of
-"safe vs. best-effort" deletion. Deletion is now **one behaviour** with one
-honest description. That's a meaningful reduction in surface area, and it came
-from getting a fact right rather than from designing harder.
-
-**§6.41's measurements still stand** — an import-based restore really does bring
-back name, pages, assets and `revn` while losing the id and history. It is simply
-demoted from "the default outcome with the bin off" to "the last resort after the
-grace window."
-
-**One thing genuinely lost, worth naming:** §6.34's bin would have preserved a
-design *indefinitely*; Penpot's trash expires. After ~7 days the only recovery is
-our archive (and only for `sync` files). That's a real difference — but it is
-Penpot's own retention policy, applied consistently to everyone, rather than a
-parallel retention scheme only our app knows about. Documenting it beats
-overriding it.
 
 ---
 

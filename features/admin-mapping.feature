@@ -144,6 +144,44 @@ Feature: Admin configures team mappings
     Then the mapping's default mode is "sync"
     # Per-file promotion/demotion is sync-mode.feature's concern, not this one.
 
+  # ── folder mode: how this team's projects map to folders (saga §6.53) ───────
+  # A per-mapping, IMMUTABLE choice between two mutually-exclusive models:
+  #
+  #   nested (default) — Penpot projects are flat names; Nextcloud nests freely
+  #                      under the team folder (§6.29). A "/" in a project name
+  #                      is INVALID, because it would mean nothing.
+  #   keyed            — a project's name IS its path relative to the team folder
+  #                      ("foo/bar" → Team/foo/bar/). Moving a project folder is
+  #                      renaming it. Free nesting does not apply, because
+  #                      position IS the name.
+  #
+  # The two cannot coexist: either "/" carries structure or it doesn't. Making
+  # the choice explicit per team is what removes the awkward middle case.
+
+  Scenario: A mapping records its folder mode, defaulting to nested
+    When the admin maps the Penpot team "Ferronescotia" without choosing a folder mode
+    Then the mapping's folder mode is "nested"
+
+  Scenario: The folder mode cannot be changed after the mapping is created
+    Given the Penpot team "Ferronescotia" is mapped with folder mode "nested"
+    When the admin tries to change that mapping's folder mode to "keyed"
+    Then the change is rejected as immutable
+    And the rejection explains the mapping must be removed and re-added
+    # Flipping it live would restructure every folder under the mapping AND
+    # rewrite every project name in Penpot — a bulk, two-sided, destructive
+    # migration behind a dropdown. Same immutability precedent both sibling apps
+    # already set for a mapping's structural fields.
+
+  @todo
+  Scenario: A team can be mapped in keyed mode
+    When the admin maps the Penpot team "Design Co" with folder mode "keyed"
+    Then the mapping's folder mode is "keyed"
+    And project names are treated as paths relative to the Team Folder
+    # DESIGNED, NOT BUILT (saga §6.53). Only the fork is locked — keyed mode has
+    # no feature file of its own and several open questions (inferred-folder
+    # ownership, key collisions, what a move out of the team means). Do not
+    # implement against this scenario.
+
   Scenario: A Penpot team may only be mapped once
     Given the Penpot team "Ferronescotia" is already mapped
     When the admin tries to map the Penpot team "Ferronescotia" again

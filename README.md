@@ -133,6 +133,28 @@ at any depth and you can reorganise freely. Project folders also carry a visible
 Folder, but **not out of it**. Moving a project between teams is a destructive
 cross-team change that belongs in Penpot, not in a drag gesture.
 
+### Two folder modes, chosen per team
+
+The nesting above is **`nested` mode** — the default, and what the rest of this
+README describes. There is one alternative, and the two are mutually exclusive:
+
+| Mode | Penpot side | Nextcloud side |
+|---|---|---|
+| **`nested`** *(default)* | Projects are plain names; `/` is not allowed in one | Nest freely under the Team Folder |
+| **`keyed`** | A project's **name is its path** — `foo/bar` | Mirrors that path exactly; no free nesting |
+
+Either `/` carries structure or it doesn't — it can't do both, which is why this
+is a choice rather than a feature. A team that already types `client/project` in
+Penpot picks `keyed`; a team that organises in Nextcloud picks `nested`.
+
+**The choice is made when the team is mapped and cannot be changed afterwards.**
+Flipping it would restructure every folder *and* rewrite every project name in
+Penpot — a bulk, two-sided migration behind a dropdown. Changing your mind means
+removing the mapping and re-adding it.
+
+> **`keyed` mode is designed, not built.** Only the choice is settled; the mode
+> itself waits for a later release. Everything below describes `nested`.
+
 ### Personal designs land in your home folder
 
 Every Penpot account has a personal "Default" team. It gets **no Team Folder** —
