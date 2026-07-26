@@ -49,10 +49,16 @@ use Psr\Log\LoggerInterface;
  * HTTP 400 `:params-validation` with a `missing-key` explain body, which is at
  * least loud. The trap is that it is only loud once you actually call it.
  *
- * ## 3. Responses are Transit, not JSON
+ * ## 3. Responses are Transit, not JSON — and asking nicely breaks that
  *
  * See {@see Transit}. Decoding is delegated there; this class never touches the
  * wire format itself.
+ *
+ * **Penpot content-negotiates**, so the request headers are part of the calling
+ * contract just as much as the param names are: send `Accept: application/json`
+ * and it answers plain camelCase JSON instead of Transit, which breaks every key
+ * lookup here *and* the decoder's shape detection. See the header block in
+ * {@see call()} — that comment is load-bearing, not decoration.
  *
  * ## 4. HTTP 200 will not mean success, once the binfile commands land
  *
