@@ -29,10 +29,11 @@
 
 ---
 
-## Status: **OPEN** — 2026-07-26
+## Status: **CLOSED** — 2026-07-26
 
-> **First contact is essentially complete**; the chapter stays open until Dr K
-> says otherwise.
+> **Closed by Dr K.** First contact is complete: the planet is surveyed, the
+> terms of contact are negotiated, and the last load-bearing fork is settled.
+> Chapter 2 plans the colony.
 >
 > **Settled:**
 >
@@ -53,11 +54,17 @@
 >   exclusive by construction — which is exactly why the `/` problem dissolved
 >   rather than needing an awkward exception.
 >
+> - **§6.54 — the last load-bearing fork, CLOSED.** `rename-file` was finally
+>   *called* rather than merely read off the schema: it works, it takes plain
+>   `id` (not `file-id`), and it accepts `/`. Nextcloud→Penpot file rename is
+>   **ratified**, and open question #48 is answered — file names need the same
+>   `/` guard as project names, because Penpot treats both equally permissively.
+>
 > **`keyed` mode is designed but deliberately NOT specced or built** — no feature
 > file. Only the *fork* is locked; the mode itself waits for a later chapter.
 >
-> Current state: a complete architecture (§6.1–§6.53), an executable spec (23
-> feature files, ~260 scenarios), and a working first slice shipped green to CI.
+> Current state: a complete architecture (§6.1–§6.54), an executable spec (23
+> feature files, 267 scenarios), and a working first slice shipped green to CI.
 >
 > **Read §6.18–§6.52 first** — they carry the current decisions; earlier sections
 > are the survey that produced them, and several are explicitly superseded (each
@@ -3637,6 +3644,75 @@ choosing the mode where `/` carries no meaning.
 
 **This closes open question #35** and supersedes §6.51's provisional framing.
 
+### 6.54 — Test Cook: `rename-file` works, takes plain `id`, and accepts a `/` — which closes the §6.2 fork and open question #48
+
+The last **load-bearing** fork in this chapter (§6.2: does read-only extend to
+the *filename*?) had been carried since the survey on a single piece of
+evidence — `rename-file` appeared in the live `/api/doc` schema. **It had never
+been called.** Ratifying a design fork on an uncalled RPC is exactly the mistake
+§6.26 made, so it was called before closing anything.
+
+**Three findings, all live against the real instance:**
+
+1. **`rename-file` works, and it takes `id` — NOT `file-id`.**
+
+   ```
+   {"file-id": ..., "name": ...}  → HTTP 400  :params-validation, missing-key [:id]
+   {"id": ...,      "name": ...}  → HTTP 200  {id, name, created-at, modified-at}
+   ```
+
+   This is a **fourth** distinct entry for the param-casing table (§6.20's
+   `import-binfile` takes `project-id`; `export-binfile` takes `fileId`;
+   `create-project` takes `team-id`). Note it is not even a casing question here
+   — the file's own identifier is bare `id`, while *other* entities' ids in the
+   same API are hyphenated. Open question #21's systematic pass is now clearly
+   necessary rather than merely tidy: **there is no rule to infer, only a table
+   to build.**
+
+2. **The name schema is `[:string {:min 1, :max 250}]`, enforced server-side.**
+   An empty name returns HTTP 400 with that exact schema in the explain body —
+   the same rule §6.38 found for projects. Our client-side guard is therefore
+   confirmed as a courtesy (better message, no round trip), not as the only
+   defence.
+
+3. **A file name accepts `/` — HTTP 200 renaming a file to `"Has/Slash In
+   File"`.** This **answers open question #48**: Penpot *file* names have exactly
+   the same latitude as project names, and therefore hit exactly the same
+   two-character Nextcloud problem (§6.51), one level down.
+
+**Decision (locked): the §6.2 fork is RATIFIED — Nextcloud→Penpot file rename
+propagates.** The reasons, in the order they actually carry weight:
+
+- **The asymmetry was never justified.** §6.36 already locked that renaming a
+  *project folder* calls `rename-project`. Leaving file renames as a silent no-op
+  meant one gesture in one Files app behaved two different ways depending on
+  whether the thing was a folder — the kind of inconsistency users experience as
+  a bug, not as a policy.
+- **§6.1 is not violated.** Read-only was always about *content* — shape data,
+  the thing we cannot meaningfully round-trip. A name is one field, one RPC, no
+  re-import. §6.19 already listed rename among the writes we permit.
+- **The alternative is worse, and we now know its exact shape.** §6.22 makes
+  Penpot authoritative for a mirrored file's name. Un-ratified, a user renaming a
+  mirrored file gets a rename that **silently reverts on the next pull** — the
+  precise failure mode this app exists to avoid.
+- **Everything else was already settled.** §6.18 fixed attribution (acting user's
+  personal token when present, service account otherwise) and failure behaviour
+  (local rename stands, Penpot untouched, divergence reported, next pull
+  reconciles). The fork was narrowly *"do we call it at all"* — and the call now
+  demonstrably works.
+
+**The `/` guard therefore applies to files too, by the same mode rule (§6.53).**
+In `nested` mode a Penpot file named `"Has/Slash"` cannot become a `.penpot`
+file of that name; it is refused and reported, exactly as a project is. This is
+a smaller blast radius than the project case — one file skipped rather than a
+whole subtree — but it is the *same* rule, which is the point: one guard,
+applied at two levels, with no second concept to learn.
+
+**Also re-confirmed in passing:** §6.42's `get-projects` bug is still live on
+this instance — every project it returned carried a `deleted-at`, while
+`get-all-projects` correctly returned only the three live ones. The workaround
+stands, and open question #39 (re-check against a newer Penpot) stays open.
+
 ## Open questions for the next chapter
 
 Struck items are now answered (see Course 5); the rest are still open.
@@ -3749,10 +3825,14 @@ Struck items are now answered (see Course 5); the rest are still open.
     same gap is worth flagging as a pattern to whoever eventually audits
     `apps/nextcloud`'s reproducibility from scratch, not just a one-off
     oversight.
-21. **New (§6.20):** the kebab-case/camelCase split was found by hitting it
-    (`import-binfile` takes `project-id`; `export-binfile` takes `fileId`).
-    Worth a systematic pass over every command the client will call, rather
-    than discovering each one at runtime.
+21. **New (§6.20), now URGENT (§6.54):** the param-naming split was found by
+    hitting it, and a fourth variant has since appeared. Confirmed live:
+    `import-binfile` → `project-id`; `export-binfile` → `fileId`;
+    `create-project` → `team-id`; **`rename-file` → plain `id`**. This is not a
+    casing convention with exceptions — **there is no inferable rule, only a
+    table**. `PenpotClient` must carry an explicit per-command param map, and a
+    systematic pass over every command the client will call is a build
+    prerequisite, not a tidy-up.
 22. **New (§6.20):** does `import-binfile` respect its `version` param?
     Untested, and irrelevant while we only ever import archives we exported
     ourselves — but it would matter if a user ever hand-drops a `.penpot` file
@@ -3858,11 +3938,10 @@ Struck items are now answered (see Course 5); the rest are still open.
     **per-mapping, immutable** choice. `nested` (default, §6.29) forbids `/` in
     project names; `keyed` makes the name a path and drops free nesting. The two
     are mutually exclusive by construction, which is what dissolved the problem.
-45. **New (§6.49), BLOCKING the chapter close:** rewrite §6.34 (drop the
-    service-account trash bin) and §6.41 (demote best-effort restore to a last
-    resort) around the corrected trash finding, then update `delete.feature`,
-    `restore.feature`, `reconcile.feature` and the README to match. The saga now
-    says the right thing; the specs still describe the superseded design.
+45. ~~(§6.49) Rewrite §6.34/§6.41 around the corrected trash finding and update
+    the specs to match.~~ **DONE.** §6.52 replaced §6.34; §6.41 is demoted to a
+    last resort; `delete.feature`, `restore.feature` and the README were rebuilt
+    on Penpot's own trash and now cite §6.49/§6.52 throughout.
 46. **New (§6.49):** `restore-deleted-team-files` returned success while
     `deleted_at` was still set — the SSE `end` event fires before the transaction
     settles. A second call cleared it. **Any client must re-read to confirm a
@@ -3874,10 +3953,12 @@ Struck items are now answered (see Course 5); the rest are still open.
     move-out-of-the-team means when position is the name; and whether a project
     key collision (two projects both named `foo/bar` — Penpot allows it) is
     refused or disambiguated.
-48. **New (§6.51):** do Penpot **file** names need the same `/` guard as project
-    names? They become `.penpot` *files*, hitting the same two forbidden
-    characters with a narrower blast radius. Probably the same refuse-and-report
-    rule, but it needs a scenario when the pull is built.
+48. ~~(§6.51) Do Penpot **file** names need the same `/` guard as project names?~~
+    **ANSWERED — §6.54: yes, and it is the same rule.** Confirmed live: renaming
+    a file to `"Has/Slash In File"` returns HTTP 200. Penpot file names have the
+    same latitude as project names, so in `nested` mode an unmappable file is
+    refused and reported exactly as an unmappable project is — one guard, applied
+    at two levels. Blast radius is narrower (one file, not a subtree).
 49. **New (§6.49):** restoring a file also restores its **containing project**
     (the source clears `deleted_at` on `project` too). Confirm what that means
     for the pull when a whole project was deleted and one file is restored —
@@ -3885,15 +3966,16 @@ Struck items are now answered (see Course 5); the rest are still open.
 
 ---
 
-## Chapter 1 — where it stands (OPEN)
+## Chapter 1 — where it stands (CLOSED)
 
 > **Dr K:** *"we made first contact — chapter one was more like opening the line
 > of communication and probing to figure out how the two species will interact."*
 >
-> That framing is exactly why the chapter reopened after its first close: two
-> more probes (§6.49, §6.51) found we'd misread part of the anatomy. **First
-> contact isn't over until the map is right, and the `/` question is still being
-> drawn.**
+> That framing is exactly why the chapter reopened twice after its first close:
+> later probes (§6.49, §6.51, §6.54) found we'd misread part of the anatomy each
+> time. **First contact wasn't over until the map was right** — and the last
+> correction (§6.54) came from the same discipline that produced the others:
+> *call the thing before you design around it.*
 >
 > That's the chapter, exactly. We were sent to answer *"can we dock with this
 > planet?"* and the honest answer turned out to be **yes, but not the way we
@@ -3911,11 +3993,12 @@ Struck items are now answered (see Course 5); the rest are still open.
 > touching things* — and twice by being wrong first and corrected (§6.27→§6.34,
 > §6.42).
 >
-> Most of the terms are agreed. One is not: what happens when a Penpot project
-> name contains a character Nextcloud cannot put in a folder name. Chapter 2
-> starts once that's settled.
+> The terms are agreed. The last one — what happens when a Penpot name contains
+> a character Nextcloud cannot put in a filename — was settled not by picking a
+> winner but by **naming the choice and scoping it** (§6.53), then confirming it
+> applies identically one level down (§6.54). **Chapter 2 builds the colony.**
 
-What this chapter has settled, what it corrected, and what is still being worked:
+What this chapter settled, what it corrected, and what it leaves to Chapter 2:
 
 **What it produced:**
 
@@ -3925,24 +4008,17 @@ What this chapter has settled, what it corrected, and what is still being worked
   handful of findings that contradicted the documentation (`import-binfile` is
   SSE and ignores `name`; `get-projects` doesn't filter deleted rows; Penpot's
   name rules are looser than Nextcloud's, not stricter).
-- **A complete architecture**, §6.1–§6.52: the access model, the mapping
-  shape, the mode axis, nesting, drafts, the trash, restore, failure behaviour.
-  Every locked decision carries the evidence that produced it, and every
-  superseded one carries an inline marker saying what replaced it — including
-  three of my own conclusions that were overturned (§6.27→§6.34→§6.52, §6.42,
-  and §6.26→§6.49).
-- **An executable specification**: 23 `.feature` files, ~270 scenarios, written
+- **A complete architecture**, §6.1–§6.54: the access model, the mapping
+  shape, the mode axis, nesting, drafts, the trash, restore, rename, failure
+  behaviour. Every locked decision carries the evidence that produced it, and
+  every superseded one carries an inline marker saying what replaced it —
+  including three of my own conclusions that were overturned (§6.27→§6.34→§6.52,
+  §6.42, and §6.26→§6.49).
+- **An executable specification**: 23 `.feature` files, 267 scenarios, written
   before the code rather than after it.
 - **A working first slice**, shipped and green: the app installs on a real
   Nextcloud and its base URL is configurable entirely over `occ`, proven by six
   live integration scenarios in CI.
-
-**What is still being worked, and blocks closing:**
-
-- **§6.51 — the `/` question.** Evidence is solid (Nextcloud forbids exactly `\`
-  and `/`; sanitising is provably lossy). The *answer* — refuse the project and
-  report why — is provisional, with real open questions about bluntness, file
-  names vs. project names, and whether a middle path exists.
 
 **What it corrected about itself** — three conclusions overturned by later
 evidence, each marked inline where it was wrong:
@@ -3959,22 +4035,28 @@ evidence, each marked inline where it was wrong:
 **What it deliberately left open** — the honest inheritance, not oversights. The
 full list lives below; the load-bearing ones are:
 
-- **The §6.2 file-rename fork.** Still genuinely undecided. Note the *project*
-  rename direction was settled (§6.36) — only files remain open.
 - **Webhook delivery (#19).** Creation works and is provisioned; delivery has
   never been observed. Nothing in the design depends on it, and nothing should
   until it's explained.
 - **Export weight on a real design file (#5).** Still unmeasured. `link`-by-
   default makes it less urgent, but the `sync` path's true cost is unknown.
-- **The creation carve-out** (§6.7/§6.15) and the `/`-as-path idea (§6.48), both
-  parked with their edge cases enumerated.
+- **The creation carve-out** (§6.7/§6.15) and **`keyed` mode** (§6.53/#47), both
+  parked deliberately with their edge cases enumerated and no feature file.
+- **The param table (#21)**, now a build prerequisite rather than a tidy-up:
+  four commands, four conventions, no inferable rule.
+
+**Note the §6.2 file-rename fork is no longer on this list** — §6.54 closed it by
+calling the RPC. That is the pattern worth inheriting: **every fork this chapter
+resolved late was resolved by touching the thing, not by reasoning harder about
+it.** Two of them (§6.26, §6.42) had been reasoned confidently in the wrong
+direction first.
 
 **For whoever picks up Chapter 2:** the build order is already implied by what's
-locked. `PenpotClient` first (SSE + Transit + the per-command param-casing
-table — four commands now confirmed to disagree), then the credential cards,
-then the nearest-ancestor resolver, then the pull. Read §6.18–§6.48 before
-anything else; the earlier sections are the survey that produced them and several
-have been superseded.
+locked. `PenpotClient` first (SSE + Transit + the per-command param table — four
+commands now confirmed to disagree), then the credential cards, then the
+nearest-ancestor resolver, then the pull. Read §6.18–§6.54 before anything else;
+the earlier sections are the survey that produced them and several have been
+superseded.
 
 ---
 

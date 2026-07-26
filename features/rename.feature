@@ -1,6 +1,5 @@
 # Rename — the ONE place saga §6.1's read-only stance is genuinely narrower than
-# it sounds, and the two directions are in different states of confirmation
-# (saga §6.2). The fork is STILL OPEN; do not resolve it here.
+# it sounds. BOTH DIRECTIONS ARE NOW SETTLED (saga §6.54 closed the §6.2 fork).
 #
 # PENPOT → NEXTCLOUD (confirmed, uncontroversial): covered by the same pull as
 # any other change — the pull compares Penpot's current name against what's on
@@ -8,24 +7,25 @@
 # both modes, because the name comes back in the ordinary listing (saga §5.5) —
 # no export needed to detect or apply it.
 #
-# NEXTCLOUD → PENPOT (open fork, saga §6.2 — NOT decided): `rename-file` is real,
-# one field, and confirmed tagged WEBHOOK in the live /api/doc. Whether read-only
-# extends to the FILENAME or only to CONTENT is unresolved. Renaming is a much
-# smaller, safer surface than editing shape data, so it's plausible either way.
+# NEXTCLOUD → PENPOT: RATIFIED (saga §6.54). `rename-file` was called live for
+# the first time and works — HTTP 200, returning {id, name, created-at,
+# modified-at}. Read-only was always about CONTENT (shape data we cannot
+# round-trip), not about a one-field name.
 #
-# WHAT DID GET DECIDED (saga §6.18): IF the fork is ratified, the attribution and
-# failure behaviour are already settled — the rename uses the acting user's
-# personal token when they have one (so Penpot's history names the human), falls
-# back to the service account otherwise, and on failure the LOCAL rename stands
-# while Penpot is left untouched. So the open question is narrowly "do we call it
-# at all," not "how would it work." Both branches are written below; the second
-# is tagged so CI skips it until a chapter ratifies the fork.
+# WHY IT WAS RATIFIED, briefly:
+#   - §6.36 already locked that renaming a PROJECT FOLDER propagates. Leaving
+#     files as a silent no-op made one gesture behave two ways in one Files app.
+#   - §6.22 makes Penpot authoritative for a mirrored file's name — so NOT
+#     propagating means a user's rename silently REVERTS on the next pull, which
+#     is the exact failure mode this app exists to avoid.
+#   - §6.18 had already settled attribution and failure behaviour, so the fork
+#     was narrowly "do we call it at all" — and the call demonstrably works.
 #
-# WHOEVER RATIFIES SHOULD WEIGH THIS: saga §6.22 makes Penpot authoritative for a
-# mirrored file's name. If NC→Penpot rename is NOT ratified, then renaming a
-# mirrored file in the Files app is a no-op that silently reverts on the next
-# pull — which is coherent, but needs to be TOLD to the user (see the scenario
-# below), exactly like the in-mapping move case in move.feature.
+# THE PARAM TRAP (saga §6.54): `rename-file` takes the id under plain **`id`**,
+# NOT `file-id`. Confirmed live: `file-id` returns HTTP 400 :params-validation.
+# This is the fourth distinct param convention in this API (`import-binfile` →
+# `project-id`, `export-binfile` → `fileId`, `create-project` → `team-id`).
+# There is no rule to infer — PenpotClient needs an explicit per-command table.
 #
 # @todo — no lib/ exists yet for either direction.
 
@@ -55,59 +55,81 @@ Feature: Renaming a mirrored Penpot file
     Then the mirrored file is renamed
     And "export-binfile" was never called to detect or apply the rename
 
-  # ── the settled behaviour if the user renames locally and the fork stays CLOSED ──
+  # ── Nextcloud → Penpot: RATIFIED (saga §6.54) ───────────────────────────────
+  # The fork is closed: renaming a mirrored file in the Files app DOES propagate,
+  # via "rename-file". §6.1's read-only stance was always about CONTENT — shape
+  # data we cannot meaningfully round-trip — not about a one-field name.
 
-  Scenario: A local rename that does not propagate is reverted by the pull, visibly
-    Given a mirrored ".penpot" file for a Penpot file named "Old Name"
-    When I rename the file to "My Name.penpot" in the Files app
-    Then the app explains that Penpot decides a mirrored file's name
-    And it explains the name will revert on the next pull
-    When a pull runs
-    Then the file is named "Old Name.penpot" again
-    And its "penpot_id" and content are unchanged
-    # Not data loss — a name correction, same shape as the in-mapping move case
-    # (move.feature). But correct behaviour still has to be VISIBLE behaviour.
-
-  # ── Nextcloud → Penpot: the OPEN FORK. Do not assume either answer. ──────────
-  # A future chapter must either ratify propagation via `rename-file` or reject
-  # it in favour of keeping renames strictly one-way. These scenarios describe
-  # what ratification WOULD mean; they are not committed behaviour.
-
-  @todo
-  Scenario: Whether renaming in Nextcloud propagates to Penpot is undecided
+  Scenario: Renaming a mirrored file in Nextcloud renames the Penpot file
     Given a mirrored ".penpot" file for a Penpot file named "Old Name"
     When I rename the file to "New Name.penpot" in the Files app
-    Then the rename is a real, simple RPC call away from propagating ("rename-file")
-    But whether this app actually calls it is an open architectural fork (saga §6.2)
-    And this scenario intentionally does not assert either outcome
+    Then "rename-file" is called with the file's Penpot id and "New Name"
+    And the Penpot file is named "New Name"
+    And the ".penpot" extension is stripped before sending and re-added locally
+    And the file's "penpot_id" is unchanged
+    # The extension is a Nextcloud-side affordance (saga §6.4) — Penpot's own
+    # name never carries it. This is the one thing file rename does that project
+    # rename does not (project folder names are bare).
 
-  @todo
-  Scenario: If ratified, a propagated rename is attributed to the acting user
-    Given the fork in saga §6.2 has been ratified
-    And the user has a valid personal Penpot token
+  Scenario: The rename call sends the file id under the plain "id" parameter
+    When a mirrored file is renamed and the rename propagates
+    Then "rename-file" is called with the id under the key "id"
+    And not under "file-id"
+    # Confirmed live (saga §6.54): {"file-id": ...} returns HTTP 400
+    # :params-validation with missing-key [:id]. There is no inferable casing
+    # rule across this API — only a per-command table. See saga open question #21.
+
+  Scenario: A propagated rename is attributed to the acting user
+    Given the user has a valid personal Penpot token
     When the user renames a mirrored file in the Files app
     Then "rename-file" is called using that user's own token
     And Penpot attributes the rename to that user, not to the service account
     # This is the whole reason personal tokens exist (saga §6.18) — rename is one
-    # one of the app's few write paths (saga §6.19), all of which attribute the
-    # same way.
+    # of the app's few write paths (saga §6.19), all of which attribute the same
+    # way.
 
-  @todo
-  Scenario: If ratified, a propagated rename with no personal token uses the service account
-    Given the fork in saga §6.2 has been ratified
-    And the user has no personal Penpot token configured
+  Scenario: A propagated rename with no personal token uses the service account
+    Given the user has no personal Penpot token configured
     When the user renames a mirrored file in the Files app
     Then "rename-file" is called using the service-account token
     And the user is told the change was attributed to the service account
 
-  @todo
-  Scenario: If ratified, a failed propagation never reverts the user's local rename
-    Given the fork in saga §6.2 has been ratified
+  Scenario: A failed propagation never reverts the user's local rename
     When the user renames a mirrored file and the Penpot call fails
     Then the Nextcloud file keeps its new name
     And Penpot is unchanged
     And the divergence is reported
+    And the next pull reconciles the name
     # Saga §6.18 rule 3 — a remote failure must never destroy local state.
+
+  # ── the name guard, same shape as the project one ───────────────────────────
+
+  Scenario: An empty file name is refused before it is sent
+    When I try to rename a mirrored file to a name that is empty once the extension is stripped
+    Then the rename is refused with an explanation
+    And Penpot is never contacted
+    # Penpot enforces this too — [:string {:min 1, :max 250}], confirmed live to
+    # return HTTP 400 on "" (saga §6.54). Our guard is a better message and a
+    # saved round trip, not the only defence.
+
+  Scenario: A file name longer than Penpot allows is refused before it is sent
+    When I try to rename a mirrored file to a name longer than 250 characters
+    Then the rename is refused with an explanation naming the limit
+    And Penpot is never contacted
+
+  @todo
+  Scenario: In nested mode, a Penpot file whose name contains a slash is skipped with a clear reason
+    Given the mapping's folder mode is "nested"
+    And a Penpot file named "Has/Slash"
+    When the pull runs
+    Then no file is created for it
+    And the admin is told the file cannot be mirrored because "/" is not allowed in a file name
+    And the message names the file so it can be renamed in Penpot
+    And every other file in the same project is mirrored normally
+    # Penpot accepts "/" in a FILE name exactly as it does in a project name —
+    # confirmed live, HTTP 200 (saga §6.54). So the §6.51 guard applies at both
+    # levels, with the same refuse-and-report rule and a narrower blast radius:
+    # one file skipped, not a whole subtree.
 
   # ── the invariant, true under either branch ─────────────────────────────────
 
