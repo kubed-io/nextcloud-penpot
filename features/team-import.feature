@@ -124,6 +124,5 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # This is the confirmed, locked behaviour (§6.13's tolerated-content rule).
     When the app's project-creation tag (name TBD) is applied to that subfolder
     Then this is PROPOSED to make the next pull call "create-project" in Penpot
-    But whether this app is ever allowed to originate a Penpot project this way
-    is an open fork against §6.1's read-only stance, not a committed behaviour
+    But whether this app may ever originate a Penpot project this way is an open fork against §6.1
     And this scenario intentionally does not assert that Penpot is contacted

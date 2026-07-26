@@ -41,26 +41,16 @@
 	</stubs>
 	<issueHandlers>
 		<!--
-			These reference classes that exist at runtime in a real Nextcloud but are
-			NOT shipped in nextcloud/ocp, so Psalm can't see them: private OC
-			internals some repair-steps / setup code reach for (`OC::$SERVERROOT` /
-			`OC::$configDir`, `OC_Util::setupFS`). Not real bugs, and there's no
-			public stub to import. Mirrors the master and apprentice repos' psalm.xml
-			(which pull the same private symbols) and integration_openai.
+			DELIBERATELY EMPTY FOR NOW. Both sibling repos suppress `UndefinedClass`
+			for the private OC internals their repair-steps reach for (`OC`,
+			`OC_Util`, `OC_User`) and suppress `MissingDependency` wholesale for an
+			IRootFolder/oc\hooks\emitter stub artifact.
+
+			This app's first slice touches none of that, and Psalm's
+			`UnusedIssueHandlerSuppression` correctly FAILS the build on a
+			suppression that never fires — so carrying the siblings' block here
+			ahead of the code would be an error, not foresight. Re-add each
+			suppression in the PR that first needs it, with the same reasoning.
 		-->
-		<UndefinedClass>
-			<errorLevel type="suppress">
-				<referencedClass name="OC" />
-				<referencedClass name="OC_Util" />
-				<referencedClass name="OC_User" />
-			</errorLevel>
-		</UndefinedClass>
-		<!--
-			MissingDependency doesn't support <referencedClass> in Psalm 6's schema.
-			The only instances are IRootFolder reporting its base oc\hooks\emitter as
-			missing — purely an OCP-stub artifact, not our code — so suppress the whole
-			(low-value) issue type. Same as the sibling repos.
-		-->
-		<MissingDependency errorLevel="suppress" />
 	</issueHandlers>
 </psalm>

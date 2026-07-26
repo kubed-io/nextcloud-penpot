@@ -1,7 +1,7 @@
 {
   "name": "penpot_sync",
   "version": "0.1.0",
-  "description": "Penpot Sync — Nextcloud frontend (Files row icon + Open in Penpot action)",
+  "description": "Penpot Sync \u2014 Nextcloud frontend (Files row icon + Open in Penpot action)",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
-  "comment": "No src/ yet — this is pre-code scaffolding (see saga/Chapter_1_First_Contact.md). @nextcloud/files (v4 for NC33) + friends land with the Files-row action in a later chapter, mirroring nextcloud-grafana's src/files.js.",
+  "comment": "No src/ yet \u2014 the JS frontend (Files row action + Open in Penpot) lands with the file-type slice, mirroring nextcloud-grafana's src/files.js. The @nextcloud/* runtime deps are declared ahead of it so the lockfile and CI cache are stable.",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",

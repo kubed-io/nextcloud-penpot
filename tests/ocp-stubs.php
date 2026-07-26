@@ -48,6 +48,30 @@ namespace OCP\AppFramework\Bootstrap {
 	}
 }
 
+namespace OCP {
+	// InstanceSettings and SetUrl read/write the base URL through AppConfig.
+	// Declaration-only: both tests mock it.
+	if (!interface_exists(IAppConfig::class, false)) {
+		interface IAppConfig {
+			public function getValueString(string $app, string $key, string $default = '', bool $lazy = false, bool $sensitive = false): string;
+
+			public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): bool;
+		}
+	}
+	// AdminSection's constructor deps. Nothing asserts on them yet, but the class
+	// must be loadable for a future AdminSection test.
+	if (!interface_exists(IL10N::class, false)) {
+		interface IL10N {
+			public function t(string $text, array $parameters = []): string;
+		}
+	}
+	if (!interface_exists(IURLGenerator::class, false)) {
+		interface IURLGenerator {
+			public function imagePath(string $appName, string $file): string;
+		}
+	}
+}
+
 namespace OCP\Settings {
 	// InstanceSettings implements IDeclarativeSettingsForm and reads
 	// DeclarativeSettingsTypes constants. Declaration-only: the constant *values*
