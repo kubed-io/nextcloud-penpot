@@ -8,13 +8,18 @@ folder tree you can organise however you like.
 [![Nextcloud](https://img.shields.io/badge/Nextcloud-30--33-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com)
 [![PHP](https://img.shields.io/badge/PHP-%E2%89%A58.1-777bb4?logo=php&logoColor=white)](composer.json)
 
-> **Status: pre-alpha — this describes the design, not shipped behavior.**
-> Nothing in `lib/`, `src/`, or `tests/` exists yet. This repository holds project
-> scaffolding, the design narrative in [`saga/`](saga/), and the executable
-> specification in [`features/`](features/) — every `.feature` file is tagged
-> `@todo` for exactly that reason. The behavior below is written as if it already
-> worked, because that's how the spec is written; treat it as a detailed design
-> document. See [Status](#status).
+> **Status: pre-alpha — most of what follows is design, not shipped behavior.**
+>
+> **What works today:** the app installs on Nextcloud and you can point it at a
+> Penpot instance — an admin setting plus `occ penpot_sync:set-url` /
+> `occ penpot_sync:show-config`. That's it. Six integration scenarios prove it
+> against a real Nextcloud in CI.
+>
+> **Everything else below is the design.** No credentials, no sync engine, no
+> file actions yet — those land slice by slice, and each `.feature` file stays
+> tagged `@todo` until its slice ships. The behavior is written as if it already
+> worked because that's how the spec is written; treat it as a detailed design
+> document backed by a live-verified API survey. See [Status](#status).
 
 ---
 
@@ -188,6 +193,14 @@ the next pull; the mapping is keyed on the team **id**, so it survives.
 
 Non-Penpot content inside a mapped folder is expected and never touched. The pull
 only acts on files it recognizes by their metadata.
+
+**Team Folders are optional, not a hard dependency.** When the `groupfolders` app
+is installed, a mapped team becomes a real Team Folder — the closest match to
+Penpot's own model, where the team *is* the access boundary. Without it, the app
+falls back to an ordinary folder shared to the mapped group, and everything else
+behaves identically (folder metadata works the same on both). Note that Team
+Folder *creation* is admin-only by default in Nextcloud, so mapping a team is an
+admin action unless delegation has been configured.
 
 ### The pull, and why it scales
 
@@ -489,14 +502,21 @@ mirroring and never deletes anything.
 
 ## Status
 
-Early development, pre-alpha, **version 0.1.0**. Scaffolding, docs, CI, and a full
-Gherkin specification exist; **zero `lib/`, `src/`, or `tests/` code does.** There
-is nothing to install or configure yet.
+Early development, pre-alpha, **version 0.1.0**.
 
-The [`saga/`](saga/) is the authoritative "where are we" record, ahead of this
-README and the feature files. Start with
-[Chapter 1: First Contact](saga/Chapter_1_First_Contact.md) — read §6.18–§6.37
-first if you want the decisions rather than the survey that produced them.
+**Implemented:** the admin Instance card (Penpot base URL) and its two `occ`
+commands, so the app can be pointed at an instance entirely headlessly. Covered
+by unit tests and by six Behat scenarios that install the app on a real Nextcloud
+and drive the CLI.
+
+**Not implemented:** everything else — credentials, mappings, the pull, file
+actions, the frontend. There is no `src/` yet.
+
+**Design chapter 1 is closed.** The [`saga/`](saga/) is the authoritative
+"where are we" record, ahead of this README and the feature files. Start with
+[Chapter 1: First Contact](saga/Chapter_1_First_Contact.md) — read §6.18–§6.48
+first if you want the decisions rather than the survey that produced them, and
+its closing section for what's settled, what's open, and where to build next.
 
 ### Executable specification
 

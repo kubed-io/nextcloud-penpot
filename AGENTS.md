@@ -13,13 +13,15 @@ mirrors Penpot design files into Nextcloud folders as read-only `.penpot` files.
 Lives under the [kubed-io](https://github.com/kubed-io) GitHub org. Licensed
 AGPL-3.0-or-later. Target: the official Nextcloud app store, eventually.
 
-**This repo is currently pre-code.** There is no `lib/`, `src/`, `tests/`,
-`templates/`, `css/`, or `img/` yet — only project scaffolding (docs, tooling
-config, CI workflows) and the design narrative in [`saga/`](saga/). If you were
-asked to write PHP or JS application code here, stop and re-read your task: the
-saga's Chapter 1 is a *survey*, not an implementation plan ready to execute
-against, and several load-bearing decisions are still open forks (see
-[Architectural non-negotiables](#architectural-non-negotiables) below).
+**This repo is in its FIRST SLICE.** `lib/`, `tests/` and `img/` exist and are
+small on purpose: an admin Instance card holding the Penpot base URL, two `occ`
+commands, and the tests that cover them. There is no `src/`, `templates/` or
+`css/` yet, and no sync engine, credentials, or file actions.
+
+Chapter 1 of the saga is CLOSED and carries a complete architecture — but read
+it before building, because several load-bearing decisions are still open forks
+(see [Architectural non-negotiables](#architectural-non-negotiables) below), and
+a fork is not yours to resolve silently.
 
 For the user-facing "what does it do?" → [README.md](README.md).
 
@@ -39,20 +41,24 @@ For the user-facing "what does it do?" → [README.md](README.md).
 ## First moves on any task
 
 1. **Read [README.md](README.md)** if you don't already know what the app is
-   meant to do — and note its "Status: early development, pre-code" framing is
-   literal, not boilerplate.
+   meant to do — its "what works today vs. what's design" split is literal, not
+   boilerplate.
 2. **Read [CONTRIBUTING.md](CONTRIBUTING.md)** for the process — issue-first
    flow, PR rules, what CI expects, testing policy, release flow. **Don't
    re-derive any of this; the contributing doc is the source of truth.**
-3. **Read [`saga/Chapter_1_First_Contact.md`](saga/Chapter_1_First_Contact.md) in
-   full before writing anything design-relevant.** It's long (~1000 lines) and
-   written in an alien-survey narrative style (deliberate, per the project
-   owner) — don't skim it. It is the authoritative source for what's confirmed
-   true about Penpot's API, what's locked architecturally, and what's still an
-   **open fork**. A fork marked "raised, not decided" is not yours to silently
-   resolve — either flag it back to a human or write code that keeps both
-   options open. **Read §6.18–§6.37 first**: they close several forks that
-   earlier sections still discuss as open, and they carry the current decisions.
+3. **Read [`saga/Chapter_1_First_Contact.md`](saga/Chapter_1_First_Contact.md)
+   before writing anything design-relevant.** It's long and written in an
+   alien-survey narrative style (deliberate, per the project owner) — don't skim
+   it. It is the authoritative source for what's confirmed true about Penpot's
+   API, what's locked architecturally, and what's still an **open fork**. A fork
+   marked "raised, not decided" is not yours to silently resolve — either flag it
+   back to a human or write code that keeps both options open.
+
+   **Chapter 1 is CLOSED.** Read **§6.18–§6.48 first** — they carry the current
+   decisions; everything before them is the survey that produced them, and
+   several sections are explicitly superseded (each says so inline). The
+   "Chapter 1 — closed" section at the end summarises what was settled, what was
+   left open, and where to start building.
 
 This repo is a deliberate third member of a family started by
 [kubed-io/nextcloud-n8n](https://github.com/kubed-io/nextcloud-n8n) (the
@@ -76,10 +82,10 @@ CONTRIBUTING.md owns that — don't ask the human to re-explain the PR flow.
 | Path | What's there |
 |---|---|
 | [appinfo/](appinfo/) | NC app metadata (`info.xml` only — no `routes.php` yet; it would reference Controller classes that don't exist). |
-| `lib/` | **Does not exist yet.** Chapter 2+ work: PHP backend (`OCA\PenpotSync`), same subdir shape as the sibling apps once it lands (`Service/`, `Listener/`, `BackgroundJob/`, `Command/`, `Settings/`, `AppInfo/`, …). |
-| `src/` | **Does not exist yet.** JS frontend source, Vite-built to `dist/penpot_sync-files.js` per [vite.config.js](vite.config.js) — config is wired ahead of the code. |
-| `tests/` | **Does not exist yet.** PHPUnit config (`tests/phpunit.unit.xml`) and Psalm stub (`tests/external-stubs.php`) referenced by [composer.json](composer.json) / [psalm.xml](psalm.xml) are not present — CI is structured to expect them, not to require them yet (see [CONTRIBUTING.md](CONTRIBUTING.md)). |
-| [.github/workflows/](.github/workflows/) | CI: `tests.yml`, `quality.yml`, `pr.yml`, `package.yml`, `publish.yml`, `copilot-setup-steps.yml`. Structurally complete; will have little to actually exercise until `lib/`/`src/` exist. |
+| [lib/](lib/) | PHP backend (`OCA\PenpotSync`). Currently `AppInfo/`, `Settings/` (Instance card + AdminSection) and `Command/` (set-url, show-config). `Service/`, `Listener/`, `BackgroundJob/` arrive with the sync engine. |
+| `src/` | **Does not exist yet.** JS frontend, Vite-built to `dist/penpot_sync-files.js` per [vite.config.js](vite.config.js) — config is wired ahead of the code. Lands with the file-type slice. |
+| [tests/](tests/) | `unit/` (standalone, no NC server — see `bootstrap.php` + `ocp-stubs.php`) and `integration/` (Behat against a real Nextcloud, plus `bin/mint-penpot-token.sh`). `ocp-stubs.php` grows one entry per OCP interface a test mocks. |
+| [.github/workflows/](.github/workflows/) | CI: `tests.yml`, `quality.yml`, `integration.yml`, `pr.yml`, `package.yml`, `publish.yml`, `copilot-setup-steps.yml`. All green on the current slice. |
 | [.devcontainer/](.devcontainer/) | PHP 8.3 + Node + GH CLI dev environment. |
 | [saga/](saga/) | The long-form design narrative. **Read Chapter 1 before touching anything design-relevant.** |
 | [composer.json](composer.json) [package.json](package.json) | Dep manifests + script entrypoints, matching the sibling apps' tooling (PHPUnit, Psalm, php-cs-fixer / ESLint, Vite, Vitest) even though there's no code to run them against yet. |
@@ -100,7 +106,7 @@ for the exact config path.
 ## Core commands
 
 ```sh
-# PHP (once lib/ and tests/ exist)
+# PHP
 composer install
 composer run test:unit       # PHPUnit unit suite
 composer run cs:check        # php-cs-fixer dry-run
@@ -114,10 +120,9 @@ npm run build                # produces dist/penpot_sync-files.js
 npm run watch                # rebuild on save
 ```
 
-These are the same commands the sibling apps use — the tooling is wired up
-ahead of the code it will run against, per this repo's scaffolding brief. Don't
-be surprised if `composer run test:unit` currently has nothing to collect; it's
-not broken, there's just no `tests/` yet.
+Same commands as the sibling apps. The unit suite and Psalm run for real today;
+the JS build is a no-op until `src/` exists. Integration runs via Behat from
+`tests/integration/` (see `.github/workflows/integration.yml`).
 
 CI runs the JS/PHP install + lint/build steps today; see
 [CONTRIBUTING.md §What CI expects](CONTRIBUTING.md#what-ci-expects) for exactly
@@ -187,10 +192,10 @@ forks* listed right after, which are explicitly NOT decided.
   maintenance:mimetype:update-db`/`update-js` mechanism both sibling apps use
   (saga §6.4). Don't assume a free Penpot-branded mimetype exists.
 
-### Decided in the latest passes (§6.18–§6.37) — these ARE locked
+### Decided across §6.18–§6.48 — these ARE locked
 
 Several forks that earlier drafts of this file listed as open have since been
-closed. **Read §6.18–§6.37 before anything else** — they supersede parts of
+closed. **Read §6.18–§6.48 before anything else** — they supersede parts of
 §6.1, §6.9, §6.12, §6.13 and §6.16, and the superseded sections carry inline
 markers saying so.
 

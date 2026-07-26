@@ -29,7 +29,28 @@
 
 ---
 
-## Where we are — 2026-07-26 · **THE ACCESS MODEL IS DECIDED. RESTORE IS REAL BUT LOSSY.**
+## Status: **CHAPTER CLOSED** — 2026-07-26
+
+> **First contact is complete.** This chapter opened the line of communication
+> with a system we'd never met, probed it until we understood its anatomy, and
+> negotiated the terms on which the two sides will interact. It ends with a
+> complete architecture (§6.1–§6.48), an executable spec (23 feature files, ~255
+> scenarios), and a working first slice shipped green to CI — the app installs on
+> a real Nextcloud and its base URL is configurable entirely over `occ`.
+>
+> Chapter 2 is where the embassy actually gets built.
+>
+> **Read [§6.18–§6.48](#618--decision-locked-the-access-model--a-required-service-account-reads-an-optional-personal-token-writes-as-you)
+> first.** They carry the current decisions; everything before them is the survey
+> that produced them, and several sections are explicitly superseded (each one
+> says so inline).
+>
+> See [Chapter 1 — closed](#chapter-1--closed) at the end for what this chapter
+> settled, what it deliberately left open, and where Chapter 2 should start.
+
+---
+
+## Where we were — 2026-07-26 · **THE ACCESS MODEL IS DECIDED. RESTORE IS REAL BUT LOSSY.**
 
 > **Latest pass (2026-07-26).** Command read the whole survey and said: *stop
 > surveying, decide.* This is where the big forks close. Read §6.18–§6.25 first
@@ -3192,6 +3213,76 @@ the account first, because Penpot has no pre-existing admin (§6.8 — there is 
 admin concept at all). That's more steps but strictly less privileged, and it
 means each CI run gets a genuinely isolated account rather than sharing one.
 
+### 6.48 — Idea parked (NOT decided): `/` in a Penpot project name as an inferred Nextcloud path
+
+> **Dr K:** *"what if we used the '/' in a penpot project name to infer the path
+> in nextcloud … then we use the path like naming to our advantage. This could
+> open a lot of edge cases though … we can capture this as a maybe feature when
+> things smooth out."*
+
+Recorded deliberately as a **maybe**, with the groundwork done so a future
+chapter can evaluate it without re-deriving anything. Not on any roadmap.
+
+**The idea.** A Penpot project named `foo/bar` would materialise in Nextcloud as
+a plain folder `foo/` containing a project folder `bar/`. Penpot stays flat;
+Nextcloud gets structure inferred from the name. `foo/bar`, `foo/baz` and
+`fuzz/buzz` would produce two ordinary parent folders and three project folders.
+
+**Why it's genuinely appealing.** It turns §6.38's most awkward finding into a
+feature. Penpot accepts `/` in project names but Nextcloud can't use it in a
+folder name — currently that's an *exception* we have to sanitise around and
+report (§6.36's names-always-match rule cannot hold for such a project). This
+idea reframes the same character as the thing that carries structure. It also
+gives Penpot users a way to express hierarchy their own tool doesn't have, using
+a convention designers already reach for by hand.
+
+**What was checked live, so the evaluation starts from facts:**
+
+| Probe | Result |
+|---|---|
+| `foo/bar`, `foo/baz`, `fuzz/buzz` | all created fine |
+| `a/b/c` (multi-level) | created fine |
+| `/leading`, `trailing/` (degenerate) | **created fine** |
+| A **duplicate** `foo/bar` in the same team | **created fine — two projects, same name** |
+| Rename `foo/baz` → `fuzz/buzz` when `fuzz/buzz` already exists | **HTTP 204, silently allowed** |
+
+**So Penpot enforces nothing here**, which is exactly what makes this hard: every
+constraint would have to be ours, on a namespace Penpot lets users freely
+collide in.
+
+**The edge cases, the reason this is parked rather than adopted.** Dr K named the
+central one; the probes surface several more:
+
+1. **The rename case.** Renaming `foo/bar` → `fuzz/buzz` has to reconcile
+   against *both* sides: does `fuzz/buzz` already exist in Penpot (yes, allowed —
+   proven above), and does the `fuzz/` folder already exist in Nextcloud, and is
+   the existing `buzz/` a project folder or an ordinary one?
+2. **Duplicates are legal in Penpot and impossible in Nextcloud.** Two projects
+   named `foo/bar` want the same folder. §6.36's collision question (open #31)
+   already exists for flat names; path-inference multiplies it.
+3. **Whose folder is `foo/`?** It's app-created but not a project — so is it
+   tagged, tolerated, or something new? What happens when the last project under
+   it is renamed away: does `foo/` get garbage-collected, and what if the user
+   put their own files in it?
+4. **It collides head-on with free nesting (§6.29).** Users may already move
+   project folders anywhere. If the name also dictates a path, the two rules
+   contradict: does renaming a project *move* its folder out from where the user
+   deliberately put it? That is a real conflict with a locked decision, not a
+   detail.
+5. **Degenerate names.** `/leading`, `trailing/`, and `a/b/c` all create
+   successfully, so the design would need defined behaviour for each rather than
+   assuming users type clean paths.
+6. **The reverse direction.** If a user creates a folder tree in Nextcloud and
+   tags a leaf as a project (§6.39's guard), does the project get named with the
+   inferred path? If so, moving that folder would rename the Penpot project —
+   surprising, and again in tension with §6.29.
+
+**Status: parked.** Point 4 alone means adopting this requires revisiting a
+locked decision, so it isn't a small additive feature — it's a different model of
+what a project folder's *location* means. Revisit only once the core mirror is
+built and stable, and only with an explicit answer to "does the name control the
+path, or does the user?" — those cannot both be true.
+
 ## Open questions for the next chapter
 
 Struck items are now answered (see Course 5); the rest are still open.
@@ -3407,6 +3498,82 @@ Struck items are now answered (see Course 5); the rest are still open.
 43. **New (§6.44), operational:** trashed files carry a `.dTIMESTAMP` suffix on
     their on-disk name (`foo.penpot.d1785087619`). Match trash entries by fileid
     or metadata, **never by filename** — a filename match will silently miss.
+44. **New (§6.48), parked not open:** `/` in a project name as an inferred
+    Nextcloud path. Appealing (it turns §6.38's sanitisation problem into a
+    feature) but it **contradicts §6.29's free nesting** — a name that dictates a
+    path and a user who moves folders freely cannot both be authoritative.
+    Evidence is gathered; revisit only after the core mirror is stable, and only
+    with an explicit answer to "name or user decides location?"
+
+---
+
+## Chapter 1 — closed
+
+> **Dr K:** *"we made first contact — chapter one was more like opening the line
+> of communication and probing to figure out how the two species will interact."*
+>
+> That's the chapter, exactly. We were sent to answer *"can we dock with this
+> planet?"* and the honest answer turned out to be **yes, but not the way we
+> docked with the last two.** Penpot isn't a system that speaks our protocol
+> badly — it's one with a genuinely different anatomy: no admin caste (§6.8),
+> flat territory where we expected hierarchy (§6.5), a customs desk that speaks
+> its own dialect (Transit), and a strange biology where a "deleted" thing is
+> alive but unreachable for seven days (§6.26).
+>
+> So the work wasn't translation, it was **negotiating the terms of contact**:
+> who may speak for whom (§6.18), what we're allowed to touch and what we only
+> observe (§6.19 — one destructive verb in the entire vocabulary), what their
+> flatness should become in our world and what ours should stay out of theirs
+> (§6.29, §6.35). Several of those terms were only settled by *going down and
+> touching things* — and twice by being wrong first and corrected (§6.27→§6.34,
+> §6.42).
+>
+> First contact is over. We know how the two species interact. Chapter 2 is
+> where we actually build the embassy.
+
+What this chapter settled, and what it deliberately did not:
+
+**What it produced:**
+
+- **A surveyed and then *landed-on* planet.** Every API claim in this chapter was
+  witnessed against a live instance, not read off a blog post — including two
+  real infrastructure bugs found and fixed along the way (§5.2, §5.3), and a
+  handful of findings that contradicted the documentation (`import-binfile` is
+  SSE and ignores `name`; `get-projects` doesn't filter deleted rows; Penpot's
+  name rules are looser than Nextcloud's, not stricter).
+- **A complete architecture**, §6.1–§6.48: the access model, the mapping shape,
+  the mode axis, nesting, drafts, the trash, restore, failure behaviour. Every
+  locked decision carries the evidence that produced it, and every superseded one
+  carries an inline marker saying what replaced it — including two of my own
+  conclusions Dr K correctly overturned (§6.27 → §6.34, and the §6.42 correction
+  to an earlier hope).
+- **An executable specification**: 23 `.feature` files, ~255 scenarios, written
+  before the code rather than after it.
+- **A working first slice**, shipped and green: the app installs on a real
+  Nextcloud and its base URL is configurable entirely over `occ`, proven by six
+  live integration scenarios in CI.
+
+**What it deliberately left open** — these are the honest inheritance, not
+oversights. The full list lives below; the load-bearing ones are:
+
+- **The §6.2 file-rename fork.** Still genuinely undecided. Note the *project*
+  rename direction was settled (§6.36) — only files remain open.
+- **Webhook delivery (#19).** Creation works and is provisioned; delivery has
+  never been observed. Nothing in the design depends on it, and nothing should
+  until it's explained.
+- **Export weight on a real design file (#5).** Still unmeasured. `link`-by-
+  default makes it less urgent, but the `sync` path's true cost is unknown.
+- **The creation carve-out** (§6.7/§6.15) and the `/`-as-path idea (§6.48), both
+  parked with their edge cases enumerated.
+
+**For whoever picks up Chapter 2:** the build order is already implied by what's
+locked. `PenpotClient` first (SSE + Transit + the per-command param-casing
+table — four commands now confirmed to disagree), then the credential cards,
+then the nearest-ancestor resolver, then the pull. Read §6.18–§6.48 before
+anything else; the earlier sections are the survey that produced them and several
+have been superseded.
+
+---
 
 ## References
 

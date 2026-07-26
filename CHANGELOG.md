@@ -25,3 +25,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin setting for the Penpot base URL, with `occ penpot_sync:set-url` and `occ penpot_sync:show-config` — the app can now be pointed at a Penpot instance entirely headlessly.
 - Unit suite covering the URL setting and its CLI, plus a Behat integration suite that installs the app on a real Nextcloud and drives those commands.
 - `tests/integration/bin/mint-penpot-token.sh`: mints a Penpot access token headlessly for CI, so the integration suite needs no repository secret.
+- Saga Chapter 1 closed: the full design record for the Penpot integration, every API claim verified against a live instance.
