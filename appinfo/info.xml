@@ -20,14 +20,16 @@ writeback. A `.penpot` export is an opaque archive of nested design data —
 editing it outside Penpot wouldn't produce anything sane to re-import. Design
 happens in Penpot; Nextcloud holds the backup and the click-through.
 
-⚠️ **Very early development.** This release contains only the first slice: an
-admin setting (and matching CLI commands) for the Penpot base URL. There is no
-sync engine, no credential storage, and no file actions yet — nothing is
-mirrored. See the project's `saga/` design narrative for what's confirmed,
-what's locked, and what's still an open question.
+⚠️ **Very early development.** This release contains the base URL setting, the
+service-account token, and the Penpot API client behind them — enough to
+configure the app and verify it can reach your Penpot
+(`occ penpot_sync:probe` lists the teams and projects the token can see). There
+is no sync engine and no file actions yet: nothing is mirrored. See the
+project's `saga/` design narrative for what's confirmed, what's locked, and
+what's still an open question.
 
-The `enable-access-tokens` Penpot instance flag will be required once the sync
-engine lands; it is off by default upstream.
+The `enable-access-tokens` Penpot instance flag is required to mint the token;
+it is off by default upstream.
 
 This is a community integration and is not affiliated with, endorsed by, or
 sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are

@@ -7,26 +7,23 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: the first slice only — the app installs and enables, and the
-# Penpot base URL can be set and read back over occ. That is deliberately small;
-# what it proves is that the whole pipeline is REAL (a genuine Nextcloud, our app
-# mounted into apps/, our occ commands driving it, assertions on the result).
-# Every other feature file stays @todo and is filtered out by behat.dist.yml.
+# SCOPE RIGHT NOW: app install/enable, the base URL over occ, and — new with the
+# client — a REAL connection to a REAL Penpot. Every other feature file stays
+# @todo and is filtered out by behat.dist.yml.
 #
-# THE PENPOT SERVICE IS NOT STARTED YET, ON PURPOSE. Nothing in this slice
-# contacts Penpot, so booting a 3-container Penpot stack per run would spend
-# minutes asserting nothing.
+# WHY THE PENPOT STACK IS WORTH THREE CONTAINERS PER RUN. This suite is the ONLY
+# place the wire format is asserted. The unit suite deliberately does not mock
+# the transport: Penpot speaks Transit over an RPC bus, and a mock of a protocol
+# we have repeatedly misread would only encode the misreading. That is not
+# hypothetical — the client shipped three bugs that no hand-written fixture would
+# have caught (two Transit cache-tracking bugs, and `json_encode([])` producing
+# `[]` where Penpot's handler demands `{}` and 500s otherwise). All three were
+# found by calling a live instance.
 #
-# CORRECTION TO AN EARLIER NOTE IN THIS FILE: it claimed Penpot has no headless
-# token mint. That was wrong, and it's now been checked against a live instance
-# (saga §6.47). Penpot CAN mint one without a browser:
+# NO REPOSITORY SECRET IS NEEDED (saga §6.47). Penpot can mint a token headlessly:
 #   prepare-register-profile → register-profile → login-with-password
 #     → create-access-token
-# All four commands confirmed present. So — like Grafana, and unlike n8n — this
-# suite needs **no repository secret**. The script is written and documented at
-# tests/integration/bin/mint-penpot-token.sh; the commented `services:` block
-# below is the shape it expects. Uncomment both in the same PR that lands the
-# first scenario needing Penpot.
+# so each run creates its own isolated account. See bin/mint-penpot-token.sh.
 
 on:
   pull_request:
@@ -81,41 +78,41 @@ jobs:
         # NC 33 is the app's max-version; SQLite is the fast integration path.
         server-versions: ['stable33']
 
-    # services:
-    #   # ── Penpot stack, ready to switch on when a scenario needs it ──────────
-    #   # Penpot needs postgres + valkey alongside the backend, which is why this
-    #   # is heavier than Grafana's single container. The FLAGS are load-bearing
-    #   # for bin/mint-penpot-token.sh:
-    #   #   enable-access-tokens       — create-access-token is gated behind it
-    #   #   disable-email-verification — else registration waits on an email
-    #   # and it must NOT carry disable-registration / disable-login-with-password.
-    #   # (Our own production instance sets those because it's OIDC/LDAP-gated,
-    #   # which is exactly why the mint script cannot be run against it.)
-    #   postgres:
-    #     image: postgres:15
-    #     env:
-    #       POSTGRES_DB: penpot
-    #       POSTGRES_USER: penpot
-    #       POSTGRES_PASSWORD: penpot
-    #     options: >-
-    #       --health-cmd "pg_isready -U penpot"
-    #       --health-interval 5s --health-timeout 5s --health-retries 20
-    #   valkey:
-    #     image: valkey/valkey:8
-    #     options: >-
-    #       --health-cmd "valkey-cli ping"
-    #       --health-interval 5s --health-timeout 5s --health-retries 20
-    #   penpot:
-    #     image: penpotapp/backend:2.17.0
-    #     ports:
-    #     - 6060:6060
-    #     env:
-    #       PENPOT_FLAGS: enable-access-tokens disable-email-verification disable-onboarding disable-secure-session-cookies
-    #       PENPOT_DATABASE_URI: postgresql://postgres/penpot
-    #       PENPOT_DATABASE_USERNAME: penpot
-    #       PENPOT_DATABASE_PASSWORD: penpot
-    #       PENPOT_REDIS_URI: redis://valkey/0
-    #       PENPOT_PUBLIC_URI: http://localhost:6060
+    services:
+      # ── Penpot stack ──────────────────────────────────────────────────────
+      # Penpot needs postgres + valkey alongside the backend, which is why this
+      # is heavier than Grafana's single container. The FLAGS are load-bearing
+      # for bin/mint-penpot-token.sh:
+      #   enable-access-tokens       — create-access-token is gated behind it
+      #   disable-email-verification — else registration waits on an email
+      # and it must NOT carry disable-registration / disable-login-with-password.
+      # (Our own production instance sets those because it's OIDC/LDAP-gated,
+      # which is exactly why the mint script cannot be run against it.)
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: penpot
+          POSTGRES_USER: penpot
+          POSTGRES_PASSWORD: penpot
+        options: >-
+          --health-cmd "pg_isready -U penpot"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      valkey:
+        image: valkey/valkey:8
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      penpot:
+        image: penpotapp/backend:2.17.0
+        ports:
+        - 6060:6060
+        env:
+          PENPOT_FLAGS: enable-access-tokens disable-email-verification disable-onboarding disable-secure-session-cookies
+          PENPOT_DATABASE_URI: postgresql://postgres/penpot
+          PENPOT_DATABASE_USERNAME: penpot
+          PENPOT_DATABASE_PASSWORD: penpot
+          PENPOT_REDIS_URI: redis://valkey/0
+          PENPOT_PUBLIC_URI: http://localhost:6060
 
     steps:
     # ── Provision: install everything up front, before any action runs ───────
@@ -154,20 +151,37 @@ jobs:
         ./occ config:system:set trusted_domains 1 --value=localhost
 
     # ── Act: everything provisioned — now do the work ────────────────────────
-    # PREREQUISITE, once the Penpot service above is switched on: mint a token so
-    # scenarios can act as "a user who already has one". How a token gets created
-    # is out of the app's scope — this is pure test setup, and needs no secret.
-    #
-    # - name: Mint Penpot token (prerequisite)
-    #   id: penpot_token
-    #   env:
-    #     PENPOT_URL: http://localhost:6060
-    #   run: |
-    #     token="$(bash apps/$APP_ID/tests/integration/bin/mint-penpot-token.sh)"
-    #     if [ -z "$token" ]; then echo "no token minted" >&2; exit 1; fi
-    #     echo "::add-mask::$token"
-    #     echo "token=$token" >> "$GITHUB_OUTPUT"
-    #     echo "✅ Penpot access token obtained (length ${#token})"
+    # Penpot's backend runs migrations on first boot, so the container is
+    # "started" well before the RPC bus answers. Poll a real endpoint rather
+    # than sleeping a guessed interval.
+    - name: Wait for Penpot
+      env:
+        PENPOT_URL: http://localhost:6060
+      run: |
+        for i in $(seq 1 60); do
+          if curl -fsS -o /dev/null "$PENPOT_URL/api/health"; then
+            echo "✅ Penpot is up after ${i}s"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Penpot did not become ready in 60s" >&2
+        docker ps -a
+        exit 1
+
+    # PREREQUISITE: mint a token so scenarios can act as "a user who already has
+    # one". How a token gets created is out of the app's scope — this is pure
+    # test setup, and needs no secret (saga §6.47).
+    - name: Mint Penpot token (prerequisite)
+      id: penpot_token
+      env:
+        PENPOT_URL: http://localhost:6060
+      run: |
+        token="$(bash apps/$APP_ID/tests/integration/bin/mint-penpot-token.sh)"
+        if [ -z "$token" ]; then echo "no token minted" >&2; exit 1; fi
+        echo "::add-mask::$token"
+        echo "token=$token" >> "$GITHUB_OUTPUT"
+        echo "✅ Penpot access token obtained (length ${#token})"
 
     # Behat runs from the integration dir; OCC points back at the server root so
     # `occ` resolves. Formatters (pretty → stdout, junit → junit/) are configured
@@ -176,6 +190,8 @@ jobs:
       working-directory: apps/${{ env.APP_ID }}/tests/integration
       env:
         OCC: php ${{ github.workspace }}/occ
+        PENPOT_URL: http://localhost:6060
+        PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
       run: vendor/bin/behat --config behat.dist.yml
 
     - name: Publish integration results

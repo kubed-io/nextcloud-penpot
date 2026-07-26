@@ -67,6 +67,39 @@ Feature: Admin and per-user Penpot connection setup
   Scenario: The URL card carries no credential field
     Then no credential field exists on this card — tokens are configured elsewhere
 
+  # ── the live connection: the client, against a real Penpot — IMPLEMENTED ────
+  # These run against a real Penpot container in CI, with a token minted per run
+  # (saga §6.47). They are the ONLY place the wire format is asserted: the unit
+  # suite deliberately does not mock the transport, because a mock of a protocol
+  # we have repeatedly misread would only encode the misreading.
+
+  Scenario: A configured connection reports the teams the token can see
+    Given the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    When the connection is checked
+    Then the connection succeeds
+    And at least one Penpot team is listed
+    # Reporting TEAMS rather than "OK" is the point (saga §6.12/§6.18): Penpot
+    # visibility is always membership-scoped, so which teams a token can see is
+    # the fact that decides what can be mapped.
+
+  Scenario: The connection check also lists projects, proving multi-record decoding
+    Given the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    When the connection is checked including files
+    Then the connection succeeds
+    And at least one Penpot project is listed
+    # A listing with several records is what exercises Transit's key cache —
+    # the second and later records are almost entirely back-references, and two
+    # real decoder bugs were invisible until exactly this shape was decoded.
+
+  Scenario: Without a token, the connection check fails and says why
+    Given the Penpot base URL points at the test instance
+    And no service-account token is configured
+    When the connection is checked
+    Then the connection fails
+    And the failure explains that no token is configured
+
   # ── the service-account token: required, admin-configured, does all reading ──
 
   @todo
