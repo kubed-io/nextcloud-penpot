@@ -48,7 +48,7 @@ Feature: Admin and per-user Penpot connection setup
 
   Scenario: Admin sets the instance-wide Penpot base URL
     When the admin sets the Penpot base URL
-    Then the Penpot base URL is saved
+    Then the Penpot base URL is stored
 
   Scenario: The stored URL is normalised so later callers can concatenate paths
     When the admin sets the Penpot base URL to "https://penpot.example.com/"

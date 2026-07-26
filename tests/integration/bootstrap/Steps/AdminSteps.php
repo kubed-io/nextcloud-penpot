@@ -33,8 +33,15 @@ trait AdminSteps {
 		$this->occ('penpot_sync:set-url ' . escapeshellarg($url));
 	}
 
-	/** @Then the Penpot base URL is saved */
-	public function thePenpotBaseUrlIsSaved(): void {
+	/**
+	 * NOTE: deliberately NOT "the Penpot base URL is saved" — Behat matches step
+	 * text by regex, and that phrasing is also a match for the `:url` variant
+	 * below ("saved" binds as the argument), which makes the step ambiguous and
+	 * fails the scenario. Keeping the two phrasings clearly distinct is the fix.
+	 *
+	 * @Then the Penpot base URL is stored
+	 */
+	public function thePenpotBaseUrlIsStored(): void {
 		$res = $this->occ('penpot_sync:show-config');
 		Assert::assertSame(0, $res['exit'], "show-config reported nothing configured:\n{$res['output']}");
 		Assert::assertStringContainsString(
