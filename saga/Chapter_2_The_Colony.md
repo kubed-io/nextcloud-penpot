@@ -362,6 +362,28 @@ Behat steps here throw plain exceptions carrying the command's own output.
 (`AdminSteps` had the same latent bug and looked fine, because its assertions had
 never failed.)
 
+### R1.7 — Nextcloud's SSRF guard blocks Penpot whenever Penpot isn't public
+
+`allow_local_remote_servers` must be `true` for Nextcloud to reach Penpot at any
+private address — a Kubernetes service name, a LAN IP, `localhost`. Otherwise
+the request never leaves:
+
+```
+Host "localhost" violates local access rules
+```
+
+This is a **deployment requirement, not a CI quirk** — §6.17 hit the same gate
+on the live cluster, where Penpot is reached at
+`penpot.cloud.svc.cluster.local`. It is now in the README's setup section, and
+`PenpotClient` catches `LocalServerException` specifically so the message names
+the setting instead of reporting a generic connection failure.
+
+**Worth noting how this one was found**, because it validates R1.6's fix: the
+diagnostic the client emits is *exactly* the fix. Once the harness stopped
+masking failures, CI printed the error message, and the error message named the
+setting to change. No investigation was needed. That is what error text is for,
+and it is why R1.6 was worth fixing before chasing the failure underneath it.
+
 ### What this round retires and what it hardens
 
 - **Open question #21 is no longer a "systematic pass" nice-to-have.** It is a

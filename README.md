@@ -510,6 +510,24 @@ mirroring and never deletes anything.
 |---|---|
 | `enable-access-tokens` | Lets a Penpot user mint the token this app authenticates with. Off by default upstream. |
 
+### Required Nextcloud setting, if Penpot is not public
+
+If Nextcloud reaches Penpot at a private or in-cluster address — a Kubernetes
+service name, a LAN IP, `localhost` — Nextcloud's SSRF guard blocks the request
+before it leaves:
+
+```
+Host "penpot.cloud.svc.cluster.local" violates local access rules
+```
+
+```bash
+occ config:system:set allow_local_remote_servers --value=true --type=boolean
+```
+
+`occ penpot_sync:probe` reports this case by name rather than as a generic
+connection failure, so you should not have to guess. Not needed when Penpot is
+on a public hostname.
+
 > `enable-webhooks` was expected to be a second requirement, as a fast-path
 > trigger for the pull. It isn't currently part of the design: webhook *creation*
 > works, but **delivery has never been observed** — two confirmed mutations
