@@ -369,16 +369,21 @@ final class PenpotClient {
 		$status = $response->getStatusCode();
 		$body = (string)$response->getBody();
 
+		// STATUS FIRST, ALWAYS. An earlier version short-circuited on an empty
+		// body before checking the status, which turned any empty-bodied failure
+		// — a 502 from a proxy, a 500 that logged instead of rendering — into a
+		// successful `null`. An empty body only means "no content" when the
+		// status says the request succeeded.
+		if ($status < 200 || $status >= 300) {
+			throw $this->errorFor($command, $status, $body);
+		}
+
 		if ($status === 204 || $body === '') {
 			// `rename-project` answers exactly this way (saga §6.38).
 			return null;
 		}
 
-		if ($status >= 200 && $status < 300) {
-			return $this->transit->decode($body);
-		}
-
-		throw $this->errorFor($command, $status, $body);
+		return $this->transit->decode($body);
 	}
 
 	/**

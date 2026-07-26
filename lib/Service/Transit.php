@@ -61,8 +61,9 @@ use OCA\PenpotSync\Exception\PenpotApiException;
  *
  * **3. The write cache (the dangerous part).** Transit assigns every map key it
  * has seen an index, and replaces later occurrences with `^<index>` where the
- * index is base-90-ish encoded (`^0`, `^1`, … `^z`, `^10`). This is why the
- * second record in a Penpot list response looks like nonsense on its own:
+ * index is base-44 encoded from `'0'` (`^0`…`^9`, `^:`, `^;`, … `^[`, then two
+ * digits `^10`). This is why the second record in a Penpot list response looks
+ * like nonsense on its own:
  *
  *     [["^ ","~:name","My firsty","~:revn",5],
  *      ["^ ","^0","Another","^1",2]]
@@ -99,7 +100,7 @@ final class Transit {
 	 */
 	private const CACHE_MAX = 94;
 
-	/** First printable character used by Transit's base-90 index encoding. */
+	/** First character of Transit's cache-index alphabet — index 0 is `'0'` (0x30). */
 	private const CACHE_BASE_CHAR = '0';
 
 	/** Radix of Transit's cache-index encoding. */
@@ -454,7 +455,7 @@ final class Transit {
 	}
 
 	/**
-	 * True if this string is a cache reference (`^0`, `^1`, … `^zz`).
+	 * True if this string is a cache reference (`^0`, `^1`, … `^[`, `^10`).
 	 *
 	 * The map marker `"^ "` is deliberately excluded — it shares the prefix but
 	 * is structural, not a reference.
@@ -476,11 +477,16 @@ final class Transit {
 	}
 
 	/**
-	 * Decode Transit's base-44 cache index: "^0" → 0, "^1" → 1, … "^10" → 44.
+	 * Decode Transit's base-44 cache index: `^0` → 0, `^1` → 1, … `^10` → 44.
 	 *
-	 * Transit encodes the index starting at the character `0`, using 44
-	 * characters per digit. Single-character indices (the overwhelming majority —
-	 * a Penpot record rarely has more than 44 distinct keys) are a direct offset.
+	 * The alphabet is 44 characters starting at `'0'` (0x30), so it runs
+	 * `0-9 : ; < = > ? @ A-Z [`. Single-character indices are a direct offset and
+	 * cover the overwhelming majority — a Penpot record rarely carries more than
+	 * 44 distinct keys, and the live fixtures top out at `^<` (12).
+	 *
+	 * NOTE the alphabet stops at `[`; lowercase letters are NOT valid index
+	 * characters, so `^z` is not a cache reference. {@see isCacheReference()}
+	 * rejects it on exactly that basis rather than by length.
 	 */
 	private function cacheIndex(string $raw): int {
 		$digits = substr($raw, 1);

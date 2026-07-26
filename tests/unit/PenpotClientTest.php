@@ -233,6 +233,53 @@ final class PenpotClientTest extends TestCase {
 		}
 	}
 
+	// ── response handling ───────────────────────────────────────────────────
+
+	/**
+	 * REGRESSION — an earlier version short-circuited on an EMPTY BODY before
+	 * checking the status, so a 502 from a proxy or a 500 that logged instead of
+	 * rendering came back as a successful `null`. An empty body only means "no
+	 * content" when the status says the request succeeded.
+	 *
+	 * Driven through the private decoder directly: the point is the status/body
+	 * precedence, and routing it through a mocked HTTP stack would assert on the
+	 * mock rather than on that rule.
+	 */
+	public function testAnEmptyBodyOnAFailureStatusIsNotTreatedAsSuccess(): void {
+		$this->expectException(PenpotApiException::class);
+
+		$this->decodeResponse(502, '');
+	}
+
+	public function testAnEmptyBodyOnA204IsNoContent(): void {
+		self::assertNull($this->decodeResponse(204, ''));
+	}
+
+	public function testAnEmptyBodyOnA200IsNoContent(): void {
+		self::assertNull($this->decodeResponse(200, ''));
+	}
+
+	public function testAFailureStatusCarriesItsKind(): void {
+		try {
+			$this->decodeResponse(401, '');
+			self::fail('expected a PenpotApiException');
+		} catch (PenpotApiException $e) {
+			self::assertSame(PenpotApiException::KIND_UNAUTHORIZED, $e->getKind());
+		}
+	}
+
+	/** Drive the private response decoder with a stubbed IResponse. */
+	private function decodeResponse(int $status, string $body): mixed {
+		$response = $this->createStub(\OCP\Http\Client\IResponse::class);
+		$response->method('getStatusCode')->willReturn($status);
+		$response->method('getBody')->willReturn($body);
+
+		$method = new \ReflectionMethod(PenpotClient::class, 'decodeResponse');
+		$method->setAccessible(true);
+
+		return $method->invoke($this->client, 'get-teams', $response);
+	}
+
 	private function givenConfigured(): void {
 		$this->config->method('getValueString')
 			->willReturnCallback(static fn (string $app, string $key): string => $key === 'penpot_url'
