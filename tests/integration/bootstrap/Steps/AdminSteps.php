@@ -28,16 +28,23 @@ trait AdminSteps {
 		Assert::assertSame(0, $res['exit'], "set-url failed:\n{$res['output']}");
 	}
 
-	/** @When the admin sets the Penpot base URL to :url */
+	/**
+	 * Pinned to a quoted argument for the same reason as the `is "..."` step
+	 * below — otherwise this also matches the no-argument phrasing above.
+	 *
+	 * @When /^the admin sets the Penpot base URL to "([^"]*)"$/
+	 */
 	public function theAdminSetsThePenpotBaseUrlTo(string $url): void {
 		$this->occ('penpot_sync:set-url ' . escapeshellarg($url));
 	}
 
 	/**
-	 * NOTE: deliberately NOT "the Penpot base URL is saved" — Behat matches step
-	 * text by regex, and that phrasing is also a match for the `:url` variant
-	 * below ("saved" binds as the argument), which makes the step ambiguous and
-	 * fails the scenario. Keeping the two phrasings clearly distinct is the fix.
+	 * NOTE ON THE TWO PHRASINGS BELOW. Behat turns `:url` into a permissive
+	 * pattern that also matches a bare word, so "the Penpot base URL is stored"
+	 * is ALSO a match for "the Penpot base URL is :url" (binding "stored" as the
+	 * argument) — an ambiguous step, which Behat fails rather than guesses at.
+	 * Renaming the no-argument step isn't enough; the parameterised one has to be
+	 * pinned to a QUOTED argument, which is what the explicit regex does.
 	 *
 	 * @Then the Penpot base URL is stored
 	 */
@@ -51,7 +58,7 @@ trait AdminSteps {
 		);
 	}
 
-	/** @Then the Penpot base URL is :url */
+	/** @Then /^the Penpot base URL is "([^"]+)"$/ */
 	public function thePenpotBaseUrlIs(string $url): void {
 		$res = $this->occ('penpot_sync:show-config');
 		Assert::assertStringContainsString($url, $res['output']);
