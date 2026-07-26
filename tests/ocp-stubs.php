@@ -72,6 +72,65 @@ namespace OCP {
 	}
 }
 
+namespace OCP\Security {
+	// PenpotClient stores the service-account token encrypted at rest, and
+	// SetToken writes it. Declaration-only: the unit suite mocks both directions
+	// (a decrypt that throws is one of the states under test).
+	if (!interface_exists(ICrypto::class, false)) {
+		interface ICrypto {
+			public function encrypt(string $input, string $password = ''): string;
+
+			public function decrypt(string $input, string $password = ''): string;
+		}
+	}
+}
+
+namespace OCP\Http\Client {
+	// PenpotClient issues every request through IClientService so that HTTP
+	// proxying, `allow_local_address` and TLS settings stay consistent with the
+	// rest of the platform. The unit suite never exercises the transport — that
+	// is the integration suite's job against a real Penpot — so these exist only
+	// so the class is constructible.
+	if (!interface_exists(IResponse::class, false)) {
+		interface IResponse {
+			/**
+			 * Upstream declares `string|resource`. `resource` is not a builtin
+			 * type PHP accepts in a signature (it would be read as a class name),
+			 * so the stub widens it to `mixed` and documents the real contract
+			 * here. PenpotClient only ever casts the result to string.
+			 *
+			 * @return string|resource
+			 */
+			public function getBody(): mixed;
+
+			public function getStatusCode(): int;
+
+			public function getHeader(string $key): string;
+
+			public function getHeaders(): array;
+		}
+	}
+	if (!interface_exists(IClient::class, false)) {
+		interface IClient {
+			public function post(string $uri, array $options = []): IResponse;
+
+			public function get(string $uri, array $options = []): IResponse;
+		}
+	}
+	if (!interface_exists(IClientService::class, false)) {
+		interface IClientService {
+			public function newClient(): IClient;
+		}
+	}
+	// Thrown when Nextcloud's own egress guard refuses a local address — common
+	// in a homelab, where Penpot is reached in-cluster. PenpotClient catches it
+	// specifically so the message can name `allow_local_remote_servers`.
+	if (!class_exists(LocalServerException::class, false)) {
+		class LocalServerException extends \Exception {
+		}
+	}
+}
+
 namespace OCP\Settings {
 	// InstanceSettings implements IDeclarativeSettingsForm and reads
 	// DeclarativeSettingsTypes constants. Declaration-only: the constant *values*

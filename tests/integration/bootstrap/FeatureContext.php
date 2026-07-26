@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Tests\Integration;
 use Behat\Behat\Context\Context;
 use OCA\PenpotSync\Tests\Integration\Steps\AdminSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 
 /**
@@ -22,24 +23,27 @@ use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
  * per-concern trait composed in below (mirroring how nextcloud/server composes
  * its own Behat context).
  *
- * **Wired so far: only the app lifecycle and the base-URL admin concern** — this
- * is the first slice, and it is deliberately the smallest thing that proves the
- * pipeline end to end (a real Nextcloud, our app installed, our occ commands
- * driving it, assertions on the result). As the sync engine lands, the remaining
- * `*Steps` traits arrive here and their features flip off `@todo`.
+ * **Wired so far: the app lifecycle, the base-URL admin concern, and the live
+ * Penpot connection.** As the sync engine lands, the remaining `*Steps` traits
+ * arrive here and their features flip off `@todo`.
  *
  * Transport channels:
  *  - **occ** (the `$OCC` env var) drives admin setup exactly the way an operator
  *    or a helm config-injection job would. → {@see OccTrait}
- *  - A **Penpot RPC** channel (Guzzle, `Authorization: Token`) is what the later
- *    assertion side will use — "did the app really create/export/move that?" It
- *    isn't here yet because nothing in this slice talks to Penpot. The token it
- *    will use is minted by `bin/mint-penpot-token.sh` (saga §6.47).
+ *  - **A real Penpot**, reached *through the app* via `penpot_sync:probe`
+ *    → {@see ConnectionSteps}. The token is minted per run by
+ *    the workflow's "Mint Penpot token" step (saga §6.47), so no repository
+ *    secret is needed.
+ *  - A direct **Penpot RPC** channel (Guzzle, `Authorization: Token`) is what the
+ *    later assertion side will use — "did the app really create/export/move
+ *    that?" Not needed yet: nothing writes to Penpot in this slice, so asserting
+ *    through the app's own read path is sufficient and simpler.
  */
 final class FeatureContext implements Context {
 	use OccTrait;
 	use AppLifecycleSteps;
 	use AdminSteps;
+	use ConnectionSteps;
 
 	private const APP_ID = 'penpot_sync';
 

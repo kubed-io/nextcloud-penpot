@@ -10,16 +10,22 @@ folder tree you can organise however you like.
 
 > **Status: pre-alpha — most of what follows is design, not shipped behavior.**
 >
-> **What works today:** the app installs on Nextcloud and you can point it at a
-> Penpot instance — an admin setting plus `occ penpot_sync:set-url` /
-> `occ penpot_sync:show-config`. That's it. Six integration scenarios prove it
-> against a real Nextcloud in CI.
+> **What works today:**
 >
-> **Everything else below is the design.** No credentials, no sync engine, no
-> file actions yet — those land slice by slice, and each `.feature` file stays
-> tagged `@todo` until its slice ships. The behavior is written as if it already
-> worked because that's how the spec is written; treat it as a detailed design
-> document backed by a live-verified API survey. See [Status](#status).
+> - The app installs on Nextcloud and you can point it at a Penpot instance —
+>   an admin setting plus `occ penpot_sync:set-url` / `occ penpot_sync:show-config`.
+> - A **Penpot API client**: Transit decoding, the per-command parameter table,
+>   and typed errors. Store a service-account token with
+>   `occ penpot_sync:set-token`, then check the connection with
+>   `occ penpot_sync:probe` — it lists the teams and projects that token can see.
+>
+> Verified against a real Nextcloud *and* a real Penpot in CI.
+>
+> **Everything else below is the design.** No mappings, no sync engine, no file
+> actions yet — those land slice by slice, and each `.feature` file stays tagged
+> `@todo` until its slice ships. The behavior is written as if it already worked
+> because that's how the spec is written; treat it as a detailed design document
+> backed by a live-verified API survey. See [Status](#status).
 
 ---
 
@@ -503,6 +509,24 @@ mirroring and never deletes anything.
 | Flag | Why |
 |---|---|
 | `enable-access-tokens` | Lets a Penpot user mint the token this app authenticates with. Off by default upstream. |
+
+### Required Nextcloud setting, if Penpot is not public
+
+If Nextcloud reaches Penpot at a private or in-cluster address — a Kubernetes
+service name, a LAN IP, `localhost` — Nextcloud's SSRF guard blocks the request
+before it leaves:
+
+```
+Host "penpot.cloud.svc.cluster.local" violates local access rules
+```
+
+```bash
+occ config:system:set allow_local_remote_servers --value=true --type=boolean
+```
+
+`occ penpot_sync:probe` reports this case by name rather than as a generic
+connection failure, so you should not have to guess. Not needed when Penpot is
+on a public hostname.
 
 > `enable-webhooks` was expected to be a second requirement, as a fast-path
 > trigger for the pull. It isn't currently part of the design: webhook *creation*

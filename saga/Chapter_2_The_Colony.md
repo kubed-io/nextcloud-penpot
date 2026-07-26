@@ -253,3 +253,144 @@ Gaps found get fixed in the pipeline, not worked around.
 > this planet lies to you politely — two hundred OK, error in the body. So the
 > first thing we build is the thing that listens properly. Everything else is
 > just deciding where to put the houses."*
+
+---
+
+## Round 1 — what building it actually found
+
+> Five bugs. **Not one** would have been caught by a hand-written fixture, and
+> four of them fail *silently* — the code runs, returns data, and the data is
+> wrong. Recorded here because every one is a durable fact about this protocol,
+> not a story about a PR.
+
+### R1.1 — Transit's write cache does not cache what you would guess
+
+The decoder's first draft cached every `~`-tagged token over 3 characters.
+**Wrong.** Only **keywords (`~:`) and tags (`~#`)** enter the cache. Instants
+(`~m…`) and UUIDs (`~u…`) do **not** — despite being long, repeated, and
+superficially ideal cache candidates.
+
+Derived, not guessed: walking a live `get-teams` body and checking that all
+twelve back-references resolve to fields the record actually has.
+
+```
+^0 → features   ^1 → #set        ^2 → permissions  ^3 → type
+^4 → membership ^5 → is-owner    ^6 → is-admin     ^7 → can-edit
+^8 → name       ^9 → modified-at ^: → id           ^; → created-at
+```
+
+Note `^4 → membership` is a cached **value**, not a key. Values share the same
+cache as keys.
+
+### R1.2 — A composite tag consumes a cache slot, and its second occurrence is a reference
+
+`["~#set", [...]]` — the **tag itself** is cached. Recursing straight to the
+payload (the obvious implementation) drops a slot. In `get-teams` the `~#set`
+sits at index 1, so every later reference resolves one slot early.
+
+Worse: the *second* composite arrives as `["^1", [...]]` — a back-reference where
+the literal tag was. Matching only on `~#` catches the first and silently leaves
+every later one wrapped as a 2-element list instead of its payload.
+
+> **Why R1.1 and R1.2 are the dangerous ones:** both produce **real but wrong
+> field names**. `created-at` reads back as `modified-at`. Nothing throws.
+> A cache reference past the end of the cache now **throws** rather than
+> guessing — that throw is what surfaced both.
+
+### R1.3 — `json_encode([])` produces `[]`, and Penpot 500s on it
+
+A no-arg command has an empty param array. `json_encode([])` renders a JSON
+**array**; Penpot's Clojure handler tries to `conj` it into a param map and dies:
+
+```
+HTTP 500  :server-error  "Vector arg to map conj must be a pair"
+```
+
+Confirmed: `[]` → 500, `{}` → 200. Needs `JSON_FORCE_OBJECT`. Without it, every
+**no-arg** command fails while every command **with params** succeeds — which
+reads as an auth or connectivity problem, not an encoding one.
+
+### R1.4 — **Penpot content-negotiates. Never send `Accept: application/json`.**
+
+The worst of the five, because the header looks like the tidy, correct thing to
+send:
+
+| Request header | Response |
+|---|---|
+| `Accept: application/json` | `{"teamId":…,"isDefault":true,"teamName":"Default"}` |
+| *(none)* | `["^ ","~:team-id",…,"~:is-default",true,"~:team-name","Default"]` |
+
+Two failures compound, neither loud:
+
+1. **Every key lookup misses** — the client reads `team-name`, the response has
+   `teamName`.
+2. **The shape is mangled** — a plain JSON object has no `"^ "` map marker, so
+   `Transit::decode()` walks it as a LIST and returns **numeric keys `0..n`**.
+
+Verified live: with the header, `$record['team-name']` is *missing* and the keys
+are `0,1,2,…`; without it they are `id, team-id, created-at, …`.
+
+**Why it survived a live probe:** the probe used raw curl *without* the header
+while the client sent it. The probe wasn't exercising the code under test — the
+exact gap that makes *"it worked when I tested it by hand"* untrustworthy.
+`Transit::decode()` now **refuses** a plain-JSON body with a message naming the
+header, checked at the top level *and* at the first list element (listings are a
+list of records, so the objects are one level down).
+
+### R1.5 — Penpot has no `/api/health`
+
+`/api/health` → **404**. `/readyz` → 200, but it reports the *process*, not the
+API. CI now polls the **RPC bus** (`get-profile`, 200 unauthenticated), because
+that is what the next step actually needs and the last thing to come up. A
+readiness check that greens before its dependency is ready is worse than none —
+it converts a clear *"not ready"* into a confusing failure one step later.
+
+### R1.6 — PHPUnit assertions cannot fail inside Behat
+
+Not a Penpot fact, but a harness trap worth naming. PHPUnit builds an assertion's
+failure **message** through `TextUI\Configuration\Registry`, which only exists
+when PHPUnit bootstrapped the run. Under Behat it is `null`, so a *failing*
+assertion dies with:
+
+```
+Type error: Registry::get(): Return value must be of type Configuration, null returned
+```
+
+Passing assertions are unaffected — so this fires **only on the failure path**,
+i.e. exactly when the diagnostic matters, and replaces it with a harness crash.
+Behat steps here throw plain exceptions carrying the command's own output.
+(`AdminSteps` had the same latent bug and looked fine, because its assertions had
+never failed.)
+
+### R1.7 — Nextcloud's SSRF guard blocks Penpot whenever Penpot isn't public
+
+`allow_local_remote_servers` must be `true` for Nextcloud to reach Penpot at any
+private address — a Kubernetes service name, a LAN IP, `localhost`. Otherwise
+the request never leaves:
+
+```
+Host "localhost" violates local access rules
+```
+
+This is a **deployment requirement, not a CI quirk** — §6.17 hit the same gate
+on the live cluster, where Penpot is reached at
+`penpot.cloud.svc.cluster.local`. It is now in the README's setup section, and
+`PenpotClient` catches `LocalServerException` specifically so the message names
+the setting instead of reporting a generic connection failure.
+
+**Worth noting how this one was found**, because it validates R1.6's fix: the
+diagnostic the client emits is *exactly* the fix. Once the harness stopped
+masking failures, CI printed the error message, and the error message named the
+setting to change. No investigation was needed. That is what error text is for,
+and it is why R1.6 was worth fixing before chasing the failure underneath it.
+
+### What this round retires and what it hardens
+
+- **Open question #21 is no longer a "systematic pass" nice-to-have.** It is a
+  build prerequisite, and the table now has a fifth entry beyond the four param
+  conventions: the **`Accept` header** is part of the calling contract too.
+- **The doctrine held.** Course 1 was put before the admin surface on the
+  argument that the client was the part most likely to be subtly wrong. It was
+  wrong in five ways, four of them silent. Had it been built after the admin
+  surface, those bugs would have surfaced as *"the mapping page shows no teams"*
+  — debugged three layers from the cause.

@@ -24,12 +24,15 @@ use PHPUnit\Framework\TestCase;
  * paths without defensive trimming.
  */
 final class InstanceSettingsTest extends TestCase {
+	/** @var IAppConfig&\PHPUnit\Framework\MockObject\Stub */
 	private IAppConfig $config;
 	private InstanceSettings $settings;
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->config = $this->createMock(IAppConfig::class);
+		// A stub, not a mock — these tests assert on the schema and on the value
+		// getUrl() returns, never on how AppConfig was called.
+		$this->config = $this->createStub(IAppConfig::class);
 		$this->settings = new InstanceSettings($this->config);
 	}
 
