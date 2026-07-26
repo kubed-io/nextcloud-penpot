@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
-use PHPUnit\Framework\Assert;
-
 /**
  * Steps that exercise the client against a REAL Penpot.
  *
@@ -35,19 +33,27 @@ trait ConnectionSteps {
 	/** @Given the Penpot base URL points at the test instance */
 	public function thePenpotBaseUrlPointsAtTheTestInstance(): void {
 		$url = getenv('PENPOT_URL');
-		Assert::assertNotFalse($url, 'PENPOT_URL is not set — the Penpot service is not running.');
+		if ($url === false || $url === '') {
+			throw new \RuntimeException('PENPOT_URL is not set — the Penpot service is not running.');
+		}
 
-		$res = $this->occ('penpot_sync:set-url ' . escapeshellarg((string)$url));
-		Assert::assertSame(0, $res['exit'], "set-url failed:\n{$res['output']}");
+		$res = $this->occ('penpot_sync:set-url ' . escapeshellarg($url));
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("set-url failed:\n{$res['output']}");
+		}
 	}
 
 	/** @Given the admin has configured the service-account token */
 	public function theAdminHasConfiguredTheServiceAccountToken(): void {
 		$token = getenv('PENPOT_TOKEN');
-		Assert::assertNotFalse($token, 'PENPOT_TOKEN is not set — the mint step did not run.');
+		if ($token === false || $token === '') {
+			throw new \RuntimeException('PENPOT_TOKEN is not set — the mint step did not run.');
+		}
 
-		$res = $this->occ('penpot_sync:set-token ' . escapeshellarg((string)$token));
-		Assert::assertSame(0, $res['exit'], "set-token failed:\n{$res['output']}");
+		$res = $this->occ('penpot_sync:set-token ' . escapeshellarg($token));
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("set-token failed:\n{$res['output']}");
+		}
 	}
 
 	/** @Given no service-account token is configured */
@@ -67,23 +73,36 @@ trait ConnectionSteps {
 		$this->occ('penpot_sync:probe --files');
 	}
 
-	/** @Then the connection succeeds */
+	/**
+	 * @Then the connection succeeds
+	 *
+	 * NOTE ON WHY THIS THROWS RATHER THAN ASSERTS. PHPUnit's assertions build
+	 * their failure message through `TextUI\Configuration\Registry`, which only
+	 * exists when PHPUnit itself bootstrapped the run. Under Behat it is null, so
+	 * a FAILING assertion dies with
+	 *
+	 *   Type error: Registry::get(): Return value must be of type Configuration,
+	 *   null returned
+	 *
+	 * — which replaces the real diagnostic with a harness error and hides what
+	 * actually went wrong. Assertions that PASS are unaffected, which is why this
+	 * only shows up on the failure path, i.e. exactly when the message matters.
+	 *
+	 * Plain exceptions carry the probe's own output straight into Behat's report.
+	 */
 	public function theConnectionSucceeds(): void {
-		Assert::assertSame(
-			0,
-			$this->lastExit,
-			"probe failed:\n{$this->lastOutput}",
-		);
-		Assert::assertStringContainsString('Connected', $this->lastOutput);
+		if ($this->lastExit !== 0 || !str_contains($this->lastOutput, 'Connected')) {
+			throw new \RuntimeException(
+				"probe did not report a successful connection (exit {$this->lastExit}):\n{$this->lastOutput}",
+			);
+		}
 	}
 
 	/** @Then the connection fails */
 	public function theConnectionFails(): void {
-		Assert::assertNotSame(
-			0,
-			$this->lastExit,
-			"expected probe to fail, got:\n{$this->lastOutput}",
-		);
+		if ($this->lastExit === 0) {
+			throw new \RuntimeException("expected probe to fail, but it succeeded:\n{$this->lastOutput}");
+		}
 	}
 
 	/**
@@ -94,11 +113,9 @@ trait ConnectionSteps {
 	 * @Then at least one Penpot team is listed
 	 */
 	public function atLeastOnePenpotTeamIsListed(): void {
-		Assert::assertMatchesRegularExpression(
-			'/Visible teams: \S/',
-			$this->lastOutput,
-			"no teams were listed:\n{$this->lastOutput}",
-		);
+		if (preg_match('/Visible teams: \S/', $this->lastOutput) !== 1) {
+			throw new \RuntimeException("no teams were listed:\n{$this->lastOutput}");
+		}
 	}
 
 	/**
@@ -110,20 +127,15 @@ trait ConnectionSteps {
 	 * @Then at least one Penpot project is listed
 	 */
 	public function atLeastOnePenpotProjectIsListed(): void {
-		Assert::assertMatchesRegularExpression(
-			'/Projects \(([1-9][0-9]*)\)/',
-			$this->lastOutput,
-			"no projects were listed:\n{$this->lastOutput}",
-		);
+		if (preg_match('/Projects \(([1-9][0-9]*)\)/', $this->lastOutput) !== 1) {
+			throw new \RuntimeException("no projects were listed:\n{$this->lastOutput}");
+		}
 	}
 
 	/** @Then the failure explains that no token is configured */
 	public function theFailureExplainsThatNoTokenIsConfigured(): void {
-		Assert::assertStringContainsString('token', strtolower($this->lastOutput));
-	}
-
-	/** @Then the failure names the connection as unreachable */
-	public function theFailureNamesTheConnectionAsUnreachable(): void {
-		Assert::assertStringContainsString('unreachable', strtolower($this->lastOutput));
+		if (!str_contains(strtolower($this->lastOutput), 'token')) {
+			throw new \RuntimeException("the failure did not mention the token:\n{$this->lastOutput}");
+		}
 	}
 }
