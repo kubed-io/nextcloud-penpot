@@ -36,7 +36,7 @@ namespace OCA\PenpotSync\Exception;
  *                 error event in the body** for SSE commands (saga §5.1/§6.20), so
  *                 a client that trusts the status code reports success on failure.
  */
-class PenpotApiException extends \RuntimeException {
+final class PenpotApiException extends \RuntimeException {
 	public const KIND_UNCONFIGURED = 'unconfigured';
 	public const KIND_UNREACHABLE = 'unreachable';
 	public const KIND_UNAUTHORIZED = 'unauthorized';

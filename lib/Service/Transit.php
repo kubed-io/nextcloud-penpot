@@ -34,15 +34,25 @@ use OCA\PenpotSync\Exception\PenpotApiException;
  *
  *     "~:name"      keyword       → "name"          (a map key or enum value)
  *     "~u4eda…"     UUID          → "4eda…"         (every Penpot id)
- *     "~m1785091…"  instant       → 1785091…        (int, millis since epoch)
- *     "~i123"       big integer   → 123
- *     "~?t" / "~?f" boolean       → true / false
+ *     "~m1785091…"  instant       → "1785091…"      (millis since epoch)
+ *     "~i123"       big integer   → "123"
  *     "~~foo"       escaped       → "~foo"          (a literal leading tilde)
  *
- * We deliberately decode keywords and UUIDs to **plain strings** rather than
- * value objects. Penpot ids are opaque to us — we store them as metadata and
- * send them back verbatim — so a wrapper type would buy nothing and cost every
- * call site an unwrap.
+ * EVERY TAGGED SCALAR DECODES TO A **STRING**, including instants and integers.
+ * That is deliberate, not an oversight:
+ *
+ *  - Penpot ids are opaque to us. We store them as metadata and send them back
+ *    verbatim, so a UUID value object would buy nothing and cost every call site
+ *    an unwrap.
+ *  - Instants and bigints are kept as their raw digits so nothing is lost on a
+ *    32-bit build or to float coercion. The two callers that need a number
+ *    (`revn` comparisons, timestamps) cast at the point of use, where the
+ *    intended type is obvious.
+ *
+ * Note that UNTAGGED JSON scalars are untouched: `"~:revn",5` decodes to the
+ * int `5`, because Transit left it a plain JSON number. So a record mixes real
+ * ints (revn, vern) with digit-strings (created-at, modified-at) — check the
+ * fixtures in TransitTest for which is which rather than assuming.
  *
  * **2. Maps** — encoded as an array whose first element is the marker `"^ "`,
  * then alternating key/value pairs:
@@ -308,11 +318,12 @@ final class Transit {
 	}
 
 	/**
-	 * Strip a Transit scalar tag, returning the plain PHP value as a string.
+	 * Strip a Transit scalar tag, returning the payload as a string.
 	 *
-	 * Keywords, UUIDs and instants all decode to strings/ints that we hand
-	 * straight to storage — see the class docblock for why there are no wrapper
-	 * types.
+	 * ALWAYS a string — keywords, UUIDs, instants and bigints alike. The return
+	 * type says so and there is no branch that produces anything else. See the
+	 * class docblock for why: ids are opaque, and numeric payloads keep their raw
+	 * digits so nothing is lost to 32-bit ints or float coercion.
 	 */
 	private function scalarString(string $raw): string {
 		if (!str_starts_with($raw, '~') || strlen($raw) < 2) {

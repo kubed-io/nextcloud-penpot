@@ -78,7 +78,7 @@ use Psr\Log\LoggerInterface;
  * which Penpot accepts — verified live across every command in the table below.
  * A Transit *writer* would be speculative work for a problem we do not have.
  */
-class PenpotClient {
+final class PenpotClient {
 	/** AppConfig key holding the service-account token, stored encrypted. */
 	public const KEY_TOKEN = 'penpot_token';
 
