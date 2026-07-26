@@ -1,0 +1,187 @@
+name: 🔗 Integration
+
+# Integration tests — prove the real wiring the unit suite mocks out, on a live
+# Nextcloud (+ a live Penpot, once anything actually talks to it). Framework:
+# **Behat**, the Nextcloud-native integration framework, run from
+# tests/integration/, mirroring kubed-io/nextcloud-grafana and
+# kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
+# the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
+#
+# SCOPE RIGHT NOW: the first slice only — the app installs and enables, and the
+# Penpot base URL can be set and read back over occ. That is deliberately small;
+# what it proves is that the whole pipeline is REAL (a genuine Nextcloud, our app
+# mounted into apps/, our occ commands driving it, assertions on the result).
+# Every other feature file stays @todo and is filtered out by behat.dist.yml.
+#
+# THE PENPOT SERVICE IS NOT STARTED YET, ON PURPOSE. Nothing in this slice
+# contacts Penpot, so booting a 3-container Penpot stack per run would spend
+# minutes asserting nothing.
+#
+# CORRECTION TO AN EARLIER NOTE IN THIS FILE: it claimed Penpot has no headless
+# token mint. That was wrong, and it's now been checked against a live instance
+# (saga §6.47). Penpot CAN mint one without a browser:
+#   prepare-register-profile → register-profile → login-with-password
+#     → create-access-token
+# All four commands confirmed present. So — like Grafana, and unlike n8n — this
+# suite needs **no repository secret**. The script is written and documented at
+# tests/integration/bin/mint-penpot-token.sh; the commented `services:` block
+# below is the shape it expects. Uncomment both in the same PR that lands the
+# first scenario needing Penpot.
+
+on:
+  pull_request:
+    branches:
+    - main
+    paths:
+    - .github/workflows/integration.yml
+    - appinfo/**
+    - lib/**
+    - templates/**
+    - features/**
+    - tests/integration/**
+    - composer.json
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/integration.yml
+    - appinfo/**
+    - lib/**
+    - templates/**
+    - features/**
+    - tests/integration/**
+    - composer.json
+
+permissions:
+  contents: read
+  # Behat results → sticky PR comment + check run (EnricoMi), like the unit suite.
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+# Static values here so `run:` steps are pure bash reading $VARS — never inline
+# GitHub templating (see CONTRIBUTING.md "Workflow authoring conventions").
+env:
+  APP_ID: penpot_sync
+  NC_ADMIN_USER: admin
+  NC_ADMIN_PASS: admin
+
+jobs:
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # NC 33 is the app's max-version; SQLite is the fast integration path.
+        server-versions: ['stable33']
+
+    # services:
+    #   # ── Penpot stack, ready to switch on when a scenario needs it ──────────
+    #   # Penpot needs postgres + valkey alongside the backend, which is why this
+    #   # is heavier than Grafana's single container. The FLAGS are load-bearing
+    #   # for bin/mint-penpot-token.sh:
+    #   #   enable-access-tokens       — create-access-token is gated behind it
+    #   #   disable-email-verification — else registration waits on an email
+    #   # and it must NOT carry disable-registration / disable-login-with-password.
+    #   # (Our own production instance sets those because it's OIDC/LDAP-gated,
+    #   # which is exactly why the mint script cannot be run against it.)
+    #   postgres:
+    #     image: postgres:15
+    #     env:
+    #       POSTGRES_DB: penpot
+    #       POSTGRES_USER: penpot
+    #       POSTGRES_PASSWORD: penpot
+    #     options: >-
+    #       --health-cmd "pg_isready -U penpot"
+    #       --health-interval 5s --health-timeout 5s --health-retries 20
+    #   valkey:
+    #     image: valkey/valkey:8
+    #     options: >-
+    #       --health-cmd "valkey-cli ping"
+    #       --health-interval 5s --health-timeout 5s --health-retries 20
+    #   penpot:
+    #     image: penpotapp/backend:2.17.0
+    #     ports:
+    #     - 6060:6060
+    #     env:
+    #       PENPOT_FLAGS: enable-access-tokens disable-email-verification disable-onboarding disable-secure-session-cookies
+    #       PENPOT_DATABASE_URI: postgresql://postgres/penpot
+    #       PENPOT_DATABASE_USERNAME: penpot
+    #       PENPOT_DATABASE_PASSWORD: penpot
+    #       PENPOT_REDIS_URI: redis://valkey/0
+    #       PENPOT_PUBLIC_URI: http://localhost:6060
+
+    steps:
+    # ── Provision: install everything up front, before any action runs ───────
+    - name: Checkout server
+      uses: actions/checkout@v7
+      with:
+        repository: nextcloud/server
+        ref: ${{ matrix.server-versions }}
+        submodules: true
+
+    - name: Checkout app into apps/
+      uses: actions/checkout@v7
+      with:
+        path: apps/${{ env.APP_ID }}
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        # Match the production pod / the rest of our CI.
+        php-version: '8.4'
+        extensions: mbstring, iconv, fileinfo, intl, sqlite, pdo_sqlite, gd, zip, curl, xml
+        coverage: none
+        tools: composer:v2
+
+    - name: Install Behat deps
+      working-directory: apps/${{ env.APP_ID }}/tests/integration
+      run: composer install --prefer-dist --no-progress
+
+    - name: Install Nextcloud (SQLite)
+      run: |
+        mkdir -p data
+        ./occ maintenance:install \
+          --database=sqlite \
+          --admin-user="$NC_ADMIN_USER" \
+          --admin-pass="$NC_ADMIN_PASS"
+        ./occ config:system:set trusted_domains 1 --value=localhost
+
+    # ── Act: everything provisioned — now do the work ────────────────────────
+    # PREREQUISITE, once the Penpot service above is switched on: mint a token so
+    # scenarios can act as "a user who already has one". How a token gets created
+    # is out of the app's scope — this is pure test setup, and needs no secret.
+    #
+    # - name: Mint Penpot token (prerequisite)
+    #   id: penpot_token
+    #   env:
+    #     PENPOT_URL: http://localhost:6060
+    #   run: |
+    #     token="$(bash apps/$APP_ID/tests/integration/bin/mint-penpot-token.sh)"
+    #     if [ -z "$token" ]; then echo "no token minted" >&2; exit 1; fi
+    #     echo "::add-mask::$token"
+    #     echo "token=$token" >> "$GITHUB_OUTPUT"
+    #     echo "✅ Penpot access token obtained (length ${#token})"
+
+    # Behat runs from the integration dir; OCC points back at the server root so
+    # `occ` resolves. Formatters (pretty → stdout, junit → junit/) are configured
+    # in behat.dist.yml, so no --format flags are needed here.
+    - name: Run Behat
+      working-directory: apps/${{ env.APP_ID }}/tests/integration
+      env:
+        OCC: php ${{ github.workspace }}/occ
+      run: vendor/bin/behat --config behat.dist.yml
+
+    - name: Publish integration results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        check_name: Integration test results
+        files: apps/${{ env.APP_ID }}/tests/integration/junit/*.xml
+        comment_mode: always

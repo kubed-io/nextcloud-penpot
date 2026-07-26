@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<!--
+	SPDX-FileCopyrightText: 2026 Kelly Ferrone
+	SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<psalm
+	errorLevel="6"
+	resolveFromConfigFile="true"
+	findUnusedBaselineEntry="false"
+	findUnusedCode="false"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="https://getpsalm.org/schema/config"
+	xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+	errorBaseline="tests/psalm-baseline.xml">
+	<projectFiles>
+		<directory name="lib" />
+		<ignoreFiles>
+			<directory name="vendor" />
+		</ignoreFiles>
+	</projectFiles>
+	<!--
+		Load the nextcloud/ocp class definitions so Psalm resolves OCP\* symbols
+		(IConfig, Files\Node, AppFramework\Controller, the Settings interfaces, …).
+		Without this, Psalm reports every OCP reference as UndefinedClass /
+		MissingDependency / UndefinedDocblockClass. We scan only the OCP package
+		(not all of vendor) to keep analysis fast. Mirrors the sibling apps.
+	-->
+	<extraFiles>
+		<directory name="vendor/nextcloud/ocp" />
+	</extraFiles>
+	<!--
+		Hand-written stubs for the Server-app classes that live in a real Nextcloud
+		but ship in neither nextcloud/ocp nor Composer (e.g. Sabre WebDAV server
+		classes, if/when a DAV guard is added). Mirrors the master (nextcloud-n8n)
+		and apprentice (nextcloud-grafana) repos' psalm.xml, which stub the same
+		surface the same way. Currently EMPTY — the first slice only touches OCP
+		interfaces that nextcloud/ocp already provides.
+	-->
+	<stubs>
+		<file name="tests/external-stubs.php" />
+	</stubs>
+	<issueHandlers>
+		<!--
+			These reference classes that exist at runtime in a real Nextcloud but are
+			NOT shipped in nextcloud/ocp, so Psalm can't see them: private OC
+			internals some repair-steps / setup code reach for (`OC::$SERVERROOT` /
+			`OC::$configDir`, `OC_Util::setupFS`). Not real bugs, and there's no
+			public stub to import. Mirrors the master and apprentice repos' psalm.xml
+			(which pull the same private symbols) and integration_openai.
+		-->
+		<UndefinedClass>
+			<errorLevel type="suppress">
+				<referencedClass name="OC" />
+				<referencedClass name="OC_Util" />
+				<referencedClass name="OC_User" />
+			</errorLevel>
+		</UndefinedClass>
+		<!--
+			MissingDependency doesn't support <referencedClass> in Psalm 6's schema.
+			The only instances are IRootFolder reporting its base oc\hooks\emitter as
+			missing — purely an OCP-stub artifact, not our code — so suppress the whole
+			(low-value) issue type. Same as the sibling repos.
+		-->
+		<MissingDependency errorLevel="suppress" />
+	</issueHandlers>
+</psalm>

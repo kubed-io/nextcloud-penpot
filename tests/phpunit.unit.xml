@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	SPDX-FileCopyrightText: 2026 Kelly Ferrone
+	SPDX-License-Identifier: AGPL-3.0-or-later
+
+	Unit suite — standalone: PHP plus the classes under test, nothing else.
+	No Nextcloud server, no docker stack. The integration suite (Behat, under
+	tests/integration/) is what exercises the real wiring.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="../vendor/phpunit/phpunit/phpunit.xsd"
+	bootstrap="bootstrap.php"
+	colors="true"
+	failOnWarning="true"
+	failOnRisky="true"
+	cacheDirectory=".phpunit.cache">
+	<logging>
+		<!-- JUnit XML for the CI test reporter (EnricoMi publish-unit-test-result). -->
+		<junit outputFile="results/junit.xml" />
+	</logging>
+	<testsuites>
+		<testsuite name="unit">
+			<directory suffix="Test.php">unit</directory>
+		</testsuite>
+	</testsuites>
+	<source>
+		<include>
+			<directory suffix=".php">../lib</directory>
+		</include>
+	</source>
+</phpunit>

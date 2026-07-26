@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Psalm baseline.
+
+	Empty on purpose: the first slice analyses clean, so nothing is suppressed.
+	The file exists because psalm.xml sets errorBaseline and Psalm errors out if
+	the referenced baseline is missing — and because an empty baseline is the
+	honest starting point. Anything added here later should be justified in the
+	PR that adds it, not accumulated silently.
+-->
+<files psalm-version="6.x"/>

@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<!--
+  - SPDX-FileCopyrightText: 2026 Kelly Ferrone
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+  <id>penpot_sync</id>
+  <name>Penpot Sync</name>
+  <summary>Your Penpot design files as native, read-only, backed-up Nextcloud files</summary>
+  <description><![CDATA[
+Penpot Sync mirrors your Penpot design files into Nextcloud as native files. A
+scheduled pull walks your mapped Penpot teams/projects and every design file
+appears in Nextcloud as a `.penpot` file — a real file icon, a deep link back to
+the live design in Penpot, and a local backup of the exported archive.
+
+Unlike this app's sibling integrations for n8n and Grafana, Penpot Sync is
+**read-only**: there is no "Edit as text" action and no Nextcloud → Penpot
+writeback. A `.penpot` export is an opaque archive of nested design data —
+editing it outside Penpot wouldn't produce anything sane to re-import. Design
+happens in Penpot; Nextcloud holds the backup and the click-through.
+
+⚠️ **Very early development.** This release contains only the first slice: an
+admin setting (and matching CLI commands) for the Penpot base URL. There is no
+sync engine, no credential storage, and no file actions yet — nothing is
+mirrored. See the project's `saga/` design narrative for what's confirmed,
+what's locked, and what's still an open question.
+
+The `enable-access-tokens` Penpot instance flag will be required once the sync
+engine lands; it is off by default upstream.
+
+This is a community integration and is not affiliated with, endorsed by, or
+sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are
+trademarks of their respective owner, used here only to identify the service
+this app integrates with.
+  ]]></description>
+  <version>0.1.0</version>
+  <licence>agpl</licence>
+  <author>Kelly Ferrone</author>
+  <namespace>PenpotSync</namespace>
+  <category>integration</category>
+  <category>files</category>
+  <website>https://github.com/kubed-io/nextcloud-penpot</website>
+  <bugs>https://github.com/kubed-io/nextcloud-penpot/issues</bugs>
+  <repository type="git">https://github.com/kubed-io/nextcloud-penpot.git</repository>
+  <dependencies>
+    <nextcloud min-version="30" max-version="33"/>
+  </dependencies>
+  <settings>
+    <!-- The Instance card itself is a DECLARATIVE form, registered in
+         AppInfo\Application::register() — only its sidebar section is declared
+         here. No <admin> panels yet: this slice ships one declarative card and
+         nothing else. -->
+    <admin-section>OCA\PenpotSync\Settings\AdminSection</admin-section>
+  </settings>
+  <commands>
+    <!-- The CLI is the primary interface for this slice — everything the admin
+         card does is reachable headlessly, which is what the integration suite
+         drives. -->
+    <command>OCA\PenpotSync\Command\SetUrl</command>
+    <command>OCA\PenpotSync\Command\ShowConfig</command>
+  </commands>
+  <!--
+    No <repair-steps> yet — the custom .penpot mimetype registration
+    (OCA\PenpotSync\Migration\RegisterMimetype) belongs to the file-type slice.
+    Don't fabricate class references ahead of the code.
+  -->
+</info>

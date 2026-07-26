@@ -1,0 +1,130 @@
+name: 🛡️ Quality
+
+# Slower / advisory quality gates kept out of the fast test loop, split by
+# language the same way tests.yml is. Same triggers so every PR into main is
+# gated.
+#
+# PHP job: dependency audit + static analysis (php-cs-fixer + Psalm). CodeQL has
+#   no PHP support (PHP is the only top-10 language CodeQL does not analyse), so
+#   Psalm IS the PHP code-scanning engine: it emits inline annotations
+#   (--output-format=github) AND a SARIF report uploaded to Security → Code
+#   scanning, once lib/ exists.
+# JS job:  dependency audit + ESLint. JS code scanning is handled by GitHub's
+#   **CodeQL default setup** (enabled in Settings → Code security), which runs
+#   its own synthesised workflow and uploads to the same Security tab. Keeping
+#   CodeQL out of this workflow avoids a duplicate scan on every PR.
+#
+# NOTE: the app is in its FIRST SLICE — lib/ exists and IS analysed; src/ (the
+# JS frontend) does not yet (see AGENTS.md).
+# Psalm and php-cs-fixer are skipped (not failed) until lib/ exists; ESLint and
+# composer/npm audit already run today since they don't require app code, only
+# the dependency manifests.
+#
+# Every step writes a $GITHUB_STEP_SUMMARY block so results are visible on the
+# run summary (and, for code scanning, on the PR) whether triggered by a PR or a
+# direct push to main.
+
+on:
+  pull_request:
+    branches:
+    - main
+  push:
+    branches:
+    - main
+
+jobs:
+
+  php:
+    name: PHP Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Upload Psalm SARIF to Security → Code scanning (PHP's code-scanning path).
+      security-events: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        coverage: none
+        tools: composer:v2
+
+    - name: Install PHP dependencies
+      run: composer install --prefer-dist --no-progress
+
+    - name: Audit composer dependencies
+      run: |
+        echo "## composer audit" >> "$GITHUB_STEP_SUMMARY"
+        if composer audit --format=plain | tee audit-composer.txt; then
+          echo "✅ No composer advisories" >> "$GITHUB_STEP_SUMMARY"
+        else
+          status=$?
+          { echo '```'; cat audit-composer.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+        fi
+
+    - name: Coding standard (php-cs-fixer)
+      run: composer run cs:check
+
+    # Guarded from the pre-code era; lib/ now exists, so this runs for real.
+    - name: Static analysis (Psalm)
+      if: hashFiles('lib/**') != ''
+      run: |
+        vendor/bin/psalm --no-cache --threads=4 \
+          --output-format=github \
+          --report=psalm.sarif
+
+    - name: Upload Psalm SARIF to code scanning
+      if: hashFiles('lib/**') != ''
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: psalm.sarif
+        category: psalm
+
+    - name: Upload Psalm SARIF artifact
+      if: hashFiles('lib/**') != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: psalm-sarif
+        path: psalm.sarif
+        if-no-files-found: warn
+
+  js:
+    name: JS Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+
+    - name: Install JS dependencies
+      run: npm ci
+
+    - name: Lint JS (ESLint)
+      run: npm run lint
+
+    - name: Audit npm dependencies
+      run: |
+        echo "## npm audit (production, level=high)" >> "$GITHUB_STEP_SUMMARY"
+        if npm audit --omit=dev --audit-level=high 2>&1 | tee audit-npm.txt; then
+          echo "✅ No npm advisories at or above high" >> "$GITHUB_STEP_SUMMARY"
+        else
+          status=$?
+          { echo '```'; tail -40 audit-npm.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+        fi
+
+    # JS code scanning lives in GitHub's CodeQL default setup (Settings → Code
+    # security → Code scanning). It runs its own workflow and posts a `CodeQL`
+    # check on every PR — mark that check as required in branch protection if
+    # you want it as a hard gate. No duplicate CodeQL step here.
