@@ -257,7 +257,25 @@ final class PenpotClient {
 				'headers' => [
 					'Authorization' => 'Token ' . $this->getToken(),
 					'Content-Type' => 'application/json',
-					'Accept' => 'application/json',
+					// DO NOT ADD `Accept: application/json`. It looks like the
+					// obvious, tidy thing to send and it silently breaks every
+					// response. Penpot CONTENT-NEGOTIATES: ask for JSON and it
+					// answers plain camelCase JSON (`teamName`, `isDefault`)
+					// instead of Transit (`~:team-name`, `~:is-default`).
+					//
+					// Two things then go wrong at once, neither of them loudly:
+					//   1. every key lookup in this class misses, because they
+					//      are all kebab-case; and
+					//   2. Transit::decode() mangles the shape — a plain JSON
+					//      object has no `"^ "` map marker, so it is walked as a
+					//      LIST and comes back with numeric keys 0..n.
+					// Verified live: with the header, `$record['team-name']` is
+					// missing and the keys are `0,1,2,…`; without it, they are
+					// `id, team-id, created-at, …` as the decoder expects.
+					//
+					// Transit is not a quirk we tolerate — it is the format this
+					// client is built for, and the only one carrying the type
+					// tags (`~u` uuid, `~m` instant) the decoder relies on.
 				],
 				// JSON_FORCE_OBJECT is load-bearing, not cosmetic. A no-arg command
 				// has an empty param array, and `json_encode([])` renders `[]` — a

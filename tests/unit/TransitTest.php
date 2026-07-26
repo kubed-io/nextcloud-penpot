@@ -261,4 +261,45 @@ final class TransitTest extends TestCase {
 	public function testAnEmptyListDecodesToAnEmptyArray(): void {
 		self::assertSame([], $this->transit->decode('[]'));
 	}
+
+	/**
+	 * REGRESSION — Penpot content-negotiates, and `Accept: application/json`
+	 * switches it to plain camelCase JSON. That body is still valid JSON, so
+	 * without this guard the decoder walks it happily and produces garbage twice
+	 * over: a plain object has no `"^ "` marker so it is treated as a LIST
+	 * (numeric keys `0..n`), and its keys are `teamName` where every caller here
+	 * reads `team-name`.
+	 *
+	 * One tidy-looking request header, every field silently null. Caught live —
+	 * the client was sending that header, and the probe only passed because it
+	 * used raw curl without it.
+	 */
+	public function testRefusesPlainJsonWithAnActionableMessage(): void {
+		// A verbatim `get-all-projects` record as returned WITH the Accept header.
+		$body = '[{"id":"4eda2e11-843e-8045-8008-51819d3f622b","teamId":"4eda2e11-843e-8045-8008-51819d3bce9d",'
+			. '"isDefault":true,"name":"Drafts","teamName":"Default"}]';
+
+		$this->expectException(PenpotApiException::class);
+		$this->expectExceptionMessageMatches('/Accept: application\/json/');
+
+		$this->transit->decode($body);
+	}
+
+	public function testRefusesATopLevelPlainJsonObject(): void {
+		$this->expectException(PenpotApiException::class);
+		$this->expectExceptionMessageMatches('/plain JSON, not Transit/');
+
+		$this->transit->decode('{"id":"abc","teamName":"Default"}');
+	}
+
+	/**
+	 * The guard must not fire on real Transit — every fixture above already
+	 * proves that, but this pins the boundary explicitly: a Transit map is a
+	 * LIST beginning with the `"^ "` marker, never a JSON object.
+	 */
+	public function testTheGuardDoesNotFireOnRealTransit(): void {
+		$out = $this->transit->decode('["^ ","~:name","My firsty"]');
+
+		self::assertSame(['name' => 'My firsty'], $out);
+	}
 }

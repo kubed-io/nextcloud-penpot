@@ -131,10 +131,66 @@ final class Transit {
 			);
 		}
 
+		$this->assertNotPlainJson($raw);
+
 		// One cache, one pass, strict document order. See the class docblock.
 		$cache = [];
 
 		return $this->walk($raw, $cache);
+	}
+
+	/**
+	 * Refuse a body that is plain JSON rather than Transit.
+	 *
+	 * WHY THIS GUARD EXISTS. Penpot content-negotiates: send
+	 * `Accept: application/json` and it answers plain camelCase JSON instead of
+	 * Transit. That body is still *valid JSON*, so this decoder happily walks it
+	 * — and produces garbage quietly, in two compounding ways: a plain object
+	 * carries no `"^ "` map marker, so it is walked as a LIST and comes back with
+	 * numeric keys `0..n`; and even unwrapped, its keys are `teamName` where every
+	 * caller here reads `team-name`.
+	 *
+	 * That is a whole class of silent wrongness produced by ONE tidy-looking
+	 * request header, so the failure is made loud at the decoder rather than left
+	 * to surface as "why is every field null?" three layers up. PenpotClient's
+	 * `call()` carries the matching warning at the header itself.
+	 *
+	 * The check is narrow on purpose: a JSON **object** is the unambiguous
+	 * signature, because Transit encodes every map as an ARRAY beginning with
+	 * `"^ "` and never as a JSON object. It is checked at the top level AND at
+	 * the first element, since Penpot's listing commands return a LIST of
+	 * records — `[{...},{...}]` — so the objects are one level down.
+	 *
+	 * @param mixed $raw
+	 *
+	 * @throws PenpotApiException
+	 */
+	private function assertNotPlainJson(mixed $raw): void {
+		if (!is_array($raw) || $raw === []) {
+			return;
+		}
+
+		// A JSON object decodes to a PHP array with at least one string key. A
+		// Transit map decodes to a LIST whose first element is the "^ " marker.
+		if (!is_string(array_key_first($raw))) {
+			// Not an object itself — but a listing response is a list OF objects,
+			// which is the shape Penpot's get-* commands actually return.
+			$first = $raw[array_key_first($raw)];
+
+			if (!is_array($first) || $first === [] || !is_string(array_key_first($first))) {
+				return;
+			}
+		}
+
+		throw new PenpotApiException(
+			'Penpot returned plain JSON, not Transit. This almost always means an '
+			. '"Accept: application/json" request header — Penpot content-negotiates, and that '
+			. 'header switches it to camelCase JSON, which this decoder cannot read and every '
+			. 'kebab-case key lookup would miss. Send no Accept header.',
+			0,
+			null,
+			PenpotApiException::KIND_PROTOCOL,
+		);
 	}
 
 	/**

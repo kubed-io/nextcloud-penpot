@@ -154,19 +154,32 @@ jobs:
     # Penpot's backend runs migrations on first boot, so the container is
     # "started" well before the RPC bus answers. Poll a real endpoint rather
     # than sleeping a guessed interval.
+    #
+    # WE POLL THE RPC BUS, NOT A HEALTH ENDPOINT. Two reasons, both checked
+    # against a live Penpot rather than assumed:
+    #   - `/api/health` does not exist (404). `/readyz` does answer 200, but it
+    #     reports the process, not the API.
+    #   - The RPC bus is what the very next step actually needs, and it is the
+    #     last thing to come up. A readiness check that greens before the thing
+    #     you depend on is ready is worse than no check, because it converts a
+    #     clear "not ready" into a confusing failure one step later.
+    # `get-profile` unauthenticated answers 200 with the anonymous profile, so a
+    # 200 here means the bus is genuinely serving commands.
     - name: Wait for Penpot
       env:
         PENPOT_URL: http://localhost:6060
       run: |
-        for i in $(seq 1 60); do
-          if curl -fsS -o /dev/null "$PENPOT_URL/api/health"; then
-            echo "✅ Penpot is up after ${i}s"
+        for i in $(seq 1 90); do
+          if curl -fsS -o /dev/null -X POST "$PENPOT_URL/api/rpc/command/get-profile" \
+               -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{}'; then
+            echo "✅ Penpot RPC is serving after ${i}s"
             exit 0
           fi
-          sleep 1
+          sleep 2
         done
-        echo "Penpot did not become ready in 60s" >&2
+        echo "Penpot did not become ready in 180s" >&2
         docker ps -a
+        docker logs "$(docker ps -aqf ancestor=penpotapp/backend:2.17.0 | head -1)" 2>&1 | tail -50 || true
         exit 1
 
     # PREREQUISITE: mint a token so scenarios can act as "a user who already has
