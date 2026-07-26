@@ -23,7 +23,8 @@ name: 🔗 Integration
 # NO REPOSITORY SECRET IS NEEDED (saga §6.47). Penpot can mint a token headlessly:
 #   prepare-register-profile → register-profile → login-with-password
 #     → create-access-token
-# so each run creates its own isolated account. See bin/mint-penpot-token.sh.
+# so each run creates its own isolated account. The chain runs in the "Mint
+# Penpot token" step below.
 
 on:
   pull_request:
@@ -82,12 +83,12 @@ jobs:
       # ── Penpot stack ──────────────────────────────────────────────────────
       # Penpot needs postgres + valkey alongside the backend, which is why this
       # is heavier than Grafana's single container. The FLAGS are load-bearing
-      # for bin/mint-penpot-token.sh:
+      # for the token mint step below:
       #   enable-access-tokens       — create-access-token is gated behind it
       #   disable-email-verification — else registration waits on an email
       # and it must NOT carry disable-registration / disable-login-with-password.
       # (Our own production instance sets those because it's OIDC/LDAP-gated,
-      # which is exactly why the mint script cannot be run against it.)
+      # which is exactly why the mint cannot be run against it.)
       postgres:
         image: postgres:15
         env:
@@ -161,8 +162,7 @@ jobs:
 
     # ── Act: everything provisioned — now do the work ────────────────────────
     # Penpot's backend runs migrations on first boot, so the container is
-    # "started" well before the RPC bus answers. Poll a real endpoint rather
-    # than sleeping a guessed interval.
+    # "started" well before the RPC bus answers.
     #
     # WE POLL THE RPC BUS, NOT A HEALTH ENDPOINT. Two reasons, both checked
     # against a live Penpot rather than assumed:
@@ -174,36 +174,112 @@ jobs:
     #     clear "not ready" into a confusing failure one step later.
     # `get-profile` unauthenticated answers 200 with the anonymous profile, so a
     # 200 here means the bus is genuinely serving commands.
+    #
+    # github-script rather than bash: a real deadline that a slow response
+    # cannot overrun (bash's `sleep 1` loop drifts by the request duration), and
+    # errors while the container is still booting are caught rather than
+    # tripping `set -e`.
     - name: Wait for Penpot
+      uses: actions/github-script@v9
       env:
         PENPOT_URL: http://localhost:6060
-      run: |
-        for i in $(seq 1 90); do
-          if curl -fsS -o /dev/null -X POST "$PENPOT_URL/api/rpc/command/get-profile" \
-               -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{}'; then
-            echo "✅ Penpot RPC is serving after ${i}s"
-            exit 0
-          fi
-          sleep 2
-        done
-        echo "Penpot did not become ready in 180s" >&2
-        docker ps -a
-        docker logs "$(docker ps -aqf ancestor=penpotapp/backend:2.17.0 | head -1)" 2>&1 | tail -50 || true
-        exit 1
+      with:
+        script: |
+          const url = `${process.env.PENPOT_URL}/api/rpc/command/get-profile`;
+          const deadline = Date.now() + 180_000;
+          let attempts = 0;
+
+          while (Date.now() < deadline) {
+            attempts++;
+            try {
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+              });
+              if (res.ok) {
+                core.info(`Penpot RPC is serving after ${attempts} attempt(s)`);
+                return;
+              }
+            } catch {
+              // Connection refused while the backend is still migrating.
+            }
+            await new Promise(r => setTimeout(r, 2000));
+          }
+
+          core.setFailed(`Penpot did not answer ${url} within 180s (${attempts} attempts)`);
 
     # PREREQUISITE: mint a token so scenarios can act as "a user who already has
     # one". How a token gets created is out of the app's scope — this is pure
     # test setup, and needs no secret (saga §6.47).
+    #
+    # Four chained calls, each reading the previous response to build the next:
+    #   prepare-register-profile -> register-profile -> login-with-password
+    #     -> create-access-token
+    # That is exactly the shape the workflow instructions say not to do in bash.
+    # The shell version parsed JSON with `sed -n 's/.*"token":"\([^"]*\)".*/\1/p'`,
+    # which returns empty rather than failing the moment a value is nested or
+    # contains a quote — and it hand-rolled a cookie jar for the session step.
     - name: Mint Penpot token (prerequisite)
       id: penpot_token
+      uses: actions/github-script@v9
       env:
         PENPOT_URL: http://localhost:6060
-      run: |
-        token="$(bash apps/$APP_ID/tests/integration/bin/mint-penpot-token.sh)"
-        if [ -z "$token" ]; then echo "no token minted" >&2; exit 1; fi
-        echo "::add-mask::$token"
-        echo "token=$token" >> "$GITHUB_OUTPUT"
-        echo "✅ Penpot access token obtained (length ${#token})"
+      with:
+        script: |
+          const base = `${process.env.PENPOT_URL}/api/rpc/command`;
+          // Unique per run so repeated CI runs never collide on an existing account.
+          const email = `ci-${Date.now()}@example.test`;
+          const password = 'Integration-Tests-1';
+
+          // Penpot speaks Transit by default; ask for plain JSON explicitly.
+          // Safe HERE (unlike in PenpotClient) because this script reads the
+          // response itself and never hands it to the Transit decoder.
+          const call = async (command, body, cookie) => {
+            const res = await fetch(`${base}/${command}`, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                ...(cookie ? { Cookie: cookie } : {}),
+              },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              throw new Error(`${command} failed: HTTP ${res.status} ${await res.text()}`);
+            }
+            return { json: await res.json(), setCookie: res.headers.get('set-cookie') };
+          };
+
+          const prepared = await call('prepare-register-profile', {
+            fullname: 'CI Integration', email, password,
+          });
+          if (!prepared.json.token) {
+            core.setFailed('prepare-register-profile returned no token — is registration disabled?');
+            return;
+          }
+
+          await call('register-profile', { token: prepared.json.token });
+
+          const login = await call('login-with-password', { email, password });
+          if (!login.setCookie) {
+            core.setFailed('login-with-password returned no session cookie');
+            return;
+          }
+
+          const created = await call(
+            'create-access-token',
+            { name: 'integration-tests' },
+            login.setCookie.split(';')[0],
+          );
+          if (!created.json.token) {
+            core.setFailed("create-access-token returned no token — is 'enable-access-tokens' set in PENPOT_FLAGS?");
+            return;
+          }
+
+          core.setSecret(created.json.token);
+          core.setOutput('token', created.json.token);
+          core.info(`Penpot access token obtained (length ${created.json.token.length})`);
 
     # Behat runs from the integration dir; OCC points back at the server root so
     # `occ` resolves. Formatters (pretty → stdout, junit → junit/) are configured

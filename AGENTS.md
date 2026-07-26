@@ -84,7 +84,7 @@ CONTRIBUTING.md owns that — don't ask the human to re-explain the PR flow.
 | [appinfo/](appinfo/) | NC app metadata (`info.xml` only — no `routes.php` yet; it would reference Controller classes that don't exist). |
 | [lib/](lib/) | PHP backend (`OCA\PenpotSync`). Currently `AppInfo/`, `Settings/` (Instance card + AdminSection) and `Command/` (set-url, show-config). `Service/`, `Listener/`, `BackgroundJob/` arrive with the sync engine. |
 | `src/` | **Does not exist yet.** JS frontend, Vite-built to `dist/penpot_sync-files.js` per [vite.config.js](vite.config.js) — config is wired ahead of the code. Lands with the file-type slice. |
-| [tests/](tests/) | `unit/` (standalone, no NC server — see `bootstrap.php` + `ocp-stubs.php`) and `integration/` (Behat against a real Nextcloud, plus `bin/mint-penpot-token.sh`). `ocp-stubs.php` grows one entry per OCP interface a test mocks. |
+| [tests/](tests/) | `unit/` (standalone, no NC server — see `bootstrap.php` + `ocp-stubs.php`) and `integration/` (Behat against a real Nextcloud; the Penpot token is minted by the workflow). `ocp-stubs.php` grows one entry per OCP interface a test mocks. |
 | [.github/workflows/](.github/workflows/) | CI: `tests.yml`, `quality.yml`, `integration.yml`, `pr.yml`, `package.yml`, `publish.yml`, `copilot-setup-steps.yml`. All green on the current slice. |
 | [.devcontainer/](.devcontainer/) | PHP 8.3 + Node + GH CLI dev environment. |
 | [saga/](saga/) | The long-form design narrative. **Read Chapter 1 before touching anything design-relevant.** |

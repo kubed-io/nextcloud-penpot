@@ -24,8 +24,8 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * So the contract with CI is: **the wire format is only ever asserted against a
  * live Penpot.** These steps are what make that true.
  *
- * The token comes from `bin/mint-penpot-token.sh` (saga §6.47) — Penpot can mint
- * one headlessly, so this suite needs no repository secret.
+ * The token is minted per run by the integration workflow (saga §6.47) — Penpot
+ * can mint one headlessly, so this suite needs no repository secret.
  *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}.
  */

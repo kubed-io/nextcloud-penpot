@@ -32,7 +32,8 @@ use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
  *    or a helm config-injection job would. → {@see OccTrait}
  *  - **A real Penpot**, reached *through the app* via `penpot_sync:probe`
  *    → {@see ConnectionSteps}. The token is minted per run by
- *    `bin/mint-penpot-token.sh` (saga §6.47), so no repository secret is needed.
+ *    the workflow's "Mint Penpot token" step (saga §6.47), so no repository
+ *    secret is needed.
  *  - A direct **Penpot RPC** channel (Guzzle, `Authorization: Token`) is what the
  *    later assertion side will use — "did the app really create/export/move
  *    that?" Not needed yet: nothing writes to Penpot in this slice, so asserting
