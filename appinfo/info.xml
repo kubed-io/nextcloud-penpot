@@ -58,7 +58,9 @@ this app integrates with.
          card does is reachable headlessly, which is what the integration suite
          drives. -->
     <command>OCA\PenpotSync\Command\SetUrl</command>
+    <command>OCA\PenpotSync\Command\SetToken</command>
     <command>OCA\PenpotSync\Command\ShowConfig</command>
+    <command>OCA\PenpotSync\Command\Probe</command>
   </commands>
   <!--
     No <repair-steps> yet — the custom .penpot mimetype registration
