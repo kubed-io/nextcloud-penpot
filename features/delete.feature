@@ -1,46 +1,28 @@
 # Deletion, in two independent layers that are easy to confuse:
 #
 #   NEXTCLOUD-SIDE delete  → the local mirror. Purely local, ALWAYS. Penpot is
-#                            never contacted. This is the default meaning of
-#                            deleting a .penpot file in the Files app (saga §6.1).
-#   PENPOT-SIDE delete     → a deliberate "Delete in Penpot" action that removes
-#                            the design itself. Opt-in behaviour, see below.
+#                            never contacted. This is what deleting a .penpot
+#                            file in the Files app means (saga §6.1).
+#   PENPOT-SIDE delete     → a deliberate "Delete in Penpot" action that moves
+#                            the design into Penpot's own trash.
 #
-# THE TRASH BIN (saga §6.34 — this REVERSES the earlier §6.27 rejection).
-# Penpot's own `delete-file` is irreversible FOR US: the id dies, deep links die,
-# and history becomes unreachable (§6.20/§6.26 — Penpot keeps the row for ~7 days
-# but no API command reaches it). So "restore" after a real delete degrades to
-# creating a look-alike with a new id.
+# PENPOT HAS A REAL TRASH, AND WE USE IT (saga §6.49/§6.52). An earlier design
+# (§6.34) built an opt-in "trash project" inside the service account's team,
+# because §6.26 had concluded Penpot's own trash was unreachable by API. That was
+# WRONG — the trash commands exist, they're just team-scoped:
 #
-# The trash bin avoids that entirely: instead of calling delete-file, the app
-# MOVES the design into a trash project inside the SERVICE ACCOUNT's personal
-# team — a space no ordinary user is a member of, so the design genuinely
-# disappears from the team's view. Restoring moves it back.
+#   get-team-deleted-files        {team-id}         → the trash listing
+#   restore-deleted-team-files    {team-id, ids[]}  → restore (SSE)
+#   permanently-delete-team-files {team-id, ids[]}  → hard delete (SSE)
 #
-# PROVEN LOSSLESS, not assumed (saga §6.34). A real round trip:
-#   duplicate-file → rename-file → move to personal team → move back
-#   result: SAME id, SAME name, SAME revn, SAME history rows.
+# Verified live: a deleted file restores with its id, revision and history
+# intact. So `delete-file` is NOT the destructive act §6.34 assumed — it puts the
+# design in a trash that keeps it for ~7 days. The whole trash-bin setting, its
+# trash-project config, and the origin bookkeeping are GONE. Deletion is now one
+# behaviour with one honest description.
 #
-# A TRASHED DESIGN NEED NOT FUNCTION WHILE TRASHED (Dr K). Nobody opens a design
-# in the bin; they restore it first. So questions like "does a shared library
-# still resolve while parked" don't need answering — only the restore has to work.
-#
-# WITH THE BIN DISABLED (the default), a Penpot-side delete is a real delete-file
-# — but it is NOT a data-loss event, because Nextcloud keeps the ".penpot"
-# archive in its own trash and can import it back. That's a BEST-EFFORT restore,
-# and it's genuinely good (saga §6.41, measured on a real round trip):
-#
-#     comes back:  name, pages, shapes, assets, even the revision number
-#     does not:    the file id (old deep links stay dead), the edit history
-#
-# So the two tiers are honest about themselves rather than "safe vs dangerous":
-#   bin OFF → best-effort restore. You get your design back, not its history.
-#   bin ON  → perfect restore. The same file, id and history intact.
-#
-# The bin earns its keep as the deeper flow for people who care about history,
-# not as the difference between recoverable and gone. ONE CAVEAT: best-effort
-# restore needs the archive to exist locally, so it only applies to "sync" files
-# (saga §6.22) — a "link" file holds no bytes to restore from.
+# THE ONE IRREVERSIBLE CALL is `permanently-delete-team-files`, and it is only
+# ever reached through an explicit "delete permanently" action.
 #
 # @todo — no lib/ exists yet; and the read-only guard (make sure NOTHING
 # accidentally calls Penpot on an ordinary Nextcloud delete) needs its own test.
@@ -48,8 +30,8 @@
 @todo
 Feature: Deleting designs, locally and in Penpot
   As a Nextcloud user
-  I want local deletes to be purely local and Penpot deletes to be recoverable
-  So that removing a file is never a surprise and never permanently costs me work
+  I want local deletes to stay local and Penpot deletes to be recoverable
+  So that removing a file is never a surprise and never silently costs me work
 
   Background:
     Given the app is connected to Penpot
@@ -129,7 +111,6 @@ Feature: Deleting designs, locally and in Penpot
     Then the file is back in its project folder
     And Penpot is never contacted by the restore
     And the pull refreshes it normally again
-    # Unhiding is the restore gesture users already know — no new UI.
 
   Scenario: Emptying the trash un-hides a dismissed link
     Given a link file the user deleted, now in the Nextcloud trash
@@ -148,71 +129,86 @@ Feature: Deleting designs, locally and in Penpot
     # file contents are never touched for any reason" — trashing and restoring a
     # link are purely local visibility operations (saga §6.45).
 
-  # ── layer 2: deleting in Penpot, with the bin ON ────────────────────────────
+  # ── layer 2: deleting in Penpot — recoverable for ~7 days ───────────────────
 
-  Scenario: Deleting in Penpot with the bin on moves the design, losing nothing
-    Given the admin has enabled the trash bin with a trash project
-    And a mirrored ".penpot" file in the "My Stuff" folder
+  Scenario: Deleting in Penpot moves the design to Penpot's trash
+    Given a mirrored ".penpot" file in the "My Stuff" folder
     When I choose "Delete in Penpot" and confirm
-    Then the design is moved into the configured trash project
-    And "delete-file" is never called
-    And the design keeps its id, its name, its revision and its history
-    And it no longer appears in the "Ferronescotia" team for any team member
+    Then "delete-file" is called
+    And the app explains the design goes to Penpot's trash and can be restored for about a week
+    And the design no longer appears in the "Ferronescotia" team's project listings
+    And the local mirror is moved to the Nextcloud trash with its metadata intact
 
-  Scenario: The origin is recorded so a restore knows where to go
-    Given the trash bin is enabled
-    When a design is moved to the trash
-    Then the app records the design's original project id in the file's metadata
-    # Penpot does not remember where a file came from — this bookkeeping is ours,
-    # and without it restore has nowhere to put the design back (saga §6.34).
+  Scenario: A design deleted in Penpot appears in Penpot's trash listing
+    Given a design that was deleted in Penpot
+    When the app lists that team's deleted files
+    Then the design is listed, with the date it will be purged
+    # get-team-deleted-files — team-scoped, which is why guessing file-scoped
+    # command names found nothing (saga §6.49).
 
-  Scenario: Restoring from the Penpot trash returns the design intact
-    Given a design in the configured trash project with its origin recorded
+  Scenario: Restoring from Penpot's trash returns the design completely intact
+    Given a design in Penpot's trash, deleted within the grace window
     When I restore it
-    Then the design is moved back to its original Penpot project
-    And it has the same id it always had
+    Then "restore-deleted-team-files" is called
+    And the design is back with the SAME id it always had
+    And its revision number and edit history are intact
     And its deep link works again
-    And its history is intact
     And no import or re-creation was performed
+    # Verified live (saga §6.49): same id, same revn, get-file returns 200 again.
 
-  Scenario: A trashed design is not required to work while it is trashed
-    Given a design sitting in the configured trash project
-    Then the app makes no guarantee about opening or rendering it in place
-    And only its restore is guaranteed to produce a working design
-    # Dr K: what matters is that it works after restore, not while parked.
+  Scenario: A restore is confirmed by re-reading, never by the success event alone
+    Given a design being restored from Penpot's trash
+    When the restore stream reports success
+    Then the app re-reads the design's state before reporting success to the user
+    And a restore that did not actually take effect is reported as a failure
+    # Confirmed live: the first restore call returned "end" while deleted_at was
+    # still set; a second call cleared it. A silent no-op is worse than an error.
 
-  @todo
-  Scenario: Trashing a shared library warns that consumers may not resolve it
-    Given a mirrored design whose Penpot file is a shared library
-    When I choose "Delete in Penpot" with the bin enabled
-    Then the app warns that files consuming this library may not resolve it while it is trashed
-    And it confirms the library resolves again once restored
-    # Library relations are keyed on file ids and survive the move, but Penpot
-    # scopes library VISIBILITY by team. Needs a real test with an actually
-    # shared library before shipping (saga open question #32).
+  Scenario: Restoring a design also restores its project if that was deleted too
+    Given a Penpot project that was deleted, containing a design
+    When the design is restored from Penpot's trash
+    Then its containing project is restored as well
+    And the project folder reappears on the next pull
+    # Penpot's restore clears deleted_at on the project as well as the file.
 
-  Scenario: Purging from the Penpot trash is the only irreversible step
-    Given a design in the configured trash project
-    When the admin purges it from the Penpot trash
-    Then "delete-file" is finally called for that design
-    And the app warns this cannot be undone
+  Scenario: The app always offers Penpot's trash before an archive import
+    Given an unmapped ".penpot" file whose design was deleted in Penpot
+    And the design is still inside Penpot's grace window
+    When I ask to restore it
+    Then the app restores it from Penpot's trash, not from the local archive
+    And it explains that this restore loses nothing
+    # Import is the last resort, not the default (saga §6.52) — see restore.feature.
+
+  # ── the one irreversible act ────────────────────────────────────────────────
+
+  Scenario: Permanent deletion is a separate, explicit action
+    Given a design in Penpot's trash
+    When I choose to delete it permanently
+    Then the app warns this cannot be undone
+    When I confirm
+    Then "permanently-delete-team-files" is called
     And the design's id and history become permanently unreachable
 
-  # ── layer 2: deleting in Penpot, with the bin OFF (the default) ─────────────
+  Scenario: An ordinary delete never reaches the permanent-delete call
+    Given a mirrored ".penpot" file
+    When I choose "Delete in Penpot" and confirm
+    Then "permanently-delete-team-files" is never called
+    # The only destructive call in the app is reachable only on its own action.
 
-  Scenario: With the bin disabled, deleting in Penpot is real but restorable
-    Given the trash bin is not enabled
-    And a mirrored ".penpot" file in "sync" mode in the "My Stuff" folder
-    When I choose "Delete in Penpot"
-    Then the app explains the design will really be deleted in Penpot
-    And it explains the archive is kept in the Nextcloud trash so it can be restored
-    And it explains a restore rebuilds the design but not its id or edit history
-    When I confirm
-    Then "delete-file" is called
-    And the local mirror is moved to the Nextcloud trash with its archive intact
+  Scenario: There is no app-managed trash-bin setting
+    Given a freshly installed app
+    Then no trash project setting exists
+    And no design is ever moved into a service-account-owned trash project
+    # WITHDRAWN DESIGN (saga §6.34 → §6.52). An earlier draft built exactly this,
+    # on the false premise that Penpot's own trash was unreachable. It isn't —
+    # and Penpot's trash preserves more, with no configuration and no bespoke
+    # machinery. Moving a user's design into a robot's private team would also
+    # have made it vanish for their whole team.
 
-  Scenario: Best-effort restore rebuilds the design from the kept archive
-    Given a design deleted in Penpot with the bin off
+  # ── after the grace window ──────────────────────────────────────────────────
+
+  Scenario: Once the grace window passes, only a best-effort import remains
+    Given a design deleted in Penpot longer ago than the grace window
     And its ".penpot" archive still in the Nextcloud trash
     When I restore it
     Then the archive is imported back into Penpot
@@ -220,39 +216,12 @@ Feature: Deleting designs, locally and in Penpot
     But it has a NEW id, and its edit history does not come back
     # Measured, not assumed (saga §6.41): a real export→import round trip
     # preserved name, revn 5, pages and assets — and produced 0 file_change rows
-    # against the original's 5. The DESIGN survives; the history and link do not.
+    # against the original's 5.
 
-  Scenario: A link file has nothing to restore from, and the app says so before deleting
-    Given the trash bin is not enabled
-    And a mirrored ".penpot" file in "link" mode
-    When I choose "Delete in Penpot"
-    Then the app warns that no archive is stored for a link file
-    And it offers to fetch the archive first so the design can be restored later
-    # Best-effort restore depends on the bytes existing locally. Without them
-    # "delete" really is unrecoverable — worth saying at the moment of deletion
-    # rather than at the moment someone tries to restore (saga open question #37).
-
-  Scenario: The trash bin is off by default
-    Given a freshly installed app
-    Then no trash project is configured
-    And the setting explains that with it off, restoring rebuilds a design without its history
-    And it explains that with it on, restoring returns the original design untouched
-
-  # ── Penpot's own grace period: real, better than ours, and not ours to drive ─
-
-  Scenario: A design deleted in Penpot's own UI may still be recoverable there
-    Given a design that was deleted directly in Penpot
-    Then Penpot retains its data for roughly 7 days before a purge worker removes it
-    But no API command exposes or restores it
-    And the app never manipulates Penpot's database to recover it
-    # Confirmed from Penpot's own database (saga §6.26): "deleted_at" is the
-    # scheduled PURGE time, ~7 days out — not the deletion time. Every plausible
-    # restore command (restore-file, get-deleted-files, undelete-file, …) 404s.
-
-  Scenario: A pull points the user at Penpot when a design vanishes there
-    Given a mirrored ".penpot" file whose design was deleted directly in Penpot
-    When the pull detects the design is gone
-    Then the local mirror is moved to the Nextcloud trash, never hard-deleted
-    And the app notes Penpot may still be able to recover it for about a week
-    And it points the user at Penpot, which preserves the id and history
-    # Recovering it in Penpot is strictly better than anything we can offer.
+  Scenario: A link file has nothing to fall back on once the window closes
+    Given a mirrored ".penpot" file in "link" mode
+    When its design is deleted in Penpot
+    Then the app takes a final snapshot while the design is still recoverable
+    And the archive is written into the file before it is trashed locally
+    # The one genuinely unrecoverable case, closed by saga §6.46 — see
+    # reconcile.feature.

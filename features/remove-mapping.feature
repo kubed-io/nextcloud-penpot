@@ -11,12 +11,12 @@
 # the next pull recreates it. One mapping object, one lifecycle.
 #
 # GRAFANA HAS THIS FILE, N8N DOESN'T — Grafana's exists because its recycle-bin
-# setting gives removing a mapping a two-path story. This app DOES have a trash
-# bin (saga §6.34), but it is irrelevant here: the bin only ever engages on an
-# explicit "Delete in Penpot" action, and removing a mapping never deletes
-# anything in Penpot at all. So teardown collapses to ONE rule regardless of
-# whether the bin is on or off — but this app still needs the file, because it
-# DOES provision real folders that a removed mapping leaves behind.
+# setting gives removing a mapping a two-path story. This app has no such
+# setting: Penpot provides its own trash (saga §6.49/§6.52), and it only ever
+# engages on an explicit "Delete in Penpot" action. Removing a mapping never
+# deletes anything in Penpot at all, so teardown collapses to ONE rule — but the
+# file is still needed, because the app DOES provision real folders that a
+# removed mapping leaves behind.
 #
 # THE CONTRACT: every mirrored file connected to the removed mapping goes to the
 # Nextcloud trash and becomes unmapped — purely local, since there is no remote
@@ -43,8 +43,8 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   Scenario: Removing the team mapping trashes its mirrored files and leaves standalone files alone
-    Given a mirrored ".penpot" file in the "My Stuff" subfolder
-    And an untracked standalone ".penpot" file also sitting in the "My Stuff" subfolder
+    Given a mirrored ".penpot" file in the "My Stuff" folder
+    And an untracked standalone ".penpot" file also sitting in the "My Stuff" folder
     When the admin removes the "Ferronescotia" mapping
     Then the mirrored file is moved to the Nextcloud trash
     And the mirrored file becomes "unmapped"
@@ -54,10 +54,10 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And the design still exists, unchanged, in Penpot
 
   Scenario: There is no project mapping to remove
-    Given the "Ferronescotia" mapping exists with several mirrored project subfolders
-    Then no individual project subfolder can be unmapped
+    Given the "Ferronescotia" mapping exists with several mirrored project folders
+    Then no individual project folder can be unmapped
     And the only teardown available is removing the team mapping itself
-    # Projects exist as subfolders because the pull created them (saga §6.24).
+    # Project folders exist because the pull created them (saga §6.24).
 
   Scenario: Removing a mapping warns about what is actually being trashed
     Given 3 mirrored files in "sync" mode and 10 in "link" mode under the mapping
@@ -67,7 +67,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # Don't-lose-data starts with telling the user what's at stake.
 
   Scenario: Trashed mirrored files keep their identity so they can reconnect
-    Given a mirrored ".penpot" file in the "My Stuff" subfolder
+    Given a mirrored ".penpot" file in the "My Stuff" folder
     When the admin removes the "Ferronescotia" mapping
     Then the trashed file keeps its "penpot_id" metadata
     And it keeps its archive content if it was in "sync" mode
@@ -83,7 +83,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # than duplicated — the same id-matching guarantee uninstall.feature relies on.
 
   Scenario: An ignored file under a removed mapping is still trashed, not destroyed
-    Given a mirrored ".penpot" file tagged as ignored in the "My Stuff" subfolder
+    Given a mirrored ".penpot" file tagged as ignored in the "My Stuff" folder
     When the admin removes the "Ferronescotia" mapping
     Then the file is moved to the trash with its archive intact
     And it is recoverable from the trash
@@ -94,13 +94,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     Given the "Ferronescotia" mapping with mirrored files
     When the admin removes the mapping
     Then no request of any kind is made to Penpot
-    And no webhook, project, or file is deleted on the Penpot side
-
-  Scenario: Removing a mapping never engages the Penpot trash bin
-    Given the trash bin is enabled with a configured trash project
-    And the "Ferronescotia" mapping with mirrored files
-    When the admin removes the mapping
-    Then no design is moved into the trash project
-    And Penpot is never contacted
-    # The bin only ever engages on an explicit "Delete in Penpot" action
+    And "delete-file" is never called
+    And no webhook, project, or design is deleted on the Penpot side
+    # Penpot deletion only ever happens on an explicit "Delete in Penpot" action
     # (delete.feature). Tearing down a mapping is a purely Nextcloud-side act.

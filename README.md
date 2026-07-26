@@ -97,7 +97,7 @@ complete list:
 | **New → Penpot design** | A design is created | Delete it |
 | Restore an archived design | It's imported | — |
 | Rename a project folder | The project is renamed | Rename it back |
-| **Delete in Penpot** *(explicit action)* | Moved to trash, or deleted | Depends on the [trash bin](#deleting) |
+| **Delete in Penpot** *(explicit action)* | Moved to Penpot's trash | Restore it, for ~7 days |
 
 **Exactly one operation in the entire app destroys anything** — and it only ever
 runs behind an explicit, confirmed "Delete in Penpot". Everything else is
@@ -330,32 +330,30 @@ something nobody is tracking — it looks like a backup and isn't one.
 
 ### Restore — putting a design back
 
-"Restore" can mean three different things, and the app picks the best one
-available and tells you which:
-
-The app picks the best path available and tells you which one it used, best
-first:
+"Restore" can mean several different things. The app picks the best path
+available and tells you which one it used — best first:
 
 | # | Situation | What you get back |
 |---|---|---|
-| 1 | Someone restores the design in **Penpot's own UI** | **Everything** — id, history, links |
-| 2 | It's in the **Penpot trash bin** (if enabled) | **Everything** |
-| 3 | Only the **Nextcloud** file was deleted | Everything local |
-| 4 | Deleted in Penpot, you have a `sync` archive | The design, not its id or history |
-| 5 | Deleted in Penpot, rescued by a **final snapshot** | The design, not its id or history |
-| 6 | A `link` whose design vanished over a week ago | Nothing |
+| 1 | Only the **Nextcloud** file was deleted | Everything — the design never moved |
+| 2 | It's in **Penpot's trash** (~7 days) | **Everything** — id, revision, history, links |
+| 3 | Deleted in Penpot, you have a `sync` archive | The design, not its id or history |
+| 4 | Deleted in Penpot, rescued by a **final snapshot** | The design, not its id or history |
+| 5 | A `link` whose design vanished over a week ago | Nothing |
 
-**Row 1 is the best restore in the app, and it isn't ours.** If a human restores
-a design in Penpot within its ~7-day window, our next pull simply notices the id
-again, finds your old mirror sitting in the Nextcloud trash, and puts it back —
-same file, same metadata, same mode. Nothing to configure.
+**Row 2 is Penpot's own Trash, and it's the important one.** A design deleted in
+Penpot stays recoverable for about a week, and it can be restored either by a
+human in Penpot's UI or by this app calling Penpot's restore directly — both
+bring it back with its id, revision and history intact. Either way, the next pull
+finds your old mirror in the Nextcloud trash and puts it back rather than
+creating a duplicate. Nothing to configure.
 
-Rows 4 and 5 are best-effort: **a deleted Penpot design cannot be resurrected at
+Rows 3 and 4 are best-effort: **a deleted Penpot design cannot be resurrected at
 its original id**, verified against a live instance, so importing returns the
 *artwork* rather than the *file* — same name, pages and assets, new identity, no
 edit history.
 
-**Row 6 is the only real loss, and the app works hard to avoid it.** When a pull
+**Row 5 is the only real loss, and the app works hard to avoid it.** When a pull
 notices a `link` file's design was deleted, it takes a **final snapshot** first —
 Penpot still lets us export a deleted design for about a week — writes that
 archive into the file, and *then* moves it to the trash. You end up holding a
@@ -376,39 +374,42 @@ Two independent layers, and the app always says which one it's acting on:
 empty-trash never contact Penpot. Restoring a mirror from the Nextcloud trash
 re-adopts it — the pull won't leave you with a duplicate.
 
-**"Delete in Penpot"** is a separate, explicit action. **Either way you can get
-your design back** — the admin's trash-bin setting decides *how much* comes back:
+**"Delete in Penpot"** is a separate, explicit action — and it is **recoverable**.
+Penpot has its own Trash, and this app uses it:
 
-| Trash bin | What happens | What a restore returns |
-|---|---|---|
-| **Off** *(default)* | `delete-file` is called; Nextcloud keeps the archive | **Best-effort** — the design, not its history |
-| **On** | The design **moves** to a trash project | **Everything** — same id, history, links |
+| What happens | What a restore returns |
+|---|---|
+| The design goes to **Penpot's trash** for ~7 days | **Everything** — same id, revision, history, links |
+| After that window closes | Best-effort rebuild from your archive — the design, not its id or history |
 
-**Best-effort restore is better than it sounds.** Measured on a real round trip:
+Restoring inside the window costs nothing: the app calls Penpot's own restore and
+the design comes back exactly as it was. Verified against a live instance — same
+id, same revision, deep links working again.
+
+**There is no trash-bin setting to configure.** An earlier design built a
+parallel "trash project" inside a service account's team, on the mistaken belief
+that Penpot's own trash was unreachable by API. It isn't — and Penpot's trash
+preserves strictly more, with no configuration and without a design vanishing
+into a robot's private team.
+
+**After the window, a best-effort restore still gets your work back.** Measured
+on a real round trip:
 
 ```
 comes back:  name, pages, shapes, assets, even the revision number
 does not:    the file id (old deep links stay dead), the edit history
 ```
 
-Nobody loses design work — you lose undo-history and a URL. That's a respectable
-outcome for a backup, which is why the default is safe rather than dangerous.
+Nobody loses design work — you lose undo-history and a URL.
 
-**The trash bin is the deeper flow for people who care about history.** With it
-on, deleting is a *move* and restoring is a *move back* — verified lossless
-against a live instance: same id, same name, same revision, same history. The
-design vanishes from the team's view because nobody else is a member of the
-service account's team. Purging from that trash is the only step that calls
-`delete-file`, and it says so.
-
-> A trashed design isn't expected to *work* while it's parked — only to come back
-> intact. Nobody opens a design in the bin.
+**Permanent deletion is its own explicit action.** It's the only irreversible
+call in the app, and an ordinary delete never reaches it.
 
 ⚠️ **Best-effort restore needs the bytes.** A `link` file holds no archive, so
-there is nothing to rebuild from. The app says so *before* you delete one, and
-offers to fetch the archive first — and if a link's design is deleted in Penpot,
-the pull takes a [final snapshot](#restore--putting-a-design-back) rather than
-leaving you a dead pointer.
+there is nothing to rebuild from once the window closes. The app says so *before*
+you delete one, and if a link's design is deleted in Penpot the pull takes a
+[final snapshot](#restore--putting-a-design-back) rather than leaving you a dead
+pointer.
 
 **Deleting a link is different: it just hides it.** A link has no content, so
 there is nothing to delete — trashing one is a *visibility* choice. The file goes
@@ -468,17 +469,6 @@ Two cards, deliberately separate:
 
 A connection test distinguishes *unset* from *rejected*, and names the required
 Penpot instance flag if it's missing.
-
-### Trash bin *(off by default)*
-
-Enable it and name a **trash project** — a project inside the service account's
-own personal team, which no ordinary user is a member of. With it on, "Delete in
-Penpot" moves designs there instead of destroying them, and restoring is a move
-back that preserves everything including edit history.
-
-Leaving it off is not dangerous: deletes are still restorable from the archive
-Nextcloud keeps, just without the design's history or its original link. The
-setting's own description says exactly that.
 
 ### Personal settings
 

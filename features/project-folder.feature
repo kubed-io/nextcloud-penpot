@@ -99,19 +99,52 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     # NOTE: creating a project from a tagged folder is itself still gated on the
     # open §6.7/§6.15 fork; only the guard's shape is settled here.
 
-  # ── the reverse direction: Penpot names Nextcloud cannot represent ──────────
+  # ── a name Nextcloud cannot represent (saga §6.51) — PROVISIONAL ───────────
+  # ⚠️ NOT RATIFIED. The evidence is solid; the answer is a first draft. Open:
+  # is refusing the whole project too blunt? does the same rule apply to FILE
+  # names? is there a middle path (mirror-but-flag)? should the app offer to
+  # rename it in Penpot? Do not build against these scenarios yet.
+  # Checked live against Nextcloud's IFilenameValidator: the ONLY forbidden
+  # characters are "\" and "/" (plus ".."/"." as segments, ".htaccess", and the
+  # .part/.filepart extensions). Everything else — "a:b", "a*b", "CON",
+  # ".hidden" — is a perfectly legal folder name. So this is a two-character
+  # problem, not a general sanitisation problem.
 
   @todo
-  Scenario: A Penpot project whose name is not a legal folder name is still mirrored
+  Scenario: A Penpot project whose name contains a slash is skipped, with a clear reason
     Given a Penpot project named "Has/Slash"
     When the pull runs
-    Then a folder is created with a sanitised version of the name
-    And the folder carries the real project id, which stays authoritative
-    And the app reports that the folder name could not match exactly
-    # Confirmed live (saga §6.38): Penpot accepts "/" in project names; Nextcloud
-    # folders cannot contain it. This is the ONE real exception to §6.36's
-    # names-always-match rule. The exact sanitisation rule is undecided —
-    # saga open question #35.
+    Then no folder is created for that project
+    And no files from that project are mirrored
+    And the admin is told the project cannot be mirrored because "/" is not allowed in a folder name
+    And the message names the project so it can be renamed in Penpot
+
+  @todo
+  Scenario: One unmappable project does not block the rest of the team
+    Given a Penpot project named "Has/Slash"
+    And other projects with ordinary names in the same team
+    When the pull runs
+    Then every other project is mirrored normally
+    And only the unmappable project is skipped
+
+  @todo
+  Scenario: Renaming the project in Penpot fixes it on the next pull
+    Given a Penpot project named "Has/Slash" that was skipped
+    When it is renamed to "Has Slash" in Penpot
+    And the pull runs
+    Then a folder named "Has Slash" is created
+    And its files are mirrored normally
+
+  @todo
+  Scenario: The app never invents a substitute name
+    Given a Penpot project named "Has/Slash"
+    When the pull runs
+    Then no folder named "Has-Slash" or "Has Slash" is created for it
+    # Sanitising is REJECTED (saga §6.51): "foo/bar" and "foo-bar" would both
+    # become "foo-bar", silently collapsing two distinct projects into one folder
+    # with no way to tell which is which. That breaks the names-always-match rule
+    # invisibly, which is worse than refusing visibly. Inferring a parent folder
+    # from the "/" is the §6.50 path-model, which was considered and rejected.
 
   # ── copying: deliberately disabled ──────────────────────────────────────────
 
