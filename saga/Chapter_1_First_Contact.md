@@ -29,16 +29,30 @@
 
 ---
 
-## Status: **CHAPTER CLOSED** — 2026-07-26
+## Status: **REOPENED** — 2026-07-26
 
-> **First contact is complete.** This chapter opened the line of communication
-> with a system we'd never met, probed it until we understood its anatomy, and
-> negotiated the terms on which the two sides will interact. It ends with a
-> complete architecture (§6.1–§6.48), an executable spec (23 feature files, ~255
-> scenarios), and a working first slice shipped green to CI — the app installs on
-> a real Nextcloud and its base URL is configurable entirely over `occ`.
+> The chapter was closed, then reopened the same day. Two things surfaced while
+> researching Dr K's `/`-as-path question, and both are too load-bearing to leave
+> in a closed chapter:
 >
-> Chapter 2 is where the embassy actually gets built.
+> 1. **§6.26 was WRONG — corrected in §6.49.** Penpot's trash *is* reachable by
+>    API (`get-team-deleted-files`, `restore-deleted-team-files`,
+>    `permanently-delete-team-files`), verified live: a deleted file restores
+>    with its **id, revision and history intact**. My earlier probe guessed
+>    command names and concluded absence; the real ones are team-scoped and no
+>    guess would have found them. **This makes §6.34's trash bin unnecessary** and
+>    demotes §6.41's best-effort restore to a last resort.
+> 2. **The nesting fork is genuinely open — §6.50.** Whether `/` in a project
+>    name should drive the Nextcloud path, or whether free nesting (§6.29) stands.
+>    Evidence is gathered and a recommendation recorded; the call is Dr K's.
+>
+> **Still true:** first contact succeeded. The architecture (§6.1–§6.50), the
+> executable spec (23 feature files, ~259 scenarios) and the shipped first slice
+> all stand — the app installs on a real Nextcloud and its base URL is
+> configurable entirely over `occ`, green in CI.
+>
+> **To close this chapter:** ratify or reject §6.50, then rewrite §6.34/§6.41 and
+> the delete/restore features around §6.49's correction.
 >
 > **Read [§6.18–§6.48](#618--decision-locked-the-access-model--a-required-service-account-reads-an-optional-personal-token-writes-as-you)
 > first.** They carry the current decisions; everything before them is the survey
@@ -2180,7 +2194,14 @@ identical to "everything was deleted" from the pull's perspective, and the
 difference between the two is the difference between a working app and one that
 deletes a user's backups because a token expired.
 
-### 6.26 — Test Cook: Penpot HAS a trash — a 7-day soft delete — but the API cannot reach it
+### 6.26 — ~~Test Cook: Penpot HAS a trash — but the API cannot reach it~~ — **WRONG, corrected by §6.49**
+
+> **⚠️ THE CONCLUSION BELOW IS WRONG.** The API *can* reach the trash:
+> `get-team-deleted-files`, `restore-deleted-team-files` and
+> `permanently-delete-team-files` all exist and work (verified live, §6.49). My
+> probe guessed command names and found none; the real ones are **team-scoped**.
+> The 7-day soft-delete *finding* is correct and useful — only the "unreachable"
+> verdict is wrong.
 
 > **Dr K:** *"does penpot have a trash bin or soft delete or archive?"*
 
@@ -2502,7 +2523,14 @@ second carve-out and Dr K has now asked for it explicitly, so it's ratified in
 principle — but `create-file` has never been called live (unlike
 `import-binfile`, §6.20), so it stays `@todo` until it is.
 
-### 6.34 — Decision (locked): §6.27 is REVERSED — an opt-in trash project, and it's the only way to make delete reversible
+### 6.34 — ~~Decision (locked): an opt-in trash project~~ — **premise removed by §6.49**
+
+> **⚠️ THIS SECTION'S PREMISE IS GONE.** It exists because §6.26 concluded
+> Penpot's own trash was unreachable, making a service-account trash project
+> "the only way to make delete reversible." §6.49 disproved that: Penpot's trash
+> restores id, history and links — strictly better than moving a design into a
+> robot's private team. **This design should be dropped**; pending the same
+> rewrite pass as §6.50.
 
 > **Dr K:** *"we can't rely on the penpot trash in their api … the trash bin
 > feature would be opt in … moving from some team to the SAs personal team in a
@@ -2857,6 +2885,11 @@ fix it would then rename the *original* Penpot project. The feature can't be mad
 coherent without answering questions nobody has asked yet, so it stays off.
 
 ### 6.41 — Refinement: with the bin off, restore is **best-effort**, not a failure mode
+
+> **⚠️ Demoted by §6.49.** The measurements below are correct and still apply —
+> but importing from our archive is now a **last resort**, reached only after
+> Penpot's own ~7-day trash window closes. Inside that window, restore losslessly
+> via `restore-deleted-team-files`.
 
 > **Dr K:** *"we do delete from penpot … we simply import back into penpot …
 > readme and docs fairly warn that this is best effort restore and that history
@@ -3498,19 +3531,195 @@ Struck items are now answered (see Course 5); the rest are still open.
 43. **New (§6.44), operational:** trashed files carry a `.dTIMESTAMP` suffix on
     their on-disk name (`foo.penpot.d1785087619`). Match trash entries by fileid
     or metadata, **never by filename** — a filename match will silently miss.
-44. **New (§6.48), parked not open:** `/` in a project name as an inferred
-    Nextcloud path. Appealing (it turns §6.38's sanitisation problem into a
-    feature) but it **contradicts §6.29's free nesting** — a name that dictates a
-    path and a user who moves folders freely cannot both be authoritative.
-    Evidence is gathered; revisit only after the core mirror is stable, and only
-    with an explicit answer to "name or user decides location?"
+44. ~~(§6.48) `/` in a project name as an inferred Nextcloud path, parked.~~
+    **Reopened as a real fork — §6.50.** Evidence gathered (Penpot's own docs
+    describe projects as flat "folders in a file system", suggest organising *"by
+    client, product, feature"*, and never mention nesting or paths).
+    **Recommendation: keep free nesting, don't adopt `/`-as-path.** Awaiting
+    Dr K's ratification.
+45. **New (§6.49), BLOCKING the chapter close:** rewrite §6.34 (drop the
+    service-account trash bin) and §6.41 (demote best-effort restore to a last
+    resort) around the corrected trash finding, then update `delete.feature`,
+    `restore.feature`, `reconcile.feature` and the README to match. The saga now
+    says the right thing; the specs still describe the superseded design.
+46. **New (§6.49):** `restore-deleted-team-files` returned success while
+    `deleted_at` was still set — the SSE `end` event fires before the transaction
+    settles. A second call cleared it. **Any client must re-read to confirm a
+    restore**, never trust the `end` event alone. Worth checking whether this is
+    a race or requires a retry, before the restore path ships.
+47. **New (§6.49):** restoring a file also restores its **containing project**
+    (the source clears `deleted_at` on `project` too). Confirm what that means
+    for the pull when a whole project was deleted and one file is restored —
+    does the project folder reappear with only that file in it?
+
+### 6.49 — Correction: **§6.26 WAS WRONG. Penpot's trash IS reachable by API — and the trash bin (§6.34) is now unnecessary**
+
+> Chasing Dr K's naming question sent me to Penpot's own docs, which describe a
+> **Trash with Restore** in the dashboard. §6.26 concluded no such API existed.
+> §6.26 was wrong, and the error is worth naming precisely because it's the kind
+> I'd otherwise repeat.
+
+**How I got it wrong.** §6.26 probed for trash commands *by guessing names* —
+`restore-file`, `get-trash`, `undelete-file`, and a dozen more, all 404. From
+that I concluded "no API reaches the grace window." But **absence of evidence
+from a guessed-name sweep is not evidence of absence.** The real commands are
+namespaced by *team*, not by file, and no reasonable guess would have found them:
+
+```
+get-team-deleted-files       {team-id}         → the trash listing
+restore-deleted-team-files   {team-id, ids[]}  → restore (SSE)
+permanently-delete-team-files{team-id, ids[]}  → hard delete (SSE)
+```
+
+Confirmed by reading Penpot's actual source
+(`backend/src/app/rpc/commands/files.clj`), then verified live. The Trash
+feature shipped in **2.13**; we run 2.17.0, so it was there the whole time.
+
+**Verified end to end, twice:**
+
+```
+duplicate-file "RestoreProbe2"  → created
+delete-file                     → 204, gone from get-project-files
+get-team-deleted-files          → lists it (with all 5 earlier probe deletions)
+restore-deleted-team-files      → event: progress {index 1, total 1}, event: end
+→ back in get-project-files, SAME id, revn 5, get-file returns 200
+```
+
+**One real gotcha:** the first restore call reported success while `deleted_at`
+was still set — the SSE returns before the transaction settles. A second call
+cleared it. **Any client must re-read to confirm, not trust the `end` event.**
+(The source explains why the restore is thorough: it clears `deleted_at` across
+`file`, `file_media_object`, `file_change`, `file_data`, `file_thumbnail`,
+`file_tagged_object_thumbnail` **and the containing project** — so restoring a
+file resurrects its project too if that was deleted.)
+
+**What this changes, and it's a lot:**
+
+1. **§6.34's trash bin is now unnecessary — and should be dropped.** Its entire
+   justification was: "Penpot's own grace period is unreachable, so our only
+   alternative to `delete-file` is moving files to a service-account project."
+   That premise is false. Penpot has a real trash with a real restore that
+   preserves **id, history, links, everything** — strictly better than our
+   move-to-a-robot's-team scheme, with none of its downsides (no design vanishing
+   into a private team, no origin bookkeeping, no shared-library caveat).
+2. **§6.41's "best-effort restore" is demoted to a last resort.** With the bin
+   off, deleting no longer means "rebuild from the archive, lose the history" —
+   it means "it's in Penpot's trash for ~7 days; restore it there." Import from
+   our archive is only needed *after* that window closes.
+3. **The restore hierarchy simplifies.** §6.46's six-row table collapses: rows 1
+   and 2 merge into "restore it in Penpot's trash — via the UI *or* via our
+   own API call," and we can now *drive* it rather than only pointing at it.
+4. **§6.20's finding still stands** and is unaffected: a **purged** file (past
+   the window, or `permanently-delete-team-files`) still cannot be resurrected
+   at its original id. The grace window is the difference between recoverable
+   and not.
+
+**The lesson for the rest of this saga:** when a vendor's *documentation*
+describes a feature and my probe says it's absent, the probe is the thing to
+doubt. Read the source next time — it took one file to answer definitively what
+a dozen guessed names could not.
+
+**Consequences for the trash-bin design are recorded but NOT yet rewritten into
+§6.34 and the features** — that's a deliberate, sizeable edit that belongs with
+the nesting decision in §6.50, so both land together.
+
+### 6.50 — The nesting fork, reopened: `/`-as-path vs. free nesting (Dr K's call, evidence gathered)
+
+> **Dr K:** *"I'm honestly open to only doing this and rewriting our whole nested
+> idea … I want to go with the option that most fits with the intended penpot
+> model … probably just picking one would make all the logic and code simply less
+> and more straightforward and expectable."*
+
+§6.48 parked this as a "maybe." Dr K has reopened it as a real fork, and the
+final clause is the right instinct: **the two models should not coexist.** Here
+is the evidence, then a recommendation.
+
+**What Penpot itself intends — from their own documentation, verbatim:**
+
+> *"Projects are containers that help you organize and group related design files
+> together. **Think of them as folders in a file system.** You can create as many
+> projects as you need to organize your work by client, product, feature, or any
+> other structure that fits your workflow."*
+
+And on files: *"Files are your design documents… Files can be created within a
+project."* There is **no mention of nesting, paths, or hierarchy anywhere** in
+the projects-and-files guide. The organizational axes Penpot suggests are *"by
+client, product, feature"* — i.e. **one flat level, chosen per workspace.**
+
+**So the honest reading: Penpot's intended model is a flat, single-level folder
+space.** The `/` character is permitted in a name the same way `🎨` and a leading
+space are permitted — because the field is `[:string {:max 250}]` and nothing
+more. It is **not** an S3-style key convention:
+
+- Penpot's own docs never suggest it.
+- Nothing in the API treats `/` specially (§6.38: `a/b/c`, `/leading`,
+  `trailing/`, and *duplicate* names all create fine; a rename into an existing
+  name returns 204).
+- The dashboard renders projects as a **flat sidebar list**, so `foo/bar` and
+  `foo/baz` appear as two unrelated entries whose names happen to share a prefix
+  — they are not grouped.
+- Penpot ships a real hierarchy feature for the *other* level (pages/boards
+  inside a file), which is where they put structure deliberately.
+
+**Recommendation: keep free nesting (§6.29). Do not adopt `/`-as-path.**
+
+The reasoning, weighed against Dr K's own criterion ("most fits the intended
+Penpot model"):
+
+1. **`/`-as-path invents a convention Penpot doesn't have**, then makes our app
+   depend on users honouring it. §6.38 proved Penpot enforces nothing — so every
+   guarantee (uniqueness, valid segments, no collisions on rename) becomes ours
+   to police, in a namespace the source system lets users freely break. That is
+   the opposite of "less logic."
+2. **It makes Penpot's flat list the master of Nextcloud's tree.** A user who
+   organises folders in Nextcloud would find their layout overwritten whenever
+   someone renames a project in Penpot. §6.29's split — *Penpot owns membership,
+   Nextcloud owns layout* — is what lets each system be good at what it actually
+   is.
+3. **It fails the don't-lose-data test in a way free nesting doesn't.** Dr K's
+   own example is the tell: renaming `/foo/baz/buz/fuz/nuz/cuz` → `/foo/baz/buz/fuz`
+   requires us to unmap a folder, remap another, move files up, and conditionally
+   delete a directory *only if* it contains nothing but `.penpot` files. That is
+   a delicate destructive cascade triggered by a **text edit in another system** —
+   exactly the class of action §6.1 exists to prevent.
+4. **Free nesting already delivers the benefit Dr K wants**, without the cost.
+   "Any folder in the structure could have any kind of files — markdown, text,
+   Grafana, n8n" is *already true* under §6.29, because ordinary Nextcloud folders
+   may sit anywhere among project folders. The tree Dr K described is buildable
+   today; the only difference is **who authors it** — the user, rather than a
+   naming convention.
+5. **The n8n/Grafana comparison actually argues against it.** Grafana has real
+   nested folders and we mirror them structurally; n8n has none and we *don't*
+   fake them (§6.3 notes n8n's tag→folder trick as weight Grafana didn't need).
+   Penpot is the n8n case: flat by design. Faking depth from a string is
+   precisely the n8n-era hack the family moved away from.
+
+**What we keep from the idea anyway.** §6.38's exception stands and is the one
+place `/` still matters: a project genuinely named `Has/Slash` can't be a folder
+name, so it's sanitised, the id stays authoritative, and the divergence is
+reported (open question #35). Users who *type* `foo/bar` get a folder literally
+named `foo bar` (or similar) — surprising-but-safe, and far better than silently
+restructuring their Nextcloud tree.
+
+**If Dr K still wants it**, the honest shape is an **admin-level, per-team,
+mutually-exclusive** setting — *"Flat projects"* (default, §6.29) vs. *"Paths
+from project names"* — precisely because the two models cannot both be
+authoritative about location. But it should be a **later chapter**, built on a
+working flat mirror, not a rewrite of the core before any of it exists.
+
+**Status: recommendation recorded, decision Dr K's.** Nothing in the locked
+design changes unless it's ratified.
 
 ---
 
-## Chapter 1 — closed
+## Chapter 1 — where it stands (REOPENED)
 
 > **Dr K:** *"we made first contact — chapter one was more like opening the line
 > of communication and probing to figure out how the two species will interact."*
+>
+> That framing still holds — and it's exactly why the chapter reopened. Two more
+> probes (§6.49, §6.50) found that we'd misread part of the anatomy. First
+> contact isn't over until the map is right.
 >
 > That's the chapter, exactly. We were sent to answer *"can we dock with this
 > planet?"* and the honest answer turned out to be **yes, but not the way we
@@ -3528,10 +3737,11 @@ Struck items are now answered (see Course 5); the rest are still open.
 > touching things* — and twice by being wrong first and corrected (§6.27→§6.34,
 > §6.42).
 >
-> First contact is over. We know how the two species interact. Chapter 2 is
-> where we actually build the embassy.
+> First contact is *nearly* over — two terms are still being negotiated
+> (§6.49's correction and §6.50's fork). Chapter 2 is where we build the embassy,
+> and it starts once those two are settled.
 
-What this chapter settled, and what it deliberately did not:
+What this chapter has settled, what it corrected, and what is still open:
 
 **What it produced:**
 
@@ -3541,20 +3751,28 @@ What this chapter settled, and what it deliberately did not:
   handful of findings that contradicted the documentation (`import-binfile` is
   SSE and ignores `name`; `get-projects` doesn't filter deleted rows; Penpot's
   name rules are looser than Nextcloud's, not stricter).
-- **A complete architecture**, §6.1–§6.48: the access model, the mapping shape,
-  the mode axis, nesting, drafts, the trash, restore, failure behaviour. Every
-  locked decision carries the evidence that produced it, and every superseded one
-  carries an inline marker saying what replaced it — including two of my own
-  conclusions Dr K correctly overturned (§6.27 → §6.34, and the §6.42 correction
-  to an earlier hope).
-- **An executable specification**: 23 `.feature` files, ~255 scenarios, written
+- **A near-complete architecture**, §6.1–§6.50: the access model, the mapping
+  shape, the mode axis, nesting, drafts, the trash, restore, failure behaviour.
+  Every locked decision carries the evidence that produced it, and every
+  superseded one carries an inline marker saying what replaced it — including
+  three of my own conclusions that were overturned (§6.27→§6.34, §6.42, and
+  §6.26→§6.49).
+- **An executable specification**: 23 `.feature` files, ~259 scenarios, written
   before the code rather than after it.
 - **A working first slice**, shipped and green: the app installs on a real
   Nextcloud and its base URL is configurable entirely over `occ`, proven by six
   live integration scenarios in CI.
 
-**What it deliberately left open** — these are the honest inheritance, not
-oversights. The full list lives below; the load-bearing ones are:
+**What must be settled before this chapter can close:**
+
+- **§6.50 — the nesting fork.** `/`-as-path vs. free nesting. Evidence gathered,
+  recommendation recorded (keep free nesting); the call is Dr K's.
+- **§6.49's fallout.** Penpot's trash is API-reachable after all, so §6.34's
+  trash bin should be dropped and §6.41 demoted to a last resort. The saga says
+  so; the feature files and README have not yet been rewritten around it.
+
+**What it deliberately left open** — the honest inheritance, not oversights. The
+full list lives below; the load-bearing ones are:
 
 - **The §6.2 file-rename fork.** Still genuinely undecided. Note the *project*
   rename direction was settled (§6.36) — only files remain open.
