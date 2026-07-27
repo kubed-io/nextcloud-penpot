@@ -14,6 +14,7 @@ use OCP\Constants;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
+use OCP\IDBConnection;
 use OCP\IGroupManager;
 use OCP\Share\IManager as IShareManager;
 use OCP\Share\IShare;
@@ -69,6 +70,7 @@ final class StorageService {
 		private readonly IShareManager $shareManager,
 		private readonly IGroupManager $groupManager,
 		private readonly IAppConfig $config,
+		private readonly IDBConnection $db,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -195,6 +197,7 @@ final class StorageService {
 							'group' => $gid,
 							'exception' => $e,
 						]);
+						$this->clearPoisonedTransaction();
 					}
 				}
 				continue;
@@ -215,7 +218,35 @@ final class StorageService {
 					'group' => $gid,
 					'exception' => $e,
 				]);
+				$this->clearPoisonedTransaction();
 			}
+		}
+	}
+
+	/**
+	 * Drop a Postgres transaction left dangling by a failed share write.
+	 *
+	 * On this instance `IShareManager::createShare()` can throw *after* the
+	 * share row commits — the notifications app's post-commit push crashes
+	 * (`OCA\Notifications\Push::$appConfig` is null) inside its own
+	 * notification transaction, leaving the shared DB connection in Postgres'
+	 * aborted-transaction state (`SQLSTATE[25P02]`). We deliberately swallow the
+	 * share error (a missing/awkward content group must not fail the pull), so
+	 * we must also discard the poisoned transaction here — otherwise every later
+	 * query on this connection, including the *next* mapping's file writes,
+	 * fails until end of transaction. Best-effort and self-contained: no caller
+	 * of {@see syncGroupShares} opens a transaction we would be clobbering.
+	 */
+	private function clearPoisonedTransaction(): void {
+		try {
+			if ($this->db->inTransaction()) {
+				$this->db->rollBack();
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync: could not clear a dangling transaction after a share failure', [
+				'app' => Application::APP_ID,
+				'exception' => $e,
+			]);
 		}
 	}
 

@@ -60,3 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Team Folder (groupfolders) provisioning is now built: a mapping set to use a Team Folder is mirrored into an ownerless groupfolders mount shared with the mapping's groups, falling back to a plain admin-owned folder when the groupfolders app is absent — the same backend pattern as the n8n and Grafana integrations.
 - A plain admin-owned mapping folder is now shared with the mapping's Nextcloud groups (read + rename), so the mapped team can see and rename their mirrored designs without an admin sharing the folder by hand.
 - A pull no longer echoes its own follow-renames back to Penpot: a re-entrancy guard fences the pull's filesystem writes off from the new rename write-back listener.
+
+### Fixed
+
+- A bulk pull no longer aborts every mapping after the first when sharing a plain folder trips a broken notifications app: the dangling database transaction that leak left behind (Postgres `SQLSTATE[25P02]`) is now discarded, so later mappings' file writes succeed.
