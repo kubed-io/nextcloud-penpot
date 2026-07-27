@@ -9,10 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\AppInfo;
 
-use OCA\PenpotSync\Settings\CredentialSettings;
+use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
 use OCA\PenpotSync\Settings\PersonalSettings;
-use OCA\PenpotSync\Settings\ScheduleSettings;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -54,13 +53,12 @@ final class Application extends App implements IBootstrap {
 		// entries come from AdminSection / PersonalSection, wired in
 		// appinfo/info.xml's <settings> block.
 		//
-		// The team-mapping list is NOT here: declarative settings have no
-		// array-of-objects field type, so it is a server-rendered
-		// IDelegatedSettings panel instead — the same split both siblings use for
-		// the same reason. See MappingSettings.
+		// The team-mapping list and Sync Actions are NOT here: declarative
+		// settings can host neither an array-of-objects nor a button, so both are
+		// server-rendered IDelegatedSettings panels declared in info.xml — the
+		// same split both siblings use, for the same reasons.
 		$context->registerDeclarativeSettings(InstanceSettings::class);
-		$context->registerDeclarativeSettings(CredentialSettings::class);
-		$context->registerDeclarativeSettings(ScheduleSettings::class);
+		$context->registerDeclarativeSettings(AutoSyncSettings::class);
 
 		// Per-user, attribution-only (saga §6.18). Registered the same way, but
 		// core stores it per-uid because the form declares a PERSONAL section

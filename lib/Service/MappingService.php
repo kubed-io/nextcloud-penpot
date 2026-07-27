@@ -157,12 +157,31 @@ final class MappingService {
 			));
 		}
 
-		// Trust Penpot's name over whatever the caller passed. The name is a
+		// Trust Penpot's name over whatever the caller passed. The TEAM name is a
 		// display cache and the server is authoritative for it (§6.13 point 3).
 		$name = $team['name'] ?? null;
 		if (is_string($name) && $name !== '') {
 			$mapping = $mapping->withTeamName($name);
+
+			// Materialise the folder name now, if the caller left it blank. It
+			// could not be defaulted in Mapping::fromArray() because the team
+			// name is only known once Penpot has answered — so this is the first
+			// moment the default exists. Matches nextcloud-grafana, where a blank
+			// nc_folder becomes the Grafana folder's title at create.
+			if ($mapping->ncFolder === '') {
+				$mapping = $mapping->withNcFolder($name);
+			}
 		}
+
+		if ($mapping->ncFolder === '') {
+			// No name given and none to borrow — refuse rather than create a
+			// mapping whose destination is unnamed.
+			throw new \InvalidArgumentException(
+				'This Penpot team has no name to borrow, so a Nextcloud folder name is required.',
+			);
+		}
+
+		$this->assertFolderUnique($mapping->ncFolder, null);
 
 		$all = $this->list();
 		$all[] = $mapping;
@@ -207,10 +226,24 @@ final class MappingService {
 				);
 			}
 
+			// The folder name IS editable — it is the admin's choice, not
+			// Penpot's (unlike project folder names, which are pinned to their
+			// project's name in both directions, §6.36). Blank means "keep what
+			// is there" rather than "clear it", so an update that only changes
+			// the mode cannot accidentally unname the destination.
+			$ncFolder = $mapping->ncFolder !== '' ? $mapping->ncFolder : $existing->ncFolder;
+
+			if ($ncFolder !== $existing->ncFolder) {
+				$this->assertFolderUnique($ncFolder, $id);
+			}
+
 			$updated = new Mapping(
 				$existing->id,
 				$existing->teamId,
 				$mapping->teamName !== '' ? $mapping->teamName : $existing->teamName,
+				$ncFolder,
+				$mapping->ncGroups,
+				$mapping->useTeamFolder,
 				$mapping->mode,
 				$existing->folderMode,
 			);
@@ -291,6 +324,34 @@ final class MappingService {
 	 */
 	private function findVisibleTeam(string $teamId): ?array {
 		return $this->visibleTeams()[$teamId] ?? null;
+	}
+
+	/**
+	 * Two mappings must not target the same Nextcloud folder.
+	 *
+	 * Without this, two teams would mirror into one folder and their project
+	 * subfolders would interleave — with the pull "fixing" the collision on every
+	 * run by fighting over the same names. Compared case-insensitively because
+	 * Nextcloud folder names are not reliably case-sensitive across storages, so
+	 * `Design` and `design` may or may not be the same folder depending on the
+	 * backend. Refusing both is the only answer that is right everywhere.
+	 *
+	 * @throws \InvalidArgumentException
+	 */
+	private function assertFolderUnique(string $ncFolder, ?string $exceptId): void {
+		foreach ($this->list() as $existing) {
+			if ($existing->id === $exceptId) {
+				continue;
+			}
+
+			if (strcasecmp($existing->ncFolder, $ncFolder) === 0) {
+				throw new \InvalidArgumentException(sprintf(
+					'The Nextcloud folder "%s" is already used by the mapping for %s. Pick another name.',
+					$ncFolder,
+					$existing->teamName !== '' ? $existing->teamName : $existing->teamId,
+				));
+			}
+		}
 	}
 
 	/** @param list<Mapping> $mappings */

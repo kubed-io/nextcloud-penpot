@@ -226,20 +226,58 @@ An admin maps a Penpot **team**; its projects come along automatically as folder
 There is no project-level mapping to configure — nothing to add, and nothing that
 could get out of sync with what Penpot actually contains.
 
-A mapped folder's name tracks Penpot's team name, so two Nextcloud setups mapping
-the same team stay recognizable. Renaming the team in Penpot renames the folder on
-the next pull; the mapping is keyed on the team **id**, so it survives.
+**You name the folder; Penpot names the projects.** A mapping binds a Penpot team
+to a Nextcloud folder, and the folder can be called whatever suits your instance.
+Leave the name blank and it defaults to the Penpot team's own name — the same
+rule the Grafana integration uses for its folder mappings, so the two behave
+alike. The mapping is keyed on the team **id**, so renaming the team in Penpot
+never breaks it, and never silently renames the folder you chose.
+
+Project folders *inside* the mapped folder are the exception: they always match
+their Penpot project's name exactly, in both directions. A rename in Penpot
+propagates down on the pull, and renaming a project folder in Nextcloud renames
+the project upstream. The reasoning for the split: a team folder is a mount point
+you chose to create, so naming it is yours; a project folder is a mirror of a
+Penpot object, and letting its name drift would break the identity the pull uses
+to match folders to projects.
+
+Two mappings cannot target the same Nextcloud folder — their project subfolders
+would interleave and the pull would fight over the same names on every run.
 
 Non-Penpot content inside a mapped folder is expected and never touched. The pull
 only acts on files it recognizes by their metadata.
 
+**Each mapping carries the Nextcloud groups its folder is shared with**, exactly
+as the n8n and Grafana integrations do — same control, same meaning, same
+defaults, so configuring all three is the same act each time. Groups start empty
+and are opt-in.
+
 **Team Folders are optional, not a hard dependency.** When the `groupfolders` app
 is installed, a mapped team becomes a real Team Folder — the closest match to
 Penpot's own model, where the team *is* the access boundary. Without it, the app
-falls back to an ordinary folder shared to the mapped group, and everything else
-behaves identically (folder metadata works the same on both). Note that Team
+falls back to an ordinary folder shared to the mapping's groups, and everything
+else behaves identically (folder metadata works the same on both). Note that Team
 Folder *creation* is admin-only by default in Nextcloud, so mapping a team is an
 admin action unless delegation has been configured.
+
+> The groups and Team Folder settings **persist today and are honoured when the
+> pull provisions the folder** (not yet built) — the same "saved now, applied
+> later" state the Grafana integration ships them in.
+
+### The admin section
+
+Laid out to match the n8n and Grafana integrations, so an admin who has
+configured one already knows where to look:
+
+| Panel | What's in it |
+|---|---|
+| **Instance** | The Penpot base URL and the service-account token. |
+| **Sync Settings** | Whether the pull runs on a schedule, and how often. |
+| **Team mappings** | One card per mapped team — folder name, mode, sharing. |
+| **Sync Actions** | Every button in the section: Test connection, and (later) bulk sync and purge. |
+
+Each user also gets a personal **Penpot** section holding their own optional
+access token, used only to attribute their changes in Penpot's history.
 
 ### The pull, and why it scales
 
@@ -551,13 +589,17 @@ on a public hostname.
 
 Early development, pre-alpha, **version 0.1.0**.
 
-**Implemented:** the admin Instance card (Penpot base URL) and its two `occ`
-commands, so the app can be pointed at an instance entirely headlessly. Covered
-by unit tests and by six Behat scenarios that install the app on a real Nextcloud
-and drive the CLI.
+**Implemented:** the complete admin surface — Instance (URL + service-account
+token), Sync Settings, Team mappings, and Sync Actions — plus a personal
+per-user token page. Every control persists and has an `occ` twin
+(`set-url`, `set-token`, `test-connection`, `list-teams`, `add-mapping`,
+`list-mappings`, `remove-mapping`, `set-personal-token`, `show-config`, `probe`).
+Covered by unit tests and by Behat scenarios that install the app on a real
+Nextcloud and drive the CLI against a real Penpot.
 
-**Not implemented:** everything else — credentials, mappings, the pull, file
-actions, the frontend. There is no `src/` yet.
+**Not implemented:** the pull, file actions, and the Files-app frontend. Nothing
+is mirrored yet — you can configure the app completely and it will still not
+create a single file. There is no `src/` yet.
 
 **Design chapter 1 is closed.** The [`saga/`](saga/) is the authoritative
 "where are we" record, ahead of this README and the feature files. Start with

@@ -10,7 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
-use OCA\PenpotSync\Settings\ScheduleSettings;
+use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCP\IAppConfig;
 
 /**
@@ -18,7 +18,7 @@ use OCP\IAppConfig;
  *
  * ## WHY THIS EXISTS BEFORE THE JOB DOES
  *
- * The card ({@see ScheduleSettings}) accepts a free-text duration like `1h`,
+ * The card ({@see AutoSyncSettings}) accepts a free-text duration like `1h`,
  * because presets age badly and a text box is honest about being a duration.
  * But free text needs parsing, and parsing needs a defined answer for `""`,
  * `"0"`, `"banana"`, and `"1s"`. Deciding that here — with tests — means the
@@ -61,7 +61,7 @@ final class ScheduleConfig {
 	}
 
 	public function isEnabled(): bool {
-		return $this->config->getValueBool(Application::APP_ID, ScheduleSettings::KEY_ENABLED, false);
+		return $this->config->getValueBool(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, false);
 	}
 
 	/**
@@ -74,7 +74,7 @@ final class ScheduleConfig {
 	public function getIntervalSeconds(): int {
 		$raw = $this->config->getValueString(
 			Application::APP_ID,
-			ScheduleSettings::KEY_INTERVAL,
+			AutoSyncSettings::KEY_INTERVAL,
 			'',
 		);
 

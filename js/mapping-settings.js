@@ -6,8 +6,9 @@
  * apps' settings scripts; the Vite bundle is reserved for the Files-app surface
  * that lands in a later course).
  *
- * A mapping is a team, so there is no card-per-mapping form here — just a row
- * per mapped team, an add control, and the Test connection button.
+ * One card per mapping, ported from nextcloud-grafana's mapping-settings.js so
+ * the three apps behave identically: Add appends a blank card, Save posts it,
+ * Delete removes it, and each card reports its own status inline.
  */
 (function () {
 	'use strict';
@@ -20,124 +21,218 @@
 		return OC.generateUrl('/apps/penpot_sync' + path);
 	}
 
+	// Card glyphs are read from the root element's data-icons attribute, which
+	// the server fills from img/icons/ — the same SVG folder any future bundle
+	// would import. This unbundled script has no build step, so injection is how
+	// it shares the one icon source.
+	var ICONS = {};
+	var DESC = {};
+
+	function root() {
+		return document.getElementById('penpot-sync-mappings');
+	}
+
 	function init() {
-		var root = document.getElementById('penpot-mapping-settings');
-		if (!root || root.dataset.bound === '1') {
+		var el = root();
+		if (!el || el.dataset.bound === '1') {
 			return;
 		}
-		root.dataset.bound = '1';
+		el.dataset.bound = '1';
 
-		var addBtn = document.getElementById('penpot-add-submit');
+		try {
+			ICONS = JSON.parse(el.dataset.icons || '{}');
+		} catch {
+			ICONS = {};
+		}
+
+		// Reuse the server-rendered tooltips verbatim, so a card built here
+		// carries exactly the same help text as one rendered by PHP — one source
+		// of wording, already translated.
+		DESC = {};
+		el.querySelectorAll('.penpot-sync-info').forEach(function (node) {
+			var field = node.closest('.penpot-sync-field');
+			if (field) {
+				var key = (field.className.match(/pp-([a-z]+)/) || [])[1];
+				if (key && !DESC[key]) {
+					DESC[key] = node.dataset.tip || '';
+				}
+			}
+		});
+
+		var list = el.querySelector('.penpot-sync-mappings__list');
+
+		list.addEventListener('click', function (e) {
+			var btn = e.target.closest('button');
+			if (!btn) { return; }
+			var card = btn.closest('.penpot-sync-mappings__card');
+			if (!card) { return; }
+
+			if (btn.classList.contains('js-save')) {
+				saveCard(card);
+			} else if (btn.classList.contains('js-delete')) {
+				deleteCard(card);
+			}
+		});
+
+		var addBtn = document.getElementById('penpot-sync-mappings-add');
 		if (addBtn) {
-			addBtn.addEventListener('click', addMapping);
+			addBtn.addEventListener('click', function () {
+				list.appendChild(buildEmptyCard());
+			});
 		}
-
-		var testBtn = document.getElementById('penpot-test-connection');
-		if (testBtn) {
-			testBtn.addEventListener('click', testConnection);
-		}
-
-		// Delegated, so rows added after load are handled without rebinding.
-		root.addEventListener('click', function (e) {
-			var btn = e.target.closest('.penpot-remove');
-			if (btn) {
-				removeMapping(btn.closest('tr'));
-			}
-		});
-
-		root.addEventListener('change', function (e) {
-			if (e.target.classList.contains('penpot-mode')) {
-				updateMode(e.target.closest('tr'), e.target.value);
-			}
-		});
 	}
 
-	function addMapping() {
-		var teamSel = document.getElementById('penpot-add-team');
-		var modeSel = document.getElementById('penpot-add-mode');
-		if (!teamSel || !teamSel.value) {
+	function availableTeams() {
+		try { return JSON.parse(root().dataset.teams || '[]'); } catch { return []; }
+	}
+
+	function availableGroups() {
+		try { return JSON.parse(root().dataset.groups || '[]'); } catch { return []; }
+	}
+
+	function teamFoldersAvailable() {
+		return root().dataset.tfAvailable === '1';
+	}
+
+	function readCard(card) {
+		var teamSel = card.querySelector('.js-team');
+		var groups = [];
+		card.querySelectorAll('.js-groups input[type="checkbox"]:checked').forEach(function (cb) {
+			groups.push(cb.value);
+		});
+		var tfEl = card.querySelector('.js-use-team-folder');
+
+		return {
+			id: card.dataset.id || '',
+			// A saved card's <select> is disabled (the team is immutable), and a
+			// disabled control still reads its value fine — but the id is kept in
+			// data-id so a saved card does not depend on the option's value at all.
+			teamId: teamSel ? (teamSel.dataset.id || teamSel.value) : '',
+			ncFolder: card.querySelector('.js-nc-folder').value.trim(),
+			ncGroups: groups,
+			useTeamFolder: tfEl ? tfEl.checked : true,
+			mode: card.querySelector('.js-mode').value,
+		};
+	}
+
+	function saveCard(card) {
+		var data = readCard(card);
+
+		if (!data.teamId) {
+			cardStatus(card, 'error', t('penpot_sync', 'Pick a Penpot team first.'));
 			return;
 		}
 
-		var btn = document.getElementById('penpot-add-submit');
-		btn.disabled = true;
+		var isNew = !card.dataset.id;
+		var req = isNew
+			? api('POST', url('/mappings'), data)
+			: api('PUT', url('/mappings/' + encodeURIComponent(card.dataset.id)), data);
 
-		api('POST', url('/mappings'), {
-			teamId: teamSel.value,
-			mode: modeSel ? modeSel.value : 'link',
-		}).then(function () {
-			// Re-render server-side rather than building the row here: the server
-			// owns the team name (it comes from Penpot, not from this page) and
-			// the immutable folder-mode column. Reloading keeps one renderer.
-			window.location.reload();
+		req.then(function (res) {
+			if (isNew && res.id) {
+				card.dataset.id = res.id;
+			}
+			// Reflect the materialised folder name back into the field, so a blank
+			// entry shows the name the backend filled in from the Penpot team
+			// rather than staying mysteriously empty.
+			if (res.nc_folder) {
+				var ncEl = card.querySelector('.js-nc-folder');
+				if (ncEl && !ncEl.value.trim()) {
+					ncEl.value = res.nc_folder;
+				}
+			}
+			cardStatus(card, 'success', t('penpot_sync', 'Saved.'));
 		}).catch(function (err) {
-			btn.disabled = false;
-			flash('error', err.message);
+			cardStatus(card, 'error', err.message || t('penpot_sync', 'Save failed.'));
 		});
 	}
 
-	function updateMode(row, mode) {
-		if (!row) { return; }
-		api('PUT', url('/mappings/' + encodeURIComponent(row.dataset.id)), { mode: mode })
-			.then(function () {
-				flash('success', t('penpot_sync', 'Saved.'));
-			})
-			.catch(function (err) {
-				flash('error', err.message);
-			});
-	}
+	function deleteCard(card) {
+		// An unsaved card has nothing to delete server-side.
+		if (!card.dataset.id) {
+			card.remove();
+			return;
+		}
 
-	function removeMapping(row) {
-		if (!row) { return; }
-
-		// Deliberately explicit that nothing is deleted. An admin removing a
-		// mapping most fears losing files or upstream designs; saying so here
+		// Deliberately explicit that nothing is deleted upstream. An admin
+		// removing a mapping most fears losing files or designs; saying so here
 		// prevents the hesitation and the support question both.
-		var name = row.querySelector('.penpot-team-name');
+		var name = card.querySelector('.js-team');
 		var msg = t(
 			'penpot_sync',
 			'Stop mirroring {team}? Nothing is deleted — not in Penpot, and not in Nextcloud.',
-			{ team: name ? name.textContent : '' }
+			{ team: name ? name.textContent.trim() : '' }
 		);
 		if (!window.confirm(msg)) {
 			return;
 		}
 
-		api('DELETE', url('/mappings/' + encodeURIComponent(row.dataset.id)))
+		api('DELETE', url('/mappings/' + encodeURIComponent(card.dataset.id)))
 			.then(function () {
-				window.location.reload();
+				card.remove();
+				flash('success', t('penpot_sync', 'Mapping removed.'));
 			})
 			.catch(function (err) {
-				flash('error', err.message);
+				cardStatus(card, 'error', err.message || t('penpot_sync', 'Delete failed.'));
 			});
 	}
 
-	function testConnection() {
-		var btn = document.getElementById('penpot-test-connection');
-		var out = document.getElementById('penpot-test-result');
-		btn.disabled = true;
-		out.textContent = t('penpot_sync', 'Testing…');
-		out.className = '';
+	function info(tip) {
+		if (!tip) { return ''; }
+		var safe = escapeHtml(tip);
+		return ' <span class="penpot-sync-info" tabindex="0" role="note" aria-label="' + safe
+			+ '" data-tip="' + safe + '">' + (ICONS.info || '') + '</span>';
+	}
 
-		api('POST', url('/test-connection'))
-			.then(function (res) {
-				// The endpoint answers 200 even for a failed connection — the
-				// verdict is in the payload. `success` and a useful outcome are
-				// not the same thing: a token that authenticates but sees no
-				// teams succeeds here and still blocks every mapping, so it gets
-				// its own warning styling rather than a green tick.
-				out.textContent = res.message;
-				out.className = res.success
-					? (res.teams && res.teams.length ? 'success' : 'warning')
-					: 'error';
+	function buildEmptyCard() {
+		var card = document.createElement('div');
+		card.className = 'penpot-sync-mappings__card';
+
+		// Only teams that are not already mapped can be added — the backend
+		// refuses a duplicate anyway, but offering it would be a trap.
+		var options = availableTeams()
+			.filter(function (team) { return !team.mapped; })
+			.map(function (team) {
+				var label = team.name ? team.name + ' (' + team.id + ')' : team.id;
+				return '<option value="' + escapeHtml(team.id) + '">' + escapeHtml(label) + '</option>';
 			})
-			.catch(function (err) {
-				out.textContent = err.message;
-				out.className = 'error';
-			})
-			.finally(function () {
-				btn.disabled = false;
-			});
+			.join('');
+
+		var groupBoxes = availableGroups().map(function (g) {
+			return '<label class="penpot-sync-groups__item"><input type="checkbox" value="'
+				+ escapeHtml(g) + '" /> ' + escapeHtml(g) + '</label>';
+		}).join('');
+
+		card.innerHTML =
+			'<div class="penpot-sync-mappings__grid">'
+			+   '<div class="penpot-sync-field pp-team"><label>' + t('penpot_sync', 'Penpot team') + info(DESC.team) + '</label>'
+			+     '<select class="js-team">' + options + '</select></div>'
+			+   '<div class="penpot-sync-field pp-nc"><label>' + t('penpot_sync', 'Nextcloud folder') + info(DESC.nc) + '</label>'
+			+     '<input type="text" class="js-nc-folder" placeholder="'
+			+       escapeHtml(t('penpot_sync', 'defaults to the team name')) + '" /></div>'
+			+   '<div class="penpot-sync-field pp-mode"><label>' + t('penpot_sync', 'Mode') + info(DESC.mode) + '</label>'
+			+     '<select class="js-mode">'
+			+       '<option value="link" selected>' + t('penpot_sync', 'Link') + '</option>'
+			+       '<option value="sync">' + t('penpot_sync', 'Sync') + '</option>'
+			+     '</select></div>'
+			+   '<div class="penpot-sync-field pp-foldermode"><label>' + t('penpot_sync', 'Folder mode') + info(DESC.foldermode) + '</label>'
+			+     '<span class="penpot-sync-fixed">nested <span class="penpot-sync-hint">'
+			+       t('penpot_sync', '(fixed)') + '</span></span></div>'
+			+   '<div class="penpot-sync-field pp-tf"><label class="penpot-sync-checkbox">'
+			+     '<input type="checkbox" class="js-use-team-folder"' + (teamFoldersAvailable() ? ' checked' : '')
+			+     ' /> ' + t('penpot_sync', 'Team Folder') + info(DESC.tf) + '</label></div>'
+			+   '<div class="penpot-sync-field pp-groups"><label>' + t('penpot_sync', 'Groups') + info(DESC.groups) + '</label>'
+			+     '<div class="js-groups penpot-sync-groups">' + groupBoxes + '</div></div>'
+			+   '<div class="penpot-sync-mappings__actions">'
+			+     '<button type="button" class="button js-save" title="' + escapeHtml(t('penpot_sync', 'Save'))
+			+       '" aria-label="' + escapeHtml(t('penpot_sync', 'Save')) + '">' + (ICONS.save || '') + '</button>'
+			+     '<button type="button" class="button js-delete" title="' + escapeHtml(t('penpot_sync', 'Delete'))
+			+       '" aria-label="' + escapeHtml(t('penpot_sync', 'Delete')) + '">' + (ICONS.delete || '') + '</button>'
+			+     '<span class="js-card-status"></span>'
+			+   '</div>'
+			+ '</div>';
+
+		return card;
 	}
 
 	// `target`, not `url` — a parameter named `url` would shadow the url()
@@ -169,17 +264,32 @@
 		});
 	}
 
-	var flashTimer = null;
-	function flash(kind, text) {
-		var el = document.getElementById('penpot-test-result');
+	// Per-card status is STICKY (no auto-dismiss): a save error names the fix,
+	// and a message that vanishes after five seconds is one the admin misses.
+	function cardStatus(card, kind, text) {
+		var el = card.querySelector('.js-card-status');
 		if (!el) { return; }
 		el.textContent = text;
-		el.className = kind || '';
+		el.className = 'js-card-status' + (kind ? ' msg ' + kind : '');
+	}
+
+	var flashTimer = null;
+	function flash(kind, text) {
+		var el = document.getElementById('penpot-sync-mappings-status');
+		if (!el) { return; }
+		el.textContent = text;
+		el.className = kind ? 'msg ' + kind : 'msg';
 		if (flashTimer) { clearTimeout(flashTimer); }
 		flashTimer = setTimeout(function () {
 			el.textContent = '';
-			el.className = '';
+			el.className = 'msg';
 		}, 5000);
+	}
+
+	function escapeHtml(s) {
+		return String(s).replace(/[&<>"']/g, function (c) {
+			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+		});
 	}
 
 	if (document.readyState === 'loading') {

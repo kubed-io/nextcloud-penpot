@@ -50,6 +50,26 @@ final class AddMapping extends Command {
 			->setDescription('Map a Penpot team (same as the admin Settings panel, via CLI).')
 			->addArgument('team-id', InputArgument::REQUIRED, 'The Penpot team id (see penpot_sync:list-teams).')
 			->addOption(
+				'folder',
+				null,
+				InputOption::VALUE_REQUIRED,
+				'Nextcloud folder name. Defaults to the Penpot team\'s own name.',
+				'',
+			)
+			->addOption(
+				'groups',
+				null,
+				InputOption::VALUE_REQUIRED,
+				'Comma-separated Nextcloud groups the folder is shared with.',
+				'',
+			)
+			->addOption(
+				'no-team-folder',
+				null,
+				InputOption::VALUE_NONE,
+				'Use a plain shared folder instead of a groupfolders Team Folder.',
+			)
+			->addOption(
 				'mode',
 				null,
 				InputOption::VALUE_REQUIRED,
@@ -70,6 +90,11 @@ final class AddMapping extends Command {
 		try {
 			$mapping = Mapping::fromArray([
 				'team_id' => (string)$input->getArgument('team-id'),
+				'nc_folder' => (string)$input->getOption('folder'),
+				// A comma-separated string is accepted verbatim by the model's
+				// group normaliser, so the CLI needs no parsing of its own.
+				'nc_groups' => (string)$input->getOption('groups'),
+				'use_team_folder' => !$input->getOption('no-team-folder'),
 				'mode' => (string)$input->getOption('mode'),
 				'folder_mode' => (string)$input->getOption('folder-mode'),
 			]);
@@ -93,6 +118,9 @@ final class AddMapping extends Command {
 			$saved->teamName !== '' ? $saved->teamName : $saved->teamId,
 			$saved->id,
 		));
+		$output->writeln('  folder: ' . $saved->ncFolder
+			. ($saved->useTeamFolder ? ' (Team Folder)' : ' (shared folder)'));
+		$output->writeln('  groups: ' . ($saved->ncGroups === [] ? '(none)' : implode(', ', $saved->ncGroups)));
 		$output->writeln('  mode: ' . $saved->mode . ', folder mode: ' . $saved->folderMode);
 		$output->writeln('<comment>Nothing is mirrored yet — the pull is not built (saga Ch2, Course 3).</comment>');
 

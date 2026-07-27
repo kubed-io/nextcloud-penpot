@@ -157,6 +157,9 @@ final class MappingServiceTest extends TestCase {
 			$saved->id,
 			$saved->teamId,
 			$saved->teamName,
+			$saved->ncFolder,
+			$saved->ncGroups,
+			$saved->useTeamFolder,
 			Mapping::MODE_SYNC,
 			$saved->folderMode,
 		));
@@ -180,6 +183,9 @@ final class MappingServiceTest extends TestCase {
 			$saved->id,
 			$saved->teamId,
 			$saved->teamName,
+			$saved->ncFolder,
+			$saved->ncGroups,
+			$saved->useTeamFolder,
 			$saved->mode,
 			Mapping::FOLDER_MODE_KEYED,
 		));
@@ -195,9 +201,115 @@ final class MappingServiceTest extends TestCase {
 			$saved->id,
 			self::OTHER_TEAM_ID,
 			$saved->teamName,
+			$saved->ncFolder,
+			$saved->ncGroups,
+			$saved->useTeamFolder,
 			$saved->mode,
 			$saved->folderMode,
 		));
+	}
+
+	/**
+	 * The folder name is only known after Penpot answers with the team name, so
+	 * this default is materialised in the SERVICE, not the model.
+	 */
+	public function testMaterialisesTheFolderNameFromPenpotsTeamName(): void {
+		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		self::assertSame('Ferronescotia', $saved->ncFolder);
+		self::assertSame('Ferronescotia', $this->service()->getById($saved->id)?->ncFolder);
+	}
+
+	public function testAnExplicitFolderNameSurvivesTheLookup(): void {
+		$saved = $this->service()->add(Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_folder' => 'Design Files',
+		]));
+
+		self::assertSame('Design Files', $saved->ncFolder);
+	}
+
+	/**
+	 * Two teams mirroring into one folder would interleave their project
+	 * subfolders, and the pull would fight over the same names on every run.
+	 */
+	public function testTwoMappingsCannotShareAFolder(): void {
+		$this->service()->add(Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_folder' => 'Designs',
+		]));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('already used');
+
+		$this->service()->add(Mapping::fromArray([
+			'team_id' => self::OTHER_TEAM_ID,
+			'nc_folder' => 'Designs',
+		]));
+	}
+
+	/**
+	 * Nextcloud folder names are not reliably case-sensitive across storages, so
+	 * "Designs" and "designs" may or may not be the same folder depending on the
+	 * backend. Refusing both is the only answer that is right everywhere.
+	 */
+	public function testFolderUniquenessIsCaseInsensitive(): void {
+		$this->service()->add(Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_folder' => 'Designs',
+		]));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('already used');
+
+		$this->service()->add(Mapping::fromArray([
+			'team_id' => self::OTHER_TEAM_ID,
+			'nc_folder' => 'designs',
+		]));
+	}
+
+	public function testTheFolderNameCanBeChanged(): void {
+		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		$updated = $this->service()->update($saved->id, $saved->withNcFolder('Design Files'));
+
+		self::assertSame('Design Files', $updated->ncFolder);
+		self::assertSame('Design Files', $this->service()->getById($saved->id)?->ncFolder);
+	}
+
+	/**
+	 * Blank on update means "keep what is there", not "clear it" — so an update
+	 * that only changes the mode cannot accidentally unname the destination.
+	 */
+	public function testABlankFolderOnUpdateKeepsTheExistingName(): void {
+		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		$updated = $this->service()->update($saved->id, new Mapping(
+			$saved->id,
+			$saved->teamId,
+			$saved->teamName,
+			'',
+			$saved->ncGroups,
+			$saved->useTeamFolder,
+			Mapping::MODE_SYNC,
+			$saved->folderMode,
+		));
+
+		self::assertSame('Ferronescotia', $updated->ncFolder);
+		self::assertSame(Mapping::MODE_SYNC, $updated->mode);
+	}
+
+	public function testGroupsAndTeamFolderPersist(): void {
+		$saved = $this->service()->add(Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_groups' => ['design', 'admin'],
+			'use_team_folder' => false,
+		]));
+
+		$reloaded = $this->service()->getById($saved->id);
+
+		self::assertSame(['design', 'admin'], $reloaded?->ncGroups);
+		self::assertFalse($reloaded?->useTeamFolder);
 	}
 
 	public function testRemovesAMapping(): void {

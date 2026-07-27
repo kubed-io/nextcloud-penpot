@@ -37,12 +37,33 @@ use JsonSerializable;
  * anyway, but only so the admin UI and `occ` can print something human before
  * the first pull has run. `teamName` is a cache, `teamId` is the identity.
  *
- * ## WHAT IS NOT ON THIS OBJECT, AND WHY
+ * ## THE FOLDER NAME IS THE ADMIN'S, THE PROJECT NAMES ARE PENPOT'S
  *
- * **No folder name.** The Team Folder is named after the Penpot team, always
- * (§6.13 point 3) — there is deliberately no "call it something else" field.
- * Two Nextcloud instances mapping the same Penpot team stay recognisably in
- * sync by name, not just by hidden id.
+ * This is the one place the two levels behave differently, and the split is
+ * deliberate:
+ *
+ *   - **The team folder** may be called whatever the admin likes. Left blank it
+ *     defaults to the Penpot team's name — the same rule `nextcloud-grafana`
+ *     uses for `nc_folder` (blank → the Grafana folder's title), so all three
+ *     apps behave alike: *the mapping names the destination, and the source name
+ *     is merely the default.*
+ *   - **Project folders inside it** always match their Penpot project's name
+ *     exactly (§6.36), in both directions — a Penpot rename propagates down on
+ *     the pull, and renaming a project folder in Nextcloud calls
+ *     `rename-project`. There is no per-project naming choice at all.
+ *
+ * Why they differ: a team folder is a *mount point the admin chose to create*,
+ * so naming it is theirs. A project folder is a *mirror of a Penpot object* —
+ * letting it drift would break the identity the pull relies on to match folders
+ * to projects, and would make a tagged folder named "Acme" no longer mean the
+ * project "Acme".
+ *
+ * The name is materialised AT CREATE rather than resolved on every read (again
+ * matching Grafana): the stored mapping always carries a concrete folder name,
+ * so the admin list shows what will actually be created, and a later Penpot team
+ * rename does not silently move an existing folder.
+ *
+ * ## WHAT IS NOT ON THIS OBJECT
  *
  * **No per-project anything.** See above.
  *
@@ -82,6 +103,10 @@ final class Mapping implements JsonSerializable {
 		public readonly string $id,
 		public readonly string $teamId,
 		public readonly string $teamName,
+		public readonly string $ncFolder,
+		/** @var list<string> */
+		public readonly array $ncGroups,
+		public readonly bool $useTeamFolder,
 		public readonly string $mode,
 		public readonly string $folderMode,
 	) {
@@ -104,6 +129,28 @@ final class Mapping implements JsonSerializable {
 		$teamId = trim((string)($data['team_id'] ?? ''));
 		$teamName = trim((string)($data['team_name'] ?? ''));
 
+		// The Nextcloud folder is OPTIONAL: when omitted, materialise it to the
+		// Penpot TEAM'S NAME at create and store it. Same rule (and same reason)
+		// as nextcloud-grafana's nc_folder ← Grafana folder title: it keeps both
+		// fields populated in the saved mapping and the admin list, so it is
+		// visible at a glance that they match because the name was left blank —
+		// rather than being resolved invisibly on every read.
+		$ncFolder = self::normaliseFolder((string)($data['nc_folder'] ?? ''));
+		if ($ncFolder === '' && $teamName !== '') {
+			$ncFolder = self::normaliseFolder($teamName);
+		}
+
+		// Which Nextcloud groups the mapped folder is shared with, and whether it
+		// is an ownerless Team Folder (groupfolders) or a plain shared folder.
+		// Both carry the same meaning and defaults as in the sibling apps, so an
+		// admin configuring all three does the same thing each time.
+		$ncGroups = self::normaliseGroups($data['nc_groups'] ?? []);
+
+		// Default true: groupfolders is the preferred path in both siblings, and
+		// an omitted flag means "use a Team Folder".
+		$useTeamFolder = !array_key_exists('use_team_folder', $data)
+			|| filter_var($data['use_team_folder'], FILTER_VALIDATE_BOOLEAN);
+
 		// Both default rather than being required: the overwhelmingly common
 		// `occ` call names a team and nothing else, and every default here is
 		// the conservative one (link downloads nothing, nested is the only
@@ -119,6 +166,15 @@ final class Mapping implements JsonSerializable {
 			// a clear message instead of a puzzling 404 from Penpot later.
 			throw new \InvalidArgumentException('team_id must be a UUID, got "' . $teamId . '"');
 		}
+		if (str_contains($ncFolder, '/')) {
+			// The team folder is one mount point. Everything under it is created
+			// by the pull from Penpot's project names, so an inner "/" would
+			// invent an intermediate folder that no Penpot object corresponds to
+			// — and that nothing would ever clean up.
+			throw new \InvalidArgumentException(
+				'nc_folder must be a single folder name, not a path — got "' . $ncFolder . '"',
+			);
+		}
 		if (!in_array($mode, [self::MODE_LINK, self::MODE_SYNC], true)) {
 			throw new \InvalidArgumentException('mode must be "link" or "sync"');
 		}
@@ -126,33 +182,51 @@ final class Mapping implements JsonSerializable {
 			throw new \InvalidArgumentException('folder_mode must be "nested" or "keyed"');
 		}
 
-		return new self($id, $teamId, $teamName, $mode, $folderMode);
+		return new self($id, $teamId, $teamName, $ncFolder, $ncGroups, $useTeamFolder, $mode, $folderMode);
 	}
 
 	/**
-	 * @return array{id: string, team_id: string, team_name: string, mode: string, folder_mode: string}
+	 * @return array{id: string, team_id: string, team_name: string, nc_folder: string, nc_groups: list<string>, use_team_folder: bool, mode: string, folder_mode: string}
 	 */
 	public function toArray(): array {
 		return [
 			'id' => $this->id,
 			'team_id' => $this->teamId,
 			'team_name' => $this->teamName,
+			'nc_folder' => $this->ncFolder,
+			'nc_groups' => $this->ncGroups,
+			'use_team_folder' => $this->useTeamFolder,
 			'mode' => $this->mode,
 			'folder_mode' => $this->folderMode,
 		];
 	}
 
 	/**
-	 * @return array{id: string, team_id: string, team_name: string, mode: string, folder_mode: string}
+	 * @return array{id: string, team_id: string, team_name: string, nc_folder: string, nc_groups: list<string>, use_team_folder: bool, mode: string, folder_mode: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
 		return $this->toArray();
 	}
 
-	/** A copy with the team name refreshed — the pull's way of following a rename. */
+	/**
+	 * A copy with the Penpot team name refreshed — how the pull follows a rename
+	 * upstream.
+	 *
+	 * NOTE this deliberately does NOT touch `ncFolder`. A Penpot team rename
+	 * updates the recorded team name (so the admin page shows the truth), but it
+	 * must not silently rename the admin's Nextcloud folder — the folder name is
+	 * the admin's choice, and the team name was only ever its default. Renaming
+	 * the mapped folder on the pull is a separate, explicit decision that belongs
+	 * to Course 3, not a side effect of this setter.
+	 */
 	public function withTeamName(string $teamName): self {
-		return new self($this->id, $this->teamId, trim($teamName), $this->mode, $this->folderMode);
+		return new self($this->id, $this->teamId, trim($teamName), $this->ncFolder, $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);
+	}
+
+	/** A copy with the Nextcloud folder name replaced. */
+	public function withNcFolder(string $ncFolder): self {
+		return new self($this->id, $this->teamId, $this->teamName, self::normaliseFolder($ncFolder), $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);
 	}
 
 	/**
@@ -165,6 +239,54 @@ final class Mapping implements JsonSerializable {
 	 */
 	private static function isUuid(string $value): bool {
 		return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) === 1;
+	}
+
+	/**
+	 * Normalise a Nextcloud folder name: trimmed, no surrounding or duplicated
+	 * slashes.
+	 *
+	 * `nextcloud-grafana`'s equivalent permits an inner `/` because a Grafana
+	 * mapping targets an arbitrary path. Ours is a single mount point — the team
+	 * folder — and everything below it is created by the pull from Penpot's own
+	 * project names, so an inner `/` here would silently invent an intermediate
+	 * folder that nothing owns. It is rejected in {@see fromArray()} instead.
+	 */
+	private static function normaliseFolder(string $value): string {
+		$v = trim($value);
+		$v = preg_replace('#/+#', '/', $v) ?? $v;
+
+		return trim($v, '/');
+	}
+
+	/**
+	 * Group ids: non-empty trimmed strings, de-duplicated, re-indexed. Tolerates
+	 * a comma-separated string from a form field.
+	 *
+	 * Identical to both siblings' normaliser, so the three mapping models reduce
+	 * cleanly into a shared base later.
+	 *
+	 * @return list<string>
+	 */
+	private static function normaliseGroups(mixed $value): array {
+		if (is_string($value)) {
+			$value = $value === '' ? [] : explode(',', $value);
+		}
+
+		if (!is_array($value)) {
+			return [];
+		}
+
+		$out = [];
+
+		foreach ($value as $g) {
+			$g = trim((string)$g);
+
+			if ($g !== '' && !in_array($g, $out, true)) {
+				$out[] = $g;
+			}
+		}
+
+		return $out;
 	}
 
 	/** Stable local id for the mapping — unrelated to any Penpot id. */

@@ -60,16 +60,20 @@ final class ListMappings extends Command {
 			return 0;
 		}
 
-		$output->writeln(sprintf('%-18s %-38s %-24s %-6s %s', 'ID', 'TEAM ID', 'TEAM', 'MODE', 'FOLDER MODE'));
+		$output->writeln(sprintf(
+			'%-18s %-22s %-22s %-6s %-8s %s',
+			'ID', 'TEAM', 'NC FOLDER', 'MODE', 'LAYOUT', 'GROUPS',
+		));
 
 		foreach ($mappings as $mapping) {
 			$output->writeln(sprintf(
-				'%-18s %-38s %-24s %-6s %s',
+				'%-18s %-22s %-22s %-6s %-8s %s',
 				$mapping->id,
-				$mapping->teamId,
 				$mapping->teamName !== '' ? $mapping->teamName : '(unknown)',
+				$mapping->ncFolder,
 				$mapping->mode,
 				$mapping->folderMode,
+				$mapping->ncGroups === [] ? '-' : implode(',', $mapping->ncGroups),
 			));
 		}
 

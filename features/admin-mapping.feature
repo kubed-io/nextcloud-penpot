@@ -70,6 +70,88 @@ Feature: Admin configures team mappings
     Then the mapping's default mode is "link"
     And the mapping's folder mode is "nested"
 
+  # ── naming: the FOLDER is the admin's, the PROJECTS are Penpot's ────────────
+  # The one place the two levels deliberately differ, and the same shape both
+  # sibling apps use: a mapping names its DESTINATION, and the source object's
+  # name is merely the default.
+  #
+  #   nextcloud-n8n:     tag        → Team Folder (named by the admin)
+  #   nextcloud-grafana: folder     → nc_folder, blank ⇒ the Grafana folder title
+  #   here:              Penpot team → nc_folder, blank ⇒ the Penpot team name
+  #
+  # Project folders INSIDE the mapped folder are the exception: they always match
+  # their Penpot project's name exactly, in both directions (saga §6.36). A team
+  # folder is a mount point the admin chose to create, so naming it is theirs; a
+  # project folder is a mirror of a Penpot object, and letting its name drift
+  # would break the identity the pull uses to match folders to projects.
+
+  Scenario: A mapped folder defaults to the Penpot team's name
+    Given no Penpot teams are mapped
+    When the admin maps the first team the service account can see
+    Then the mapping's Nextcloud folder is named after the Penpot team
+
+  Scenario: The admin may name the Nextcloud folder whatever they like
+    Given no Penpot teams are mapped
+    When the admin maps the first visible team into the folder "Design Files"
+    Then the mapping's Nextcloud folder is "Design Files"
+    And the mapping still records the Penpot team's own name separately
+    # Both are kept: the folder name is what gets created, the team name is what
+    # the admin page shows so the pairing is legible at a glance.
+
+  @todo
+  Scenario: Renaming the team in Penpot does not rename the admin's folder
+    Given the first visible team is mapped into the folder "Design Files"
+    When the team is renamed in Penpot
+    And the pull runs
+    Then the mapping's Nextcloud folder is still "Design Files"
+    # The folder name was the admin's choice; the team name was only ever its
+    # default. Silently moving their folder because someone renamed a team
+    # upstream would be a surprise, not a sync.
+
+  @todo
+  Scenario: Two mappings cannot target the same Nextcloud folder
+    Given the first visible team is mapped into the folder "Designs"
+    When the admin maps another team into the folder "Designs"
+    Then the mapping is rejected
+    And the refusal explains "already used"
+    # Two teams mirroring into one folder would interleave their project
+    # subfolders, and the pull would fight over the same names on every run.
+
+  Scenario: A Nextcloud folder name is a single folder, not a path
+    Given no Penpot teams are mapped
+    When the admin maps the first visible team into the folder "teams/design"
+    Then the mapping is rejected
+    And the refusal explains "single folder name"
+    # Everything below the team folder is created by the pull from Penpot's own
+    # project names, so an inner "/" would invent an intermediate folder that no
+    # Penpot object corresponds to — and that nothing would ever clean up.
+
+  # ── sharing: groups + Team Folder, exactly as the siblings do it ────────────
+  # Same two controls, same meanings, same defaults as nextcloud-n8n and
+  # nextcloud-grafana, so an admin configuring all three does the same thing each
+  # time. They PERSIST today and are honoured when the pull provisions the folder
+  # (Course 3) — the same "saved now, applied later" state Grafana ships them in.
+
+  Scenario: A mapping records the Nextcloud groups its folder is shared with
+    Given no Penpot teams are mapped
+    When the admin maps the first visible team shared with the group "admin"
+    Then the mapping's groups are "admin"
+
+  Scenario: A mapping defaults to a Team Folder with no groups
+    Given no Penpot teams are mapped
+    When the admin maps the first team the service account can see
+    Then the mapping uses a Team Folder
+    And the mapping has no groups
+    # groupfolders is the preferred backend in all three apps, so an omitted flag
+    # means "use a Team Folder". Groups start empty and are opt-in.
+
+  @todo
+  Scenario: A mapping can use a plain shared folder instead of a Team Folder
+    When the admin maps a team with Team Folder turned off
+    Then the mapping records that it uses a plain shared folder
+    And the folder is shared to the mapping's groups when the pull provisions it
+    # The value persists today; the provisioning that acts on it is Course 3.
+
   Scenario: A team the service account cannot see cannot be mapped
     Given no Penpot teams are mapped
     When the admin tries to map the Penpot team "11111111-2222-3333-4444-555555555555"

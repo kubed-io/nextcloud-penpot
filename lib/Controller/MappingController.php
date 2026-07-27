@@ -79,12 +79,18 @@ final class MappingController extends Controller {
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function create(
 		string $teamId,
+		string $ncFolder = '',
+		array $ncGroups = [],
+		bool $useTeamFolder = true,
 		string $mode = Mapping::MODE_LINK,
 		string $folderMode = Mapping::FOLDER_MODE_NESTED,
 	): JSONResponse {
 		try {
 			$mapping = $this->service->add(Mapping::fromArray([
 				'team_id' => $teamId,
+				'nc_folder' => $ncFolder,
+				'nc_groups' => $ncGroups,
+				'use_team_folder' => $useTeamFolder,
 				'mode' => $mode,
 				'folder_mode' => $folderMode,
 			]));
@@ -105,7 +111,13 @@ final class MappingController extends Controller {
 	 * them — {@see MappingService::update()} explains why.
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
-	public function update(string $id, string $mode): JSONResponse {
+	public function update(
+		string $id,
+		string $mode,
+		string $ncFolder = '',
+		array $ncGroups = [],
+		bool $useTeamFolder = true,
+	): JSONResponse {
 		$existing = $this->service->getById($id);
 
 		if ($existing === null) {
@@ -113,13 +125,16 @@ final class MappingController extends Controller {
 		}
 
 		try {
-			$updated = $this->service->update($id, new Mapping(
-				$existing->id,
-				$existing->teamId,
-				$existing->teamName,
-				$mode,
-				$existing->folderMode,
-			));
+			$updated = $this->service->update($id, Mapping::fromArray([
+				'id' => $existing->id,
+				'team_id' => $existing->teamId,
+				'team_name' => $existing->teamName,
+				'nc_folder' => $ncFolder,
+				'nc_groups' => $ncGroups,
+				'use_team_folder' => $useTeamFolder,
+				'mode' => $mode,
+				'folder_mode' => $existing->folderMode,
+			]));
 		} catch (\InvalidArgumentException $e) {
 			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_UNPROCESSABLE_ENTITY);
 		}

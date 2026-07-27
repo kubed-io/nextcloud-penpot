@@ -39,3 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin settings for the scheduled pull (on/off and how often), stored now and honoured when the background job lands.
 - An optional personal Penpot token per Nextcloud user, so changes made from Nextcloud are attributed to that person in Penpot's history instead of to the shared service account — with `occ penpot_sync:set-personal-token`.
 - `occ penpot_sync:show-config` now also reports the configured mappings and the pull schedule.
+- A mapping now names the Nextcloud folder its Penpot team is mirrored into — leave it blank and it uses the team's own name, the same way the Grafana integration defaults its folder mappings. Project folders inside it still always match their Penpot project's name exactly.
+- Each mapping records the Nextcloud groups its folder is shared with, and whether it uses a Team Folder or a plain shared folder — the same controls, defaults, and meanings as the n8n and Grafana integrations.
+- Two mappings can no longer target the same Nextcloud folder, and a folder name must be a single folder rather than a path.
+- The admin section now matches the n8n and Grafana integrations: one **Instance** card holding the URL and the token, **Sync Settings**, **Team mappings** as one card per mapping, and a **Sync Actions** panel collecting every button at the bottom.

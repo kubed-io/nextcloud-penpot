@@ -50,16 +50,26 @@ this app integrates with.
     <nextcloud min-version="30" max-version="33"/>
   </dependencies>
   <settings>
-    <!-- The Instance, Service account, Scheduled pull and personal Penpot cards
-         are DECLARATIVE forms, registered in AppInfo\Application::register() —
-         only their sidebar sections are declared here.
+    <!-- Section order (by priority), deliberately identical to nextcloud-n8n and
+         nextcloud-grafana so an admin who has configured one already knows where
+         to look here:
 
-         MappingSettings is the exception and must be listed as an <admin> panel:
-         declarative settings have no array-of-objects field type, so the mapping
-         list is a server-rendered IDelegatedSettings panel with its own
-         controller. Same split, for the same reason, as both sibling apps. -->
-    <admin-section>OCA\PenpotSync\Settings\AdminSection</admin-section>
+           Instance (5)      base URL + service-account token, one card
+           Sync Settings (20) the scheduled pull
+           Team mappings (30) the repeating mapping cards
+           Sync Actions (45)  every button in the section, rendered last
+
+         Instance and Sync Settings are DECLARATIVE forms, registered in
+         AppInfo\Application::register(). Team mappings and Sync Actions are
+         classic panels (declarative settings can host neither an
+         array-of-objects nor a button), so they are listed here.
+
+         AdminTest is NOT listed: it exists only as the #[AuthorizedAdminSetting]
+         target for the test endpoint, and renders nothing. Same arrangement as
+         nextcloud-grafana. -->
     <admin>OCA\PenpotSync\Settings\MappingSettings</admin>
+    <admin>OCA\PenpotSync\Settings\SyncSettings</admin>
+    <admin-section>OCA\PenpotSync\Settings\AdminSection</admin-section>
     <personal-section>OCA\PenpotSync\Settings\PersonalSection</personal-section>
   </settings>
   <commands>

@@ -107,6 +107,116 @@ final class MappingTest extends TestCase {
 		self::assertSame(Mapping::FOLDER_MODE_KEYED, $mapping->folderMode);
 	}
 
+	/**
+	 * The Grafana-parity rule: a blank folder name is NOT an error — it defaults
+	 * to the source object's name. Here that resolution happens at the model when
+	 * a team name is already known, and in MappingService when it is not (because
+	 * the name comes back from Penpot).
+	 */
+	public function testFolderNameDefaultsToTheTeamName(): void {
+		$mapping = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'team_name' => 'Ferronescotia',
+		]);
+
+		self::assertSame('Ferronescotia', $mapping->ncFolder);
+	}
+
+	public function testAnExplicitFolderNameWins(): void {
+		// The destination is the ADMIN's to name; the team name is only the
+		// default. (Project folders inside it are a different rule entirely —
+		// those are always Penpot's, §6.36.)
+		$mapping = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'team_name' => 'Ferronescotia',
+			'nc_folder' => 'Design Files',
+		]);
+
+		self::assertSame('Design Files', $mapping->ncFolder);
+	}
+
+	public function testStripsSurroundingSlashesFromTheFolderName(): void {
+		$mapping = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_folder' => '/Designs/',
+		]);
+
+		self::assertSame('Designs', $mapping->ncFolder);
+	}
+
+	/**
+	 * A path would invent an intermediate folder that no Penpot object
+	 * corresponds to — and that nothing would ever clean up.
+	 */
+	public function testRejectsAFolderPath(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('single folder name');
+
+		Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_folder' => 'teams/design',
+		]);
+	}
+
+	public function testDefaultsToATeamFolderWithNoGroups(): void {
+		$mapping = Mapping::fromArray(['team_id' => self::TEAM_ID]);
+
+		// Matches both siblings: groupfolders is the preferred backend, so an
+		// omitted flag means "use a Team Folder".
+		self::assertTrue($mapping->useTeamFolder);
+		self::assertSame([], $mapping->ncGroups);
+	}
+
+	public function testAcceptsGroupsAsAnArrayOrACommaSeparatedString(): void {
+		// The CLI passes a comma-separated string straight through; the settings
+		// panel posts an array. Both must land identically.
+		$fromArray = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_groups' => ['design', 'admin'],
+		]);
+		$fromString = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_groups' => 'design, admin',
+		]);
+
+		self::assertSame(['design', 'admin'], $fromArray->ncGroups);
+		self::assertSame($fromArray->ncGroups, $fromString->ncGroups);
+	}
+
+	public function testDeduplicatesAndDropsEmptyGroups(): void {
+		$mapping = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_groups' => ['design', '', 'design', '  admin  '],
+		]);
+
+		self::assertSame(['design', 'admin'], $mapping->ncGroups);
+	}
+
+	public function testTeamFolderFlagCanBeTurnedOff(): void {
+		$mapping = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'use_team_folder' => false,
+		]);
+
+		self::assertFalse($mapping->useTeamFolder);
+	}
+
+	/**
+	 * A Penpot team rename must NOT silently rename the admin's folder — the
+	 * folder name is their choice, and the team name was only ever its default.
+	 */
+	public function testRenamingTheTeamLeavesTheFolderNameAlone(): void {
+		$mapping = Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'team_name' => 'Ferronescotia',
+		]);
+
+		$renamed = $mapping->withTeamName('Ferronescotia Design');
+
+		self::assertSame('Ferronescotia Design', $renamed->teamName);
+		self::assertSame('Ferronescotia', $renamed->ncFolder);
+	}
+
 	public function testRoundTripsThroughAnArray(): void {
 		$original = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,

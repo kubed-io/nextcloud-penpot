@@ -99,6 +99,122 @@ trait MappingSteps {
 		}
 	}
 
+	/** @When /^the admin maps the first visible team into the folder "([^"]*)"$/ */
+	public function theAdminMapsTheFirstVisibleTeamIntoTheFolder(string $folder): void {
+		$this->occ(sprintf(
+			'penpot_sync:add-mapping %s --folder=%s',
+			escapeshellarg($this->firstVisibleTeamId()),
+			escapeshellarg($folder),
+		));
+	}
+
+	/** @Given /^the first visible team is mapped into the folder "([^"]*)"$/ */
+	public function theFirstVisibleTeamIsMappedIntoTheFolder(string $folder): void {
+		$this->noPenpotTeamsAreMapped();
+		$this->theAdminMapsTheFirstVisibleTeamIntoTheFolder($folder);
+
+		if ($this->lastExit !== 0) {
+			throw new \RuntimeException("could not map the team into {$folder}:\n" . $this->lastOutput);
+		}
+	}
+
+	/** @When /^the admin maps another team into the folder "([^"]*)"$/ */
+	public function theAdminMapsAnotherTeamIntoTheFolder(string $folder): void {
+		$mapped = $this->mappings();
+		$taken = $mapped === [] ? '' : (string)($mapped[0]['team_id'] ?? '');
+
+		foreach ($this->visibleTeamIds() as $id) {
+			if ($id !== $taken) {
+				$this->occ(sprintf(
+					'penpot_sync:add-mapping %s --folder=%s',
+					escapeshellarg($id),
+					escapeshellarg($folder),
+				));
+
+				return;
+			}
+		}
+
+		throw new \RuntimeException('needs a second visible Penpot team, found only one');
+	}
+
+	/** @When /^the admin maps the first visible team shared with the group "([^"]*)"$/ */
+	public function theAdminMapsTheFirstVisibleTeamSharedWith(string $groups): void {
+		$this->occ(sprintf(
+			'penpot_sync:add-mapping %s --groups=%s',
+			escapeshellarg($this->firstVisibleTeamId()),
+			escapeshellarg($groups),
+		));
+	}
+
+	/** @Then the mapping's Nextcloud folder is named after the Penpot team */
+	public function theFolderIsNamedAfterTheTeam(): void {
+		$mapping = $this->firstMapping();
+		$teamName = (string)($mapping['team_name'] ?? '');
+		$ncFolder = (string)($mapping['nc_folder'] ?? '');
+
+		if ($teamName === '' || $ncFolder !== $teamName) {
+			throw new \RuntimeException(
+				"expected the folder to default to the team name '{$teamName}', got '{$ncFolder}'",
+			);
+		}
+	}
+
+	/** @Then /^the mapping's Nextcloud folder is "([^"]*)"$/ */
+	public function theMappingsFolderIs(string $expected): void {
+		$actual = (string)($this->firstMapping()['nc_folder'] ?? '');
+
+		if ($actual !== $expected) {
+			throw new \RuntimeException("expected the folder to be '{$expected}', got '{$actual}'");
+		}
+	}
+
+	/** @Then /^the mapping's Nextcloud folder is still "([^"]*)"$/ */
+	public function theMappingsFolderIsStill(string $expected): void {
+		$this->theMappingsFolderIs($expected);
+	}
+
+	/** @Then the mapping still records the Penpot team's own name separately */
+	public function theMappingStillRecordsTheTeamName(): void {
+		$mapping = $this->firstMapping();
+		$teamName = (string)($mapping['team_name'] ?? '');
+
+		if ($teamName === '') {
+			throw new \RuntimeException("the mapping lost the Penpot team name:\n" . $this->lastOutput);
+		}
+
+		if ($teamName === (string)($mapping['nc_folder'] ?? '')) {
+			throw new \RuntimeException(
+				'this scenario needs a folder name that differs from the team name, '
+				. 'otherwise it proves nothing',
+			);
+		}
+	}
+
+	/** @Then /^the mapping's groups are "([^"]*)"$/ */
+	public function theMappingsGroupsAre(string $expected): void {
+		$actual = $this->firstMapping()['nc_groups'] ?? [];
+		$actual = is_array($actual) ? implode(',', $actual) : '';
+
+		if ($actual !== $expected) {
+			throw new \RuntimeException("expected the groups to be '{$expected}', got '{$actual}'");
+		}
+	}
+
+	/** @Then the mapping uses a Team Folder */
+	public function theMappingUsesATeamFolder(): void {
+		if (($this->firstMapping()['use_team_folder'] ?? null) !== true) {
+			throw new \RuntimeException("expected the mapping to use a Team Folder:\n" . $this->lastOutput);
+		}
+	}
+
+	/** @Then the mapping has no groups */
+	public function theMappingHasNoGroups(): void {
+		if (($this->firstMapping()['nc_groups'] ?? []) !== []) {
+			throw new \RuntimeException("expected no groups:\n" . $this->lastOutput);
+		}
+	}
+
 	/** @Then the mapping's default mode is "link" */
 	public function theMappingsDefaultModeIsLink(): void {
 		$mappings = $this->mappings();
@@ -194,6 +310,38 @@ trait MappingSteps {
 		}
 
 		throw new \RuntimeException("no visible Penpot team to map:\n{$res['output']}");
+	}
+
+	/**
+	 * The single mapping under test.
+	 *
+	 * Throws rather than returning an empty array: every caller is asserting a
+	 * property OF a mapping, so "there isn't one" is a failure, not a value.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function firstMapping(): array {
+		$mappings = $this->mappings();
+
+		if ($mappings === []) {
+			throw new \RuntimeException("expected a configured mapping, found none:\n" . $this->lastOutput);
+		}
+
+		return $mappings[0];
+	}
+
+	/** @return list<string> */
+	private function visibleTeamIds(): array {
+		$res = $this->occ('penpot_sync:list-teams');
+		$ids = [];
+
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^([0-9a-f-]{36})\s/i', trim($line), $m) === 1) {
+				$ids[] = $m[1];
+			}
+		}
+
+		return $ids;
 	}
 
 	/** @return list<array<string, mixed>> */

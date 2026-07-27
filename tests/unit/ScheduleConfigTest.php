@@ -10,7 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\ScheduleConfig;
-use OCA\PenpotSync\Settings\ScheduleSettings;
+use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCP\IAppConfig;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\Stub;
@@ -118,7 +118,7 @@ final class ScheduleConfigTest extends TestCase {
 		/** @var IAppConfig&Stub $config */
 		$config = $this->createStub(IAppConfig::class);
 		$config->method('getValueString')->willReturnCallback(
-			static fn (string $app, string $key, string $default = ''): string => $key === ScheduleSettings::KEY_INTERVAL
+			static fn (string $app, string $key, string $default = ''): string => $key === AutoSyncSettings::KEY_INTERVAL
 				? $interval
 				: $default,
 		);

@@ -40,7 +40,7 @@ use OCP\Settings\IDeclarativeSettingsForm;
  * Nextcloud schedules by interval (`TimedJob`), not cron expressions — hence a
  * duration rather than a crontab line.
  */
-final class ScheduleSettings implements IDeclarativeSettingsForm {
+final class AutoSyncSettings implements IDeclarativeSettingsForm {
 	/** AppConfig key: whether the scheduled pull is enabled. */
 	public const KEY_ENABLED = 'schedule_enabled';
 
@@ -51,12 +51,12 @@ final class ScheduleSettings implements IDeclarativeSettingsForm {
 	public function getSchema(): array {
 		return [
 			// Same id-prefix gotcha as the other cards — no app-id prefix.
-			'id' => 'schedule',
-			'priority' => 30,
+			'id' => 'data_sync',
+			'priority' => 20,
 			'section_type' => DeclarativeSettingsTypes::SECTION_TYPE_ADMIN,
 			'section_id' => Application::APP_ID,
 			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_INTERNAL,
-			'title' => 'Scheduled pull',
+			'title' => 'Sync Settings',
 			'description' => 'How often Nextcloud mirrors mapped Penpot teams. The pull is read-only — '
 				. 'it never changes anything in Penpot. Saved here now; the background job that '
 				. 'reads these values is not built yet, so nothing is mirrored regardless of this setting.',

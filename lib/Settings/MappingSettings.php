@@ -13,7 +13,9 @@ use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IGroupManager;
 use OCP\Settings\IDelegatedSettings;
 use OCP\Util;
 
@@ -45,6 +47,8 @@ use OCP\Util;
 final class MappingSettings implements IDelegatedSettings {
 	public function __construct(
 		private MappingService $service,
+		private IGroupManager $groupManager,
+		private IAppManager $appManager,
 	) {
 	}
 
@@ -75,6 +79,15 @@ final class MappingSettings implements IDelegatedSettings {
 
 		usort($teams, static fn (array $a, array $b): int => strcasecmp((string)$a['name'], (string)$b['name']));
 
+		// Every group id, for the per-mapping group picker. search('') returns
+		// them all — fine at homelab scale; paginate if it ever gets large. Same
+		// approach, and same caveat, as both sibling apps.
+		$groups = array_map(
+			static fn ($g): string => $g->getGID(),
+			$this->groupManager->search(''),
+		);
+		sort($groups);
+
 		return new TemplateResponse(
 			Application::APP_ID,
 			'mapping_settings',
@@ -84,6 +97,12 @@ final class MappingSettings implements IDelegatedSettings {
 					$this->service->list(),
 				),
 				'teams' => $teams,
+				'groups' => $groups,
+				// Drives the Team Folder checkbox's availability, exactly as in the
+				// siblings: without groupfolders the mapping falls back to a plain
+				// shared folder, and the checkbox should say so rather than offer a
+				// backend that is not installed.
+				'team_folders_available' => $this->appManager->isEnabledForUser('groupfolders'),
 				'error' => $error,
 			],
 			'blank',
@@ -96,12 +115,12 @@ final class MappingSettings implements IDelegatedSettings {
 	}
 
 	/**
-	 * Below Service account (10) and above Scheduled pull (30): configure the
-	 * connection, then choose what to mirror, then say how often.
+	 * Priority 30 — below Instance (5) and Sync Settings (20), above Sync Actions
+	 * (45). The same slot Folder mappings occupies in both sibling apps.
 	 */
 	#[\Override]
 	public function getPriority(): int {
-		return 20;
+		return 30;
 	}
 
 	#[\Override]
