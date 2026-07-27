@@ -40,8 +40,8 @@ $unmapped = array_values(array_filter(
 
 	<?php if ($error !== null) { ?>
 		<?php /* Penpot is unreachable. The stored mappings below still render and
-		         stay removable — a connection problem must not lock an admin out
-		         of their own configuration. */ ?>
+				 stay removable — a connection problem must not lock an admin out
+				 of their own configuration. */ ?>
 		<div class="penpot-notice penpot-notice--error">
 			<strong><?php p($l->t('Could not reach Penpot.')); ?></strong>
 			<?php p($error); ?>
@@ -50,8 +50,8 @@ $unmapped = array_values(array_filter(
 		</div>
 	<?php } elseif ($teams === []) { ?>
 		<?php /* Authenticated, member of nothing — the §6.18 precondition, unmet.
-		         This is the single most likely reason an admin gets stuck here, so
-		         it names the exact fix rather than showing an empty dropdown. */ ?>
+				 This is the single most likely reason an admin gets stuck here, so
+				 it names the exact fix rather than showing an empty dropdown. */ ?>
 		<div class="penpot-notice">
 			<strong><?php p($l->t('The service account cannot see any Penpot teams.')); ?></strong>
 			<?php p($l->t('Penpot has no instance-wide view — an account only sees teams it belongs to. In Penpot, invite the service account to the team you want to mirror, then reload this page.')); ?>
@@ -82,8 +82,8 @@ $unmapped = array_values(array_filter(
 					</td>
 					<td>
 						<?php /* Immutable after creation (§6.53) — rendered as text, not a
-						         control, because changing it would restructure every folder
-						         AND rename every project in Penpot. */ ?>
+								 control, because changing it would restructure every folder
+								 AND rename every project in Penpot. */ ?>
 						<span class="penpot-folder-mode"><?php p($mapping['folder_mode']); ?></span>
 						<span class="penpot-hint"><?php p($l->t('fixed')); ?></span>
 					</td>
@@ -117,8 +117,8 @@ $unmapped = array_values(array_filter(
 		</div>
 		<p class="settings-hint">
 			<?php /* Said here because the schedule card is further down the page and
-			         an admin who just mapped a team will otherwise wait for a sync
-			         that cannot happen yet. */ ?>
+					 an admin who just mapped a team will otherwise wait for a sync
+					 that cannot happen yet. */ ?>
 			<?php p($l->t('Mapping a team records it. Nothing is mirrored yet — the pull is not built (see the project roadmap).')); ?>
 		</p>
 	<?php } elseif ($teams !== [] && $error === null) { ?>

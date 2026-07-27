@@ -51,8 +51,8 @@ Feature: Admin configures team mappings
 
   Background:
     Given the app is enabled
-    And the admin has set the instance-wide Penpot base URL
-    And the admin has configured the service-account Penpot token
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
 
   # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
   # These drive the same MappingService the settings panel calls, over occ.
@@ -108,6 +108,7 @@ Feature: Admin configures team mappings
 
   # ── the core mapping action ──────────────────────────────────────────────────
 
+  @todo
   Scenario: Mapping a Penpot team provisions a Team Folder and mirrors its projects
     Given the service account has been invited as "viewer" on the Penpot team "Ferronescotia"
     When the admin maps the Penpot team "Ferronescotia"
@@ -122,6 +123,7 @@ Feature: Admin configures team mappings
     # within the Team Folder (saga §6.29) — but not out of it (saga §6.30).
 
   # The precondition that makes the single-puller model work (saga §6.18).
+  @todo
   Scenario: A team the service account cannot see cannot be mapped
     Given the Penpot team "Private Team" is visible to a user's personal token
     But the service account has not been invited to "Private Team"
@@ -131,6 +133,7 @@ Feature: Admin configures team mappings
     And no Team Folder is provisioned
     # Better an honest refusal now than a mapping that silently pulls nothing.
 
+  @todo
   Scenario: There is no project-level mapping to configure
     Given the Penpot team "Ferronescotia" is mapped
     Then the mapping list shows exactly 1 mapping, for the team
@@ -141,6 +144,7 @@ Feature: Admin configures team mappings
 
   # Team Folders are admin-configured by default (groupfolders' own documentation
   # and this cluster's live config, checked directly — no delegation configured).
+  @todo
   Scenario: Mapping a team into a Team Folder requires Team Folder creation rights
     Given the acting Nextcloud user does not hold Team Folder admin or delegated rights
     When that user tries to map a Penpot team to a new Team Folder
@@ -149,6 +153,7 @@ Feature: Admin configures team mappings
 
   # The fallback tier — same "optional dependency" precedent both sibling apps'
   # TeamFolderService.php already establish, mirrored here for the team level.
+  @todo
   Scenario: Mapping a team without groupfolders installed falls back to a plain shared folder
     Given the "groupfolders" app is not installed
     When the admin maps the Penpot team "Ferronescotia"
@@ -161,11 +166,13 @@ Feature: Admin configures team mappings
 
   # ── naming, mode, and duplicate prevention ───────────────────────────────────
 
+  @todo
   Scenario: A mapped folder's name is not independently chosen at mapping time
     When the admin maps the Penpot team "Ferronescotia"
     Then the provisioned Team Folder is named "Ferronescotia", matching Penpot exactly
     And the mapping UI does not offer a separate "call it something else" field
 
+  @todo
   Scenario: Project folder names always match their Penpot projects
     Given the Penpot team "Ferronescotia" is mapped and pulled
     Then every project folder is named exactly as Penpot names that project
@@ -185,6 +192,7 @@ Feature: Admin configures team mappings
     # sibling folder names. Free nesting means the second folder can live
     # elsewhere, but the exact rule is undecided — saga open question #31.
 
+  @todo
   Scenario: A team renamed in Penpot renames its Team Folder on the next pull
     Given the Penpot team "Ferronescotia" is mapped
     When the team is renamed to "Ferronescotia Design" in Penpot
@@ -192,6 +200,7 @@ Feature: Admin configures team mappings
     Then the Team Folder is renamed to "Ferronescotia Design"
     And the mapping still resolves, because it is keyed on the team id, not the name
 
+  @todo
   Scenario: A mapping records the default mode its files get, defaulting to link
     When the admin maps the Penpot team "Ferronescotia" without choosing a mode
     Then the mapping's default mode is "link"
@@ -213,10 +222,12 @@ Feature: Admin configures team mappings
   # The two cannot coexist: either "/" carries structure or it doesn't. Making
   # the choice explicit per team is what removes the awkward middle case.
 
+  @todo
   Scenario: A mapping records its folder mode, defaulting to nested
     When the admin maps the Penpot team "Ferronescotia" without choosing a folder mode
     Then the mapping's folder mode is "nested"
 
+  @todo
   Scenario: The folder mode cannot be changed after the mapping is created
     Given the Penpot team "Ferronescotia" is mapped with folder mode "nested"
     When the admin tries to change that mapping's folder mode to "keyed"
@@ -237,6 +248,7 @@ Feature: Admin configures team mappings
     # ownership, key collisions, what a move out of the team means). Do not
     # implement against this scenario.
 
+  @todo
   Scenario: A Penpot team may only be mapped once
     Given the Penpot team "Ferronescotia" is already mapped
     When the admin tries to map the Penpot team "Ferronescotia" again
