@@ -25,7 +25,8 @@ Feature: Pulling a Penpot team into a plain Nextcloud folder
   So that the team appears in Nextcloud with the metadata the resolver relies on
 
   Background:
-    Given the Penpot base URL points at the test instance
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
 
