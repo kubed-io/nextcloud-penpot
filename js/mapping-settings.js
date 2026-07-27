@@ -272,16 +272,30 @@
 			opts.body = JSON.stringify(body);
 		}
 		return fetch(target, opts).then(function (res) {
-			return res.json().then(function (data) {
+			// NOT res.json() directly: a reverse-proxy error page, a login
+			// redirect or a CSRF failure answers with HTML, and parsing that
+			// throws a SyntaxError which would replace the real diagnostic with
+			// "Unexpected token <". Read the text and fall back to the status.
+			return res.text().then(function (body) {
+				var data = null;
+				try { data = body ? JSON.parse(body) : null; } catch { data = null; }
+
 				if (!res.ok) {
 					// The server's own message is already localised and specific;
-					// the status fallback only fires when there is no body to show.
+					// the status fallback only fires when there is no JSON body.
 					return Promise.reject(new Error(
 						data && data.message
 							? data.message
 							: t('penpot_sync', 'Request failed ({status})', { status: res.status })
 					));
 				}
+
+				if (data === null) {
+					return Promise.reject(new Error(
+						t('penpot_sync', 'Request failed ({status})', { status: res.status })
+					));
+				}
+
 				return data;
 			});
 		});

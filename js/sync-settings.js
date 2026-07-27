@@ -37,7 +37,18 @@
 			method: 'POST',
 			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
 		})
-			.then(function (res) { return res.json(); })
+			.then(function (res) {
+				// A proxy error page, a login redirect or a CSRF failure answers
+				// with HTML — parsing that throws, and the admin would see
+				// "Unexpected token <" instead of anything actionable.
+				return res.text().then(function (body) {
+					try {
+						return JSON.parse(body);
+					} catch {
+						throw new Error(t('penpot_sync', 'Connection test failed ({status}).', { status: res.status }));
+					}
+				});
+			})
 			.then(function (res) {
 				// The endpoint answers 200 even for a failed connection — the
 				// verdict is in the payload. `success` and a useful outcome are

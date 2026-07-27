@@ -168,8 +168,13 @@ final class MappingService {
 			// name is only known once Penpot has answered — so this is the first
 			// moment the default exists. Matches nextcloud-grafana, where a blank
 			// nc_folder becomes the Grafana folder's title at create.
+			// borrowFolderName(), not the raw name: Penpot permits "/" in a team
+			// name and a Nextcloud folder name cannot carry one. Storing it raw
+			// would persist an nc_folder that Mapping::fromArray() then REJECTS on
+			// every later read — so the row would vanish from the list, and from
+			// `list-mappings`, with nothing saying why.
 			if ($mapping->ncFolder === '') {
-				$mapping = $mapping->withNcFolder($name);
+				$mapping = $mapping->withNcFolder(Mapping::borrowFolderName($name));
 			}
 		}
 

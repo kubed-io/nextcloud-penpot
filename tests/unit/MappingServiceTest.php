@@ -279,6 +279,29 @@ final class MappingServiceTest extends TestCase {
 		self::assertSame('Ferronescotia', $this->service()->getById($saved->id)?->ncFolder);
 	}
 
+	/**
+	 * Penpot permits "/" in a team name; a Nextcloud folder name cannot carry
+	 * one. Borrowing such a name verbatim would persist an nc_folder that
+	 * Mapping::fromArray() then REJECTS on every later read — so the mapping
+	 * would vanish from the list with nothing saying why.
+	 */
+	public function testASlashInTheTeamNameDoesNotProduceAnUnreadableMapping(): void {
+		$client = $this->createStub(PenpotClient::class);
+		$client->method('getTeams')->willReturn([
+			['id' => self::TEAM_ID, 'name' => 'Design/Brand'],
+		]);
+
+		$service = new MappingService($this->config, $client);
+		$saved = $service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		self::assertStringNotContainsString('/', $saved->ncFolder);
+		self::assertSame('Design-Brand', $saved->ncFolder);
+
+		// The real point: it must still be readable back. A stored row that
+		// fromArray() rejects would silently disappear from list().
+		self::assertCount(1, (new MappingService($this->config, $client))->list());
+	}
+
 	public function testAnExplicitFolderNameSurvivesTheLookup(): void {
 		$saved = $this->service()->add(Mapping::fromArray([
 			'team_id' => self::TEAM_ID,

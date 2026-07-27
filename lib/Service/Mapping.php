@@ -144,7 +144,12 @@ final class Mapping implements JsonSerializable {
 		// rather than being resolved invisibly on every read.
 		$ncFolder = self::normaliseFolder((string)($data['nc_folder'] ?? ''));
 		if ($ncFolder === '' && $teamName !== '') {
-			$ncFolder = self::normaliseFolder($teamName);
+			// borrowFolderName(), not normaliseFolder(): Penpot permits "/" in a
+			// team name and a Nextcloud folder name cannot carry one, so the
+			// borrowed default has to be made legal here. Passing it through
+			// unchanged would build a mapping the validation below then rejects —
+			// on every read, so the row would silently vanish from the list.
+			$ncFolder = self::borrowFolderName($teamName);
 		}
 
 		// Which Nextcloud groups the mapped folder is shared with, and whether it
@@ -294,6 +299,17 @@ final class Mapping implements JsonSerializable {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Turn a Penpot team name into a legal Nextcloud folder name.
+	 *
+	 * Only used when defaulting — an EXPLICIT folder name containing "/" is still
+	 * rejected, because that is a mistake worth telling the admin about. A
+	 * borrowed one is not their mistake, so it is made to work instead.
+	 */
+	public static function borrowFolderName(string $teamName): string {
+		return self::normaliseFolder(str_replace('/', '-', $teamName));
 	}
 
 	/** Stable local id for the mapping — unrelated to any Penpot id. */
