@@ -86,6 +86,8 @@ this app integrates with.
     <command>OCA\PenpotSync\Command\AddMapping</command>
     <command>OCA\PenpotSync\Command\ListMappings</command>
     <command>OCA\PenpotSync\Command\RemoveMapping</command>
+    <command>OCA\PenpotSync\Command\Sync</command>
+    <command>OCA\PenpotSync\Command\Status</command>
   </commands>
   <!--
     No <repair-steps> yet — the custom .penpot mimetype registration

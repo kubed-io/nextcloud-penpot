@@ -23,15 +23,22 @@ folder tree you can organise however you like.
 >   team mappings, scheduled-pull settings, and an optional per-user token for
 >   attribution. Every control persists and has an `occ` twin
 >   (`list-teams`, `add-mapping`, `list-mappings`, `remove-mapping`, …).
+> - **The pull** (Penpot → Nextcloud): `occ penpot_sync:sync pull` mirrors a
+>   mapped team into a plain Nextcloud folder — projects become folders and files
+>   become `.penpot` link pointers, each stamped with Penpot metadata, and
+>   re-pulling reconciles in place instead of duplicating. `occ
+>   penpot_sync:status <path>` shows a node's metadata and the project/team the
+>   **membership resolver** derives by walking its ancestor folders.
 >
-> Verified against a real Nextcloud *and* a real Penpot in CI.
+> Verified against a real Nextcloud *and* a real Penpot in CI — including a pull
+> asserted end-to-end against a project seeded directly in Penpot.
 >
-> **But nothing is mirrored yet.** You can configure the app completely and it
-> will still not create a single file — the pull, the file actions, and the
-> background job are the next slices. That gap is deliberate: the admin surface
-> is built *whole* first, so that every later feature is something you configure
-> rather than something that ships twice. Controls that configure an unbuilt
-> engine say so in their own descriptions.
+> **This is the first slice that actually mirrors.** It is still narrow: only the
+> plain admin-owned folder backend (the groupfolders Team Folder backend, the
+> Files-app surface, `sync`-mode downloads, and the write-back paths are the next
+> slices), and controls that configure an unbuilt part still say so. The admin
+> surface was built *whole* first so that every later feature is something you
+> configure rather than something that ships twice.
 >
 > **Everything else below is the design**, written as if it already worked
 > because that is how the spec is written. Each `.feature` file stays tagged
