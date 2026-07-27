@@ -237,7 +237,7 @@
 			+       '<option value="sync">' + t('penpot_sync', 'Sync') + '</option>'
 			+     '</select></div>'
 			+   '<div class="penpot-sync-field pp-foldermode"><label>' + t('penpot_sync', 'Folder mode') + info(DESC.foldermode) + '</label>'
-			+     '<span class="penpot-sync-fixed">nested <span class="penpot-sync-hint">'
+			+     '<span class="penpot-sync-fixed">' + t('penpot_sync', 'Nested') + ' <span class="penpot-sync-hint">'
 			+       t('penpot_sync', '(fixed)') + '</span></span></div>'
 			+   '<div class="penpot-sync-field pp-tf"><label class="penpot-sync-checkbox">'
 			+     '<input type="checkbox" class="js-use-team-folder"' + (teamFoldersAvailable() ? ' checked' : '')
@@ -277,7 +277,7 @@
 			// throws a SyntaxError which would replace the real diagnostic with
 			// "Unexpected token <". Read the text and fall back to the status.
 			return res.text().then(function (body) {
-				var data = null;
+				var data;
 				try { data = body ? JSON.parse(body) : null; } catch { data = null; }
 
 				if (!res.ok) {

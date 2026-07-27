@@ -152,7 +152,10 @@ $info = static function (string $tip) use ($icon): string {
 								 under the mapping, link→sync would export every file at once.
 								 Per-FILE promotion is the supported path, because it can ask
 								 first. */ ?>
-						<span class="penpot-sync-fixed"><?php p($modeSel); ?>
+						<?php /* The SAME localised labels the add-card offers — a saved card
+								 showing raw "link"/"sync" while a new one says "Link"/"Sync"
+								 is both inconsistent and untranslatable. */ ?>
+						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?>
 							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
 						</span>
 					</div>
@@ -162,7 +165,9 @@ $info = static function (string $tip) use ($icon): string {
 						<?php /* Immutable after creation (§6.53) — rendered as text, not
 								 a disabled control, because a greyed-out dropdown invites
 								 clicking and implies it might become editable. */ ?>
-						<span class="penpot-sync-fixed"><?php p((string)($m['folder_mode'] ?? 'nested')); ?>
+						<?php /* Localised, for the same reason Mode is: a stored value is
+								 still a label when it is shown to a human. */ ?>
+						<span class="penpot-sync-fixed"><?php p(($m['folder_mode'] ?? 'nested') === 'keyed' ? $l->t('Keyed') : $l->t('Nested')); ?>
 							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
 						</span>
 					</div>

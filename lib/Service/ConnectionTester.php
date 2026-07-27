@@ -94,11 +94,15 @@ final class ConnectionTester {
 	private function describe(PenpotApiException $e): string {
 		return match ($e->getKind()) {
 			PenpotApiException::KIND_UNCONFIGURED => $e->getMessage(),
+			// Names BOTH front doors on purpose: this same string is rendered by
+			// the admin button and printed by the CLI, so an instruction that
+			// assumes one of them is wrong half the time it is read.
 			PenpotApiException::KIND_UNAUTHORIZED => 'Penpot rejected the service-account token. '
 				. 'It may have been revoked, or the Penpot instance may not have '
 				. '`enable-access-tokens` set — that flag is off by default and its '
-				. 'absence looks exactly like a bad token. Mint a new token and set it '
-				. 'with `occ penpot_sync:set-token`.',
+				. 'absence looks exactly like a bad token. Mint a new token in Penpot, '
+				. 'then paste it into the Instance card above or run '
+				. '`occ penpot_sync:set-token`.',
 			PenpotApiException::KIND_FORBIDDEN => 'The service-account token was accepted but is not '
 				. 'allowed to do this. Check the account\'s role in Penpot.',
 			PenpotApiException::KIND_UNREACHABLE => $e->getMessage(),
