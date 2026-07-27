@@ -69,7 +69,7 @@ final class PushService {
 	 *              file, an unmanaged `.penpot`, the team root, a non-project folder)
 	 *
 	 * @throws PenpotApiException when Penpot rejects or cannot be reached — the
-	 *         caller logs it; the local name stands until the next pull
+	 *                            caller logs it; the local name stands until the next pull
 	 */
 	public function pushRename(Node $node): bool {
 		if ($node instanceof File) {

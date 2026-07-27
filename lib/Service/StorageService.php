@@ -58,9 +58,15 @@ final class StorageService {
 	public const ADMIN_GROUP = 'admin';
 
 	/**
-	 * Content-group rights on a managed Penpot folder: read + rename (UPDATE),
-	 * never create or delete. Kept identical to {@see TeamFolderService} so both
+	 * Content-group rights on a managed Penpot folder: read + UPDATE, never
+	 * create or delete. Kept identical to {@see TeamFolderService} so both
 	 * backends grant the same surface.
+	 *
+	 * NB: Nextcloud has no "rename-only" permission bit — `PERMISSION_UPDATE` is
+	 * the least that lets a group rename a node, and it also allows editing an
+	 * existing file's contents. We accept that over-grant: a content edit is not
+	 * a rename, so it is never pushed to Penpot ({@see PushService}) and is
+	 * overwritten on the next pull, keeping content effectively one-way.
 	 */
 	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE;
 

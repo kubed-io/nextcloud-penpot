@@ -18,6 +18,14 @@
 # DELIBERATELY NOT ASSERTED HERE (built in later courses, see the PullService
 # docblock): the project-folder visible tag, `sync`-mode archive download, the
 # `.penpot` browser deep-link, and prune of stale mirror files.
+#
+# LIVE-ONLY, NOT ASSERTABLE HERE (saga §C4.5): a bulk pull over MULTIPLE mappings
+# now isolates each mapping's failure so one poisoned database transaction cannot
+# cascade into the next. The bug that motivated it needs a group-share failure
+# that leaves an aborted Postgres transaction (this instance's notifications app
+# crashing post-commit) AND a second mapping whose writes then inherit it —
+# neither reproducible in a single-team, no-groupfolders CI stack. It is verified
+# on the pod, where two real mappings pull green in one command.
 
 Feature: Pulling a Penpot team into a plain Nextcloud folder
   As an operator who has mapped a Penpot team

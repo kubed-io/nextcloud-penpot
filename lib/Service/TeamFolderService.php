@@ -60,8 +60,14 @@ final class TeamFolderService {
 	private const FOLDER_MANAGER = 'OCA\\GroupFolders\\Folder\\FolderManager';
 
 	/**
-	 * Content-group rights on a managed Penpot folder: read + rename (UPDATE),
-	 * never create or delete. See the class docblock's third rule.
+	 * Content-group rights on a managed Penpot folder: read + UPDATE, never
+	 * create or delete. See the class docblock's third rule.
+	 *
+	 * NB: Nextcloud has no "rename-only" permission bit — `PERMISSION_UPDATE` is
+	 * the least that lets a group rename a node, and it also allows editing an
+	 * existing file's contents. We accept that over-grant: a content edit is not
+	 * a rename, so it is never pushed to Penpot ({@see \OCA\PenpotSync\Service\PushService})
+	 * and is overwritten on the next pull, keeping content effectively one-way.
 	 */
 	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE;
 

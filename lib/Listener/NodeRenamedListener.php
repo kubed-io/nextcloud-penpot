@@ -75,7 +75,7 @@ final class NodeRenamedListener implements IEventListener {
 			// the next pull reconcile the Penpot side.
 			$this->logger->warning('penpot_sync writeback: rename push failed', [
 				'app' => Application::APP_ID,
-				'fileId' => $target->getId(),
+				'nodeId' => $target->getId(),
 				'path' => $target->getPath(),
 				'exception' => $e,
 			]);

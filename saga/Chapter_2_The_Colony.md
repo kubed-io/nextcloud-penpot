@@ -554,3 +554,33 @@ live), and the feature files flip on the day a Files-app channel lands, not the
 day the code did. The Team Folder backend is `@todo` for the mirror of that
 reason: no groupfolders in CI. Both are exercised live on the pod, where the
 cluster's `groupfolders` app and the real Kubed Team Folder mapping are the test.
+
+### C4.5 — The live smoke test earned its keep: a poisoned-transaction cascade
+
+Deploying Course 4 to the pod and running a full `occ penpot_sync:sync pull` over
+*both* live mappings failed where each mapping *alone* passed — the tell of state
+leaking between them. The error was Postgres `SQLSTATE[25P02]: current transaction
+is aborted`, and it surfaced deep in the *second* mapping's file write
+(`ObjectStoreStorage::writeStream`), nowhere near its cause. 25P02 is a **cascade**:
+once a transaction aborts, every later statement on that connection reports 25P02,
+so the real first error was masked. Walking the JSON log back to the first
+non-25P02 row found it: the plain (admin-owned) mapping's group share tripped a
+bug in this instance's notifications app — `OCA\Notifications\Push::$appConfig` is
+null, `Call to a member function getAppValueString() on null` — thrown *after* the
+share row committed but with the notification's own transaction left open and
+aborted. `syncGroupShares` (correctly) swallows a share failure — a missing or
+awkward content group must never fail the pull — but swallowing the exception did
+not clear the poisoned connection, so the *next* mapping's writes inherited it.
+
+The fix is small and local: after a caught share create/update failure,
+`StorageService` now discards any dangling transaction (`IDBConnection::inTransaction`
+→ `rollBack`) before returning. The Team Folder backend is immune — it provisions
+through groupfolders' `FolderManager`, never `IShareManager`, so it never triggers
+the notification push. Two lessons the doctrine keeps: **a masked cascade error
+means hunt for the first failure, not the loudest one**, and **swallowing an
+exception is only half a decision — you also own whatever partial state it left**,
+here a transaction that had to be explicitly rolled back. This is exactly the
+class of bug the occ integration suite cannot see (single mapping, no groupfolders,
+no notifications crash to reproduce) and the live pod can — the argument of C4.4,
+paid back in a concrete catch.
+
