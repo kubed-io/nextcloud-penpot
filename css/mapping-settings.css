@@ -192,6 +192,13 @@
 	background-color: var(--color-success-hover, var(--color-success));
 }
 
+.penpot-sync-mappings__actions .js-sync {
+	background-color: var(--color-primary-element, var(--color-primary));
+}
+.penpot-sync-mappings__actions .js-sync:hover:not(:disabled) {
+	background-color: var(--color-primary-element-hover, var(--color-primary-element, var(--color-primary)));
+}
+
 .penpot-sync-mappings__actions .js-delete {
 	background-color: var(--color-error);
 }
@@ -227,25 +234,38 @@
 	color: var(--color-main-text);
 }
 
-/* The groups picker — a wrapping checkbox list, scrollable once it outgrows the
-   card so a big instance cannot stretch the layout. */
+.penpot-sync-checkbox input {
+	margin: 0;
+}
+
+/* Groups: a wrapping, scrollable checkbox list. FILLS the full card height —
+ * `flex: 1` inside the stretched .pp-groups column — so its bottom edge lines
+ * up with the action buttons, exactly as in the sibling apps. A `max-height`
+ * here instead would leave the box floating short of the card's bottom, which
+ * is precisely what it looked like before this rule was ported properly. */
 .penpot-sync-groups {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px 14px;
-	max-height: 150px;
+	align-content: flex-start;
+	gap: 2px 14px;
+	flex: 1 1 auto;
+	min-height: 9em;
 	overflow-y: auto;
-	padding: 6px 8px;
+	padding: 4px 6px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 6px);
-	background: var(--color-main-background);
 }
 
 .penpot-sync-groups__item {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
-	gap: 5px;
+	gap: 4px;
 	white-space: nowrap;
+	cursor: pointer;
+}
+
+.penpot-sync-groups__item input {
+	margin: 0;
 }
 
 /* Narrow admin widths: collapse the grid to a single column so nothing

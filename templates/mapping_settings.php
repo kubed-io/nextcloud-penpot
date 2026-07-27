@@ -81,6 +81,7 @@ $info = static function (string $tip) use ($icon): string {
 	data-icons="<?php p(json_encode([
 		'info' => $icon('info'),
 		'save' => $icon('save'),
+		'sync' => $icon('sync'),
 		'delete' => $icon('delete'),
 	])); ?>">
 	<h3 class="penpot-sync-mappings__heading"><?php p($l->t('Team mappings')); ?></h3>
@@ -180,6 +181,14 @@ $info = static function (string $tip) use ($icon): string {
 					<div class="penpot-sync-mappings__actions">
 						<button type="button" class="button js-save" title="<?php p($l->t('Save')); ?>" aria-label="<?php p($l->t('Save')); ?>">
 							<?php print_unescaped($icon('save')); ?>
+						</button>
+						<?php /* Per-mapping sync. Present and clickable — it reports honestly
+								 that the pull is not built yet, rather than being absent.
+								 Same position and treatment as in the sibling apps, so
+								 enabling it in Course 3 is wiring a handler, not redesigning
+								 the card. */ ?>
+						<button type="button" class="button js-sync" title="<?php p($l->t('Sync now')); ?>" aria-label="<?php p($l->t('Sync now')); ?>">
+							<?php print_unescaped($icon('sync')); ?>
 						</button>
 						<button type="button" class="button js-delete" title="<?php p($l->t('Delete')); ?>" aria-label="<?php p($l->t('Delete')); ?>">
 							<?php print_unescaped($icon('delete')); ?>

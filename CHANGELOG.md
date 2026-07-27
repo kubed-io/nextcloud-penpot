@@ -43,3 +43,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each mapping records the Nextcloud groups its folder is shared with, and whether it uses a Team Folder or a plain shared folder — the same controls, defaults, and meanings as the n8n and Grafana integrations.
 - Two mappings can no longer target the same Nextcloud folder, and a folder name must be a single folder rather than a path.
 - The admin section now matches the n8n and Grafana integrations: one **Instance** card holding the URL and the token, **Sync Settings**, **Team mappings** as one card per mapping, and a **Sync Actions** panel collecting every button at the bottom.
+- Each mapping card carries its own **Sync now** button, in the same place as in the n8n and Grafana integrations — it reports that per-team sync is not available yet rather than silently doing nothing.

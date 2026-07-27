@@ -69,6 +69,8 @@
 
 			if (btn.classList.contains('js-save')) {
 				saveCard(card);
+			} else if (btn.classList.contains('js-sync')) {
+				syncCard(card);
 			} else if (btn.classList.contains('js-delete')) {
 				deleteCard(card);
 			}
@@ -145,6 +147,18 @@
 		}).catch(function (err) {
 			cardStatus(card, 'error', err.message || t('penpot_sync', 'Save failed.'));
 		});
+	}
+
+	// Per-mapping sync isn't wired yet — the button exists for parity with the
+	// siblings, and says so rather than failing silently or doing nothing. The
+	// handler lands with the pull in Course 3.
+	function syncCard(card) {
+		if (!card.dataset.id) {
+			cardStatus(card, 'error', t('penpot_sync', 'Save the mapping first.'));
+			return;
+		}
+
+		cardStatus(card, '', t('penpot_sync', 'Per-team sync isn\u2019t available yet — it arrives with the pull.'));
 	}
 
 	function deleteCard(card) {
@@ -226,6 +240,8 @@
 			+   '<div class="penpot-sync-mappings__actions">'
 			+     '<button type="button" class="button js-save" title="' + escapeHtml(t('penpot_sync', 'Save'))
 			+       '" aria-label="' + escapeHtml(t('penpot_sync', 'Save')) + '">' + (ICONS.save || '') + '</button>'
+			+     '<button type="button" class="button js-sync" title="' + escapeHtml(t('penpot_sync', 'Sync now'))
+			+       '" aria-label="' + escapeHtml(t('penpot_sync', 'Sync now')) + '">' + (ICONS.sync || '') + '</button>'
 			+     '<button type="button" class="button js-delete" title="' + escapeHtml(t('penpot_sync', 'Delete'))
 			+       '" aria-label="' + escapeHtml(t('penpot_sync', 'Delete')) + '">' + (ICONS.delete || '') + '</button>'
 			+     '<span class="js-card-status"></span>'
