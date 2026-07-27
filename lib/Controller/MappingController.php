@@ -108,17 +108,17 @@ final class MappingController extends Controller {
 	}
 
 	/**
-	 * Update a mapping's mutable fields. `folder_mode` and the team are not among
-	 * them — {@see MappingService::update()} explains why.
+	 * Update a mapping's mutable fields — in practice, the groups its folder is
+	 * shared with.
+	 *
+	 * Everything else is immutable once created: the team, the Nextcloud folder,
+	 * the Team Folder flag, `mode`, and `folder_mode`. {@see MappingService::update()}
+	 * gives the reason for each. Changing one means removing the mapping and
+	 * adding it again, which makes the migration cost visible instead of hiding
+	 * it behind a dropdown.
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
-	public function update(
-		string $id,
-		string $mode,
-		string $ncFolder = '',
-		array $ncGroups = [],
-		bool $useTeamFolder = true,
-	): JSONResponse {
+	public function update(string $id, array $ncGroups = []): JSONResponse {
 		$existing = $this->service->getById($id);
 
 		if ($existing === null) {
@@ -126,14 +126,19 @@ final class MappingController extends Controller {
 		}
 
 		try {
+			// Only the groups are taken from the request. Every other field is
+			// carried over from the stored mapping, so this endpoint CANNOT trip
+			// the service's immutability checks with an omitted parameter's
+			// default — a caller that sends nothing changes nothing, which is the
+			// right behaviour for a PUT that only owns one field.
 			$updated = $this->service->update($id, Mapping::fromArray([
 				'id' => $existing->id,
 				'team_id' => $existing->teamId,
 				'team_name' => $existing->teamName,
-				'nc_folder' => $ncFolder,
+				'nc_folder' => $existing->ncFolder,
 				'nc_groups' => $ncGroups,
-				'use_team_folder' => $useTeamFolder,
-				'mode' => $mode,
+				'use_team_folder' => $existing->useTeamFolder,
+				'mode' => $existing->mode,
 				'folder_mode' => $existing->folderMode,
 			]));
 		} catch (\InvalidArgumentException $e) {

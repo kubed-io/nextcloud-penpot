@@ -43,10 +43,10 @@ $error = $_['error'] ?? null;
 // sibling apps use, so the cards read identically.
 $desc = [
 	'team' => $l->t('The Penpot team to mirror. Its projects become subfolders inside the Nextcloud folder. Bound by team id, so renaming the team in Penpot never breaks the mapping.'),
-	'nc' => $l->t('Name of the Nextcloud folder the team is mirrored into. Leave blank to use the Penpot team\'s own name. Project folders inside it are always named exactly as Penpot names them — that part is not configurable.'),
-	'mode' => $l->t('Link: a read-only pointer that opens the design in Penpot. Sync: the exported .penpot archive is downloaded and kept as a real file.'),
+	'nc' => $l->t('Name of the Nextcloud folder the team is mirrored into. Leave blank to use the Penpot team\'s own name. Fixed once the mapping is created — changing it would have to move the whole mirrored tree. Project folders inside it are always named exactly as Penpot names them.'),
+	'mode' => $l->t('Link: a read-only pointer that opens the design in Penpot. Sync: the exported .penpot archive is downloaded and kept as a real file. Fixed once the mapping is created — switching it in bulk would either delete every downloaded archive or export every file at once; promote or demote individual files instead.'),
 	'foldermode' => $l->t('Nested (default): Penpot project names are plain names, and you may reorganise project folders freely inside the team folder. Fixed once the mapping is created — changing it would restructure every folder and rename every project in Penpot.'),
-	'tf' => $l->t('On = an ownerless Team Folder (groupfolders). Off = a folder in the admin account shared to the groups below. Saved with the mapping; the folder is provisioned when the sync engine lands.'),
+	'tf' => $l->t('On = an ownerless Team Folder (groupfolders). Off = a folder in the admin account shared to the groups below. Fixed once the mapping is created — switching would have to migrate the folder and its shares. Applied when the sync engine provisions the folder.'),
 	'groups' => $l->t('Which Nextcloud groups the mapped folder is shared with. Saved with the mapping; applied when the sync engine provisions the folder.'),
 ];
 
@@ -137,19 +137,24 @@ $info = static function (string $tip) use ($icon): string {
 					<div class="penpot-sync-field pp-nc">
 						<label><?php p($l->t('Nextcloud folder'));
 			print_unescaped($info($desc['nc'])); ?></label>
-						<input type="text" class="js-nc-folder" value="<?php p((string)($m['nc_folder'] ?? '')); ?>" placeholder="<?php p($teamName !== '' ? $teamName : $l->t('designs')); ?>" />
+						<?php /* Immutable once created — re-pointing it would have to move
+								 the whole mirrored tree and re-stamp every file's metadata.
+								 Shown as text for the same reason folder mode is: a disabled
+								 input invites typing and implies it might save. */ ?>
+						<span class="penpot-sync-fixed"><?php p((string)($m['nc_folder'] ?? '')); ?>
+							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
+						</span>
 					</div>
 					<div class="penpot-sync-field pp-mode">
 						<label><?php p($l->t('Mode'));
 			print_unescaped($info($desc['mode'])); ?></label>
-						<select class="js-mode">
-							<option value="link" <?php if ($modeSel === 'link') {
-								print_unescaped('selected');
-							} ?>><?php p($l->t('Link')); ?></option>
-							<option value="sync" <?php if ($modeSel === 'sync') {
-								print_unescaped('selected');
-							} ?>><?php p($l->t('Sync')); ?></option>
-						</select>
+						<?php /* Immutable: sync→link would delete every downloaded archive
+								 under the mapping, link→sync would export every file at once.
+								 Per-FILE promotion is the supported path, because it can ask
+								 first. */ ?>
+						<span class="penpot-sync-fixed"><?php p($modeSel); ?>
+							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
+						</span>
 					</div>
 					<div class="penpot-sync-field pp-foldermode">
 						<label><?php p($l->t('Folder mode'));
@@ -162,10 +167,14 @@ $info = static function (string $tip) use ($icon): string {
 						</span>
 					</div>
 					<div class="penpot-sync-field pp-tf">
-						<label class="penpot-sync-checkbox"><input type="checkbox" class="js-use-team-folder" <?php if ($useTf) {
-							print_unescaped('checked');
-						} ?> /> <?php p($l->t('Team Folder'));
+						<label><?php p($l->t('Team Folder'));
 			print_unescaped($info($desc['tf'])); ?></label>
+						<?php /* Immutable: switching backend would have to migrate the
+								 provisioned folder and all its shares. Both siblings lock
+								 this too. */ ?>
+						<span class="penpot-sync-fixed"><?php p($useTf ? $l->t('yes') : $l->t('no')); ?>
+							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
+						</span>
 					</div>
 					<div class="penpot-sync-field pp-groups">
 						<label><?php p($l->t('Groups'));

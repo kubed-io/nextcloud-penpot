@@ -193,14 +193,37 @@ final class MappingService {
 	/**
 	 * Update a mapping's mutable fields.
 	 *
-	 * `folder_mode` is IMMUTABLE (saga §6.53). Flipping it live would restructure
-	 * every folder under the mapping *and* rewrite every project name in Penpot —
-	 * a bulk, two-sided, destructive migration hiding behind a dropdown. The
-	 * admin must remove and re-add instead, which makes the cost visible. Same
-	 * immutability precedent both sibling apps set for their structural fields.
+	 * ## WHAT IS IMMUTABLE, AND WHY EACH ONE IS
 	 *
-	 * The team id is immutable for a simpler reason: a mapping IS its team. A
-	 * different team is a different mapping.
+	 * The same principle `nextcloud-grafana` settles on: a field is immutable
+	 * when changing it would force a LIVE MIGRATION of already-mirrored content,
+	 * which is easier to avoid by re-creating the mapping than to implement
+	 * safely behind a dropdown. Delete and re-add makes the cost visible instead
+	 * of hiding it.
+	 *
+	 *   - **the Penpot team** — a mapping IS its team; a different team is a
+	 *     different mapping.
+	 *   - **the Nextcloud folder** — re-pointing it would have to move the whole
+	 *     mirrored tree and re-stamp every file's metadata. (Grafana locks its
+	 *     `nc_folder` for exactly this reason.)
+	 *   - **the Team Folder flag** — switching backend (ownerless Team Folder ⇄
+	 *     admin-owned shared folder) would have to migrate the provisioned folder
+	 *     and all its shares. Both siblings lock this.
+	 *   - **`folder_mode`** (saga §6.53) — flipping it would restructure every
+	 *     folder under the mapping *and* rewrite every project name in Penpot: a
+	 *     bulk, two-sided, destructive migration.
+	 *   - **`mode`** — link ⇄ sync. Grafana leaves its `mode` editable, and this
+	 *     app deliberately does NOT, because the axis means something different
+	 *     here (saga §6.22). There, mode decides which way edits flow. Here it
+	 *     decides **whether we hold the bytes**: sync→link would delete every
+	 *     downloaded `.penpot` archive under the mapping, and link→sync would
+	 *     trigger a full export of every file at once. Per-FILE promotion and
+	 *     demotion is the supported path (sync-mode.feature) precisely because it
+	 *     is the one that can ask before destroying an archive.
+	 *
+	 * **Editable:** the recorded team name (the pull refreshes it) and the
+	 * groups the folder is shared with — the same "everything else stays
+	 * editable" line Grafana draws.
 	 *
 	 * @throws \InvalidArgumentException
 	 */
@@ -213,38 +236,49 @@ final class MappingService {
 				continue;
 			}
 
-			if ($existing->folderMode !== $mapping->folderMode) {
-				throw new \InvalidArgumentException(
-					'A mapping\'s folder mode cannot be changed after it is created. '
-					. 'Remove the mapping and add it again with the mode you want.',
-				);
-			}
-
 			if ($existing->teamId !== $mapping->teamId) {
 				throw new \InvalidArgumentException(
-					'A mapping\'s Penpot team cannot be changed. Remove it and map the other team.',
+					'A mapping\'s Penpot team cannot be changed after it is created — remove it and map the other team.',
 				);
 			}
 
-			// The folder name IS editable — it is the admin's choice, not
-			// Penpot's (unlike project folder names, which are pinned to their
-			// project's name in both directions, §6.36). Blank means "keep what
-			// is there" rather than "clear it", so an update that only changes
-			// the mode cannot accidentally unname the destination.
+			if ($existing->folderMode !== $mapping->folderMode) {
+				throw new \InvalidArgumentException(
+					'A mapping\'s folder mode cannot be changed after it is created — remove it and add a new one.',
+				);
+			}
+
+			// Blank means "keep what is there" rather than "clear it", so a
+			// caller that omits the field is not asking to change it.
 			$ncFolder = $mapping->ncFolder !== '' ? $mapping->ncFolder : $existing->ncFolder;
 
 			if ($ncFolder !== $existing->ncFolder) {
-				$this->assertFolderUnique($ncFolder, $id);
+				throw new \InvalidArgumentException(
+					'A mapping\'s Nextcloud folder cannot be changed after it is created — remove it and add a new one.',
+				);
+			}
+
+			if ($existing->useTeamFolder !== $mapping->useTeamFolder) {
+				throw new \InvalidArgumentException(
+					'A mapping\'s Team Folder setting cannot be changed after it is created — remove it and add a new one.',
+				);
+			}
+
+			if ($existing->mode !== $mapping->mode) {
+				throw new \InvalidArgumentException(
+					'A mapping\'s default mode cannot be changed after it is created — remove it and add a new one. '
+					. 'To change an individual file, promote or demote that file instead.',
+				);
 			}
 
 			$updated = new Mapping(
 				$existing->id,
 				$existing->teamId,
 				$mapping->teamName !== '' ? $mapping->teamName : $existing->teamName,
-				$ncFolder,
+				$existing->ncFolder,
 				$mapping->ncGroups,
-				$mapping->useTeamFolder,
-				$mapping->mode,
+				$existing->useTeamFolder,
+				$existing->mode,
 				$existing->folderMode,
 			);
 

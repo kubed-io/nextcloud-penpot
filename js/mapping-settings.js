@@ -96,36 +96,45 @@
 		return root().dataset.tfAvailable === '1';
 	}
 
+	// Reads whatever the card still offers. A SAVED card renders its immutable
+	// fields as text, so those selectors simply miss and the corresponding keys
+	// are omitted — which is exactly what the update endpoint wants, since it
+	// only accepts groups. A NEW card has every control, and create takes them
+	// all.
 	function readCard(card) {
 		var teamSel = card.querySelector('.js-team');
+		var ncEl = card.querySelector('.js-nc-folder');
+		var modeEl = card.querySelector('.js-mode');
+		var tfEl = card.querySelector('.js-use-team-folder');
+
 		var groups = [];
 		card.querySelectorAll('.js-groups input[type="checkbox"]:checked').forEach(function (cb) {
 			groups.push(cb.value);
 		});
-		var tfEl = card.querySelector('.js-use-team-folder');
 
-		return {
-			id: card.dataset.id || '',
-			// A saved card's <select> is disabled (the team is immutable), and a
-			// disabled control still reads its value fine — but the id is kept in
-			// data-id so a saved card does not depend on the option's value at all.
-			teamId: teamSel ? (teamSel.dataset.id || teamSel.value) : '',
-			ncFolder: card.querySelector('.js-nc-folder').value.trim(),
-			ncGroups: groups,
-			useTeamFolder: tfEl ? tfEl.checked : true,
-			mode: card.querySelector('.js-mode').value,
-		};
+		var data = { ncGroups: groups };
+
+		if (card.dataset.id) {
+			return data;
+		}
+
+		data.teamId = teamSel ? (teamSel.dataset.id || teamSel.value) : '';
+		data.ncFolder = ncEl ? ncEl.value.trim() : '';
+		data.mode = modeEl ? modeEl.value : 'link';
+		data.useTeamFolder = tfEl ? tfEl.checked : true;
+
+		return data;
 	}
 
 	function saveCard(card) {
+		var isNew = !card.dataset.id;
 		var data = readCard(card);
 
-		if (!data.teamId) {
+		if (isNew && !data.teamId) {
 			cardStatus(card, 'error', t('penpot_sync', 'Pick a Penpot team first.'));
 			return;
 		}
 
-		var isNew = !card.dataset.id;
 		var req = isNew
 			? api('POST', url('/mappings'), data)
 			: api('PUT', url('/mappings/' + encodeURIComponent(card.dataset.id)), data);
@@ -133,28 +142,14 @@
 		req.then(function (res) {
 			if (isNew && res.id) {
 				card.dataset.id = res.id;
+				// Everything except the groups is immutable once created, so redraw
+				// the card from the server's own renderer rather than trying to
+				// convert five controls into text here. It also surfaces the folder
+				// name the backend materialised from the team name.
+				window.location.reload();
+				return;
+			}
 
-				// Lock the team, exactly as a server-rendered card is: a mapping IS
-				// its team, so the backend ignores a changed teamId on update. Left
-				// editable, the select would let an admin pick another team, see the
-				// save succeed, and reasonably believe it moved — when nothing did.
-				// data-id carries the chosen team so readCard() no longer depends on
-				// the disabled control's value.
-				var teamSel = card.querySelector('.js-team');
-				if (teamSel) {
-					teamSel.dataset.id = teamSel.value;
-					teamSel.disabled = true;
-				}
-			}
-			// Reflect the materialised folder name back into the field, so a blank
-			// entry shows the name the backend filled in from the Penpot team
-			// rather than staying mysteriously empty.
-			if (res.nc_folder) {
-				var ncEl = card.querySelector('.js-nc-folder');
-				if (ncEl && !ncEl.value.trim()) {
-					ncEl.value = res.nc_folder;
-				}
-			}
 			cardStatus(card, 'success', t('penpot_sync', 'Saved.'));
 		}).catch(function (err) {
 			cardStatus(card, 'error', err.message || t('penpot_sync', 'Save failed.'));

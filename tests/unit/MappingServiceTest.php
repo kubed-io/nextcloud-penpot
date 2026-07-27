@@ -150,10 +150,43 @@ final class MappingServiceTest extends TestCase {
 			->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 	}
 
-	public function testUpdatesTheDefaultMode(): void {
+	/**
+	 * Groups are the one thing an update may change — the same "everything else
+	 * stays editable" line Grafana draws, minus the fields whose meaning differs
+	 * here.
+	 */
+	public function testUpdatesTheGroups(): void {
 		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
 		$updated = $this->service()->update($saved->id, new Mapping(
+			$saved->id,
+			$saved->teamId,
+			$saved->teamName,
+			$saved->ncFolder,
+			['design'],
+			$saved->useTeamFolder,
+			$saved->mode,
+			$saved->folderMode,
+		));
+
+		self::assertSame(['design'], $updated->ncGroups);
+		self::assertSame(['design'], $this->service()->getById($saved->id)?->ncGroups);
+	}
+
+	/**
+	 * link ⇄ sync is IMMUTABLE here, unlike Grafana's `mode`, because the axis
+	 * means something different (saga §6.22): it decides whether we hold the
+	 * bytes. sync→link would delete every downloaded archive under the mapping;
+	 * link→sync would export every file at once. Per-FILE promotion is the
+	 * supported path, because it can ask first.
+	 */
+	public function testModeIsImmutable(): void {
+		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('cannot be changed');
+
+		$this->service()->update($saved->id, new Mapping(
 			$saved->id,
 			$saved->teamId,
 			$saved->teamName,
@@ -163,9 +196,35 @@ final class MappingServiceTest extends TestCase {
 			Mapping::MODE_SYNC,
 			$saved->folderMode,
 		));
+	}
 
-		self::assertSame(Mapping::MODE_SYNC, $updated->mode);
-		self::assertSame(Mapping::MODE_SYNC, $this->service()->getById($saved->id)?->mode);
+	/** Re-pointing it would have to move the whole mirrored tree. Grafana locks it too. */
+	public function testTheFolderIsImmutable(): void {
+		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('cannot be changed');
+
+		$this->service()->update($saved->id, $saved->withNcFolder('Design Files'));
+	}
+
+	/** Switching backend would have to migrate the folder and all its shares. */
+	public function testTheTeamFolderFlagIsImmutable(): void {
+		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('cannot be changed');
+
+		$this->service()->update($saved->id, new Mapping(
+			$saved->id,
+			$saved->teamId,
+			$saved->teamName,
+			$saved->ncFolder,
+			$saved->ncGroups,
+			!$saved->useTeamFolder,
+			$saved->mode,
+			$saved->folderMode,
+		));
 	}
 
 	/**
@@ -268,20 +327,12 @@ final class MappingServiceTest extends TestCase {
 		]));
 	}
 
-	public function testTheFolderNameCanBeChanged(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-
-		$updated = $this->service()->update($saved->id, $saved->withNcFolder('Design Files'));
-
-		self::assertSame('Design Files', $updated->ncFolder);
-		self::assertSame('Design Files', $this->service()->getById($saved->id)?->ncFolder);
-	}
-
 	/**
-	 * Blank on update means "keep what is there", not "clear it" — so an update
-	 * that only changes the mode cannot accidentally unname the destination.
+	 * Blank on update means "keep what is there", not "clear it" — so a caller
+	 * that omits the folder is not asking to change it, and must not trip the
+	 * immutability check.
 	 */
-	public function testABlankFolderOnUpdateKeepsTheExistingName(): void {
+	public function testABlankFolderOnUpdateIsNotAChange(): void {
 		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
 		$updated = $this->service()->update($saved->id, new Mapping(
@@ -289,14 +340,14 @@ final class MappingServiceTest extends TestCase {
 			$saved->teamId,
 			$saved->teamName,
 			'',
-			$saved->ncGroups,
+			['design'],
 			$saved->useTeamFolder,
-			Mapping::MODE_SYNC,
+			$saved->mode,
 			$saved->folderMode,
 		));
 
 		self::assertSame('Ferronescotia', $updated->ncFolder);
-		self::assertSame(Mapping::MODE_SYNC, $updated->mode);
+		self::assertSame(['design'], $updated->ncGroups);
 	}
 
 	public function testGroupsAndTeamFolderPersist(): void {

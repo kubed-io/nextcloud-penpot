@@ -244,6 +244,20 @@ to match folders to projects.
 Two mappings cannot target the same Nextcloud folder — their project subfolders
 would interleave and the pull would fight over the same names on every run.
 
+**Most of a mapping is fixed once it is created**, following the same rule the
+n8n and Grafana integrations use: a field is immutable when changing it would
+force a live migration of already-mirrored content. The team, the Nextcloud
+folder, the Team Folder setting, the default mode and the folder mode are all set
+at creation; the groups the folder is shared with stay editable. To change
+anything else, remove the mapping and add it again — which makes the cost
+visible instead of hiding it behind a dropdown.
+
+The **default mode** is the one place this app is stricter than the Grafana
+integration, which leaves its mode editable. Here the axis decides whether the
+app *holds the bytes*, so flipping it in bulk would either delete every
+downloaded archive under the mapping or export every file at once. Promote or
+demote individual files instead.
+
 Non-Penpot content inside a mapped folder is expected and never touched. The pull
 only acts on files it recognizes by their metadata.
 
