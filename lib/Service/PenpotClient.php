@@ -235,7 +235,9 @@ final class PenpotClient {
 	 *
 	 * Penpot answers 204 with no body, like `rename-project`.
 	 *
-	 * @param list<string> $fileIds
+	 * @param list<string> $fileIds A LIST, not any array: `ids` goes on the wire
+	 *                              as a JSON array, and a gappy or keyed array
+	 *                              would encode as an object instead.
 	 *
 	 * @throws PenpotApiException
 	 */
@@ -246,7 +248,7 @@ final class PenpotClient {
 			return;
 		}
 
-		$this->call('move-files', ['project' => $projectId, 'files' => array_values($fileIds)], $actorToken);
+		$this->call('move-files', ['project' => $projectId, 'files' => $fileIds], $actorToken);
 	}
 
 	// ── connection test ─────────────────────────────────────────────────────

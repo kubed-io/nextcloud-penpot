@@ -158,7 +158,7 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **File rename → `rename-file`** | � | Ratified §6.54. Strip/re-add `.penpot`; send under plain **`id`**. |
+| **File rename → `rename-file`** | 🟢 | Ratified §6.54. Strip/re-add `.penpot`; send under plain **`id`**. |
 | **Project folder rename → `rename-project`** | 🟢 | §6.36/§6.39 — its own flow, *not* a variant of file rename. Different event, id, RPC, and response (204, no body). |
 | **Move between projects → `move-files`** | 🟢 | Confirmed working both directions (§6.34 probe). Built and gated: `sync` files re-file, `link` files are refused (§6.43). |
 | **`sync` mode + `export-binfile`** | 🟡 | Opt-in per file. Downloads the real archive when `revn` moves. |

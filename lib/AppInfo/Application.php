@@ -53,8 +53,9 @@ use OCP\Files\Events\Node\NodeRenamedEvent;
  * rename of a managed `.penpot` file or project folder up to Penpot, and re-files
  * a moved design into the project it landed in. Those are the only writes Penpot
  * permits us at this stage (§6.19) — content is still strictly one-way (§6.1).
- * A {@see MoveGuardListener} on {@see BeforeNodeRenamedEvent} refuses the one
- * move that cannot be honoured: a project folder leaving its team folder (§6.30).
+ * A {@see MoveGuardListener} on {@see BeforeNodeRenamedEvent} refuses the two
+ * moves that cannot be honoured: a project folder leaving its team folder
+ * (§6.30), and a `link` file leaving the project it points into (§6.43).
  * The `SyncGuard` keeps the pull's own follow-renames from looping through either.
  *
  * The background job, the rest of the Files-app surface and the remaining write
