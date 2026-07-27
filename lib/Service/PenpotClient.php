@@ -112,6 +112,10 @@ final class PenpotClient {
 		'create-project' => ['team' => 'team-id', 'name' => 'name'],
 		'rename-project' => ['project' => 'id', 'name' => 'name'],
 		'get-team-deleted-files' => ['team' => 'team-id'],
+		// ── confirmed live, Chapter 1 §6.27/§6.34 (the cross-team move probe) ──
+		// Note `ids` is a SET of file ids, the one command in this table whose
+		// value is not a scalar — see wireParams()' widened type.
+		'move-files' => ['project' => 'project-id', 'files' => 'ids'],
 	];
 
 	/**
@@ -219,6 +223,32 @@ final class PenpotClient {
 		$this->call('rename-project', ['project' => $projectId, 'name' => $name], $actorToken);
 	}
 
+	/**
+	 * Re-file one or more design files into a project. Proven live in §6.27/§6.34:
+	 * HTTP 204, and the destination's `team-id` follows automatically — so this one
+	 * call covers a same-team re-file *and* a cross-team move.
+	 *
+	 * NON-DESTRUCTIVE AND REVERSIBLE. Nothing is copied, re-imported or re-id'd:
+	 * the file keeps its id, its `revn` and its whole history, and dragging it back
+	 * is the same call in the other direction. That is why the user-facing drag
+	 * propagates rather than being refused or silently reverted (§6.35).
+	 *
+	 * Penpot answers 204 with no body, like `rename-project`.
+	 *
+	 * @param list<string> $fileIds
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function moveFiles(string $projectId, array $fileIds, ?string $actorToken = null): void {
+		if ($fileIds === []) {
+			// An empty set is a no-op request, and Penpot would reject it as a
+			// validation error — refuse to spend the round-trip.
+			return;
+		}
+
+		$this->call('move-files', ['project' => $projectId, 'files' => array_values($fileIds)], $actorToken);
+	}
+
 	// ── connection test ─────────────────────────────────────────────────────
 
 	/**
@@ -251,9 +281,9 @@ final class PenpotClient {
 	 * Issue one RPC command and decode its response.
 	 *
 	 * @param string $command The RPC command name, e.g. `get-teams`.
-	 * @param array<string, string> $args Logical argument names — translated to
-	 *                                    wire params through {@see PARAMS}, never
-	 *                                    passed through raw.
+	 * @param array<string, string|list<string>> $args Logical argument names —
+	 *                                    translated to wire params through
+	 *                                    {@see PARAMS}, never passed through raw.
 	 *
 	 * @return mixed The decoded body (`null` for a 204).
 	 *
@@ -293,16 +323,23 @@ final class PenpotClient {
 					// client is built for, and the only one carrying the type
 					// tags (`~u` uuid, `~m` instant) the decoder relies on.
 				],
-				// JSON_FORCE_OBJECT is load-bearing, not cosmetic. A no-arg command
-				// has an empty param array, and `json_encode([])` renders `[]` — a
-				// JSON *array*. Penpot's Clojure handler tries to conj that into a
-				// param map and dies with HTTP 500 `:server-error` / "Vector arg to
-				// map conj must be a pair". Confirmed live: `[]` → 500, `{}` → 200
-				// on `get-teams`. Every no-arg command (get-teams, get-all-projects)
-				// would fail without this, while every command WITH params would
-				// work — so it looks like an auth or connectivity problem rather
-				// than an encoding one.
-				'body' => json_encode($body, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT),
+				// THE EMPTY BODY MUST BE `{}`, NEVER `[]`, and it is load-bearing,
+				// not cosmetic. A no-arg command has an empty param array, and
+				// `json_encode([])` renders `[]` — a JSON *array*. Penpot's Clojure
+				// handler tries to conj that into a param map and dies with HTTP 500
+				// `:server-error` / "Vector arg to map conj must be a pair".
+				// Confirmed live: `[]` → 500, `{}` → 200 on `get-teams`. Every no-arg
+				// command (get-teams, get-all-projects) would fail without this,
+				// while every command WITH params would work — so it looks like an
+				// auth or connectivity problem rather than an encoding one.
+				//
+				// This used to be `JSON_FORCE_OBJECT`, which was correct only while
+				// every param value was a scalar. That flag forces **every** array
+				// in the payload to an object, including a nested one — so
+				// `move-files`' `ids` set would go out as `{"0":"<uuid>"}` instead
+				// of `["<uuid>"]` and Penpot would reject it. Special-casing the
+				// empty body keeps the `{}` guarantee without touching the values.
+				'body' => $body === [] ? '{}' : json_encode($body, JSON_THROW_ON_ERROR),
 				'timeout' => self::TIMEOUT,
 				// Penpot answers 4xx with a body worth reading (it names the
 				// missing param), so never let the HTTP layer throw it away.
@@ -333,9 +370,9 @@ final class PenpotClient {
 	/**
 	 * Translate logical argument names into the exact wire params for a command.
 	 *
-	 * @param array<string, string> $args
+	 * @param array<string, string|list<string>> $args
 	 *
-	 * @return array<string, string>
+	 * @return array<string, string|list<string>>
 	 *
 	 * @throws PenpotApiException on an unknown command or an unmapped argument —
 	 *                            both are programmer errors, and both would

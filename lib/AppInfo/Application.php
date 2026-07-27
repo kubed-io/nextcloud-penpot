@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\AppInfo;
 
+use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
@@ -18,6 +19,7 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 
 /**
@@ -46,12 +48,14 @@ use OCP\Files\Events\Node\NodeRenamedEvent;
  * keys must exist for DAV to advertise them and for the resolver's reverse
  * lookups to be indexed, and registration is idempotent and cheap.
  *
- * The first write path also lands now (saga Ch2 Course 4): a
+ * The first write paths also land now (saga Ch2 Course 4): a
  * {@see NodeRenamedListener} on {@see NodeRenamedEvent} propagates a Nextcloud
- * rename of a managed `.penpot` file or project folder up to Penpot. It is the
- * only write Penpot permits us at this stage (§6.19) — content is still strictly
- * one-way (§6.1). The `SyncGuard` keeps the pull's own follow-renames from
- * looping back through it.
+ * rename of a managed `.penpot` file or project folder up to Penpot, and re-files
+ * a moved design into the project it landed in. Those are the only writes Penpot
+ * permits us at this stage (§6.19) — content is still strictly one-way (§6.1).
+ * A {@see MoveGuardListener} on {@see BeforeNodeRenamedEvent} refuses the one
+ * move that cannot be honoured: a project folder leaving its team folder (§6.30).
+ * The `SyncGuard` keeps the pull's own follow-renames from looping through either.
  *
  * The background job, the rest of the Files-app surface and the remaining write
  * paths still land in Courses 4–6. Don't scaffold those here ahead of the code
@@ -82,12 +86,18 @@ final class Application extends App implements IBootstrap {
 		// type — see PersonalSettings.
 		$context->registerDeclarativeSettings(PersonalSettings::class);
 
-		// The write path (saga Ch2 Course 4): a Nextcloud rename of a managed
-		// `.penpot` file or a project folder is propagated up to Penpot via
-		// `rename-file` / `rename-project`. NodeRenamedEvent fires for both renames
-		// and moves; the listener acts on the rename and defers moves. The pull's
-		// own follow-renames are fenced out by the SyncGuard, so this never loops.
+		// The write paths (saga Ch2 Course 4). NodeRenamedEvent fires for both a
+		// rename and a move, and the listener routes each: a rename of a managed
+		// `.penpot` file or project folder goes up as `rename-file`/`rename-project`,
+		// and a move that changes a file's project goes up as `move-files`. The
+		// pull's own follow-renames are fenced out by the SyncGuard, so neither loops.
 		$context->registerEventListener(NodeRenamedEvent::class, NodeRenamedListener::class);
+
+		// The one refusal (§6.30), and it must happen BEFORE the move: a project
+		// folder may not leave its team folder, because neither honouring it
+		// (a cross-team reparent in Penpot) nor ignoring it (a silent desync) is
+		// acceptable. Aborting the event shows the user why, at the moment they try.
+		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveGuardListener::class);
 	}
 
 	#[\Override]

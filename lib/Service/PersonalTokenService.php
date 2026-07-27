@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Service;
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Settings\PersonalSettings;
 use OCP\IConfig;
+use OCP\IUserSession;
 use OCP\Security\ICrypto;
 use Psr\Log\LoggerInterface;
 
@@ -43,8 +44,24 @@ final class PersonalTokenService {
 	public function __construct(
 		private readonly IConfig $config,
 		private readonly ICrypto $crypto,
+		private readonly IUserSession $userSession,
 		private readonly LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * The token the write happening *right now* should attribute to: the acting
+	 * user's personal token if they have one, else null (the service account).
+	 *
+	 * ONE ANSWER, ONE PLACE. Every write path asks this same question, and if each
+	 * answered it for itself they would drift — one honouring a personal token, the
+	 * next quietly not. Never throws: attribution is best-effort by design (see the
+	 * class docblock), and there is no session at all on the cron path.
+	 */
+	public function tokenForActor(): ?string {
+		$uid = $this->userSession->getUser()?->getUID();
+
+		return $uid !== null ? $this->tokenFor($uid) : null;
 	}
 
 	/**

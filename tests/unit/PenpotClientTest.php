@@ -66,15 +66,15 @@ final class PenpotClientTest extends TestCase {
 	 * piece of logic in the class and it is deliberately not public — testing it
 	 * through a mocked HTTP stack would assert on the mock, not on the table.
 	 *
-	 * @param array<string, string> $args
+	 * @param array<string, string|list<string>> $args
 	 *
-	 * @return array<string, string>
+	 * @return array<string, string|list<string>>
 	 */
 	private function wireParams(string $command, array $args): array {
 		$method = new \ReflectionMethod(PenpotClient::class, 'wireParams');
 		$method->setAccessible(true);
 
-		/** @var array<string, string> $result */
+		/** @var array<string, string|list<string>> $result */
 		$result = $method->invoke($this->client, $command, $args);
 
 		return $result;
@@ -99,7 +99,7 @@ final class PenpotClientTest extends TestCase {
 	 * "fixing" by relaxing it, the fix is wrong — each row was established by
 	 * calling the command live.
 	 *
-	 * @return iterable<string, array{string, array<string, string>, array<string, string>}>
+	 * @return iterable<string, array{string, array<string, string|list<string>>, array<string, string|list<string>>}>
 	 */
 	public static function paramTableProvider(): iterable {
 		yield 'rename-file uses bare id' => [
@@ -117,14 +117,17 @@ final class PenpotClientTest extends TestCase {
 		yield 'get-team-deleted-files uses kebab team-id' => [
 			'get-team-deleted-files', ['team' => 't1'], ['team-id' => 't1'],
 		];
+		yield 'move-files uses kebab project-id and a set under ids' => [
+			'move-files', ['project' => 'p1', 'files' => ['f1', 'f2']], ['project-id' => 'p1', 'ids' => ['f1', 'f2']],
+		];
 		yield 'no-arg commands send nothing' => [
 			'get-teams', [], [],
 		];
 	}
 
 	/**
-	 * @param array<string, string> $args
-	 * @param array<string, string> $expected
+	 * @param array<string, string|list<string>> $args
+	 * @param array<string, string|list<string>> $expected
 	 */
 	#[\PHPUnit\Framework\Attributes\DataProvider('paramTableProvider')]
 	public function testTheParamTableMatchesWhatPenpotConfirmedLive(
