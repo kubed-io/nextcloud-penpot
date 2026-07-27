@@ -12,7 +12,13 @@
 (function () {
 	'use strict';
 
-	var BASE = '/apps/penpot_sync';
+	// OC.generateUrl, never a hardcoded path (see
+	// .github/instructions/frontend.instructions.md). A literal '/apps/...'
+	// breaks on any instance served from a webroot (e.g. /nextcloud) or using
+	// the index.php front controller — the request 404s with no clue why.
+	function url(path) {
+		return OC.generateUrl('/apps/penpot_sync' + path);
+	}
 
 	function init() {
 		var root = document.getElementById('penpot-mapping-settings');
@@ -56,7 +62,7 @@
 		var btn = document.getElementById('penpot-add-submit');
 		btn.disabled = true;
 
-		api('POST', BASE + '/mappings', {
+		api('POST', url('/mappings'), {
 			teamId: teamSel.value,
 			mode: modeSel ? modeSel.value : 'link',
 		}).then(function () {
@@ -72,7 +78,7 @@
 
 	function updateMode(row, mode) {
 		if (!row) { return; }
-		api('PUT', BASE + '/mappings/' + encodeURIComponent(row.dataset.id), { mode: mode })
+		api('PUT', url('/mappings/' + encodeURIComponent(row.dataset.id)), { mode: mode })
 			.then(function () {
 				flash('success', t('penpot_sync', 'Saved.'));
 			})
@@ -97,7 +103,7 @@
 			return;
 		}
 
-		api('DELETE', BASE + '/mappings/' + encodeURIComponent(row.dataset.id))
+		api('DELETE', url('/mappings/' + encodeURIComponent(row.dataset.id)))
 			.then(function () {
 				window.location.reload();
 			})
@@ -113,7 +119,7 @@
 		out.textContent = t('penpot_sync', 'Testing…');
 		out.className = '';
 
-		api('POST', BASE + '/test-connection')
+		api('POST', url('/test-connection'))
 			.then(function (res) {
 				// The endpoint answers 200 even for a failed connection — the
 				// verdict is in the payload. `success` and a useful outcome are
@@ -134,7 +140,11 @@
 			});
 	}
 
-	function api(method, url, body) {
+	// `target`, not `url` — a parameter named `url` would shadow the url()
+	// helper above for the whole body. Harmless today because nothing in here
+	// calls it, but it is exactly the kind of shadowing that bites the next
+	// person to add a retry or a redirect.
+	function api(method, target, body) {
 		var opts = {
 			method: method,
 			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
@@ -143,10 +153,16 @@
 			opts.headers['Content-Type'] = 'application/json';
 			opts.body = JSON.stringify(body);
 		}
-		return fetch(url, opts).then(function (res) {
+		return fetch(target, opts).then(function (res) {
 			return res.json().then(function (data) {
 				if (!res.ok) {
-					return Promise.reject(new Error(data && data.message ? data.message : 'HTTP ' + res.status));
+					// The server's own message is already localised and specific;
+					// the status fallback only fires when there is no body to show.
+					return Promise.reject(new Error(
+						data && data.message
+							? data.message
+							: t('penpot_sync', 'Request failed ({status})', { status: res.status })
+					));
 				}
 				return data;
 			});

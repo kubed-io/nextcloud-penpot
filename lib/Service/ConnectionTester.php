@@ -41,7 +41,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
  * off by default upstream and produces a plain 401 — indistinguishable from a
  * typo'd token unless the message names it.
  */
-class ConnectionTester {
+final class ConnectionTester {
 	public function __construct(
 		private readonly PenpotClient $client,
 	) {

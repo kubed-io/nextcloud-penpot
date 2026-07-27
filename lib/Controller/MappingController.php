@@ -46,7 +46,7 @@ use OCP\IRequest;
  * Every endpoint is gated by `#[AuthorizedAdminSetting]`, which is what
  * {@see MappingSettings} implementing `IDelegatedSettings` enables.
  */
-class MappingController extends Controller {
+final class MappingController extends Controller {
 	public function __construct(
 		string $appName,
 		IRequest $request,

@@ -37,7 +37,7 @@ use OCP\IAppConfig;
  * Rejection is the *card's* job at input time; clamping is this reader's job at
  * use time. Different moments, different correct answers.
  */
-class ScheduleConfig {
+final class ScheduleConfig {
 	/**
 	 * The slowest anything may be asked to run, in seconds.
 	 *
@@ -112,8 +112,23 @@ class ScheduleConfig {
 		// A bare number means seconds — the same convention the n8n sibling uses,
 		// kept identical so an admin who knows one app knows this one.
 		$unit = $m[2] ?? 's';
+		$multiplier = self::UNITS[$unit];
 
-		return $amount * self::UNITS[$unit];
+		// OVERFLOW GUARD, and it is not theoretical. `(int)` SATURATES at
+		// PHP_INT_MAX rather than wrapping, so "99999999999999999999" becomes
+		// PHP_INT_MAX; multiplying that by 86400 then overflows to a FLOAT, which
+		// violates this method's `?int` return type and throws a TypeError.
+		// Verified on PHP 8.4.
+		//
+		// The consequence is worse than a bad interval: a stored junk value would
+		// crash every READ — `show-config`, and later the timed job — instead of
+		// falling back. An unusable duration is nonsense input, so it takes the
+		// same path as "banana".
+		if ($amount > (int)(PHP_INT_MAX / $multiplier)) {
+			return null;
+		}
+
+		return $amount * $multiplier;
 	}
 
 	/** Render seconds back as the shortest exact duration string. */

@@ -49,6 +49,12 @@ final class ScheduleConfigTest extends TestCase {
 			// lie about the actual state.
 			'zero' => ['0', null],
 			'zero with a unit' => ['0h', null],
+			// `(int)` SATURATES at PHP_INT_MAX rather than wrapping, so without a
+			// guard the multiply overflows to a float and the ?int return type
+			// throws a TypeError — crashing every READ of a stored junk value,
+			// not just its first use. Nonsense input takes the "banana" path.
+			'saturating overflow' => ['99999999999999999999d', null],
+			'exactly PHP_INT_MAX seconds still parses' => [(string)PHP_INT_MAX, PHP_INT_MAX],
 		];
 	}
 

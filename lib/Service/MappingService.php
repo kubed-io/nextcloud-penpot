@@ -41,7 +41,7 @@ use OCP\IAppConfig;
  * twin cannot drift from the UI, which is the house style (CLI-first) and also
  * what the integration suite drives.
  */
-class MappingService {
+final class MappingService {
 	/** AppConfig key holding the JSON array of mappings. */
 	public const KEY_MAPPINGS = 'mappings';
 

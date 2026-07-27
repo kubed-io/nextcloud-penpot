@@ -59,8 +59,12 @@ final class MappingSettings implements IDelegatedSettings {
 		try {
 			foreach ($this->service->visibleTeams() as $id => $team) {
 				$teams[] = [
+					// Deliberately '' rather than a placeholder string: this value
+					// is rendered into the admin UI, and a fallback invented here
+					// could never be localised. The template applies its own
+					// translated fallback instead.
 					'id' => $id,
-					'name' => is_string($team['name'] ?? null) ? $team['name'] : '(unnamed)',
+					'name' => is_string($team['name'] ?? null) ? $team['name'] : '',
 					'mapped' => $this->service->getByTeamId($id) !== null,
 				];
 			}

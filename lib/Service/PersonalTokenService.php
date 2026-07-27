@@ -39,7 +39,7 @@ use Psr\Log\LoggerInterface;
  * this returns `null` rather than throwing: an exception here would invite
  * callers to fail the user's action over an attribution detail.
  */
-class PersonalTokenService {
+final class PersonalTokenService {
 	public function __construct(
 		private readonly IConfig $config,
 		private readonly ICrypto $crypto,

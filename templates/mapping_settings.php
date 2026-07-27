@@ -104,7 +104,10 @@ $unmapped = array_values(array_filter(
 			<label for="penpot-add-team"><?php p($l->t('Map a team')); ?></label>
 			<select id="penpot-add-team">
 				<?php foreach ($unmapped as $team) { ?>
-					<option value="<?php p($team['id']); ?>"><?php p($team['name']); ?></option>
+					<?php /* The backend passes '' rather than inventing a placeholder,
+							 precisely so the fallback shown here can be localised —
+							 same translated string the table rows use. */ ?>
+					<option value="<?php p($team['id']); ?>"><?php p($team['name'] !== '' ? $team['name'] : $l->t('(unknown team)')); ?></option>
 				<?php } ?>
 			</select>
 
