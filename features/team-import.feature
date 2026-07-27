@@ -82,10 +82,10 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
   # build. So detecting "is this already imported" is a read-only match, not a
   # grant action.
   Scenario: A Penpot team already mapped to a Team Folder is detected, not re-imported
-    Given the Penpot team "Ferronescotia" is already mapped to a Team Folder
+    Given the Penpot team "Northwind" is already mapped to a Team Folder
     And the user's Nextcloud group has access to that Team Folder
     When the user views their Penpot teams in personal settings
-    Then "Ferronescotia" is shown as already imported
+    Then "Northwind" is shown as already imported
     And no new folder or mapping is created
 
   # ── importing a NOT-yet-mapped team — the permission gate is the open point ──
@@ -118,7 +118,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
   # ── the speculative, explicitly-not-decided creation-via-tag mechanism ──────
   @todo
   Scenario: A tagged plain folder inside a mapped Team Folder is proposed to become a new Penpot project
-    Given a Team Folder mapped to the Penpot team "Ferronescotia"
+    Given a Team Folder mapped to the Penpot team "Northwind"
     And a plain, untagged subfolder created directly inside it
     Then that subfolder is ordinary tolerated content — nothing happens to it
     # This is the confirmed, locked behaviour (§6.13's tolerated-content rule).

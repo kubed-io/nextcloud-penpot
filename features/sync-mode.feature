@@ -37,13 +37,13 @@ Feature: Choosing whether a mirrored file stores its archive
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a subfolder
 
   # ── defaults ─────────────────────────────────────────────────────────────────
 
   Scenario: Files inherit their mapping's default mode
-    Given the "Ferronescotia" mapping has default mode "link"
+    Given the "Northwind" mapping has default mode "link"
     When the pull runs
     Then every newly mirrored file is in "link" mode
     When the admin changes the mapping's default mode to "sync"
@@ -136,7 +136,7 @@ Feature: Choosing whether a mirrored file stores its archive
   # ── cost ─────────────────────────────────────────────────────────────────────
 
   Scenario: A team of link files costs no exports at all
-    Given the "Ferronescotia" team has 100 files, all in "link" mode
+    Given the "Northwind" team has 100 files, all in "link" mode
     When the pull runs
     Then "export-binfile" is called 0 times
     And no archive bytes are downloaded

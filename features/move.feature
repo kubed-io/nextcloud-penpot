@@ -47,7 +47,7 @@ Feature: Moving files and folders never destroys anything
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── moving FILES within one project: free, local, and it sticks ──────────────
@@ -199,12 +199,12 @@ Feature: Moving files and folders never destroys anything
     Then the move succeeds
     And Penpot is never contacted
     And files inside "My Stuff" still belong to the "My Stuff" project
-    And the folder still resolves to the "Ferronescotia" team, found further up
+    And the folder still resolves to the "Northwind" team, found further up
     And a pull does not move the folder back
     # Free organisation is the whole point of §6.29 — Penpot is flat, we needn't be.
 
   Scenario: A project folder cannot be moved out of its team folder
-    Given the "My Stuff" project folder inside the "Ferronescotia" Team Folder
+    Given the "My Stuff" project folder inside the "Northwind" Team Folder
     When I try to move it outside that Team Folder
     Then the move is refused
     And the refusal explains a project cannot leave its team from Nextcloud

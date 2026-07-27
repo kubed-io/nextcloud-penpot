@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -46,19 +46,19 @@ final class ConnectionTesterTest extends TestCase {
 	}
 
 	public function testReportsTheVisibleTeams(): void {
-		$result = $this->tester($this->clientReturning(['Ferronescotia', 'Default']))->test();
+		$result = $this->tester($this->clientReturning(['Northwind', 'Default']))->test();
 
 		self::assertTrue($result->success);
 		self::assertSame(ConnectionResult::KIND_OK, $result->kind);
-		self::assertSame(['Ferronescotia', 'Default'], $result->teams);
+		self::assertSame(['Northwind', 'Default'], $result->teams);
 		// Naming the teams is the point (§6.12/§6.18) — "OK" would hide the one
 		// fact that decides what can be mapped.
-		self::assertStringContainsString('Ferronescotia', $result->message);
+		self::assertStringContainsString('Northwind', $result->message);
 		self::assertTrue($result->canMap());
 	}
 
 	public function testPluralisesASingleTeamCorrectly(): void {
-		$result = $this->tester($this->clientReturning(['Ferronescotia']))->test();
+		$result = $this->tester($this->clientReturning(['Northwind']))->test();
 
 		self::assertStringContainsString('Visible team:', $result->message);
 		self::assertStringNotContainsString('teams:', $result->message);
@@ -124,7 +124,7 @@ final class ConnectionTesterTest extends TestCase {
 	}
 
 	public function testSerialisesForTheFrontend(): void {
-		$json = $this->tester($this->clientReturning(['Ferronescotia']))->test()->jsonSerialize();
+		$json = $this->tester($this->clientReturning(['Northwind']))->test()->jsonSerialize();
 
 		self::assertSame(
 			['success', 'kind', 'message', 'teams'],

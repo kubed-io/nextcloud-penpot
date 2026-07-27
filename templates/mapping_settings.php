@@ -1,6 +1,6 @@
 <?php
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * Team-mapping admin UI. One **card per mapping** (a repeating form, not a

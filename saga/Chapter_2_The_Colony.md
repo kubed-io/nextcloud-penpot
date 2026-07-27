@@ -433,6 +433,10 @@ The consequence to name loudly: the **default** mapping uses a Team Folder, so
 in production the default mapping pulls nothing until that backend lands. CI maps
 with `--no-team-folder` to exercise the built path.
 
+> **Retired in Course 4 (see C4.3):** the groupfolders backend is now built, so
+> a `use_team_folder` mapping mirrors for real. This section is left as written
+> to record why the cut fell here first.
+
 ### C3.3 — The metadata IS the join, so re-pull is idempotent by construction
 
 A project folder is matched on its `penpot_project_id`, a file on its
@@ -474,3 +478,109 @@ integration suite asserts the resolver on live Nextcloud, and an operator gets a
 honest *"where does Penpot think this lives"* answer. A read-only diagnostic that
 doubles as the end-to-end assertion for the app's most load-bearing rule earns
 its place cheaply.
+
+---
+
+## Course 4 — where the write paths stand
+
+> The first Nextcloud → Penpot writes, and the Team Folder backend Course 3
+> deferred. The app is no longer read-only in the strict sense: a **rename** now
+> flows back. Content never will (§6.1) — that boundary is permanent, not a
+> phase.
+
+### C4.1 — Rename is the whole write surface this slice ships
+
+Course 4's table lists rename, project rename, move, and `sync`-mode export. This
+slice takes **only the two renames**, for the same reason Course 1 came before the
+admin surface: build the smallest write that is fully understood, prove the
+listener → push → Penpot wiring on it, and let move / export ride the seam it
+leaves. `PenpotClient::renameFile` / `renameProject` already existed (Course 1
+built the write surface ahead of a caller); Course 4 gives them their first one.
+
+A `NodeRenamedEvent` listener (`NodeRenamedListener`) delegates to `PushService`,
+which reads the node's own metadata to decide what it is — a `.penpot` file →
+`rename-file` on its `penpot_id` (extension stripped, §6.4), a project folder →
+`rename-project` on its `penpot_project_id`, anything else (a plain file, an
+unmanaged `.penpot`, the team root) → ignored. The move half of the event
+(same name, new parent) is left for the next slice; only a genuine name change
+is pushed.
+
+### C4.2 — The guard is the wall between the two directions
+
+The pull renames mirror nodes to follow Penpot, and that fires the very event the
+write-back listens for. Without a fence, the pull's own correction would be
+pushed straight back — the app arguing with itself over a name it just set. A
+counter-based `SyncGuard` (ported verbatim from both siblings — pure re-entrancy
+bookkeeping, nothing penpot-specific) is raised for the whole pull; the listener
+bails while it is active. One hop each way, never an echo: a user rename renames
+the Penpot object, the next pull sees the matching name and does nothing.
+
+Attribution rides `PersonalTokenService` exactly as §6.18 specified it before a
+caller existed: the acting user's personal token when set, the service account
+otherwise. A failure never reverts the local rename (§6.18 rule 3) — the NC name
+has already committed, so the push logs and the next pull reconciles Penpot.
+
+### C4.3 — The Team Folder backend, ported not invented
+
+Course 3 shipped only the plain admin-owned folder because CI has no
+groupfolders (C3.2). Course 4 adds the groupfolders backend, **ported wholesale**
+from the siblings' `TeamFolderService` (saga §14.1) — the "optional dependency"
+precedent this app was always going to inherit: `FolderManager` resolved lazily
+so a disabled app never breaks DI, the ownerless mount shared to the mapping's
+groups, the built-in `admin` group as the write actor, name→id lookups straight
+against the `group_folders` table. `StorageService` now routes on
+`use_team_folder` behind the same `ensureRoot` / `findRoot` seam, so the pull
+never learns which backend answered — exactly the drop-in C3.2 promised.
+
+The one deliberate deviation from the siblings is the permission grant. The
+siblings gate write on their mapping's `mode` (a whole dashboard/workflow folder
+is either read-only or writable). Penpot's `link`/`sync` is a **per-file** archive
+choice, not a folder stance, so it cannot drive a folder permission. Instead the
+content groups get a fixed **read + rename (UPDATE)** everywhere: the mirror is
+read-only for *content* (§6.1) but a name flows back (§6.2, C4.1), so members may
+read and rename and nothing more — create and delete wait for §6.33 / Course 5.
+
+### C4.4 — Why the write paths stay integration-@todo (and that is honest)
+
+The rename write-back is unit-tested to the decision boundary (`PushServiceTest`
+pins every node-type verdict, the extension strip, the empty-name refusal, and
+both attribution branches) and verified live on the pod. It stays `@todo` in the
+integration suite for one concrete reason: the harness is **occ-only**. It has no
+running HTTP server, so no WebDAV `MOVE` to fire a real `NodeRenamedEvent`, and no
+logged-in session to exercise the personal-token branch. Adding a production
+`occ` rename command purely to trip the event would be test scaffolding wearing a
+feature's clothes — so the code is proven where it can be proven honestly (unit +
+live), and the feature files flip on the day a Files-app channel lands, not the
+day the code did. The Team Folder backend is `@todo` for the mirror of that
+reason: no groupfolders in CI. Both are exercised live on the pod, where the
+cluster's `groupfolders` app and the real Kubed Team Folder mapping are the test.
+
+### C4.5 — The live smoke test earned its keep: a poisoned-transaction cascade
+
+Deploying Course 4 to the pod and running a full `occ penpot_sync:sync pull` over
+*both* live mappings failed where each mapping *alone* passed — the tell of state
+leaking between them. The error was Postgres `SQLSTATE[25P02]: current transaction
+is aborted`, and it surfaced deep in the *second* mapping's file write
+(`ObjectStoreStorage::writeStream`), nowhere near its cause. 25P02 is a **cascade**:
+once a transaction aborts, every later statement on that connection reports 25P02,
+so the real first error was masked. Walking the JSON log back to the first
+non-25P02 row found it: the plain (admin-owned) mapping's group share tripped a
+bug in this instance's notifications app — `OCA\Notifications\Push::$appConfig` is
+null, `Call to a member function getAppValueString() on null` — thrown *after* the
+share row committed but with the notification's own transaction left open and
+aborted. `syncGroupShares` (correctly) swallows a share failure — a missing or
+awkward content group must never fail the pull — but swallowing the exception did
+not clear the poisoned connection, so the *next* mapping's writes inherited it.
+
+The fix is small and local: after a caught share create/update failure,
+`StorageService` now discards any dangling transaction (`IDBConnection::inTransaction`
+→ `rollBack`) before returning. The Team Folder backend is immune — it provisions
+through groupfolders' `FolderManager`, never `IShareManager`, so it never triggers
+the notification push. Two lessons the doctrine keeps: **a masked cascade error
+means hunt for the first failure, not the loudest one**, and **swallowing an
+exception is only half a decision — you also own whatever partial state it left**,
+here a transaction that had to be explicitly rolled back. This is exactly the
+class of bug the occ integration suite cannot see (single mapping, no groupfolders,
+no notifications crash to reproduce) and the live pod can — the argument of C4.4,
+paid back in a concrete catch.
+

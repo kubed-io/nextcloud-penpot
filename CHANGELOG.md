@@ -56,3 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A bulk pull now contains a filesystem or metadata failure to the one mapping that hit it, so a single broken team no longer aborts every other team's mirror in the same run.
 - The pull indexes each folder's children once per team and per project instead of re-scanning on every file, so mirroring a large team is no longer quadratic.
 - **Fixed:** reading a node's Penpot metadata no longer materialises an empty record as a side effect, keeping "no record" an honest signal that a node is untracked.
+- Renaming a mirrored `.penpot` file or a project folder in Nextcloud now propagates to Penpot (`rename-file` / `rename-project`), attributed to the acting user's personal token when they have one and the service account otherwise — the first Nextcloud → Penpot write path (content stays strictly one-way).
+- Team Folder (groupfolders) provisioning is now built: a mapping set to use a Team Folder is mirrored into an ownerless groupfolders mount shared with the mapping's groups, falling back to a plain admin-owned folder when the groupfolders app is absent — the same backend pattern as the n8n and Grafana integrations.
+- A plain admin-owned mapping folder is now shared with the mapping's Nextcloud groups (read + update — the least permission Nextcloud offers that allows a rename; content edits are possible but never pushed and are reverted on the next pull), so the mapped team can see and rename their mirrored designs without an admin sharing the folder by hand.
+- A pull no longer echoes its own follow-renames back to Penpot: a re-entrancy guard fences the pull's filesystem writes off from the new rename write-back listener.
+
+### Fixed
+
+- A bulk pull no longer aborts every mapping after the first when sharing a plain folder trips a broken notifications app: the dangling database transaction that leak left behind (Postgres `SQLSTATE[25P02]`) is now discarded, so later mappings' file writes succeed.

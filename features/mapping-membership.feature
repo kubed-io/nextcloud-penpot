@@ -53,7 +53,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── the core lookup ──────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
   Scenario: A file's project is the nearest ancestor folder carrying a project id
     When a mirrored ".penpot" file lives directly in the "My Stuff" folder
     Then the file belongs to the "My Stuff" project, read from that folder's metadata
-    And that folder belongs to the "Ferronescotia" team, read from the Team Folder's metadata
+    And that folder belongs to the "Northwind" team, read from the Team Folder's metadata
     And the file itself stores no copy of its mapping
 
   Scenario: A file nested deeper inside a project folder still belongs to that project
@@ -84,7 +84,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     Given a plain folder "Clients" created inside the Team Folder
     When the "My Stuff" project folder is moved inside "Clients"
     Then files in "My Stuff" still belong to the "My Stuff" project
-    And "My Stuff" still belongs to the "Ferronescotia" team, found further up
+    And "My Stuff" still belongs to the "Northwind" team, found further up
     And "Clients" is never sent to Penpot, which has no concept of it
 
   Scenario: A file with no project-id ancestor belongs to no mapping
@@ -100,7 +100,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   Scenario: A file at a Team Folder's root is in that team's Drafts
     When a mirrored ".penpot" file lives directly at the Team Folder's root
-    Then it belongs to the "Ferronescotia" team
+    Then it belongs to the "Northwind" team
     And it belongs to no project
     And in Penpot it lives in that team's "Drafts" project
 
@@ -108,7 +108,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     Given a plain folder "Inbox" inside the Team Folder, with no Penpot metadata
     And a deeper plain folder "Inbox/2026" also with no Penpot metadata
     When a mirrored ".penpot" file lives in "Inbox/2026"
-    Then it belongs to the "Ferronescotia" team
+    Then it belongs to the "Northwind" team
     And it belongs to no project
     And in Penpot it lives in that team's "Drafts" project
     # This is where Nextcloud is MORE expressive than Penpot: any arrangement of
@@ -117,7 +117,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # design; we can express the same state as a whole folder tree, for free.
 
   Scenario: No folder is ever created to represent Drafts
-    Given the "Ferronescotia" team has a "Drafts" project in Penpot
+    Given the "Northwind" team has a "Drafts" project in Penpot
     When the pull runs
     Then no folder named "Drafts" is created for it
     And no folder carries the Drafts project's id as metadata
@@ -162,7 +162,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   Scenario: A project folder's team is the nearest ancestor carrying a team id
     Given the "My Stuff" project folder is nested two levels deep inside the Team Folder
-    Then it still resolves to the "Ferronescotia" team
+    Then it still resolves to the "Northwind" team
     And the depth between them is irrelevant to the lookup
 
   Scenario: A personal project folder has no team ancestor, and that is valid

@@ -27,7 +27,15 @@
 # `project-id`, `export-binfile` → `fileId`, `create-project` → `team-id`).
 # There is no rule to infer — PenpotClient needs an explicit per-command table.
 #
-# @todo — no lib/ exists yet for either direction.
+# BUILD STATE (Course 4): the NEXTCLOUD → PENPOT path is now built and unit-
+# tested — a `NodeRenamedListener` on `NodeRenamedEvent` calls `PushService`,
+# which maps a `.penpot` file to `rename-file` and a project folder to
+# `rename-project`, strips/attributes exactly as the scenarios below describe
+# (see tests/unit/PushServiceTest.php). It is verified live on the pod. These
+# scenarios stay @todo only because the integration harness is occ-only: it has
+# no Files-app / WebDAV channel to fire a real NodeRenamedEvent, and no logged-in
+# user session to exercise the personal-token attribution branch. They flip on
+# the day that channel lands, not when the code does.
 
 @todo
 Feature: Renaming a mirrored Penpot file
@@ -37,7 +45,7 @@ Feature: Renaming a mirrored Penpot file
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── Penpot → Nextcloud: confirmed, this is how renames normally happen ───────

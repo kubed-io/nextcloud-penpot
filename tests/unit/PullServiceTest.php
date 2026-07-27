@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -15,6 +15,7 @@ use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
+use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\IAppConfig;
@@ -63,6 +64,7 @@ final class PullServiceTest extends TestCase {
 			$this->client,
 			$this->metadata,
 			$this->storage,
+			new SyncGuard(),
 			$config,
 			new NullLogger(),
 		);
@@ -143,7 +145,7 @@ final class PullServiceTest extends TestCase {
 	private function mapping(bool $useTeamFolder): Mapping {
 		return Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferrone Scotia',
+			'team_name' => 'North Wind',
 			'nc_folder' => 'Penpot',
 			'use_team_folder' => $useTeamFolder,
 			'mode' => Mapping::MODE_LINK,

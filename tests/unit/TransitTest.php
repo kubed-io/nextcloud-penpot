@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -154,7 +154,7 @@ final class TransitTest extends TestCase {
 			. '"~:name","Default","~:modified-at","~m1783903949043",'
 			. '"~:id","~u4eda2e11-843e-8045-8008-51819d3bce9d","~:created-at","~m1783903949043","~:is-default",true],'
 			. '["^ ","^0",["^1",["plugins/runtime"]],"^2",["^ ","^3","^4","^5",true,"^6",true,"^7",true],'
-			. '"^8","Ferronescotia","^9","~m1783904127847","^:","~u4eda2e11-843e-8045-8008-51824bda07a1",'
+			. '"^8","Northwind","^9","~m1783904127847","^:","~u4eda2e11-843e-8045-8008-51824bda07a1",'
 			. '"^;","~m1783904127847","^<",false]]';
 
 		$out = $this->transit->decode($body);
@@ -176,7 +176,7 @@ final class TransitTest extends TestCase {
 				'is-admin' => true,
 				'can-edit' => true,
 			],
-			'name' => 'Ferronescotia',
+			'name' => 'Northwind',
 			'modified-at' => '1783904127847',
 			'id' => '4eda2e11-843e-8045-8008-51824bda07a1',
 			'created-at' => '1783904127847',
@@ -193,7 +193,7 @@ final class TransitTest extends TestCase {
 			. '"~:created-at","~m1783903949053","~:modified-at","~m1785084303270","~:is-default",true,'
 			. '"~:name","Drafts","~:team-name","Default","~:is-default-team",true],'
 			. '["^ ","^0","~u61d8ecb9-c430-8120-8008-622627f23540","^1","~u4eda2e11-843e-8045-8008-51824bda07a1",'
-			. '"^2","~m1785020824515","^3","~m1785086989746","^4",false,"^5","My Stuff","^6","Ferronescotia","^7",false]]';
+			. '"^2","~m1785020824515","^3","~m1785086989746","^4",false,"^5","My Stuff","^6","Northwind","^7",false]]';
 
 		$out = $this->transit->decode($body);
 
@@ -203,7 +203,7 @@ final class TransitTest extends TestCase {
 		self::assertSame('My Stuff', $out[1]['name']);
 		self::assertSame('61d8ecb9-c430-8120-8008-622627f23540', $out[1]['id']);
 		self::assertSame('4eda2e11-843e-8045-8008-51824bda07a1', $out[1]['team-id']);
-		self::assertSame('Ferronescotia', $out[1]['team-name']);
+		self::assertSame('Northwind', $out[1]['team-name']);
 		self::assertFalse($out[1]['is-default']);
 	}
 

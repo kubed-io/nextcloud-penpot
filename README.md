@@ -57,7 +57,7 @@ deep link back to the live design in Penpot.
 ```
 Penpot                              Nextcloud
 ─────────────────────────────       ─────────────────────────────────────
-team    "Ferronescotia"        ⟶    Team Folder  Ferronescotia/
+team    "Northwind"            ⟶    Team Folder  Northwind/
  └ project "My Stuff"          ⟶      folder       My Stuff/
     └ file  "My firsty"        ⟶        file         My firsty.penpot
 ```
@@ -138,7 +138,7 @@ A file's project is **the nearest ancestor folder carrying a Penpot project id**
 That one rule buys a lot:
 
 ```
-Ferronescotia/                 ← Team Folder (team id in metadata)
+Northwind/                     ← Team Folder (team id in metadata)
 ├── Clients/                   ← just a folder you made. Penpot never sees it
 │   ├── Acme/                  ← project folder (project id in metadata) 🏷
 │   │   ├── Homepage.penpot    → belongs to the "Acme" project
@@ -344,7 +344,7 @@ nearest-ancestor rule. So this all works, and all of it is Drafts on Penpot's
 side:
 
 ```
-Ferronescotia/
+Northwind/
 ├── Inbox/2026/sketch.penpot     → Drafts
 ├── Scratch/idea.penpot          → Drafts
 ├── quick-thing.penpot           → Drafts

@@ -389,7 +389,7 @@ guessed at.
 - **`get-profile`, `get-teams`, `get-projects`, `get-project-files` all work
   exactly as documented.** Trivial GETs, no surprises.
 - **`get-access-tokens` confirms the Course 1 open question:** the token is
-  scoped to the human account (`kelly@...`), named `claude`, 30-day expiry —
+  scoped to the human account (`dana@...`), named `claude`, 30-day expiry —
   there is no team/service-account-level credential visible anywhere in the
   live API surface. The "dedicated bot user's personal token" plan from
   Course 1 is now the confirmed approach, not a hedge.
@@ -528,7 +528,7 @@ capturing per mapping if we ever gate behavior on a feature flag:
       "render-wasm/v1", "components/v2"
     ],
     "permissions": { "type": "membership", "isOwner": true, "isAdmin": true, "canEdit": true },
-    "name": "Ferronescotia",
+    "name": "Northwind",
     "modifiedAt": "2026-07-13T00:55:27.847826Z",
     "id": "4eda2e11-843e-8045-8008-51824bda07a1",
     "createdAt": "2026-07-13T00:55:27.847826Z",
@@ -614,7 +614,7 @@ elsewhere still takes an explicit `teamId`/`projectId`:
   "email": "REDACTED",
   "isDemo": false,
   "authBackend": "ldap",
-  "fullname": "Kelly Ferrone",
+  "fullname": "REDACTED",
   "modifiedAt": "2026-07-13T00:52:29.031719Z",
   "isActive": true,
   "defaultProjectId": "4eda2e11-843e-8045-8008-51819d3f622b",
@@ -833,9 +833,9 @@ hard, not soft/optional metadata:**
     { "id": "4eda2e11-843e-8045-8008-51819d3f622b", "teamId": "4eda2e11-843e-8045-8008-51819d3bce9d",
       "isDefault": true, "name": "Drafts", "teamName": "Default", "isDefaultTeam": true },
     { "id": "4eda2e11-843e-8045-8008-51824bdafd88", "teamId": "4eda2e11-843e-8045-8008-51824bda07a1",
-      "isDefault": true, "name": "Drafts", "teamName": "Ferronescotia", "isDefaultTeam": false },
+      "isDefault": true, "name": "Drafts", "teamName": "Northwind", "isDefaultTeam": false },
     { "id": "61d8ecb9-c430-8120-8008-622627f23540", "teamId": "4eda2e11-843e-8045-8008-51824bda07a1",
-      "isDefault": false, "name": "My Stuff", "teamName": "Ferronescotia", "isDefaultTeam": false }
+      "isDefault": false, "name": "My Stuff", "teamName": "Northwind", "isDefaultTeam": false }
   ]
   ```
 - Same shape one level down: `create-file` *requires* `projectId` (no
@@ -1397,7 +1397,7 @@ directories, full stop — this just confirms it's true of *every* folder on
 this instance, not only Penpot's export bucket.
 
 **Confirmed, live: an ordinary Nextcloud folder can carry a system tag.**
-Ran `occ tag:files:add "kelly/files/n8n" "test-metadata-probe" "invisible"`
+Ran `occ tag:files:add "dana/files/n8n" "test-metadata-probe" "invisible"`
 against the **live "n8n" Team Folder** (a real, in-production `groupfolders`
 mount, folder id 4, shared to the `friends`/`family`/`devs`/`admin` groups —
 not a scratch folder) — succeeded (`invisible tag named test-metadata-probe
@@ -1841,7 +1841,7 @@ correct:
 This is the entire case for per-user tokens and it's a good one. If Nextcloud
 renames using the service account, Penpot's history says "nextcloud renamed
 this" for every rename by every user, forever. With a personal token it says
-"Kelly renamed this" — which is *true*, and which is the point of an audit
+"Dana renamed this" — which is *true*, and which is the point of an audit
 trail. The personal token isn't load-bearing for the app to **function**; it's
 load-bearing for the app to be **honest about who did what**.
 
@@ -2286,7 +2286,7 @@ it, and the purge still fires on schedule.
 > need to prove we can move a file from one team to another"*
 
 **The mechanism is proven.** Duplicated a real file, then moved it from the
-`Ferronescotia` team's project into the `Default` (personal) team's Drafts
+`Northwind` team's project into the `Default` (personal) team's Drafts
 project via `move-files` — **HTTP 204**, and the file appeared in the
 destination listing with its `teamId` **updated automatically** to the new team.
 Cross-team file moves work, in one call, with no re-import. (`move-project`

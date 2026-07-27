@@ -36,7 +36,7 @@ Feature: Purge the app's mirrored files from Nextcloud
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   Scenario: Purge deletes mirrored files but leaves Penpot and the mapping intact
@@ -44,7 +44,7 @@ Feature: Purge the app's mirrored files from Nextcloud
     When the admin purges the Nextcloud files
     Then no mirrored files remain in the "My Stuff" subfolder
     And the design file still exists, unchanged, in Penpot
-    And the "Ferronescotia" mapping is still configured
+    And the "Northwind" mapping is still configured
 
   Scenario: Purge keeps an unmapped file — a standalone copy is never lost
     Given an unmapped ".penpot" file that still carries its "penpot_id"
@@ -76,14 +76,14 @@ Feature: Purge the app's mirrored files from Nextcloud
   Scenario: Sync from Penpot brings a sync file back after a purge
     Given a mirrored ".penpot" file in "sync" mode in the "My Stuff" subfolder
     And the admin purges the Nextcloud files
-    When the admin clicks "Sync from Penpot" for the "Ferronescotia" mapping
+    When the admin clicks "Sync from Penpot" for the "Northwind" mapping
     Then the design file appears again as a file in the "My Stuff" subfolder
     And it is re-exported and re-downloaded from Penpot, not restored from any local backup
 
   Scenario: Sync from Penpot brings a link file back as a pointer
     Given a mirrored ".penpot" file in "link" mode in the "My Stuff" subfolder
     And the admin purges the Nextcloud files
-    When the admin clicks "Sync from Penpot" for the "Ferronescotia" mapping
+    When the admin clicks "Sync from Penpot" for the "Northwind" mapping
     Then the file appears again in the "My Stuff" subfolder as a pointer
     And no export was performed to bring it back
     # A purge of link files costs nothing to undo — there were never any bytes.

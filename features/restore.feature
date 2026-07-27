@@ -62,7 +62,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── restore is never automatic ───────────────────────────────────────────────

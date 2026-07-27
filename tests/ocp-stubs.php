@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -75,6 +75,19 @@ namespace OCP {
 	if (!interface_exists(IUserManager::class, false)) {
 		interface IUserManager {
 			public function userExists(string $uid): bool;
+		}
+	}
+	// PushService attributes a rename to the acting user's personal token, so it
+	// asks IUserSession who is renaming. Declaration-only: PushServiceTest fakes
+	// a session with and without a signed-in user.
+	if (!interface_exists(IUser::class, false)) {
+		interface IUser {
+			public function getUID(): string;
+		}
+	}
+	if (!interface_exists(IUserSession::class, false)) {
+		interface IUserSession {
+			public function getUser(): ?IUser;
 		}
 	}
 	// MappingSettings offers a per-mapping group picker, so it needs the list of
