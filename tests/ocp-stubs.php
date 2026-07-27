@@ -56,10 +56,6 @@ namespace OCP {
 			public function getValueString(string $app, string $key, string $default = '', bool $lazy = false, bool $sensitive = false): string;
 
 			public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): bool;
-
-			// ScheduleConfig reads the enabled flag as a real bool rather than
-			// parsing a string, so the stub must carry this too.
-			public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool;
 		}
 	}
 	// PersonalTokenService stores per-USER values, which is a different config
