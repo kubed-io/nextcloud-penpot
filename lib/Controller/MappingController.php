@@ -13,6 +13,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ConnectionTester;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
+use OCA\PenpotSync\Settings\AdminTest;
 use OCA\PenpotSync\Settings\MappingSettings;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -162,7 +163,12 @@ final class MappingController extends Controller {
 	 * unable to tell "the test ran and reports a bad token" from "the test
 	 * endpoint itself is broken", and only the first has a message worth showing.
 	 */
-	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
+	// Gated on AdminTest, not MappingSettings: the connection test is not part of
+	// the mapping panel — it lives in Sync Actions, and the CLI and the mapping
+	// page both use it. AdminTest exists precisely to be this target (Nextcloud
+	// gates admin endpoints by naming an IDelegatedSettings class), which is the
+	// same arrangement nextcloud-grafana uses.
+	#[AuthorizedAdminSetting(settings: AdminTest::class)]
 	public function testConnection(): JSONResponse {
 		return new JSONResponse($this->tester->test()->jsonSerialize());
 	}

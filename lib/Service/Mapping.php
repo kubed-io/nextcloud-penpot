@@ -32,10 +32,17 @@ use JsonSerializable;
  *
  * ## KEYED ON THE TEAM ID, NEVER THE NAME
  *
- * Penpot team names change, and a rename must not orphan a mapping — the pull
- * renames the Team Folder to follow (admin-mapping.feature). The name is stored
- * anyway, but only so the admin UI and `occ` can print something human before
- * the first pull has run. `teamName` is a cache, `teamId` is the identity.
+ * Penpot team names change, and a rename must not orphan a mapping. The name is
+ * stored anyway — so the admin UI and `occ` can print something human, and so a
+ * rename upstream is visible — but `teamName` is a CACHE and `teamId` is the
+ * identity.
+ *
+ * A team rename in Penpot therefore updates `teamName` and **nothing else**. It
+ * does not rename the admin's Nextcloud folder; see the next section for why.
+ * (An earlier draft of this docblock said the pull renames the folder to follow.
+ * That predates `ncFolder` and is wrong — the two statements contradicted each
+ * other, which is exactly the kind of thing a later contributor implements from
+ * the wrong half.)
  *
  * ## THE FOLDER NAME IS THE ADMIN'S, THE PROJECT NAMES ARE PENPOT'S
  *

@@ -249,10 +249,17 @@ Feature: Admin configures team mappings
   # ── naming, mode, and duplicate prevention ───────────────────────────────────
 
   @todo
-  Scenario: A mapped folder's name is not independently chosen at mapping time
-    When the admin maps the Penpot team "Ferronescotia"
-    Then the provisioned Team Folder is named "Ferronescotia", matching Penpot exactly
-    And the mapping UI does not offer a separate "call it something else" field
+  Scenario: A mapped folder defaults to the team's name but may be renamed
+    When the admin maps the Penpot team "Ferronescotia" without naming a folder
+    Then the provisioned Team Folder is named "Ferronescotia", matching Penpot
+    But the admin may name it something else when creating the mapping
+    And that name is what gets provisioned
+    # SUPERSEDES an earlier draft that said the folder name is "not independently
+    # chosen" and that the UI offers no "call it something else" field. Both are
+    # now false: a mapping names its DESTINATION and the team name is merely the
+    # default, matching how the n8n and Grafana integrations have always worked.
+    # Project folders INSIDE it are the ones pinned to Penpot's names — see the
+    # next scenario, which is the rule that did survive.
 
   @todo
   Scenario: Project folder names always match their Penpot projects
@@ -275,12 +282,21 @@ Feature: Admin configures team mappings
     # elsewhere, but the exact rule is undecided — saga open question #31.
 
   @todo
-  Scenario: A team renamed in Penpot renames its Team Folder on the next pull
+  Scenario: A team renamed in Penpot does not rename the mapped folder
     Given the Penpot team "Ferronescotia" is mapped
     When the team is renamed to "Ferronescotia Design" in Penpot
     And the pull runs
-    Then the Team Folder is renamed to "Ferronescotia Design"
+    Then the mapped folder keeps the name the admin gave it
+    And the mapping records the team's new name
     And the mapping still resolves, because it is keyed on the team id, not the name
+    # SUPERSEDES an earlier draft in which the pull renamed the Team Folder to
+    # follow. That predates admin-chosen folder names: silently moving someone's
+    # folder because a team was renamed upstream is a surprise, not a sync. The
+    # recorded team name still updates, so the admin page shows the truth.
+    #
+    # Note this is the opposite of the PROJECT folder rule below, and
+    # deliberately so: a team folder is a mount point the admin chose to create,
+    # a project folder is a mirror of a Penpot object.
 
   @todo
   Scenario: A mapping records the default mode its files get, defaulting to link

@@ -68,7 +68,9 @@ $icon = static function (string $name) use (&$icons): string {
 $info = static function (string $tip) use ($icon): string {
 	$t = \OCP\Util::sanitizeHTML($tip);
 
-	return ' <span class="penpot-sync-info" tabindex="0" role="note" aria-label="' . $t . '" data-tip="' . $t . '">'
+	// No role="note": this is focusable and behaves like a help trigger, so
+	// announcing it as a note is misleading. The aria-label carries the text.
+	return ' <span class="penpot-sync-info" tabindex="0" aria-label="' . $t . '" data-tip="' . $t . '">'
 		. $icon('info')
 		. '</span>';
 };

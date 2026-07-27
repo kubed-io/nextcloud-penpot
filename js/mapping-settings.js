@@ -133,6 +133,18 @@
 		req.then(function (res) {
 			if (isNew && res.id) {
 				card.dataset.id = res.id;
+
+				// Lock the team, exactly as a server-rendered card is: a mapping IS
+				// its team, so the backend ignores a changed teamId on update. Left
+				// editable, the select would let an admin pick another team, see the
+				// save succeed, and reasonably believe it moved — when nothing did.
+				// data-id carries the chosen team so readCard() no longer depends on
+				// the disabled control's value.
+				var teamSel = card.querySelector('.js-team');
+				if (teamSel) {
+					teamSel.dataset.id = teamSel.value;
+					teamSel.disabled = true;
+				}
 			}
 			// Reflect the materialised folder name back into the field, so a blank
 			// entry shows the name the backend filled in from the Penpot team
@@ -194,7 +206,7 @@
 	function info(tip) {
 		if (!tip) { return ''; }
 		var safe = escapeHtml(tip);
-		return ' <span class="penpot-sync-info" tabindex="0" role="note" aria-label="' + safe
+		return ' <span class="penpot-sync-info" tabindex="0" aria-label="' + safe
 			+ '" data-tip="' + safe + '">' + (ICONS.info || '') + '</span>';
 	}
 
