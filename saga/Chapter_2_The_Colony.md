@@ -394,3 +394,83 @@ and it is why R1.6 was worth fixing before chasing the failure underneath it.
   wrong in five ways, four of them silent. Had it been built after the admin
   surface, those bugs would have surfaced as *"the mapping page shows no teams"*
   — debugged three layers from the cause.
+
+---
+
+## Course 3 — where the survey stakes stand
+
+> The resolver and the first real pull. The app **mirrors** now: `occ
+> penpot_sync:sync pull` turns a mapped team into a folder tree, and `occ
+> penpot_sync:status` reads it back through the resolver. What follows is the
+> scope line — what shipped, what was deliberately left for a later slice, and
+> why the cut falls where it does — recorded so the next contributor builds the
+> *next* thing, not this one again.
+
+### C3.1 — The resolver landed first, and alone, because it has no sibling
+
+`MembershipResolver` is the one piece of this app with no precedent in either
+sibling: both `nextcloud-grafana` and `nextcloud-n8n` talk to a flat REST API
+and derive nothing from folder position, so there was nothing to port. It is
+also *the single most load-bearing rule in the app* (§6.29). So it shipped as
+its own reviewed unit — pure logic over mocked `Node`s, one test per
+`mapping-membership.feature` scenario — before anything wrote a marker for it to
+read. The metadata keys (`PenpotMetadata`) rode in with it, since the resolver
+reads them and DAV must advertise them.
+
+### C3.2 — The pull ships the **fallback** backend, not the preferred one
+
+The course table marks *Team Folder provisioning* 🟢, but this slice builds only
+the **plain admin-owned folder** (`StorageService`), and `isAvailable()` skips a
+`use_team_folder` mapping with a warning. The reason is testability, not
+difficulty: the CI Nextcloud has **no groupfolders app**, so the groupfolders
+backend cannot be proven end-to-end here, and an untestable backend is exactly
+the kind of surface this project builds *last*, not first. The plain backend is
+the siblings' documented fallback (#10), so this is a real path, not a stub — and
+the two-method seam (`ensureRoot` / `findRoot`) means the groupfolders backend
+drops in behind it without touching the pull.
+
+The consequence to name loudly: the **default** mapping uses a Team Folder, so
+in production the default mapping pulls nothing until that backend lands. CI maps
+with `--no-team-folder` to exercise the built path.
+
+### C3.3 — The metadata IS the join, so re-pull is idempotent by construction
+
+A project folder is matched on its `penpot_project_id`, a file on its
+`penpot_id` — never on name. That is what makes a second pull reconcile in place
+instead of creating `Acme (2)`, and it is asserted live (the third
+`pull.feature` scenario pulls twice and proves no `(2)` folder appears). Names
+are the *output* of the mirror, never its key — the same discipline the siblings
+learned, arrived at here from the resolver's own requirement.
+
+### C3.4 — No fabricated deep-link URL (the doctrine, applied to ourselves)
+
+A `link` file is *"a pointer deep-linking to the live design"* — but Penpot's
+workspace route has **not** been called live, and Chapter 1's whole method is
+*call it before you design around it* (§6.26). So the link body carries the ids
+and the instance base URL and stops there; the browser deep-link is Course 4's,
+built against a running Penpot. Writing a plausible `/#/workspace/…` now would be
+the exact guess this saga exists to refuse.
+
+### C3.5 — What this slice deliberately does not do
+
+Named here so the seams read as intentional, not forgotten:
+
+- **the project-folder visible tag** (§6.32) — metadata is written; the
+  systemtag pill waits for the Files-app surface;
+- **`sync`-mode archive download** (`export-binfile`) — Course 4; both modes
+  write a link marker for now, but stamp the mapping's mode faithfully;
+- **prune of stale mirror files** — the pull is upsert-only; a file whose Penpot
+  object vanished is left for the trash-aware reconciler (Course 5), which must
+  match by fileid anyway (§6.37/§6.45);
+- **the `/` guard as a user-facing report** (§6.51) — a project or file whose
+  Penpot name contains `/` is skipped and logged now; Course 4 makes it a report.
+
+### C3.6 — `occ penpot_sync:status` is the resolver's first live witness
+
+The resolver had unit coverage but had never run over a *real* tree. `status`
+gives it one: after a pull, `status Penpot/Acme` walks the folders the pull built
+and prints the `in_project` / `drafts` / `personal` / `none` verdict — so the
+integration suite asserts the resolver on live Nextcloud, and an operator gets an
+honest *"where does Penpot think this lives"* answer. A read-only diagnostic that
+doubles as the end-to-end assertion for the app's most load-bearing rule earns
+its place cheaply.

@@ -14,6 +14,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\AdminSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\PullSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 
 /**
@@ -35,10 +36,11 @@ use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
  *    → {@see ConnectionSteps}. The token is minted per run by
  *    the workflow's "Mint Penpot token" step (saga §6.47), so no repository
  *    secret is needed.
- *  - A direct **Penpot RPC** channel (Guzzle, `Authorization: Token`) is what the
- *    later assertion side will use — "did the app really create/export/move
- *    that?" Not needed yet: nothing writes to Penpot in this slice, so asserting
- *    through the app's own read path is sufficient and simpler.
+ *  - A direct **Penpot RPC** channel (Guzzle, `Authorization: Token`) seeds the
+ *    fixtures the pull needs — "create this project in Penpot, then prove the app
+ *    mirrored it." → {@see PullSteps}. The pull itself is asserted through the
+ *    app's own read path (`penpot_sync:status`), so the two channels cross-check
+ *    each other.
  */
 final class FeatureContext implements Context {
 	use OccTrait;
@@ -46,6 +48,7 @@ final class FeatureContext implements Context {
 	use AdminSteps;
 	use ConnectionSteps;
 	use MappingSteps;
+	use PullSteps;
 
 	private const APP_ID = 'penpot_sync';
 

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\AppInfo;
 
+use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
 use OCA\PenpotSync\Settings\PersonalSettings;
@@ -37,8 +38,14 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
  * does not exist yet (the pull schedule, most obviously). Each one says so in
  * its own description rather than implying a sync that is not running.
  *
- * The background job, the resolver, the Files-app surface and the write paths
- * land in Courses 3–6. Don't scaffold them here ahead of the code that uses them.
+ * The one exception, landing now (saga Ch2 Course 3): the Penpot metadata keys
+ * are registered in {@see boot()}, ahead of the pull that writes them. That is
+ * the same "register the seam before the engine" move both siblings make — the
+ * keys must exist for DAV to advertise them and for the resolver's reverse
+ * lookups to be indexed, and registration is idempotent and cheap.
+ *
+ * The background job, the Files-app surface and the write paths still land in
+ * Courses 3–6. Don't scaffold those here ahead of the code that uses them.
  */
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
@@ -68,7 +75,19 @@ final class Application extends App implements IBootstrap {
 
 	#[\Override]
 	public function boot(IBootContext $context): void {
-		// Nothing to boot. The metadata-key registration, the trash purge hook,
-		// and the background job all belong to later courses.
+		// Register the Penpot metadata keys, once, ahead of the pull that writes
+		// them (saga Ch2 Course 3). This surfaces `penpot_id` / `penpot_revision`
+		// / `penpot_mode` on files and `penpot_project_id` / `penpot_team_id` on
+		// folders over DAV, and makes the indexed keys queryable — the seam the
+		// resolver and reconciler build on. Idempotent; safe on every boot, and
+		// it registers only the key *schema* — nothing writes a value until the
+		// pull lands, so a save still triggers no Penpot behaviour yet.
+		//
+		// getAppContainer() resolves THIS app's services — the same boot-time
+		// accessor both siblings use to register their metadata keys.
+		$context->getAppContainer()->get(PenpotMetadata::class)->register();
+
+		// The trash purge hook and the background job still belong to later
+		// courses — not scaffolded here ahead of the code that uses them.
 	}
 }

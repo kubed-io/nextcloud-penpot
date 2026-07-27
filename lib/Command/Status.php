@@ -1,0 +1,103 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+declare(strict_types=1);
+
+namespace OCA\PenpotSync\Command;
+
+use OCA\PenpotSync\Service\MembershipResolver;
+use OCA\PenpotSync\Service\PenpotMetadata;
+use OCA\PenpotSync\Service\StorageService;
+use OCP\Files\File;
+use OCP\Files\Folder;
+use OCP\Files\IRootFolder;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+/**
+ * `occ penpot_sync:status <path>`
+ *
+ * Read-only inspector: given a path in the sync actor's files, print the Penpot
+ * metadata stamped on that node and — the point of the command — the membership
+ * {@see MembershipResolver} derives for it by walking its ancestors.
+ *
+ * ## WHY THIS EXISTS
+ *
+ * The resolver is *the single most load-bearing rule in the app* (saga §6.29),
+ * and until now it had no way to be run against a real folder tree. This command
+ * gives it one: after a pull, `status` on a mirrored file reports the exact
+ * `in_project` / `drafts` / `personal` / `none` verdict the reconciler and every
+ * write path depend on — so the integration suite asserts the resolver on a live
+ * Nextcloud, not only in unit mocks. It is also the honest "why is this file
+ * here / where does Penpot think it lives" answer for an operator.
+ *
+ * It never writes. Safe to run anytime.
+ */
+final class Status extends Command {
+	public function __construct(
+		private IRootFolder $rootFolder,
+		private StorageService $storage,
+		private MembershipResolver $resolver,
+		private PenpotMetadata $metadata,
+	) {
+		parent::__construct();
+	}
+
+	#[\Override]
+	protected function configure(): void {
+		$this
+			->setName('penpot_sync:status')
+			->setDescription('Show the Penpot metadata and resolved membership for a path (read-only).')
+			->addArgument('path', InputArgument::REQUIRED, "A path in the sync actor's files, e.g. 'Penpot/Acme/Login.penpot'.");
+	}
+
+	#[\Override]
+	protected function execute(InputInterface $input, OutputInterface $output): int {
+		$path = trim((string)$input->getArgument('path'), '/');
+
+		try {
+			$home = $this->rootFolder->getUserFolder($this->storage->resolveActorUid());
+		} catch (\RuntimeException $e) {
+			$output->writeln('<error>' . $e->getMessage() . '</error>');
+
+			return 1;
+		}
+
+		if ($path === '' || !$home->nodeExists($path)) {
+			$output->writeln('<error>No such node: ' . $path . '</error>');
+
+			return 1;
+		}
+
+		$node = $home->get($path);
+		$output->writeln('Path: ' . $path);
+		$output->writeln('Type: ' . ($node instanceof Folder ? 'folder' : 'file'));
+
+		if ($node instanceof File) {
+			$file = $this->metadata->readFile($node->getId());
+			$output->writeln('penpot_id: ' . ($file?->penpotId ?? ''));
+			$output->writeln('penpot_revision: ' . ($file?->revision ?? ''));
+			$output->writeln('penpot_mode: ' . ($file?->mode ?? ''));
+		} elseif ($node instanceof Folder) {
+			$markers = $this->metadata->readFolder($node->getId());
+			$output->writeln('penpot_project_id: ' . $markers->projectId);
+			$output->writeln('penpot_team_id: ' . $markers->teamId);
+		}
+
+		$membership = $this->resolver->resolve($node);
+		$output->writeln(sprintf(
+			'Membership: %s (team=%s project=%s)',
+			$membership->state(),
+			$membership->teamId ?? '',
+			$membership->projectId ?? '',
+		));
+
+		return 0;
+	}
+}
