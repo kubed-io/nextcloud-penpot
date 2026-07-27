@@ -14,7 +14,6 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
-use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -32,9 +31,9 @@ use Psr\Log\LoggerInterface;
  * ## ATTRIBUTION (saga §6.18)
  *
  * A rename attributes to the acting user's personal token when they have set one
- * ({@see PersonalTokenService}), and to the service account otherwise. An expired
- * or absent personal token is the ordinary case, not an error — {@see actorToken()}
- * returns null and Penpot records the service account.
+ * ({@see PersonalTokenService::tokenForActor()}), and to the service account
+ * otherwise. An expired or absent personal token is the ordinary case, not an
+ * error — the helper returns null and Penpot records the service account.
  *
  * ## ON FAILURE, THE LOCAL STATE STANDS (saga §6.18 rule 3)
  *
@@ -56,7 +55,6 @@ final class PushService {
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly PersonalTokenService $personalTokens,
-		private readonly IUserSession $userSession,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -106,7 +104,7 @@ final class PushService {
 			return false;
 		}
 
-		$this->client->renameFile($meta->penpotId, $base, $this->actorToken());
+		$this->client->renameFile($meta->penpotId, $base, $this->personalTokens->tokenForActor());
 		$this->logger->info('penpot_sync writeback: renamed Penpot file', [
 			'app' => Application::APP_ID,
 			'penpotId' => $meta->penpotId,
@@ -124,21 +122,12 @@ final class PushService {
 			return false;
 		}
 
-		$this->client->renameProject($markers->projectId, $node->getName(), $this->actorToken());
+		$this->client->renameProject($markers->projectId, $node->getName(), $this->personalTokens->tokenForActor());
 		$this->logger->info('penpot_sync writeback: renamed Penpot project', [
 			'app' => Application::APP_ID,
 			'projectId' => $markers->projectId,
 			'name' => $node->getName(),
 		]);
 		return true;
-	}
-
-	/**
-	 * The token a write attributes to: the acting user's personal token if set,
-	 * else null (the service account). Never throws — attribution is best-effort.
-	 */
-	private function actorToken(): ?string {
-		$uid = $this->userSession->getUser()?->getUID();
-		return $uid !== null ? $this->personalTokens->tokenFor($uid) : null;
 	}
 }

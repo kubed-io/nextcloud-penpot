@@ -17,8 +17,6 @@ use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\PushService;
 use OCP\Files\File;
 use OCP\Files\Folder;
-use OCP\IUser;
-use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -43,7 +41,6 @@ final class PushServiceTest extends TestCase {
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private PersonalTokenService $personalTokens;
-	private IUserSession $userSession;
 	private PushService $push;
 
 	protected function setUp(): void {
@@ -51,18 +48,16 @@ final class PushServiceTest extends TestCase {
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->personalTokens = $this->createMock(PersonalTokenService::class);
-		$this->userSession = $this->createMock(IUserSession::class);
 		$this->push = new PushService(
 			$this->client,
 			$this->metadata,
 			$this->personalTokens,
-			$this->userSession,
 			new NullLogger(),
 		);
 	}
 
 	public function testRenamesAManagedPenpotFileByStrippingTheExtension(): void {
-		$this->signedInAs('dana', personalToken: null);
+		$this->attributingTo(null);
 		$this->metadata->method('readFile')->with(30)
 			->willReturn(new PenpotFileMetadata(self::FILE_ID, '5@x', 'link'));
 
@@ -74,7 +69,7 @@ final class PushServiceTest extends TestCase {
 	}
 
 	public function testAttributesToThePersonalTokenWhenTheUserHasOne(): void {
-		$this->signedInAs('dana', personalToken: 'dana-token');
+		$this->attributingTo('dana-token');
 		$this->metadata->method('readFile')
 			->willReturn(new PenpotFileMetadata(self::FILE_ID, '5@x', 'link'));
 
@@ -107,7 +102,7 @@ final class PushServiceTest extends TestCase {
 	}
 
 	public function testRenamesAProjectFolder(): void {
-		$this->signedInAs('dana', personalToken: null);
+		$this->attributingTo(null);
 		$this->metadata->method('readFolder')->with(20)
 			->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
 
@@ -126,11 +121,9 @@ final class PushServiceTest extends TestCase {
 		self::assertFalse($this->push->pushRename($this->folder(10, 'Design Files')));
 	}
 
-	private function signedInAs(string $uid, ?string $personalToken): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn($uid);
-		$this->userSession->method('getUser')->willReturn($user);
-		$this->personalTokens->method('tokenFor')->with($uid)->willReturn($personalToken);
+	/** Who the write attributes to; null is the service account (§6.18). */
+	private function attributingTo(?string $token): void {
+		$this->personalTokens->method('tokenForActor')->willReturn($token);
 	}
 
 	private function file(int $id, string $name): File {

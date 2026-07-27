@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Team Folder (groupfolders) provisioning is now built: a mapping set to use a Team Folder is mirrored into an ownerless groupfolders mount shared with the mapping's groups, falling back to a plain admin-owned folder when the groupfolders app is absent — the same backend pattern as the n8n and Grafana integrations.
 - A plain admin-owned mapping folder is now shared with the mapping's Nextcloud groups (read + update — the least permission Nextcloud offers that allows a rename; content edits are possible but never pushed and are reverted on the next pull), so the mapped team can see and rename their mirrored designs without an admin sharing the folder by hand.
 - A pull no longer echoes its own follow-renames back to Penpot: a re-entrancy guard fences the pull's filesystem writes off from the new rename write-back listener.
+- Dragging a mirrored design into a different project folder now re-files it in Penpot (`move-files`), and dragging it to the team root files it into that team's Drafts — the gesture Nextcloud users already know is the Penpot operation, with the design keeping its id, revision and history.
+- Moving a design out of every mapped folder no longer pushes anything at all: Penpot keeps the file exactly where it is, because unmapping is a deliberate action rather than something to infer from a drag.
+- A project folder can now be organised freely inside its team folder, and is refused — with an explanation, before the move happens — if dragged out of it, since moving a project between teams has to be done in Penpot.
+- A `link` file is now confined to its own project: it moves freely within it, and any move that would change its project is refused with an offer to switch it to `sync` mode first, so nobody is left holding a pointer that looks like a design and isn't.
 
 ### Fixed
 

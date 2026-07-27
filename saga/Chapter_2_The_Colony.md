@@ -158,9 +158,9 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **File rename → `rename-file`** | 🟡 | Ratified §6.54. Strip/re-add `.penpot`; send under plain **`id`**. |
-| **Project folder rename → `rename-project`** | 🟡 | §6.36/§6.39 — its own flow, *not* a variant of file rename. Different event, id, RPC, and response (204, no body). |
-| **Move between projects → `move-files`** | 🟡 | Confirmed working both directions (§6.34 probe), never exercised as the user-facing drag (#34). |
+| **File rename → `rename-file`** | 🟢 | Ratified §6.54. Strip/re-add `.penpot`; send under plain **`id`**. |
+| **Project folder rename → `rename-project`** | 🟢 | §6.36/§6.39 — its own flow, *not* a variant of file rename. Different event, id, RPC, and response (204, no body). |
+| **Move between projects → `move-files`** | 🟢 | Confirmed working both directions (§6.34 probe). Built and gated: `sync` files re-file, `link` files are refused (§6.43). |
 | **`sync` mode + `export-binfile`** | 🟡 | Opt-in per file. Downloads the real archive when `revn` moves. |
 | **The `/` guard, both levels** | 🔴 | `nested` mode refuses `/` in project *and* file names (§6.51/§6.54), reports which object, skips only that one. |
 | ⛔ **Content push** | ⛔ | **Never.** §6.1 is the app's spine: Nextcloud mirrors, it does not edit shape data. |
@@ -584,3 +584,68 @@ class of bug the occ integration suite cannot see (single mapping, no groupfolde
 no notifications crash to reproduce) and the live pod can — the argument of C4.4,
 paid back in a concrete catch.
 
+
+### C4.6 — The drag, propagated: `move-files` and the two refusals
+
+The rename slice left the move half of `NodeRenamedEvent` on the floor
+deliberately, and this slice picks it up. Nextcloud fires **one** event for a
+rename and a move, so the listener now routes both: the name changed ⇒
+`PushService` (`rename-file`/`rename-project`), the parent changed ⇒ a new
+`MotionService` (`move-files`). A WebDAV `MOVE` can do both at once, so both are
+checked independently and pushed rename-first — a drag that also renames must not
+silently lose one half.
+
+`MotionService` is cut from both siblings' service of the same name, and it is
+the smaller for one reason: §6.1 removes the hard part. Theirs delete, create and
+re-upload content on a move; ours has exactly one call it can make. So the whole
+service is a **classification**, and §6.29 makes the classification a one-liner —
+a file's project is the nearest ancestor folder carrying a project id, so resolve
+the destination, resolve where it came from, and compare. Same project (a plain
+subfolder, two folders mapping to one project): Penpot is never contacted, which
+is the common case and costs zero requests. Different project: one `move-files`.
+Team root with no project above it: that is Penpot's **Drafts**, which is a real
+(default) project, so the file is filed there rather than treated as "no
+project". Out of every mapped folder: **nothing is pushed** — unmapping is
+Course 5's decision to make explicitly, and a drag is not evidence of it.
+
+### C4.7 — The guard refuses two moves, and only two
+
+Both siblings pair their motion service with a `MoveGuardListener` on
+`BeforeNodeRenamedEvent`, because some moves must be stopped rather than
+reconciled — throwing `AbortedEventException` aborts the operation and shows the
+user why, at the moment they try, instead of leaving them to discover it hours
+later on a pull. This app inherits the pattern and carries two rules in it:
+
+**§6.30 — a project folder may not leave its team folder.** A refusal rather than
+a silent undo, because both alternatives are worse: honouring it means
+reparenting the project in Penpot, a destructive cross-team mutation far outside
+§6.1; ignoring it strands a folder carrying a `penpot_project_id` under a team it
+no longer sits in, and every later resolution disagrees with Penpot forever
+after. Inside its team folder the same folder moves anywhere, for free — §6.29
+gives Nextcloud folder layout, and Penpot has no notion of the position.
+
+**§6.43 — a `link` file is confined to its project.** This one changed the shape
+of the slice. `link` and `sync` are not two flavours of the same file: a `sync`
+file is a real archive, so moving it anywhere leaves the user holding something
+valuable, while a `link` is a pointer — move it out and they hold an empty husk
+that looks like a design and is not. So every project-changing move of a link is
+refused, each with the same escape hatch: *promote to `sync` first*, which is not
+a fob-off but exactly the action that makes the gesture safe.
+
+The consequence is worth stating plainly rather than burying: **`sync` mode has
+not landed** (its `export-binfile` is a later slice), so every mirrored file is a
+link today, and the guard is the entire user-visible behaviour of a cross-project
+drag — the `move-files` push sits behind it, built and tested and dormant. That
+is deliberate. The classification is the part that has to be right, and it is far
+easier to get right against the resolver now than to retrofit alongside an
+archive download later. Two comparisons earned their own tests: the guard
+compares **both** ids, not just the project, because two team roots each resolve
+to "no project" while meaning two *different* Drafts; and the mode check lives in
+exactly one place, so `MotionService` never second-guesses a decision the gate
+already made.
+
+The slice also collapsed a duplication before it started: "whose token attributes
+this write?" now lives on `PersonalTokenService::tokenForActor()` instead of
+being re-derived by each write path. Two callers is where that stops being
+premature — and where, left alone, one of them would eventually have forgotten to
+honour a personal token at all.

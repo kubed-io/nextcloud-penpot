@@ -77,9 +77,9 @@ namespace OCP {
 			public function userExists(string $uid): bool;
 		}
 	}
-	// PushService attributes a rename to the acting user's personal token, so it
-	// asks IUserSession who is renaming. Declaration-only: PushServiceTest fakes
-	// a session with and without a signed-in user.
+	// PersonalTokenService answers "whose token attributes this write?", so it
+	// asks IUserSession who is acting. Declaration-only: PersonalTokenServiceTest
+	// fakes a session with and without a signed-in user.
 	if (!interface_exists(IUser::class, false)) {
 		interface IUser {
 			public function getUID(): string;
@@ -313,6 +313,59 @@ namespace OCP\Files {
 	// resolver catches it to terminate the climb.
 	if (!class_exists(NotFoundException::class, false)) {
 		class NotFoundException extends \Exception {
+		}
+	}
+}
+
+namespace OCP\Exceptions {
+	// MoveGuardListener throws this to REFUSE a move before it happens (§6.30).
+	// Core turns it into a user-visible message; here it only needs to exist so
+	// the guard's test can assert the refusal.
+	if (!class_exists(AbortedEventException::class, false)) {
+		class AbortedEventException extends \Exception {
+		}
+	}
+}
+
+namespace OCP\EventDispatcher {
+	// The event base and the listener contract. Both listeners implement
+	// IEventListener and type-check the concrete event, so both symbols have to
+	// resolve before the classes can even be loaded.
+	if (!class_exists(Event::class, false)) {
+		class Event {
+		}
+	}
+	if (!interface_exists(IEventListener::class, false)) {
+		interface IEventListener {
+			public function handle(Event $event): void;
+		}
+	}
+}
+
+namespace OCP\Files\Events\Node {
+	// The move/rename events. Nextcloud fires ONE event class for both gestures;
+	// the `Before` variant is the only place a move can still be refused.
+	// Non-final and concrete so the guard's test can mock the accessors.
+	if (!class_exists(BeforeNodeRenamedEvent::class, false)) {
+		class BeforeNodeRenamedEvent extends \OCP\EventDispatcher\Event {
+			public function getSource(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+
+			public function getTarget(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+		}
+	}
+	if (!class_exists(NodeRenamedEvent::class, false)) {
+		class NodeRenamedEvent extends \OCP\EventDispatcher\Event {
+			public function getSource(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+
+			public function getTarget(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
 		}
 	}
 }

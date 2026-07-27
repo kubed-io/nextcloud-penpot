@@ -37,7 +37,22 @@
 # or silently desyncing. Refused with an explanation, not silently undone. Moving
 # a project folder ANYWHERE INSIDE its team folder is free and meaningful.
 #
-# @todo — no lib/Listener/ exists yet.
+# BUILD STATE (Course 4, the move slice). The engine below is BUILT:
+# `MoveGuardListener` refuses the two illegal moves before they happen (a project
+# folder leaving its team folder, §6.30; a `link` file changing project, §6.43),
+# and `MotionService` re-files a moved `sync` file with `move-files`. Both are
+# unit-tested to the decision boundary, and deployed to a live pod where a full
+# pull still runs clean — the drag itself is exercised from the Files app.
+#
+# STILL @todo HERE, for the reason rename.feature gives: the integration harness
+# is occ-only. There is no running HTTP server, so no WebDAV MOVE to fire a real
+# NodeRenamedEvent / BeforeNodeRenamedEvent, and no logged-in session for the
+# personal-token branch. Adding a production `occ` move command purely to trip
+# the events would be test scaffolding wearing a feature's clothes.
+#
+# NOT BUILT YET, and marked in place below: `sync` mode (so the move push is
+# dormant until export-binfile lands), the notification surface for a failed
+# move, the restore offer, and the "hidden, not deleted" link state.
 
 @todo
 Feature: Moving files and folders never destroys anything
