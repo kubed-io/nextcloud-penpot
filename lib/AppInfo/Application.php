@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\AppInfo;
 
+use OCA\PenpotSync\Listener\NodeRenamedListener;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
@@ -17,6 +18,7 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\Files\Events\Node\NodeRenamedEvent;
 
 /**
  * App bootstrap.
@@ -44,8 +46,16 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
  * keys must exist for DAV to advertise them and for the resolver's reverse
  * lookups to be indexed, and registration is idempotent and cheap.
  *
- * The background job, the Files-app surface and the write paths still land in
- * Courses 3–6. Don't scaffold those here ahead of the code that uses them.
+ * The first write path also lands now (saga Ch2 Course 4): a
+ * {@see NodeRenamedListener} on {@see NodeRenamedEvent} propagates a Nextcloud
+ * rename of a managed `.penpot` file or project folder up to Penpot. It is the
+ * only write Penpot permits us at this stage (§6.19) — content is still strictly
+ * one-way (§6.1). The `SyncGuard` keeps the pull's own follow-renames from
+ * looping back through it.
+ *
+ * The background job, the rest of the Files-app surface and the remaining write
+ * paths still land in Courses 4–6. Don't scaffold those here ahead of the code
+ * that uses them.
  */
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
@@ -71,6 +81,13 @@ final class Application extends App implements IBootstrap {
 		// core stores it per-uid because the form declares a PERSONAL section
 		// type — see PersonalSettings.
 		$context->registerDeclarativeSettings(PersonalSettings::class);
+
+		// The write path (saga Ch2 Course 4): a Nextcloud rename of a managed
+		// `.penpot` file or a project folder is propagated up to Penpot via
+		// `rename-file` / `rename-project`. NodeRenamedEvent fires for both renames
+		// and moves; the listener acts on the rename and defers moves. The pull's
+		// own follow-renames are fenced out by the SyncGuard, so this never loops.
+		$context->registerEventListener(NodeRenamedEvent::class, NodeRenamedListener::class);
 	}
 
 	#[\Override]

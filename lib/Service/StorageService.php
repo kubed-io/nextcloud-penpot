@@ -10,54 +10,63 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
+use OCP\Constants;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IAppConfig;
 use OCP\IGroupManager;
+use OCP\Share\IManager as IShareManager;
+use OCP\Share\IShare;
 use Psr\Log\LoggerInterface;
 
 /**
  * Resolves a mapping's writable root folder — the mount point the pull mirrors
- * a Penpot team into.
+ * a Penpot team into — routing to the per-mapping storage backend, exactly as
+ * both siblings' `StorageService` does (saga §14.1, saga Ch2 Course 3):
  *
- * ## THIS INCREMENT SHIPS THE FALLBACK BACKEND ONLY (saga Ch2 Course 3)
- *
- * The course lists two backends for the team folder:
- *
- *   - **Team Folder (`use_team_folder = true`):** an ownerless groupfolders
- *     mount shared with the mapping's groups — the preferred path, and the one
- *     both siblings' `TeamFolderService` builds.
+ *   - **Team Folder (`use_team_folder = true`):** delegate to
+ *     {@see TeamFolderService} — an ownerless groupfolders mount shared with the
+ *     mapping's groups. The preferred path when the groupfolders app is present.
  *   - **Admin-owned (`use_team_folder = false`):** a plain folder in the sync
- *     actor's home. No groupfolders dependency.
+ *     actor's (admin's) home, shared to the mapping's groups via
+ *     `OCP\Share\IManager` group shares. No groupfolders dependency. The owner is
+ *     always the actor and is never switched (no migration).
  *
- * Only the **admin-owned** path is built here. It is the one the integration
- * suite can prove end-to-end (the CI Nextcloud has no groupfolders app), so it
- * is the honest first slice: the pull becomes real and testable against a live
- * Penpot, and {@see isAvailable()} skips a Team-Folder mapping with a warning
- * rather than half-doing it. The groupfolders backend lands next, ported from
- * the siblings, behind the same two methods so the pull needs no change.
+ * Both paths write files carrying the same Penpot metadata {@see PullService}
+ * stamps, and neither ever creates a group — the content groups are
+ * admin-managed. The pull calls {@see ensureRoot()} / {@see findRoot()} and never
+ * learns which backend answered.
+ *
+ * ## PERMISSIONS ARE READ + RENAME, NOT FULL WRITE (penpot-specific)
+ *
+ * The mirror is read-only for *content* (§6.1) but a *rename* propagates to
+ * Penpot (§6.2, Course 4), so the content groups get read + UPDATE and nothing
+ * more — create and delete wait for §6.33 / Course 5. Unlike the siblings, the
+ * grant does not vary with the mapping's `mode`, because penpot's `link`/`sync`
+ * is a per-file archive choice, not a folder-wide read-vs-write stance.
  *
  * ## NO EXPLICIT FS SETUP ON THE PLAIN PATH
  *
- * Unlike the siblings' Team-Folder path (which re-inits the actor FS so a
- * groupfolders mount created earlier in the same request is visible), the
- * admin-owned path just asks {@see IRootFolder::getUserFolder()} for the actor's
- * home, which mounts it. This mirrors `nextcloud-grafana`'s admin-owned branch,
- * which is integration-green without any `OC_Util` dance.
- *
- * ## GROUP SHARING IS DEFERRED
- *
- * The siblings also share the admin-owned folder to the mapping's groups. That
- * is not built here (the CI actor is admin-only, so it is untestable now); the
- * folder is created owned by, and visible to, the sync actor. Group shares land
- * with the groupfolders backend.
+ * The admin-owned path just asks {@see IRootFolder::getUserFolder()} for the
+ * actor's home, which mounts it — no `OC_Util` dance (that is only needed for the
+ * groupfolders mount, and lives in {@see TeamFolderService}). Mirrors
+ * nextcloud-grafana's admin-owned branch, which is integration-green as-is.
  */
 final class StorageService {
 	/** Built-in group whose first member is the default sync actor. */
 	public const ADMIN_GROUP = 'admin';
 
+	/**
+	 * Content-group rights on a managed Penpot folder: read + rename (UPDATE),
+	 * never create or delete. Kept identical to {@see TeamFolderService} so both
+	 * backends grant the same surface.
+	 */
+	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE;
+
 	public function __construct(
+		private readonly TeamFolderService $teamFolders,
 		private readonly IRootFolder $rootFolder,
+		private readonly IShareManager $shareManager,
 		private readonly IGroupManager $groupManager,
 		private readonly IAppConfig $config,
 		private readonly LoggerInterface $logger,
@@ -67,31 +76,49 @@ final class StorageService {
 	/**
 	 * True when the mapping's chosen backend can be provisioned right now.
 	 *
-	 * Only the admin-owned backend is built in this increment, so a Team-Folder
-	 * mapping is reported unavailable — the pull skips it with a warning rather
-	 * than creating dead storage.
+	 * A Team-Folder mapping needs the groupfolders app enabled; an admin-owned
+	 * mapping is always available. A Team-Folder mapping on an instance without
+	 * groupfolders is reported unavailable, and the pull skips it with a warning
+	 * rather than creating dead storage.
 	 */
 	public function isAvailable(Mapping $mapping): bool {
-		return !$mapping->useTeamFolder;
+		return $mapping->useTeamFolder ? $this->teamFolders->isAvailable() : true;
 	}
 
 	/**
 	 * Ensure the mapping's root folder exists and return it, writable by the
-	 * sync actor. Idempotent: an existing folder is returned as-is.
+	 * sync actor. Idempotent: an existing folder is returned as-is, and its group
+	 * shares / permissions are re-asserted.
 	 *
-	 * @throws \RuntimeException when the actor is unresolvable, the mapping has no folder name, or the name collides with a non-folder node
+	 * @throws \RuntimeException when the backend is unavailable, the actor is unresolvable, the mapping has no folder name, or the name collides with a non-folder node
 	 */
 	public function ensureRoot(Mapping $mapping): Folder {
+		if ($mapping->useTeamFolder) {
+			if (!$this->teamFolders->isAvailable()) {
+				throw new \RuntimeException(
+					'This mapping uses a Team Folder, but the Team Folders (groupfolders) app is not enabled.',
+				);
+			}
+			$name = $this->folderName($mapping);
+			$this->teamFolders->ensure($name, $mapping->ncGroups);
+			return $this->teamFolders->getWritableFolder($name);
+		}
+
+		// Admin-owned backend.
 		$name = $this->folderName($mapping);
-		$home = $this->rootFolder->getUserFolder($this->resolveActorUid());
+		$uid = $this->resolveActorUid();
+		$home = $this->rootFolder->getUserFolder($uid);
 		if (!$home->nodeExists($name)) {
-			return $home->newFolder($name);
+			$folder = $home->newFolder($name);
+		} else {
+			$node = $home->get($name);
+			if (!$node instanceof Folder) {
+				throw new \RuntimeException('Penpot mapping folder name is taken by a file: ' . $name);
+			}
+			$folder = $node;
 		}
-		$node = $home->get($name);
-		if (!$node instanceof Folder) {
-			throw new \RuntimeException('Penpot mapping folder name is taken by a file: ' . $name);
-		}
-		return $node;
+		$this->syncGroupShares($folder, $uid, $mapping);
+		return $folder;
 	}
 
 	/**
@@ -103,6 +130,13 @@ final class StorageService {
 		$name = trim($mapping->ncFolder);
 		if ($name === '') {
 			return null;
+		}
+		if ($mapping->useTeamFolder) {
+			try {
+				return $this->teamFolders->getWritableFolder($name);
+			} catch (\Throwable) {
+				return null;
+			}
 		}
 		$home = $this->rootFolder->getUserFolder($this->resolveActorUid());
 		if (!$home->nodeExists($name)) {
@@ -132,6 +166,59 @@ final class StorageService {
 		throw new \RuntimeException('No sync actor available: the built-in admin group has no members.');
 	}
 
+	/**
+	 * Ensure the admin-owned folder is shared with each of the mapping's groups
+	 * at the read + rename level. Idempotent: creates missing group shares, fixes
+	 * permissions on existing ones. Does NOT remove shares to groups no longer
+	 * listed (a removed group's share is left for the admin to clean up, so a
+	 * manual share is never clobbered) — same conservative choice as the siblings.
+	 */
+	private function syncGroupShares(Folder $folder, string $ownerUid, Mapping $mapping): void {
+		$existing = [];
+		foreach ($this->shareManager->getSharesBy($ownerUid, IShare::TYPE_GROUP, $folder, false, -1, 0) as $share) {
+			$existing[$share->getSharedWith()] = $share;
+		}
+
+		foreach ($mapping->ncGroups as $gid) {
+			if ($gid === '') {
+				continue;
+			}
+			if (isset($existing[$gid])) {
+				$share = $existing[$gid];
+				if ($share->getPermissions() !== self::CONTENT_PERMISSIONS) {
+					$share->setPermissions(self::CONTENT_PERMISSIONS);
+					try {
+						$this->shareManager->updateShare($share);
+					} catch (\Throwable $e) {
+						$this->logger->warning('penpot_sync: failed to update group share', [
+							'app' => Application::APP_ID,
+							'group' => $gid,
+							'exception' => $e,
+						]);
+					}
+				}
+				continue;
+			}
+			try {
+				$share = $this->shareManager->newShare();
+				$share->setNode($folder);
+				$share->setShareType(IShare::TYPE_GROUP);
+				$share->setSharedWith($gid);
+				$share->setSharedBy($ownerUid);
+				$share->setPermissions(self::CONTENT_PERMISSIONS);
+				$this->shareManager->createShare($share);
+			} catch (\Throwable $e) {
+				// Most likely the group does not exist (admin-managed / LDAP). Log
+				// and carry on — a missing content group must not fail the pull.
+				$this->logger->warning('penpot_sync: failed to share with group (does it exist?)', [
+					'app' => Application::APP_ID,
+					'group' => $gid,
+					'exception' => $e,
+				]);
+			}
+		}
+	}
+
 	/** The single-segment folder name for a mapping, guarded non-empty. */
 	private function folderName(Mapping $mapping): string {
 		$name = trim($mapping->ncFolder);
@@ -145,6 +232,7 @@ final class StorageService {
 			'app' => Application::APP_ID,
 			'folder' => $name,
 			'mapping' => $mapping->id,
+			'backend' => $mapping->useTeamFolder ? 'team_folder' : 'admin_owned',
 		]);
 		return $name;
 	}

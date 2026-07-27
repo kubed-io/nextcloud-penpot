@@ -191,14 +191,17 @@ final class PenpotClient {
 	 * The `.penpot` extension is a Nextcloud-side affordance (saga §6.4) —
 	 * Penpot's own name never carries it, so callers pass the bare name.
 	 *
+	 * `$actorToken`, when given, attributes the rename to that user in Penpot's
+	 * history (saga §6.18); null attributes it to the service account.
+	 *
 	 * @return array<string, mixed> The updated `{id, name, created-at, modified-at}`.
 	 *
 	 * @throws PenpotApiException
 	 */
-	public function renameFile(string $fileId, string $name): array {
+	public function renameFile(string $fileId, string $name, ?string $actorToken = null): array {
 		$this->assertName($name);
 
-		return $this->record($this->call('rename-file', ['file' => $fileId, 'name' => $name]));
+		return $this->record($this->call('rename-file', ['file' => $fileId, 'name' => $name], $actorToken));
 	}
 
 	/**
@@ -206,12 +209,14 @@ final class PenpotClient {
 	 *
 	 * Penpot answers 204 with NO BODY, unlike `rename-file`'s 200 + record.
 	 *
+	 * `$actorToken` attributes the rename exactly as {@see renameFile()}.
+	 *
 	 * @throws PenpotApiException
 	 */
-	public function renameProject(string $projectId, string $name): void {
+	public function renameProject(string $projectId, string $name, ?string $actorToken = null): void {
 		$this->assertName($name);
 
-		$this->call('rename-project', ['project' => $projectId, 'name' => $name]);
+		$this->call('rename-project', ['project' => $projectId, 'name' => $name], $actorToken);
 	}
 
 	// ── connection test ─────────────────────────────────────────────────────
@@ -254,14 +259,19 @@ final class PenpotClient {
 	 *
 	 * @throws PenpotApiException
 	 */
-	protected function call(string $command, array $args = []): mixed {
+	protected function call(string $command, array $args = [], ?string $actorToken = null): mixed {
 		$url = $this->getBaseUrl() . self::RPC_PATH . $command;
 		$body = $this->wireParams($command, $args);
+
+		// A write may attribute to the acting user's personal token (saga §6.18);
+		// everything else — and any write with no personal token — uses the
+		// service account. `$actorToken === null` is the ordinary case.
+		$token = $actorToken ?? $this->getToken();
 
 		try {
 			$response = $this->clientService->newClient()->post($url, [
 				'headers' => [
-					'Authorization' => 'Token ' . $this->getToken(),
+					'Authorization' => 'Token ' . $token,
 					'Content-Type' => 'application/json',
 					// DO NOT ADD `Accept: application/json`. It looks like the
 					// obvious, tidy thing to send and it silently breaks every

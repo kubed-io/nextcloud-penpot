@@ -15,6 +15,7 @@ use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
+use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\IAppConfig;
@@ -63,6 +64,7 @@ final class PullServiceTest extends TestCase {
 			$this->client,
 			$this->metadata,
 			$this->storage,
+			new SyncGuard(),
 			$config,
 			new NullLogger(),
 		);

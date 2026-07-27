@@ -41,6 +41,22 @@
 	</stubs>
 	<issueHandlers>
 		<!--
+			These reference classes that exist at runtime in a real Nextcloud but
+			are NOT shipped in nextcloud/ocp, so Psalm cannot see them: the private
+			OC internals TeamFolderService reaches for when it re-inits the actor's
+			filesystem so a groupfolders mount created earlier in the same request
+			becomes visible (`OC_Util::tearDownFS` / `setupFS`). Not real bugs, and
+			there is no public stub to import. Same handler, and same reasoning, as
+			nextcloud-grafana / nextcloud-n8n.
+		-->
+		<UndefinedClass>
+			<errorLevel type="suppress">
+				<referencedClass name="OC" />
+				<referencedClass name="OC_Util" />
+				<referencedClass name="OC_User" />
+			</errorLevel>
+		</UndefinedClass>
+		<!--
 			MissingDependency does not support <referencedClass> in Psalm 6's
 			schema, so it is suppressed wholesale. Every instance is the same
 			OCP-stub artifact both siblings hit the moment they touch the

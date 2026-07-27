@@ -70,6 +70,7 @@ final class PullService {
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly StorageService $storage,
+		private readonly SyncGuard $guard,
 		private readonly IAppConfig $config,
 		private readonly LoggerInterface $logger,
 	) {
@@ -111,47 +112,54 @@ final class PullService {
 		}
 
 		try {
-			$root = $this->storage->ensureRoot($mapping);
-			$this->metadata->writeFolder($root->getId(), [PenpotMetadata::KEY_TEAM_ID => $mapping->teamId]);
+			// The pull renames mirror nodes to follow Penpot ({@see tryRename} →
+			// Node::move), which fires the same NodeRenamedEvent a user's rename
+			// does. Raise the guard so the write-path listener ignores our own
+			// corrections instead of pushing them straight back to Penpot — the
+			// wall between the pull (Penpot → NC) and the writeback (NC → Penpot).
+			return $this->guard->run(function () use ($mapping): array {
+				$root = $this->storage->ensureRoot($mapping);
+				$this->metadata->writeFolder($root->getId(), [PenpotMetadata::KEY_TEAM_ID => $mapping->teamId]);
 
-			// Index the existing project folders ONCE (penpot_project_id -> folder)
-			// rather than re-listing the root for every project below — the pull is
-			// otherwise O(projects × children) on a big team.
-			$folderIndex = $this->indexProjectFolders($root);
+				// Index the existing project folders ONCE (penpot_project_id -> folder)
+				// rather than re-listing the root for every project below — the pull is
+				// otherwise O(projects × children) on a big team.
+				$folderIndex = $this->indexProjectFolders($root);
 
-			$folders = 0;
-			$files = 0;
-			$skipped = 0;
-			$processed = 0;
+				$folders = 0;
+				$files = 0;
+				$skipped = 0;
+				$processed = 0;
 
-			foreach ($this->teamProjects($mapping->teamId) as $project) {
-				$processed++;
-				$projectId = $this->str($project, 'id');
-				if ($projectId === '') {
-					$skipped++;
-					continue;
-				}
-
-				$target = $root;
-				if (!$this->isDefaultProject($project)) {
-					$projectName = $this->str($project, 'name');
-					if (!$this->isLegalName($projectName)) {
-						$this->logger->warning('penpot_sync pull: skipping project with an illegal folder name', [
-							'app' => Application::APP_ID,
-							'project' => $projectId,
-							'name' => $projectName,
-						]);
+				foreach ($this->teamProjects($mapping->teamId) as $project) {
+					$processed++;
+					$projectId = $this->str($project, 'id');
+					if ($projectId === '') {
 						$skipped++;
 						continue;
 					}
-					$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName);
-					$folders++;
+
+					$target = $root;
+					if (!$this->isDefaultProject($project)) {
+						$projectName = $this->str($project, 'name');
+						if (!$this->isLegalName($projectName)) {
+							$this->logger->warning('penpot_sync pull: skipping project with an illegal folder name', [
+								'app' => Application::APP_ID,
+								'project' => $projectId,
+								'name' => $projectName,
+							]);
+							$skipped++;
+							continue;
+						}
+						$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName);
+						$folders++;
+					}
+
+					$files += $this->pullProjectFiles($target, $mapping, $projectId, $skipped);
 				}
 
-				$files += $this->pullProjectFiles($target, $mapping, $projectId, $skipped);
-			}
-
-			return ['processed' => $processed, 'folders' => $folders, 'files' => $files, 'skipped' => $skipped, 'error' => null];
+				return ['processed' => $processed, 'folders' => $folders, 'files' => $files, 'skipped' => $skipped, 'error' => null];
+			});
 		} catch (PenpotApiException $e) {
 			$this->logger->warning('penpot_sync pull failed', [
 				'app' => Application::APP_ID,

@@ -77,6 +77,19 @@ namespace OCP {
 			public function userExists(string $uid): bool;
 		}
 	}
+	// PushService attributes a rename to the acting user's personal token, so it
+	// asks IUserSession who is renaming. Declaration-only: PushServiceTest fakes
+	// a session with and without a signed-in user.
+	if (!interface_exists(IUser::class, false)) {
+		interface IUser {
+			public function getUID(): string;
+		}
+	}
+	if (!interface_exists(IUserSession::class, false)) {
+		interface IUserSession {
+			public function getUser(): ?IUser;
+		}
+	}
 	// MappingSettings offers a per-mapping group picker, so it needs the list of
 	// group ids. Declaration-only; only the settings panel touches it.
 	if (!interface_exists(IGroup::class, false)) {
