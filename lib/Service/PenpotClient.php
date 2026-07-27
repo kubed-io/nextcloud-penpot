@@ -282,8 +282,8 @@ final class PenpotClient {
 	 *
 	 * @param string $command The RPC command name, e.g. `get-teams`.
 	 * @param array<string, string|list<string>> $args Logical argument names —
-	 *                                    translated to wire params through
-	 *                                    {@see PARAMS}, never passed through raw.
+	 *                                                 translated to wire params through
+	 *                                                 {@see PARAMS}, never passed through raw.
 	 *
 	 * @return mixed The decoded body (`null` for a 204).
 	 *
