@@ -41,16 +41,17 @@
 	</stubs>
 	<issueHandlers>
 		<!--
-			DELIBERATELY EMPTY FOR NOW. Both sibling repos suppress `UndefinedClass`
-			for the private OC internals their repair-steps reach for (`OC`,
-			`OC_Util`, `OC_User`) and suppress `MissingDependency` wholesale for an
-			IRootFolder/oc\hooks\emitter stub artifact.
-
-			This app's first slice touches none of that, and Psalm's
-			`UnusedIssueHandlerSuppression` correctly FAILS the build on a
-			suppression that never fires — so carrying the siblings' block here
-			ahead of the code would be an error, not foresight. Re-add each
-			suppression in the PR that first needs it, with the same reasoning.
+			MissingDependency does not support <referencedClass> in Psalm 6's
+			schema, so it is suppressed wholesale. Every instance is the same
+			OCP-stub artifact both siblings hit the moment they touch the
+			filesystem: `OCP\Files\IRootFolder` reports its base
+			`oc\hooks\emitter` as missing, because that private base ships in a
+			real Nextcloud but in neither nextcloud/ocp nor Composer. It is not
+			our code and there is no public stub to import — same reasoning, and
+			same handler, as nextcloud-grafana / nextcloud-n8n. First needed by
+			StorageService / the status command, which resolve the actor's home
+			folder via IRootFolder.
 		-->
+		<MissingDependency errorLevel="suppress" />
 	</issueHandlers>
 </psalm>
