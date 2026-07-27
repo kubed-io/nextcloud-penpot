@@ -13,6 +13,7 @@ use Behat\Behat\Context\Context;
 use OCA\PenpotSync\Tests\Integration\Steps\AdminSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 
 /**
@@ -44,6 +45,7 @@ final class FeatureContext implements Context {
 	use AppLifecycleSteps;
 	use AdminSteps;
 	use ConnectionSteps;
+	use MappingSteps;
 
 	private const APP_ID = 'penpot_sync';
 

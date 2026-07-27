@@ -32,3 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration suite now runs against a real Penpot container, with a token minted per run — the only place the wire format is asserted, since mocking a protocol we have misread would only encode the misreading.
 - Saga Chapter 2: the build plan, in dependency order, committing to the client before the admin surface.
 - Documented that `allow_local_remote_servers` must be enabled when Penpot is reached at a private or in-cluster address — otherwise Nextcloud's SSRF guard blocks every request, and `occ penpot_sync:probe` now names that case specifically.
+- Admin settings for the Penpot service-account token, stored encrypted, with a field that shows whether a token is set without ever echoing it back.
+- Admin team mappings: map a Penpot team to a Nextcloud folder, with a per-mapping default file mode and an immutable folder mode — plus `occ penpot_sync:list-teams`, `add-mapping`, `list-mappings`, and `remove-mapping`.
+- A team can only be mapped if the service account can actually see it in Penpot, because Penpot has no instance-wide view — the app now explains that up front instead of creating a mapping that would silently mirror nothing.
+- Admin "Test connection", and `occ penpot_sync:test-connection`, which tell an unset token, a rejected token, and an unreachable Penpot apart — and name the `enable-access-tokens` instance flag, whose absence otherwise looks exactly like a bad token.
+- Admin settings for the scheduled pull (on/off and how often), stored now and honoured when the background job lands.
+- An optional personal Penpot token per Nextcloud user, so changes made from Nextcloud are attributed to that person in Penpot's history instead of to the shared service account — with `occ penpot_sync:set-personal-token`.
+- `occ penpot_sync:show-config` now also reports the configured mappings and the pull schedule.

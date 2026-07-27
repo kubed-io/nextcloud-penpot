@@ -138,4 +138,65 @@ trait ConnectionSteps {
 			throw new \RuntimeException("the failure did not mention the token:\n{$this->lastOutput}");
 		}
 	}
+
+	// ── the Test connection button's occ twin ───────────────────────────────
+	// Deliberately a DIFFERENT command from `probe` above: probe is the deep
+	// diagnostic (teams, projects, optionally files), this is the operator's
+	// one-line verdict. Both exist, and both must agree about what failed.
+
+	/** @When the admin saves an invalid service-account token */
+	public function theAdminSavesAnInvalidToken(): void {
+		$res = $this->occ('penpot_sync:set-token ' . escapeshellarg('not-a-real-token'));
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("set-token refused a syntactically fine token:\n{$res['output']}");
+		}
+	}
+
+	/** @When the admin tests the connection */
+	public function theAdminTestsTheConnection(): void {
+		$this->occ('penpot_sync:test-connection');
+	}
+
+	/** @Then the connection test reports a failure */
+	public function theConnectionTestReportsAFailure(): void {
+		if ($this->lastExit === 0) {
+			throw new \RuntimeException("expected the connection test to fail:\n{$this->lastOutput}");
+		}
+	}
+
+	/** @Then the connection test reports success */
+	public function theConnectionTestReportsSuccess(): void {
+		if ($this->lastExit !== 0) {
+			throw new \RuntimeException("expected the connection test to succeed:\n{$this->lastOutput}");
+		}
+	}
+
+	/** @Then the connection test says the token is not set */
+	public function theConnectionTestSaysTheTokenIsNotSet(): void {
+		// "no token" must not read like "bad token" — the fixes differ.
+		if (!preg_match('/no penpot service-account token|not configured/i', $this->lastOutput)) {
+			throw new \RuntimeException("expected an unset-token message, got:\n{$this->lastOutput}");
+		}
+	}
+
+	/** @Then the connection test says the token was rejected */
+	public function theConnectionTestSaysTheTokenWasRejected(): void {
+		if (!str_contains(strtolower($this->lastOutput), 'rejected')) {
+			throw new \RuntimeException("expected a rejected-token message, got:\n{$this->lastOutput}");
+		}
+	}
+
+	/** @Then /^the connection test names the "([^"]*)" instance flag$/ */
+	public function theConnectionTestNamesTheInstanceFlag(string $flag): void {
+		if (!str_contains($this->lastOutput, $flag)) {
+			throw new \RuntimeException("expected the message to name {$flag}, got:\n{$this->lastOutput}");
+		}
+	}
+
+	/** @Then the connection test lists at least one Penpot team */
+	public function theConnectionTestListsATeam(): void {
+		if (!str_contains($this->lastOutput, 'Visible team')) {
+			throw new \RuntimeException("expected the visible teams to be listed, got:\n{$this->lastOutput}");
+		}
+	}
 }

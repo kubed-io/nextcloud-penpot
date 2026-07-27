@@ -38,9 +38,12 @@
 # WHAT'S DELIBERATELY NOT HERE: creating a NEW Penpot team or project FROM
 # Nextcloud is a separate, still-open fork — see team-import.feature.
 #
-# @todo — no lib/Settings/ or lib/Service/MappingService exists yet.
+# PARTIALLY LIVE. The MAPPING LIFECYCLE — add, refuse, list, remove, and the
+# defaults a new mapping gets — runs for real in CI against a real Penpot, and
+# those scenarios are untagged below. Everything that depends on the PULL (Team
+# Folder provisioning, project subfolders, rename propagation) is still @todo:
+# MappingService and the admin surface exist, the sync engine does not.
 
-@todo
 Feature: Admin configures team mappings
   As a Nextcloud admin
   I want to map existing Penpot teams to Team Folders
@@ -50,6 +53,58 @@ Feature: Admin configures team mappings
     Given the app is enabled
     And the admin has set the instance-wide Penpot base URL
     And the admin has configured the service-account Penpot token
+
+  # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
+  # These drive the same MappingService the settings panel calls, over occ.
+
+  Scenario: A team the service account can see can be mapped
+    Given no Penpot teams are mapped
+    And the service account can see at least one Penpot team
+    When the admin maps the first team the service account can see
+    Then there is exactly 1 configured team mapping
+    And the mapping records the team name from Penpot
+
+  Scenario: A new mapping defaults to link mode and nested folders
+    Given no Penpot teams are mapped
+    When the admin maps the first team the service account can see
+    Then the mapping's default mode is "link"
+    And the mapping's folder mode is "nested"
+
+  Scenario: A team the service account cannot see cannot be mapped
+    Given no Penpot teams are mapped
+    When the admin tries to map the Penpot team "11111111-2222-3333-4444-555555555555"
+    Then the mapping is rejected
+    And the refusal explains "not visible to the service account"
+    And there are exactly 0 configured team mappings
+    # Better an honest refusal now than a mapping that silently pulls nothing.
+    # Penpot offers NO instance-wide view (§6.12), so this is Penpot's model
+    # surfacing, not a rule this app invented.
+
+  Scenario: A Penpot team may only be mapped once
+    Given no Penpot teams are mapped
+    When the admin maps the first team the service account can see
+    And the admin maps the same team again
+    Then the mapping is rejected
+    And there is exactly 1 configured team mapping
+
+  Scenario: Folder mode "keyed" is refused, because it is designed but not built
+    Given no Penpot teams are mapped
+    When the admin tries to map the first visible team with folder mode "keyed"
+    Then the mapping is rejected
+    And the refusal explains "not implemented"
+    # Accepting it and behaving as "nested" would be a silent lie the admin could
+    # only detect from the resulting folder layout (saga §6.53, question #47).
+
+  Scenario: Removing a mapping deletes nothing
+    Given no Penpot teams are mapped
+    When the admin maps the first team the service account can see
+    And the admin removes that mapping
+    Then there are exactly 0 configured team mappings
+    And removing it reported that nothing was deleted
+    # Nothing is removed from Penpot and nothing local is removed either. What
+    # SHOULD happen to already-mirrored files is Course 5's decision
+    # (remove-mapping.feature) — until then the safe behaviour is to leave them
+    # and say so.
 
   # ── the core mapping action ──────────────────────────────────────────────────
 

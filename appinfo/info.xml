@@ -20,13 +20,14 @@ writeback. A `.penpot` export is an opaque archive of nested design data —
 editing it outside Penpot wouldn't produce anything sane to re-import. Design
 happens in Penpot; Nextcloud holds the backup and the click-through.
 
-⚠️ **Very early development.** This release contains the base URL setting, the
-service-account token, and the Penpot API client behind them — enough to
-configure the app and verify it can reach your Penpot
-(`occ penpot_sync:probe` lists the teams and projects the token can see). There
-is no sync engine and no file actions yet: nothing is mirrored. See the
-project's `saga/` design narrative for what's confirmed, what's locked, and
-what's still an open question.
+⚠️ **Very early development.** The admin surface is complete — instance URL,
+service-account token, team mappings, scheduled-pull settings, and an optional
+per-user token for attribution — and every control has an `occ` twin. But there
+is still **no sync engine and no file actions: nothing is mirrored yet.** You
+can configure the app fully and verify it reaches your Penpot
+(`occ penpot_sync:test-connection` reports which teams the account can see), and
+that is all it does today. See the project's `saga/` design narrative for what's
+confirmed, what's locked, and what's still an open question.
 
 The `enable-access-tokens` Penpot instance flag is required to mint the token;
 it is off by default upstream.
@@ -49,20 +50,32 @@ this app integrates with.
     <nextcloud min-version="30" max-version="33"/>
   </dependencies>
   <settings>
-    <!-- The Instance card itself is a DECLARATIVE form, registered in
-         AppInfo\Application::register() — only its sidebar section is declared
-         here. No <admin> panels yet: this slice ships one declarative card and
-         nothing else. -->
+    <!-- The Instance, Service account, Scheduled pull and personal Penpot cards
+         are DECLARATIVE forms, registered in AppInfo\Application::register() —
+         only their sidebar sections are declared here.
+
+         MappingSettings is the exception and must be listed as an <admin> panel:
+         declarative settings have no array-of-objects field type, so the mapping
+         list is a server-rendered IDelegatedSettings panel with its own
+         controller. Same split, for the same reason, as both sibling apps. -->
     <admin-section>OCA\PenpotSync\Settings\AdminSection</admin-section>
+    <admin>OCA\PenpotSync\Settings\MappingSettings</admin>
+    <personal-section>OCA\PenpotSync\Settings\PersonalSection</personal-section>
   </settings>
   <commands>
-    <!-- The CLI is the primary interface for this slice — everything the admin
-         card does is reachable headlessly, which is what the integration suite
-         drives. -->
+    <!-- CLI-first is the house style: every control on the admin surface has a
+         headless twin, which is what the integration suite drives and what makes
+         declarative cluster config possible. -->
     <command>OCA\PenpotSync\Command\SetUrl</command>
     <command>OCA\PenpotSync\Command\SetToken</command>
+    <command>OCA\PenpotSync\Command\SetPersonalToken</command>
     <command>OCA\PenpotSync\Command\ShowConfig</command>
     <command>OCA\PenpotSync\Command\Probe</command>
+    <command>OCA\PenpotSync\Command\TestConnection</command>
+    <command>OCA\PenpotSync\Command\ListTeams</command>
+    <command>OCA\PenpotSync\Command\AddMapping</command>
+    <command>OCA\PenpotSync\Command\ListMappings</command>
+    <command>OCA\PenpotSync\Command\RemoveMapping</command>
   </commands>
   <!--
     No <repair-steps> yet — the custom .penpot mimetype registration

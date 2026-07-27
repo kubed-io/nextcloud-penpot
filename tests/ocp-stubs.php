@@ -56,6 +56,29 @@ namespace OCP {
 			public function getValueString(string $app, string $key, string $default = '', bool $lazy = false, bool $sensitive = false): string;
 
 			public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): bool;
+
+			// ScheduleConfig reads the enabled flag as a real bool rather than
+			// parsing a string, so the stub must carry this too.
+			public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool;
+		}
+	}
+	// PersonalTokenService stores per-USER values, which is a different config
+	// interface from IAppConfig — user-scoped keys are the whole reason one
+	// Nextcloud user's Penpot token cannot be read as another's.
+	if (!interface_exists(IConfig::class, false)) {
+		interface IConfig {
+			public function getUserValue(string $userId, string $appName, string $key, string $default = ''): string;
+
+			public function setUserValue(string $userId, string $appName, string $key, string $value, ?string $preCondition = null): void;
+
+			public function deleteUserValue(string $userId, string $appName, string $key): void;
+		}
+	}
+	// SetPersonalToken validates the target user exists, so a typo'd uid fails
+	// loudly instead of storing a token nothing will ever read.
+	if (!interface_exists(IUserManager::class, false)) {
+		interface IUserManager {
+			public function userExists(string $uid): bool;
 		}
 	}
 	// AdminSection's constructor deps. Nothing asserts on them yet, but the class
@@ -144,9 +167,13 @@ namespace OCP\Settings {
 	if (!class_exists(DeclarativeSettingsTypes::class, false)) {
 		final class DeclarativeSettingsTypes {
 			public const SECTION_TYPE_ADMIN = 'admin';
+			public const SECTION_TYPE_PERSONAL = 'personal';
 			public const STORAGE_TYPE_INTERNAL = 'internal';
 			public const TEXT = 'text';
 			public const URL = 'url';
+			public const PASSWORD = 'password';
+			public const CHECKBOX = 'checkbox';
+			public const RADIO = 'radio';
 		}
 	}
 	// AdminSection implements IIconSection (which extends ISection upstream —

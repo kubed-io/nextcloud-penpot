@@ -1,0 +1,103 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Team-mapping admin panel. Deliberately small: this is a list, not a form
+ * grid like the sibling apps' mapping UIs, because a mapping here has no
+ * folder name, no groups and no per-project rows to lay out.
+ *
+ * Everything uses core's CSS variables so the panel follows the active theme
+ * (including dark mode) without a second set of rules.
+ */
+
+#penpot-mapping-settings .penpot-notice {
+	margin: 12px 0;
+	padding: 12px;
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+	border-left: 4px solid var(--color-warning, #c28900);
+}
+
+#penpot-mapping-settings .penpot-notice--error {
+	border-left-color: var(--color-error, #c9326b);
+}
+
+#penpot-mapping-settings .penpot-mappings {
+	width: 100%;
+	max-width: 900px;
+	margin: 12px 0;
+	border-collapse: collapse;
+}
+
+#penpot-mapping-settings .penpot-mappings th {
+	text-align: left;
+	font-weight: normal;
+	color: var(--color-text-maxcontrast);
+	padding: 6px 12px 6px 0;
+	border-bottom: 1px solid var(--color-border);
+}
+
+#penpot-mapping-settings .penpot-mappings td {
+	padding: 8px 12px 8px 0;
+	border-bottom: 1px solid var(--color-border);
+	vertical-align: middle;
+}
+
+#penpot-mapping-settings .penpot-team-name {
+	display: block;
+	font-weight: bold;
+}
+
+/* The id is shown because Penpot allows duplicate team names — without it two
+   rows can look identical. Muted and monospaced so it reads as a machine value
+   and never competes with the name. */
+#penpot-mapping-settings .penpot-team-id {
+	display: block;
+	font-family: monospace;
+	font-size: 0.85em;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Immutable (saga §6.53), so it is rendered as text rather than a disabled
+   control — a greyed-out dropdown invites clicking and implies it might become
+   editable. */
+#penpot-mapping-settings .penpot-folder-mode {
+	font-family: monospace;
+}
+
+#penpot-mapping-settings .penpot-hint,
+#penpot-mapping-settings .settings-hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9em;
+}
+
+#penpot-mapping-settings .penpot-add {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin: 12px 0;
+}
+
+#penpot-mapping-settings .penpot-test {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+	margin-top: 20px;
+}
+
+#penpot-mapping-settings #penpot-test-result.success {
+	color: var(--color-success, #2d7b41);
+}
+
+/* Connected, but the token can see no teams — a SUCCESS that still blocks every
+   mapping (saga §6.18). It gets its own colour because a green tick here would
+   tell an admin everything is fine while nothing can be mirrored. */
+#penpot-mapping-settings #penpot-test-result.warning {
+	color: var(--color-warning, #c28900);
+}
+
+#penpot-mapping-settings #penpot-test-result.error {
+	color: var(--color-error, #c9326b);
+}

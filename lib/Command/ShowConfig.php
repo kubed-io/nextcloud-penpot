@@ -10,7 +10,9 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Command;
 
 use OCA\PenpotSync\AppInfo\Application;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
+use OCA\PenpotSync\Service\ScheduleConfig;
 use OCA\PenpotSync\Settings\InstanceSettings;
 use OCP\IAppConfig;
 use Symfony\Component\Console\Command\Command;
@@ -36,6 +38,8 @@ final class ShowConfig extends Command {
 	public function __construct(
 		private InstanceSettings $settings,
 		private IAppConfig $config,
+		private MappingService $mappings,
+		private ScheduleConfig $schedule,
 	) {
 		parent::__construct();
 	}
@@ -64,6 +68,31 @@ final class ShowConfig extends Command {
 		$output->writeln($hasToken
 			? 'Service-account token: <info>stored</info>'
 			: 'Service-account token: <comment>not set</comment> (occ penpot_sync:set-token <token>)');
+
+		$mappings = $this->mappings->list();
+
+		$output->writeln('Mapped teams: ' . ($mappings === []
+			? '<comment>none</comment> (occ penpot_sync:add-mapping <team-id>)'
+			: '<info>' . count($mappings) . '</info>'));
+
+		foreach ($mappings as $mapping) {
+			$output->writeln(sprintf(
+				'  - %s (%s) mode=%s folder-mode=%s',
+				$mapping->teamName !== '' ? $mapping->teamName : '(unknown)',
+				$mapping->teamId,
+				$mapping->mode,
+				$mapping->folderMode,
+			));
+		}
+
+		// Reported even though nothing reads it yet, because it is stored state an
+		// operator can set — and a setting you can change but cannot read back is
+		// how "did that apply?" becomes an unanswerable question.
+		$output->writeln(sprintf(
+			'Scheduled pull: %s, every %s <comment>(not running — the pull job is not built yet)</comment>',
+			$this->schedule->isEnabled() ? '<info>enabled</info>' : '<comment>disabled</comment>',
+			ScheduleConfig::formatInterval($this->schedule->getIntervalSeconds()),
+		));
 
 		return 0;
 	}
