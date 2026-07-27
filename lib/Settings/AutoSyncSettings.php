@@ -65,13 +65,32 @@ final class AutoSyncSettings implements IDeclarativeSettingsForm {
 					'id' => self::KEY_ENABLED,
 					'title' => 'Pull from Penpot on a schedule',
 					'description' => 'When on, Nextcloud periodically refreshes mirrored files from Penpot.',
-					'type' => DeclarativeSettingsTypes::CHECKBOX,
-					// A CHECKBOX default MUST be a real bool. Core's
-					// DeclarativeManager does no type coercion, so a string '0'
-					// breaks the frontend's boolean round-trip and the toggle
-					// silently never persists — it reads as off forever. The n8n
-					// sibling hit exactly this; core's own apps use real bools.
-					'default' => false,
+					// RADIO, not CHECKBOX — and this is a bug workaround, not a
+					// style choice.
+					//
+					// A declarative CHECKBOX sends a real PHP bool, and core's
+					// DeclarativeManager::saveInternalValue() hands that straight
+					// to IAppConfig::setValueString(), which is typed `string`:
+					//
+					//   TypeError: setValueString(): Argument #3 ($value) must be
+					//   of type string, true given
+					//
+					// The save aborts, nothing persists, and the toggle springs
+					// back to its default on the next page load with no error the
+					// admin can see. Reproduced on this NC 33 instance by driving
+					// the manager directly — and BOTH sibling apps have the same
+					// bug: n8n_sync's stored value came from `occ`, not from its
+					// toggle, and grafana_sync's key is simply unset.
+					//
+					// A RADIO sends a string, which survives that path — verified
+					// against n8n's own `timing` radio, which round-trips fine.
+					// Same two choices for the admin, one that actually saves.
+					'type' => DeclarativeSettingsTypes::RADIO,
+					'default' => 'no',
+					'options' => [
+						['name' => 'Off — mirror only when run manually', 'value' => 'no'],
+						['name' => 'On — pull from Penpot automatically', 'value' => 'yes'],
+					],
 				],
 				[
 					'id' => self::KEY_INTERVAL,

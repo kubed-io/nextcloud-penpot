@@ -60,8 +60,25 @@ final class ScheduleConfig {
 	) {
 	}
 
+	/**
+	 * Whether the scheduled pull is switched on.
+	 *
+	 * Reads a STRING, because the settings card stores one: a declarative
+	 * CHECKBOX cannot save at all on this Nextcloud (its real-bool value hits
+	 * `setValueString()` and raises a TypeError), so the field is a RADIO with
+	 * `yes`/`no`. See {@see AutoSyncSettings} for the full reasoning.
+	 *
+	 * FILTER_VALIDATE_BOOLEAN rather than a bare comparison, so every shape this
+	 * key has ever held reads correctly — `yes`/`no` from the card, `1`/`0` from
+	 * `occ config:app:set`, and `true`/`false` if anyone sets it by hand. A bare
+	 * cast would read the string `"0"` as... false, but `"no"` as TRUE, which is
+	 * exactly the silent inversion this method exists to avoid.
+	 */
 	public function isEnabled(): bool {
-		return $this->config->getValueBool(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, false);
+		return filter_var(
+			$this->config->getValueString(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, 'no'),
+			FILTER_VALIDATE_BOOLEAN,
+		);
 	}
 
 	/**

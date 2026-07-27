@@ -83,9 +83,30 @@ final class ScheduleConfigTest extends TestCase {
 		self::assertSame(21600, $this->config('6h')->getIntervalSeconds());
 	}
 
-	public function testReadsTheEnabledFlagAsABool(): void {
-		self::assertTrue($this->config('1h', true)->isEnabled());
-		self::assertFalse($this->config('1h', false)->isEnabled());
+	/**
+	 * The card stores a STRING (`yes`/`no`), because a declarative CHECKBOX
+	 * cannot save on this Nextcloud at all — see AutoSyncSettings. `occ` can also
+	 * leave `1`/`0` in the same key, so every shape has to read correctly.
+	 */
+	#[DataProvider('enabledValues')]
+	public function testReadsTheEnabledFlag(string $stored, bool $expected): void {
+		self::assertSame($expected, $this->config('1h', $stored)->isEnabled());
+	}
+
+	/** @return array<string, array{string, bool}> */
+	public static function enabledValues(): array {
+		return [
+			'yes from the settings card' => ['yes', true],
+			'no from the settings card' => ['no', false],
+			'1 from occ' => ['1', true],
+			'0 from occ' => ['0', false],
+			'true by hand' => ['true', true],
+			'false by hand' => ['false', false],
+			// A bare (bool) cast would read this as TRUE, since any non-empty
+			// string is truthy — the silent inversion the filter avoids.
+			'unset falls back to off' => ['', false],
+			'nonsense is off, never on' => ['banana', false],
+		];
 	}
 
 	/** @return array<string, array{int, string}> */
@@ -114,15 +135,18 @@ final class ScheduleConfigTest extends TestCase {
 		}
 	}
 
-	private function config(string $interval, bool $enabled = false): ScheduleConfig {
+	private function config(string $interval, string $enabled = 'no'): ScheduleConfig {
 		/** @var IAppConfig&Stub $config */
 		$config = $this->createStub(IAppConfig::class);
 		$config->method('getValueString')->willReturnCallback(
-			static fn (string $app, string $key, string $default = ''): string => $key === AutoSyncSettings::KEY_INTERVAL
-				? $interval
-				: $default,
+			static function (string $app, string $key, string $default = '') use ($interval, $enabled): string {
+				return match ($key) {
+					AutoSyncSettings::KEY_INTERVAL => $interval,
+					AutoSyncSettings::KEY_ENABLED => $enabled,
+					default => $default,
+				};
+			},
 		);
-		$config->method('getValueBool')->willReturn($enabled);
 
 		return new ScheduleConfig($config);
 	}
