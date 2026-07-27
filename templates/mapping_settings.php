@@ -88,7 +88,7 @@ $unmapped = array_values(array_filter(
 						<span class="penpot-hint"><?php p($l->t('fixed')); ?></span>
 					</td>
 					<td>
-						<button class="penpot-remove"><?php p($l->t('Remove')); ?></button>
+						<button type="button" class="penpot-remove"><?php p($l->t('Remove')); ?></button>
 					</td>
 				</tr>
 			<?php } ?>
@@ -116,7 +116,7 @@ $unmapped = array_values(array_filter(
 				<option value="sync"><?php p($l->t('Sync — download the design archive')); ?></option>
 			</select>
 
-			<button id="penpot-add-submit" class="primary"><?php p($l->t('Map team')); ?></button>
+			<button type="button" id="penpot-add-submit" class="primary"><?php p($l->t('Map team')); ?></button>
 		</div>
 		<p class="settings-hint">
 			<?php /* Said here because the schedule card is further down the page and
@@ -129,7 +129,7 @@ $unmapped = array_values(array_filter(
 	<?php } ?>
 
 	<div class="penpot-test">
-		<button id="penpot-test-connection"><?php p($l->t('Test connection')); ?></button>
+		<button type="button" id="penpot-test-connection"><?php p($l->t('Test connection')); ?></button>
 		<span id="penpot-test-result" role="status" aria-live="polite"></span>
 	</div>
 </div>

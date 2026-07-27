@@ -17,7 +17,6 @@ use OCA\PenpotSync\Settings\MappingSettings;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\AuthorizedAdminSetting;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 
@@ -58,8 +57,12 @@ final class MappingController extends Controller {
 
 	/**
 	 * The configured mappings.
+	 *
+	 * No `#[NoCSRFRequired]`: it was here out of habit from read-only endpoints,
+	 * but nothing needs it. js/mapping-settings.js sends `requesttoken` on every
+	 * request, so the check passes — and dropping the attribute keeps the CSRF
+	 * protection Nextcloud applies by default to an authenticated admin surface.
 	 */
-	#[NoCSRFRequired]
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function index(): JSONResponse {
 		return new JSONResponse([

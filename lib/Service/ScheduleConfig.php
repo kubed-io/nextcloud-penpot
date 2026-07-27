@@ -111,6 +111,12 @@ final class ScheduleConfig {
 
 		// A bare number means seconds — the same convention the n8n sibling uses,
 		// kept identical so an admin who knows one app knows this one.
+		//
+		// `?? 's'` IS correct here, despite looking fragile. PHP omits a TRAILING
+		// unmatched group from $m entirely rather than setting it to '', so "90"
+		// yields a 2-element array and the coalesce fires. (That is only true
+		// because this group is last; a later group would make it '' instead.)
+		// Verified on 8.4, and covered by the 'bare number means seconds' case.
 		$unit = $m[2] ?? 's';
 		$multiplier = self::UNITS[$unit];
 
