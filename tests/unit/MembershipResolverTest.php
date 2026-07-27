@@ -13,8 +13,8 @@ use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotMetadata;
-use OCP\Files\NotFoundException;
 use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 use PHPUnit\Framework\TestCase;
 
 /**

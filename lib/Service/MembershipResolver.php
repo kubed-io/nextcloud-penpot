@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Service;
 
-use OCP\Files\NotFoundException;
 use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 
 /**
  * Resolves where a node "belongs" in Penpot by walking UP the folder tree,
