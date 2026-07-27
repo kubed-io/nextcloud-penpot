@@ -257,11 +257,43 @@ namespace OCP\Files {
 	// MembershipResolver walks UP the folder tree via Node::getParent(), reading
 	// each ancestor's id. Declaration-only: the resolver test fakes a chain of
 	// these. `getParent()` throws NotFoundException past the storage root.
+	//
+	// PullService additionally reads names/paths and moves nodes, so those live
+	// on Node too (both File and Folder inherit them). Only the surface the app
+	// actually calls is declared — a mock auto-implements exactly this.
 	if (!interface_exists(Node::class, false)) {
 		interface Node {
 			public function getId(): int;
 
 			public function getParent(): Node;
+
+			public function getName(): string;
+
+			public function getPath(): string;
+
+			public function move(string $targetPath): Node;
+		}
+	}
+	// A folder the pull mirrors into: it lists children, checks/creates nodes,
+	// and stamps folder metadata by id. PullServiceTest fakes these.
+	if (!interface_exists(Folder::class, false)) {
+		interface Folder extends Node {
+			/** @return list<Node> */
+			public function getDirectoryListing(): array;
+
+			public function nodeExists(string $path): bool;
+
+			public function get(string $path): Node;
+
+			public function newFolder(string $path): Folder;
+
+			public function newFile(string $path, mixed $content = null): File;
+		}
+	}
+	// A mirrored `.penpot` link file: the pull rewrites its body on re-pull.
+	if (!interface_exists(File::class, false)) {
+		interface File extends Node {
+			public function putContent(mixed $data): void;
 		}
 	}
 	// Thrown by Node::getParent() once the walk runs past the root — the

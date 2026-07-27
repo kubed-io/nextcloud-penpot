@@ -79,8 +79,7 @@ final class StorageService {
 	 * Ensure the mapping's root folder exists and return it, writable by the
 	 * sync actor. Idempotent: an existing folder is returned as-is.
 	 *
-	 * @throws \RuntimeException when the actor cannot be resolved, the mapping
-	 *   has no folder name, or a name collides with a non-folder node.
+	 * @throws \RuntimeException when the actor is unresolvable, the mapping has no folder name, or the name collides with a non-folder node
 	 */
 	public function ensureRoot(Mapping $mapping): Folder {
 		$name = $this->folderName($mapping);
