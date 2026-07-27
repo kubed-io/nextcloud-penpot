@@ -130,6 +130,15 @@ trait MappingSteps {
 		}
 	}
 
+	/**
+	 * Held across steps because `$this->lastOutput` is shared and every later
+	 * step clobbers it — the assertion below runs after a `list-mappings` call
+	 * that would otherwise leave it holding `[]`. Anything asserted about a
+	 * command's output *after* an intervening step has to be captured when it
+	 * happens, not read back later.
+	 */
+	private string $removalOutput = '';
+
 	/** @When the admin removes that mapping */
 	public function theAdminRemovesThatMapping(): void {
 		$ids = $this->mappingIds();
@@ -143,13 +152,15 @@ trait MappingSteps {
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("remove-mapping failed:\n{$res['output']}");
 		}
+
+		$this->removalOutput = $res['output'];
 	}
 
 	/** @Then removing it reported that nothing was deleted */
 	public function removingReportedNothingDeleted(): void {
-		if (!str_contains($this->lastOutput, 'Nothing was deleted')) {
+		if (!str_contains($this->removalOutput, 'Nothing was deleted')) {
 			throw new \RuntimeException(
-				"expected the removal to state that nothing was deleted, got:\n" . $this->lastOutput,
+				"expected the removal to state that nothing was deleted, got:\n" . $this->removalOutput,
 			);
 		}
 	}
