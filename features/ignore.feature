@@ -34,7 +34,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── the core behaviour ───────────────────────────────────────────────────────

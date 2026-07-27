@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -62,7 +62,7 @@ final class PushServiceTest extends TestCase {
 	}
 
 	public function testRenamesAManagedPenpotFileByStrippingTheExtension(): void {
-		$this->signedInAs('kelly', personalToken: null);
+		$this->signedInAs('dana', personalToken: null);
 		$this->metadata->method('readFile')->with(30)
 			->willReturn(new PenpotFileMetadata(self::FILE_ID, '5@x', 'link'));
 
@@ -74,12 +74,12 @@ final class PushServiceTest extends TestCase {
 	}
 
 	public function testAttributesToThePersonalTokenWhenTheUserHasOne(): void {
-		$this->signedInAs('kelly', personalToken: 'kelly-token');
+		$this->signedInAs('dana', personalToken: 'dana-token');
 		$this->metadata->method('readFile')
 			->willReturn(new PenpotFileMetadata(self::FILE_ID, '5@x', 'link'));
 
 		$this->client->expects($this->once())->method('renameFile')
-			->with(self::FILE_ID, 'Login screen', 'kelly-token');
+			->with(self::FILE_ID, 'Login screen', 'dana-token');
 
 		$this->push->pushRename($this->file(30, 'Login screen.penpot'));
 	}
@@ -107,7 +107,7 @@ final class PushServiceTest extends TestCase {
 	}
 
 	public function testRenamesAProjectFolder(): void {
-		$this->signedInAs('kelly', personalToken: null);
+		$this->signedInAs('dana', personalToken: null);
 		$this->metadata->method('readFolder')->with(20)
 			->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
 

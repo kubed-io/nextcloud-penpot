@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--
-  - SPDX-FileCopyrightText: 2026 Kelly Ferrone
+  - SPDX-FileCopyrightText: 2026 kubed-io
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -39,7 +39,7 @@ this app integrates with.
   ]]></description>
   <version>0.1.0</version>
   <licence>agpl</licence>
-  <author>Kelly Ferrone</author>
+  <author>kubed-io</author>
   <namespace>PenpotSync</namespace>
   <category>integration</category>
   <category>files</category>

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -65,7 +65,7 @@ final class MappingServiceTest extends TestCase {
 
 		$this->client = $this->createStub(PenpotClient::class);
 		$this->client->method('getTeams')->willReturn([
-			['id' => self::TEAM_ID, 'name' => 'Ferronescotia'],
+			['id' => self::TEAM_ID, 'name' => 'Northwind'],
 			['id' => self::OTHER_TEAM_ID, 'name' => 'Default'],
 		]);
 	}
@@ -106,7 +106,7 @@ final class MappingServiceTest extends TestCase {
 			'team_name' => 'Whatever The Caller Typed',
 		]));
 
-		self::assertSame('Ferronescotia', $saved->teamName);
+		self::assertSame('Northwind', $saved->teamName);
 	}
 
 	public function testATeamCanOnlyBeMappedOnce(): void {
@@ -275,8 +275,8 @@ final class MappingServiceTest extends TestCase {
 	public function testMaterialisesTheFolderNameFromPenpotsTeamName(): void {
 		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
-		self::assertSame('Ferronescotia', $saved->ncFolder);
-		self::assertSame('Ferronescotia', $this->service()->getById($saved->id)?->ncFolder);
+		self::assertSame('Northwind', $saved->ncFolder);
+		self::assertSame('Northwind', $this->service()->getById($saved->id)?->ncFolder);
 	}
 
 	/**
@@ -369,7 +369,7 @@ final class MappingServiceTest extends TestCase {
 			$saved->folderMode,
 		));
 
-		self::assertSame('Ferronescotia', $updated->ncFolder);
+		self::assertSame('Northwind', $updated->ncFolder);
 		self::assertSame(['design'], $updated->ncGroups);
 	}
 
@@ -435,6 +435,6 @@ final class MappingServiceTest extends TestCase {
 		$teams = $this->service()->visibleTeams();
 
 		self::assertArrayHasKey(self::TEAM_ID, $teams);
-		self::assertSame('Ferronescotia', $teams[self::TEAM_ID]['name']);
+		self::assertSame('Northwind', $teams[self::TEAM_ID]['name']);
 	}
 }

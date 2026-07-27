@@ -47,7 +47,7 @@ Feature: Scheduled or manual pull from Penpot
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── what a pull produces ─────────────────────────────────────────────────────
@@ -61,16 +61,16 @@ Feature: Scheduled or manual pull from Penpot
 
   @todo
   Scenario: Sync now on a mapping card pulls just that team
-    Given the Penpot team "Ferronescotia" is mapped
+    Given the Penpot team "Northwind" is mapped
     When the admin uses that mapping's "Sync now" button
-    Then only "Ferronescotia" is pulled
+    Then only "Northwind" is pulled
     And other mapped teams are left alone
     # The per-mapping equivalent of "Sync from Penpot", exactly as in both
     # siblings — the same button, in the same place on the card.
 
   @todo
   Scenario: Sync now reports honestly while the pull is unbuilt
-    Given the Penpot team "Ferronescotia" is mapped
+    Given the Penpot team "Northwind" is mapped
     When the admin uses that mapping's "Sync now" button
     Then the card reports that per-team sync is not available yet
     And nothing is mirrored
@@ -87,7 +87,7 @@ Feature: Scheduled or manual pull from Penpot
     # There is nothing to sync until the mapping is persisted.
 
   Scenario: Pulling mirrors Penpot's projects as folders and its files inside them
-    Given the "Ferronescotia" team has a Penpot project "My Stuff" containing a file "My firsty"
+    Given the "Northwind" team has a Penpot project "My Stuff" containing a file "My firsty"
     When the pull runs
     Then a folder named "My Stuff" exists in the Team Folder
     And that folder carries the Penpot project id as folder metadata
@@ -110,7 +110,7 @@ Feature: Scheduled or manual pull from Penpot
     # project — not that it sits at a particular path.
 
   Scenario: A newly created Penpot project appears as a folder on the next pull
-    Given the "Ferronescotia" team gains a new Penpot project "Brand"
+    Given the "Northwind" team gains a new Penpot project "Brand"
     When the pull runs
     Then a folder named "Brand" appears one level inside the Team Folder
     And it carries the new project's id as metadata and the app's project tag
@@ -152,7 +152,7 @@ Feature: Scheduled or manual pull from Penpot
     And it is refreshed if Penpot has changed since it was trashed
 
   Scenario: A design already in Penpot's Drafts surfaces at the Team Folder root
-    Given the "Ferronescotia" team has a design in its "Drafts" project
+    Given the "Northwind" team has a design in its "Drafts" project
     When the pull runs
     Then the design appears as a file at the Team Folder's root
     And no folder named "Drafts" is created
@@ -162,7 +162,7 @@ Feature: Scheduled or manual pull from Penpot
   # ── the mode axis: what actually costs anything ──────────────────────────────
 
   Scenario: A new mapping defaults its files to "link" mode
-    When the admin maps the Penpot team "Ferronescotia" without choosing a mode
+    When the admin maps the Penpot team "Northwind" without choosing a mode
     And the pull runs
     Then every mirrored file is in "link" mode
     And no ".penpot" archive content is stored for any of them
@@ -187,7 +187,7 @@ Feature: Scheduled or manual pull from Penpot
     Then the file is re-exported and its archive content replaced
 
   Scenario: A pull over an unchanged instance costs no exports at all
-    Given the "Ferronescotia" team has 3 mirrored projects holding 50 files in "link" mode
+    Given the "Northwind" team has 3 mirrored projects holding 50 files in "link" mode
     And nothing has changed in Penpot since the last pull
     When the pull runs
     Then "export-binfile" is called 0 times
@@ -297,12 +297,12 @@ Feature: Scheduled or manual pull from Penpot
   # ── there is no push, and there is no user-attributed pull ───────────────────
 
   Scenario: There is no push counterpart to this feature
-    Given the "Ferronescotia" mapping exists
+    Given the "Northwind" mapping exists
     Then no "Sync to Penpot" action exists anywhere in the admin panel or CLI
 
   Scenario: The pull always runs as the service account, never as a user
     Given two Nextcloud users both have personal Penpot tokens configured
-    And both are members of the mapped "Ferronescotia" team
+    And both are members of the mapped "Northwind" team
     When the scheduled pull runs
     Then the pull uses the service-account token only
     And neither user's personal token is used for any read

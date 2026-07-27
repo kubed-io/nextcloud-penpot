@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -34,7 +34,7 @@ use PHPUnit\Framework\TestCase;
  * only `getId()` and `getParent()`.
  */
 final class MembershipResolverTest extends TestCase {
-	private const TEAM_ID = 'team-ferronescotia';
+	private const TEAM_ID = 'team-northwind';
 	private const PROJECT_ID = 'proj-my-stuff';
 	private const OTHER_PROJECT_ID = 'proj-design-system';
 

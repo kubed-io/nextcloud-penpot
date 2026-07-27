@@ -192,12 +192,12 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: Mapping a Penpot team provisions a Team Folder and mirrors its projects
-    Given the service account has been invited as "viewer" on the Penpot team "Ferronescotia"
-    When the admin maps the Penpot team "Ferronescotia"
-    Then a Team Folder is provisioned for "Ferronescotia"
+    Given the service account has been invited as "viewer" on the Penpot team "Northwind"
+    When the admin maps the Penpot team "Northwind"
+    Then a Team Folder is provisioned for "Northwind"
     And the Team Folder carries the Penpot team id as folder metadata
     When the pull runs
-    Then each of "Ferronescotia"'s Penpot projects appears as a direct subfolder
+    Then each of "Northwind"'s Penpot projects appears as a direct subfolder
     And each project folder carries its Penpot project id as folder metadata
     And each project folder carries the app's project tag
     And the pull creates them one level inside the Team Folder
@@ -217,7 +217,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: There is no project-level mapping to configure
-    Given the Penpot team "Ferronescotia" is mapped
+    Given the Penpot team "Northwind" is mapped
     Then the mapping list shows exactly 1 mapping, for the team
     And no per-project mapping can be added, configured, or removed
     And project subfolders exist only because the pull created them
@@ -238,7 +238,7 @@ Feature: Admin configures team mappings
   @todo
   Scenario: Mapping a team without groupfolders installed falls back to a plain shared folder
     Given the "groupfolders" app is not installed
-    When the admin maps the Penpot team "Ferronescotia"
+    When the admin maps the Penpot team "Northwind"
     Then a plain Nextcloud folder is provisioned and shared to the mapped group
     And the folder carries the Penpot team id as folder metadata, exactly as a Team Folder would
     And the mapping behaves the same for pull purposes as a Team Folder mapping
@@ -250,8 +250,8 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: A mapped folder defaults to the team's name but may be renamed
-    When the admin maps the Penpot team "Ferronescotia" without naming a folder
-    Then the provisioned Team Folder is named "Ferronescotia", matching Penpot
+    When the admin maps the Penpot team "Northwind" without naming a folder
+    Then the provisioned Team Folder is named "Northwind", matching Penpot
     But the admin may name it something else when creating the mapping
     And that name is what gets provisioned
     # SUPERSEDES an earlier draft that said the folder name is "not independently
@@ -263,7 +263,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: Project folder names always match their Penpot projects
-    Given the Penpot team "Ferronescotia" is mapped and pulled
+    Given the Penpot team "Northwind" is mapped and pulled
     Then every project folder is named exactly as Penpot names that project
     And the app never lets a project folder's name diverge from its project's
     # Locked in saga §6.36, in both directions: Penpot renames propagate down on
@@ -273,7 +273,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: Two Penpot projects in one team sharing a name is handled, not crashed
-    Given the "Ferronescotia" team has two projects both named "Brand"
+    Given the "Northwind" team has two projects both named "Brand"
     When the pull runs
     Then both are mirrored without a folder-name collision
     And the app reports the ambiguity so an admin can rename one in Penpot
@@ -283,8 +283,8 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: A team renamed in Penpot does not rename the mapped folder
-    Given the Penpot team "Ferronescotia" is mapped
-    When the team is renamed to "Ferronescotia Design" in Penpot
+    Given the Penpot team "Northwind" is mapped
+    When the team is renamed to "Northwind Design" in Penpot
     And the pull runs
     Then the mapped folder keeps the name the admin gave it
     And the mapping records the team's new name
@@ -300,7 +300,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: A mapping records the default mode its files get, defaulting to link
-    When the admin maps the Penpot team "Ferronescotia" without choosing a mode
+    When the admin maps the Penpot team "Northwind" without choosing a mode
     Then the mapping's default mode is "link"
     When the admin maps the Penpot team "Design Co" with default mode "sync"
     Then the mapping's default mode is "sync"
@@ -322,12 +322,12 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: A mapping records its folder mode, defaulting to nested
-    When the admin maps the Penpot team "Ferronescotia" without choosing a folder mode
+    When the admin maps the Penpot team "Northwind" without choosing a folder mode
     Then the mapping's folder mode is "nested"
 
   @todo
   Scenario: The folder mode cannot be changed after the mapping is created
-    Given the Penpot team "Ferronescotia" is mapped with folder mode "nested"
+    Given the Penpot team "Northwind" is mapped with folder mode "nested"
     When the admin tries to change that mapping's folder mode to "keyed"
     Then the change is rejected as immutable
     And the rejection explains the mapping must be removed and re-added
@@ -342,7 +342,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: The Nextcloud folder cannot be changed after the mapping is created
-    Given the Penpot team "Ferronescotia" is mapped into the folder "Design Files"
+    Given the Penpot team "Northwind" is mapped into the folder "Design Files"
     When the admin tries to rename that mapping's Nextcloud folder
     Then the change is rejected as immutable
     # Re-pointing it would have to move the whole mirrored tree and re-stamp
@@ -350,7 +350,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: The Team Folder setting cannot be changed after the mapping is created
-    Given the Penpot team "Ferronescotia" is mapped using a Team Folder
+    Given the Penpot team "Northwind" is mapped using a Team Folder
     When the admin tries to switch that mapping to a plain shared folder
     Then the change is rejected as immutable
     # Switching the storage backend would have to migrate the provisioned folder
@@ -358,7 +358,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: The default mode cannot be changed after the mapping is created
-    Given the Penpot team "Ferronescotia" is mapped with default mode "link"
+    Given the Penpot team "Northwind" is mapped with default mode "link"
     When the admin tries to change that mapping's default mode to "sync"
     Then the change is rejected as immutable
     And the rejection points at per-file promotion instead
@@ -372,7 +372,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: The groups a mapped folder is shared with can be changed
-    Given the Penpot team "Ferronescotia" is mapped
+    Given the Penpot team "Northwind" is mapped
     When the admin changes that mapping's groups
     Then the change is accepted
     # Re-sharing a folder is not a migration — it is the one field that moves no
@@ -394,7 +394,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: A Penpot team may only be mapped once
-    Given the Penpot team "Ferronescotia" is already mapped
-    When the admin tries to map the Penpot team "Ferronescotia" again
+    Given the Penpot team "Northwind" is already mapped
+    When the admin tries to map the Penpot team "Northwind" again
     Then the mapping is rejected
     And there is still exactly 1 configured team mapping

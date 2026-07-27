@@ -48,7 +48,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── where the action appears ─────────────────────────────────────────────────
@@ -62,15 +62,15 @@ Feature: Creating a new Penpot design from Nextcloud
     And "Open in Penpot" opens the new design
 
   Scenario: Creating at a team folder's root puts the design in that team's Drafts
-    When I choose "New → Penpot design" at the root of the "Ferronescotia" Team Folder
-    Then the design is created in the "Ferronescotia" team's "Drafts" project
+    When I choose "New → Penpot design" at the root of the "Northwind" Team Folder
+    Then the design is created in the "Northwind" team's "Drafts" project
     And the mirrored file appears where I created it, at the team folder root
     And the app explains the design lives in Penpot's Drafts
 
   Scenario: Creating in a plain folder under a team also lands in Drafts
     Given a plain folder "scratch" inside the Team Folder, with no Penpot metadata
     When I choose "New → Penpot design" inside "scratch"
-    Then the design is created in the "Ferronescotia" team's "Drafts" project
+    Then the design is created in the "Northwind" team's "Drafts" project
     And the mirrored file appears in "scratch", where I created it
     And no folder named "Drafts" is created anywhere
     # No project-id ancestor, but a team-id ancestor exists — so the team is
@@ -135,7 +135,7 @@ Feature: Creating a new Penpot design from Nextcloud
   # ── mode ─────────────────────────────────────────────────────────────────────
 
   Scenario: A newly created design follows its mapping's default mode
-    Given the "Ferronescotia" mapping has default mode "link"
+    Given the "Northwind" mapping has default mode "link"
     When I create a new design in the "My Stuff" folder
     Then the mirrored file is in "link" mode
     And no archive is stored for it until it is promoted to "sync"

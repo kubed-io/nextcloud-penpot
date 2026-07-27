@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -145,7 +145,7 @@ final class PullServiceTest extends TestCase {
 	private function mapping(bool $useTeamFolder): Mapping {
 		return Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferrone Scotia',
+			'team_name' => 'North Wind',
 			'nc_folder' => 'Penpot',
 			'use_team_folder' => $useTeamFolder,
 			'mode' => Mapping::MODE_LINK,

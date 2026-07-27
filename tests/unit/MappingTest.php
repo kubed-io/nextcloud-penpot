@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -63,7 +63,7 @@ final class MappingTest extends TestCase {
 		$this->expectException(\InvalidArgumentException::class);
 		$this->expectExceptionMessage('must be a UUID');
 
-		Mapping::fromArray(['team_id' => 'Ferronescotia']);
+		Mapping::fromArray(['team_id' => 'Northwind']);
 	}
 
 	/**
@@ -116,10 +116,10 @@ final class MappingTest extends TestCase {
 	public function testFolderNameDefaultsToTheTeamName(): void {
 		$mapping = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferronescotia',
+			'team_name' => 'Northwind',
 		]);
 
-		self::assertSame('Ferronescotia', $mapping->ncFolder);
+		self::assertSame('Northwind', $mapping->ncFolder);
 	}
 
 	public function testAnExplicitFolderNameWins(): void {
@@ -128,7 +128,7 @@ final class MappingTest extends TestCase {
 		// those are always Penpot's, §6.36.)
 		$mapping = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferronescotia',
+			'team_name' => 'Northwind',
 			'nc_folder' => 'Design Files',
 		]);
 
@@ -208,19 +208,19 @@ final class MappingTest extends TestCase {
 	public function testRenamingTheTeamLeavesTheFolderNameAlone(): void {
 		$mapping = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferronescotia',
+			'team_name' => 'Northwind',
 		]);
 
-		$renamed = $mapping->withTeamName('Ferronescotia Design');
+		$renamed = $mapping->withTeamName('Northwind Design');
 
-		self::assertSame('Ferronescotia Design', $renamed->teamName);
-		self::assertSame('Ferronescotia', $renamed->ncFolder);
+		self::assertSame('Northwind Design', $renamed->teamName);
+		self::assertSame('Northwind', $renamed->ncFolder);
 	}
 
 	public function testRoundTripsThroughAnArray(): void {
 		$original = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferronescotia',
+			'team_name' => 'Northwind',
 			'mode' => Mapping::MODE_SYNC,
 		]);
 
@@ -230,12 +230,12 @@ final class MappingTest extends TestCase {
 	public function testWithTeamNameReplacesOnlyTheName(): void {
 		$original = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'team_name' => 'Ferronescotia',
+			'team_name' => 'Northwind',
 		]);
 
-		$renamed = $original->withTeamName('Ferronescotia Design');
+		$renamed = $original->withTeamName('Northwind Design');
 
-		self::assertSame('Ferronescotia Design', $renamed->teamName);
+		self::assertSame('Northwind Design', $renamed->teamName);
 		self::assertSame($original->id, $renamed->id);
 		self::assertSame($original->teamId, $renamed->teamId);
 		self::assertSame($original->mode, $renamed->mode);
@@ -245,10 +245,10 @@ final class MappingTest extends TestCase {
 	public function testTrimsWhitespace(): void {
 		$mapping = Mapping::fromArray([
 			'team_id' => '  ' . self::TEAM_ID . '  ',
-			'team_name' => '  Ferronescotia  ',
+			'team_name' => '  Northwind  ',
 		]);
 
 		self::assertSame(self::TEAM_ID, $mapping->teamId);
-		self::assertSame('Ferronescotia', $mapping->teamName);
+		self::assertSame('Northwind', $mapping->teamName);
 	}
 }

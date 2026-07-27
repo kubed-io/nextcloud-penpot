@@ -41,7 +41,7 @@ Feature: Uninstall reverts the system and reinstall reconnects the data
 
   Background:
     Given the app is connected to Penpot
-    And a folder mapped to the Penpot team "Ferronescotia"
+    And a folder mapped to the Penpot team "Northwind"
 
   # ── system cleanup (needs a live app remove — @todo in CI) ────────────────────
   @todo

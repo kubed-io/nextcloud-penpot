@@ -1,7 +1,7 @@
 <?php
 
 /**
- * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-FileCopyrightText: 2026 kubed-io
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
@@ -67,20 +67,20 @@ final class ProbeTest extends TestCase {
 	}
 
 	public function testReportsTheVisibleTeams(): void {
-		$this->client->method('ping')->willReturn(['Ferronescotia', 'Default']);
+		$this->client->method('ping')->willReturn(['Northwind', 'Default']);
 		$this->client->method('getAllProjects')->willReturn([]);
 
 		self::assertSame(0, $this->tester->execute([]));
 
 		$display = $this->tester->getDisplay();
 		self::assertStringContainsString('Connected', $display);
-		self::assertStringContainsString('Ferronescotia', $display);
+		self::assertStringContainsString('Northwind', $display);
 	}
 
 	public function testListsProjectsWithTheirTeam(): void {
-		$this->client->method('ping')->willReturn(['Ferronescotia']);
+		$this->client->method('ping')->willReturn(['Northwind']);
 		$this->client->method('getAllProjects')->willReturn([
-			['id' => 'p1', 'name' => 'My Stuff', 'team-name' => 'Ferronescotia'],
+			['id' => 'p1', 'name' => 'My Stuff', 'team-name' => 'Northwind'],
 		]);
 
 		$this->tester->execute([]);
@@ -88,7 +88,7 @@ final class ProbeTest extends TestCase {
 
 		self::assertStringContainsString('Projects (1)', $display);
 		self::assertStringContainsString('My Stuff', $display);
-		self::assertStringContainsString('Ferronescotia', $display);
+		self::assertStringContainsString('Northwind', $display);
 	}
 
 	/**
@@ -125,7 +125,7 @@ final class ProbeTest extends TestCase {
 	}
 
 	public function testAFailureListingProjectsExitsNonZero(): void {
-		$this->client->method('ping')->willReturn(['Ferronescotia']);
+		$this->client->method('ping')->willReturn(['Northwind']);
 		$this->client->method('getAllProjects')->willThrowException(new PenpotApiException(
 			'boom',
 			0,
@@ -138,9 +138,9 @@ final class ProbeTest extends TestCase {
 
 	public function testFilesAreOnlyFetchedWhenAsked(): void {
 		$client = $this->mockClient();
-		$client->method('ping')->willReturn(['Ferronescotia']);
+		$client->method('ping')->willReturn(['Northwind']);
 		$client->method('getAllProjects')->willReturn([
-			['id' => 'p1', 'name' => 'My Stuff', 'team-name' => 'Ferronescotia'],
+			['id' => 'p1', 'name' => 'My Stuff', 'team-name' => 'Northwind'],
 		]);
 		$client->expects(self::never())->method('getProjectFiles');
 
@@ -149,9 +149,9 @@ final class ProbeTest extends TestCase {
 
 	public function testFilesAreListedWithRevisionWhenAsked(): void {
 		$client = $this->mockClient();
-		$client->method('ping')->willReturn(['Ferronescotia']);
+		$client->method('ping')->willReturn(['Northwind']);
 		$client->method('getAllProjects')->willReturn([
-			['id' => 'p1', 'name' => 'My Stuff', 'team-name' => 'Ferronescotia'],
+			['id' => 'p1', 'name' => 'My Stuff', 'team-name' => 'Northwind'],
 		]);
 		$client->expects(self::once())
 			->method('getProjectFiles')
@@ -171,10 +171,10 @@ final class ProbeTest extends TestCase {
 	 * skip-and-report posture the pull itself takes (saga §6.25).
 	 */
 	public function testOneUnreadableProjectDoesNotAbortTheListing(): void {
-		$this->client->method('ping')->willReturn(['Ferronescotia']);
+		$this->client->method('ping')->willReturn(['Northwind']);
 		$this->client->method('getAllProjects')->willReturn([
-			['id' => 'p1', 'name' => 'Broken', 'team-name' => 'Ferronescotia'],
-			['id' => 'p2', 'name' => 'Fine', 'team-name' => 'Ferronescotia'],
+			['id' => 'p1', 'name' => 'Broken', 'team-name' => 'Northwind'],
+			['id' => 'p2', 'name' => 'Fine', 'team-name' => 'Northwind'],
 		]);
 		$this->client->method('getProjectFiles')->willReturnCallback(
 			static function (string $id): array {

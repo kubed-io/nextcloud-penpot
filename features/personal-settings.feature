@@ -59,10 +59,10 @@ Feature: Personal Penpot access token settings
     And the field renders blank on reload, the same "never echoed back" pattern both sibling apps use
 
   Scenario: A user's token never leaks to another Nextcloud user
-    Given user "kelly" has set a personal Penpot token
+    Given user "dana" has set a personal Penpot token
     When user "alex" opens their own personal Penpot settings
     Then "alex" sees no token configured
-    And "alex" setting their own token never overwrites "kelly"'s
+    And "alex" setting their own token never overwrites "dana"'s
 
   Scenario: Testing the personal connection distinguishes unset from rejected
     Given the user has not set a personal Penpot token

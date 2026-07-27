@@ -35,7 +35,7 @@ Feature: Deleting designs, locally and in Penpot
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   # ── layer 1: ordinary Nextcloud deletes are always purely local ─────────────
@@ -136,7 +136,7 @@ Feature: Deleting designs, locally and in Penpot
     When I choose "Delete in Penpot" and confirm
     Then "delete-file" is called
     And the app explains the design goes to Penpot's trash and can be restored for about a week
-    And the design no longer appears in the "Ferronescotia" team's project listings
+    And the design no longer appears in the "Northwind" team's project listings
     And the local mirror is moved to the Nextcloud trash with its metadata intact
 
   Scenario: A design deleted in Penpot appears in Penpot's trash listing

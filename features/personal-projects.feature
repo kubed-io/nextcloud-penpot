@@ -98,11 +98,11 @@ Feature: Personal Penpot projects in the user's home folder
     # Team content is the service account's job and does not depend on this.
 
   Scenario: One user's personal projects never appear in another user's home
-    Given user "kelly" has a personal Penpot token and personal projects
+    Given user "dana" has a personal Penpot token and personal projects
     And user "alex" has their own personal Penpot token
     When the personal pull runs for both users
     Then "alex" sees only their own personal projects
-    And no folder from "kelly"'s personal team appears anywhere in "alex"'s home
+    And no folder from "dana"'s personal team appears anywhere in "alex"'s home
 
   Scenario: Clearing a personal token stops personal pulls without deleting anything
     Given the user has personal project folders in their home

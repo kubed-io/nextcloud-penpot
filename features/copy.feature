@@ -46,7 +46,7 @@ Feature: Copying a mirrored Penpot file never creates anything in Penpot
 
   Background:
     Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Ferronescotia"
+    And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
   Scenario: A copy made under a mapped project becomes untracked local content
