@@ -52,7 +52,23 @@
 .pp-mode       { grid-area: 1 / 2; }
 .pp-foldermode { grid-area: 2 / 2; }
 .pp-tf         { grid-area: 3 / 2; align-self: center; }
-.pp-groups { grid-area: 1 / 3 / 5 / 4; align-self: stretch; } /* span all rows in col 3 */
+
+/* Spans every row of col 3, INCLUDING the actions row (4), so its bottom edge
+   lines up with the Save/Sync/Delete buttons — which is what makes the card look
+   like the siblings' rather than leaving the box floating short.
+   `align-self: stretch` overrides the grid's `align-items: start` for this one
+   item; without it the box would collapse to its content height.
+   The sibling card gets away with less because it has a control in row 3 of
+   BOTH left columns; ours has one only in col 2, so row 3 would otherwise
+   collapse and the groups box would stop above the buttons. */
+.pp-groups {
+	grid-area: 1 / 3 / 5 / 4;
+	align-self: stretch;
+	/* The grid item stretches, but its CONTENT only fills it if the flex column
+	   is told to take the full height — otherwise .penpot-sync-groups' `flex: 1`
+	   has nothing to expand into and the box stops at its natural size. */
+	height: 100%;
+}
 
 /* The immutable folder mode, rendered as text rather than a disabled control —
    a greyed-out dropdown invites clicking and implies it might become editable. */
