@@ -1,0 +1,167 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+declare(strict_types=1);
+
+namespace OCA\PenpotSync\Service;
+
+use OCA\PenpotSync\AppInfo\Application;
+use OCA\PenpotSync\Settings\AutoSyncSettings;
+use OCP\IAppConfig;
+
+/**
+ * Reads the scheduled-pull settings and turns the interval into seconds.
+ *
+ * ## WHY THIS EXISTS BEFORE THE JOB DOES
+ *
+ * The card ({@see AutoSyncSettings}) accepts a free-text duration like `1h`,
+ * because presets age badly and a text box is honest about being a duration.
+ * But free text needs parsing, and parsing needs a defined answer for `""`,
+ * `"0"`, `"banana"`, and `"1s"`. Deciding that here — with tests — means the
+ * Course 3 background job inherits a settled contract instead of re-deriving it
+ * from a string it happens to find in appconfig.
+ *
+ * ## THE FLOOR IS REAL, NOT DECORATIVE
+ *
+ * A pull costs 1 + P requests per team (§5.5). Sub-minute intervals spend
+ * requests without catching fresher designs, and a typo (`5` meaning "5
+ * minutes", parsed as 5 seconds) would hammer Penpot. Anything below the floor
+ * is CLAMPED UP rather than rejected: the value is already stored by the time
+ * anything reads it, and a background job that refuses to run because of a bad
+ * setting is worse than one that runs a bit less often than asked.
+ *
+ * Rejection is the *card's* job at input time; clamping is this reader's job at
+ * use time. Different moments, different correct answers.
+ */
+final class ScheduleConfig {
+	/**
+	 * The slowest anything may be asked to run, in seconds.
+	 *
+	 * Not a Penpot limit — a homelab-scale sanity floor. See the class docblock.
+	 */
+	public const MIN_INTERVAL = 300;
+
+	/** Used when the stored value is absent or unparseable. */
+	public const DEFAULT_INTERVAL = 3600;
+
+	private const UNITS = [
+		's' => 1,
+		'm' => 60,
+		'h' => 3600,
+		'd' => 86400,
+	];
+
+	public function __construct(
+		private readonly IAppConfig $config,
+	) {
+	}
+
+	/**
+	 * Whether the scheduled pull is switched on.
+	 *
+	 * Reads a STRING, because the settings card stores one: a declarative
+	 * CHECKBOX cannot save at all on this Nextcloud (its real-bool value hits
+	 * `setValueString()` and raises a TypeError), so the field is a RADIO with
+	 * `yes`/`no`. See {@see AutoSyncSettings} for the full reasoning.
+	 *
+	 * FILTER_VALIDATE_BOOLEAN rather than a bare comparison, so every shape this
+	 * key has ever held reads correctly — `yes`/`no` from the card, `1`/`0` from
+	 * `occ config:app:set`, and `true`/`false` if anyone sets it by hand. A bare
+	 * cast would read the string `"0"` as... false, but `"no"` as TRUE, which is
+	 * exactly the silent inversion this method exists to avoid.
+	 */
+	public function isEnabled(): bool {
+		return filter_var(
+			$this->config->getValueString(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, 'no'),
+			FILTER_VALIDATE_BOOLEAN,
+		);
+	}
+
+	/**
+	 * The configured interval in seconds, clamped to {@see MIN_INTERVAL}.
+	 *
+	 * Never throws and never returns something a `TimedJob` cannot use — an
+	 * unparseable value falls back to the default rather than disabling the pull,
+	 * because a stored typo should degrade the schedule, not silently stop it.
+	 */
+	public function getIntervalSeconds(): int {
+		$raw = $this->config->getValueString(
+			Application::APP_ID,
+			AutoSyncSettings::KEY_INTERVAL,
+			'',
+		);
+
+		$parsed = self::parseInterval($raw);
+
+		return max(self::MIN_INTERVAL, $parsed ?? self::DEFAULT_INTERVAL);
+	}
+
+	/**
+	 * Parse a duration like `30s`, `15m`, `1h`, `2d`, or a bare number (seconds).
+	 *
+	 * Returns null when the input means nothing — the caller decides whether that
+	 * is a fallback (this class) or a validation error (the CLI).
+	 */
+	public static function parseInterval(string $raw): ?int {
+		$value = strtolower(trim($raw));
+
+		if ($value === '') {
+			return null;
+		}
+
+		if (preg_match('/^(\d+)\s*([smhd])?$/', $value, $m) !== 1) {
+			return null;
+		}
+
+		$amount = (int)$m[1];
+
+		if ($amount <= 0) {
+			// "0" and "0h" are not a schedule. Turning the pull off is what the
+			// enabled checkbox is for, and conflating the two would make the
+			// checkbox lie about the state.
+			return null;
+		}
+
+		// A bare number means seconds — the same convention the n8n sibling uses,
+		// kept identical so an admin who knows one app knows this one.
+		//
+		// `?? 's'` IS correct here, despite looking fragile. PHP omits a TRAILING
+		// unmatched group from $m entirely rather than setting it to '', so "90"
+		// yields a 2-element array and the coalesce fires. (That is only true
+		// because this group is last; a later group would make it '' instead.)
+		// Verified on 8.4, and covered by the 'bare number means seconds' case.
+		$unit = $m[2] ?? 's';
+		$multiplier = self::UNITS[$unit];
+
+		// OVERFLOW GUARD, and it is not theoretical. `(int)` SATURATES at
+		// PHP_INT_MAX rather than wrapping, so "99999999999999999999" becomes
+		// PHP_INT_MAX; multiplying that by 86400 then overflows to a FLOAT, which
+		// violates this method's `?int` return type and throws a TypeError.
+		// Verified on PHP 8.4.
+		//
+		// The consequence is worse than a bad interval: a stored junk value would
+		// crash every READ — `show-config`, and later the timed job — instead of
+		// falling back. An unusable duration is nonsense input, so it takes the
+		// same path as "banana".
+		if ($amount > (int)(PHP_INT_MAX / $multiplier)) {
+			return null;
+		}
+
+		return $amount * $multiplier;
+	}
+
+	/** Render seconds back as the shortest exact duration string. */
+	public static function formatInterval(int $seconds): string {
+		foreach (['d' => 86400, 'h' => 3600, 'm' => 60] as $suffix => $size) {
+			if ($seconds % $size === 0 && $seconds >= $size) {
+				return ((int)($seconds / $size)) . $suffix;
+			}
+		}
+
+		return $seconds . 's';
+	}
+}

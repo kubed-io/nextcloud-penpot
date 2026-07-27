@@ -58,6 +58,38 @@ namespace OCP {
 			public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): bool;
 		}
 	}
+	// PersonalTokenService stores per-USER values, which is a different config
+	// interface from IAppConfig — user-scoped keys are the whole reason one
+	// Nextcloud user's Penpot token cannot be read as another's.
+	if (!interface_exists(IConfig::class, false)) {
+		interface IConfig {
+			public function getUserValue(string $userId, string $appName, string $key, string $default = ''): string;
+
+			public function setUserValue(string $userId, string $appName, string $key, string $value, ?string $preCondition = null): void;
+
+			public function deleteUserValue(string $userId, string $appName, string $key): void;
+		}
+	}
+	// SetPersonalToken validates the target user exists, so a typo'd uid fails
+	// loudly instead of storing a token nothing will ever read.
+	if (!interface_exists(IUserManager::class, false)) {
+		interface IUserManager {
+			public function userExists(string $uid): bool;
+		}
+	}
+	// MappingSettings offers a per-mapping group picker, so it needs the list of
+	// group ids. Declaration-only; only the settings panel touches it.
+	if (!interface_exists(IGroup::class, false)) {
+		interface IGroup {
+			public function getGID(): string;
+		}
+	}
+	if (!interface_exists(IGroupManager::class, false)) {
+		interface IGroupManager {
+			/** @return list<IGroup> */
+			public function search(string $search): array;
+		}
+	}
 	// AdminSection's constructor deps. Nothing asserts on them yet, but the class
 	// must be loadable for a future AdminSection test.
 	if (!interface_exists(IL10N::class, false)) {
@@ -68,6 +100,16 @@ namespace OCP {
 	if (!interface_exists(IURLGenerator::class, false)) {
 		interface IURLGenerator {
 			public function imagePath(string $appName, string $file): string;
+		}
+	}
+}
+
+namespace OCP\App {
+	// MappingSettings asks whether groupfolders is installed, to decide whether
+	// the Team Folder checkbox offers a backend that actually exists.
+	if (!interface_exists(IAppManager::class, false)) {
+		interface IAppManager {
+			public function isEnabledForUser(string $appId): bool;
 		}
 	}
 }
@@ -144,9 +186,13 @@ namespace OCP\Settings {
 	if (!class_exists(DeclarativeSettingsTypes::class, false)) {
 		final class DeclarativeSettingsTypes {
 			public const SECTION_TYPE_ADMIN = 'admin';
+			public const SECTION_TYPE_PERSONAL = 'personal';
 			public const STORAGE_TYPE_INTERNAL = 'internal';
 			public const TEXT = 'text';
 			public const URL = 'url';
+			public const PASSWORD = 'password';
+			public const CHECKBOX = 'checkbox';
+			public const RADIO = 'radio';
 		}
 	}
 	// AdminSection implements IIconSection (which extends ISection upstream —

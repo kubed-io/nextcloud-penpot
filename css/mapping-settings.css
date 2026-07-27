@@ -1,0 +1,304 @@
+/* SPDX-FileCopyrightText: 2026 Kelly Ferrone
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Layout-only — feedback uses Nextcloud's native `.msg success` / `.msg error`
+ * classes; buttons use `.button`. One card per mapping (a repeating form),
+ * ported from nextcloud-grafana so the family looks the same:
+ *
+ *   col 1: Penpot team (row 1) · Nextcloud folder (row 2)
+ *   col 2: Mode (row 1) · Folder mode (row 2, immutable) · Team Folder (row 3)
+ *   col 3: Groups selector (spans every row — it's the big one)
+ *   row 4: Save / Delete action buttons (spanning cols 1–2)
+ *
+ * One field fewer than the siblings' card: no Format, because a .penpot archive
+ * has exactly one shape. Everything else sits where they put it.
+ */
+
+.penpot-sync-mappings {
+	margin-top: 12px;
+}
+
+.penpot-sync-mappings__heading {
+	margin-bottom: 4px;
+}
+
+/* ── one card per mapping ───────────────────────────────────────────── */
+.penpot-sync-mappings__card {
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 12px);
+	padding: 14px 16px;
+	margin-bottom: 14px;
+	background: var(--color-main-background);
+	/* Match NC's settings text width (`.section p { max-width: 900px }`) so the
+	   card's right edge lines up with the explanations above it. */
+	max-width: 900px;
+}
+
+/* team      | mode         (row 1)
+ * nc-folder | folder-mode  (row 2)
+ *           | team-folder  (row 3)
+ * actions                  (row 4, spans the two left columns)
+ * groups spans all four rows in the third (wider) column. */
+.penpot-sync-mappings__grid {
+	display: grid;
+	grid-template-columns: minmax(140px, 0.9fr) minmax(140px, 0.9fr) minmax(340px, 2.2fr);
+	grid-template-rows: auto auto auto auto;
+	gap: 10px 18px;
+	align-items: start;
+}
+
+.pp-team       { grid-area: 1 / 1; }
+.pp-nc         { grid-area: 2 / 1; }
+.pp-mode       { grid-area: 1 / 2; }
+.pp-foldermode { grid-area: 2 / 2; }
+.pp-tf         { grid-area: 3 / 2; align-self: center; }
+
+/* Spans every row of col 3, INCLUDING the actions row (4), so its bottom edge
+   lines up with the Save/Sync/Delete buttons — which is what makes the card look
+   like the siblings' rather than leaving the box floating short.
+   `align-self: stretch` overrides the grid's `align-items: start` for this one
+   item; without it the box would collapse to its content height.
+   The sibling card gets away with less because it has a control in row 3 of
+   BOTH left columns; ours has one only in col 2, so row 3 would otherwise
+   collapse and the groups box would stop above the buttons. */
+.pp-groups {
+	grid-area: 1 / 3 / 5 / 4;
+	align-self: stretch;
+	/* The grid item stretches, but its CONTENT only fills it if the flex column
+	   is told to take the full height — otherwise .penpot-sync-groups' `flex: 1`
+	   has nothing to expand into and the box stops at its natural size. */
+	height: 100%;
+}
+
+/* The immutable folder mode, rendered as text rather than a disabled control —
+   a greyed-out dropdown invites clicking and implies it might become editable. */
+.penpot-sync-fixed {
+	display: inline-block;
+	padding-top: 6px;
+	font-family: monospace;
+}
+
+.penpot-sync-hint {
+	font-family: var(--font-face, sans-serif);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9em;
+}
+
+/* Penpot unreachable / no visible teams. Rendered ABOVE the list, which stays
+   fully functional — a connection problem must not lock an admin out of their
+   own configuration. */
+.penpot-sync-notice {
+	max-width: 900px;
+	margin: 12px 0;
+	padding: 12px;
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+	border-left: 4px solid var(--color-warning, #c28900);
+}
+
+.penpot-sync-notice--error {
+	border-left-color: var(--color-error, #c9326b);
+}
+
+/* ⓘ info button next to each field label — a pure-CSS hover/focus tooltip
+ * (no JS, no @nextcloud/vue). Reliable where the native `title=` was useless. */
+.penpot-sync-info {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	margin-inline-start: 4px;
+	color: var(--color-text-maxcontrast);
+	opacity: 0.4; /* subtle by default — it's a hint, not a control */
+	cursor: help;
+	vertical-align: middle;
+}
+
+/* The glyph ships from img/icons/info.svg without an intrinsic size, so the
+   list-row hint is sized here (the action-button glyphs are sized below). */
+.penpot-sync-info svg {
+	width: 14px;
+	height: 14px;
+}
+
+.penpot-sync-info:hover,
+.penpot-sync-info:focus-visible {
+	color: var(--color-primary-element, var(--color-primary));
+	opacity: 1;
+	outline: none;
+}
+
+.penpot-sync-info::after {
+	content: attr(data-tip);
+	position: absolute;
+	inset-inline-start: 0;
+	top: calc(100% + 6px);
+	z-index: 100;
+	width: max-content;
+	max-width: 260px;
+	padding: 8px 10px;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 6px);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+	font-size: 0.95em;
+	font-weight: normal;
+	line-height: 1.35;
+	white-space: normal;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.12s ease;
+}
+
+.penpot-sync-info:hover::after,
+.penpot-sync-info:focus-visible::after {
+	opacity: 1;
+}
+
+/* a field = label stacked over its control */
+.penpot-sync-field {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.penpot-sync-field > label {
+	font-size: 1.1em;
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+.penpot-sync-field input[type="text"],
+.penpot-sync-field select {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* Save / Delete — a horizontal group of colored, icon-only buttons.
+ * Row 3 of the grid, spanning both columns, pinned to the bottom. */
+.penpot-sync-mappings__actions {
+	grid-area: 4 / 1 / 5 / 3;
+	align-self: end;
+	display: flex;
+	gap: 8px;
+}
+
+.penpot-sync-mappings__actions .button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	min-height: 38px;
+	padding: 0;
+	color: #fff;
+	border: none;
+}
+
+.penpot-sync-mappings__actions .button svg {
+	width: 20px;
+	height: 20px;
+}
+
+.penpot-sync-mappings__actions .js-save {
+	background-color: var(--color-success);
+}
+.penpot-sync-mappings__actions .js-save:hover:not(:disabled) {
+	background-color: var(--color-success-hover, var(--color-success));
+}
+
+.penpot-sync-mappings__actions .js-sync {
+	background-color: var(--color-primary-element, var(--color-primary));
+}
+.penpot-sync-mappings__actions .js-sync:hover:not(:disabled) {
+	background-color: var(--color-primary-element-hover, var(--color-primary-element, var(--color-primary)));
+}
+
+.penpot-sync-mappings__actions .js-delete {
+	background-color: var(--color-error);
+}
+.penpot-sync-mappings__actions .js-delete:hover:not(:disabled) {
+	background-color: var(--color-error-hover, var(--color-error));
+}
+
+.penpot-sync-mappings__actions .button:disabled {
+	opacity: 0.5;
+}
+
+/* Per-mapping status, right of the buttons. Sticky (no auto-dismiss); uses the
+   canonical .msg success/error pill once a message is set. */
+.penpot-sync-mappings__actions .js-card-status {
+	align-self: center;
+	margin-left: 6px;
+	font-size: 0.9em;
+}
+
+.penpot-sync-mappings__footer {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* A checkbox that sits inline with its label (Team Folder). */
+.penpot-sync-checkbox {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 1.1em;
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+.penpot-sync-checkbox input {
+	margin: 0;
+}
+
+/* Groups: a wrapping, scrollable checkbox list. FILLS the full card height —
+ * `flex: 1` inside the stretched .pp-groups column — so its bottom edge lines
+ * up with the action buttons, exactly as in the sibling apps. A `max-height`
+ * here instead would leave the box floating short of the card's bottom, which
+ * is precisely what it looked like before this rule was ported properly. */
+.penpot-sync-groups {
+	display: flex;
+	flex-wrap: wrap;
+	align-content: flex-start;
+	gap: 2px 14px;
+	flex: 1 1 auto;
+	min-height: 9em;
+	overflow-y: auto;
+	padding: 4px 6px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 6px);
+}
+
+.penpot-sync-groups__item {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.penpot-sync-groups__item input {
+	margin: 0;
+}
+
+/* Narrow admin widths: collapse the grid to a single column so nothing
+ * overflows. */
+@media (max-width: 680px) {
+	.penpot-sync-mappings__grid {
+		grid-template-columns: 1fr;
+		grid-template-rows: auto;
+	}
+
+	.pp-team,
+	.pp-nc,
+	.pp-mode,
+	.pp-foldermode,
+	.pp-tf,
+	.pp-groups,
+	.penpot-sync-mappings__actions {
+		grid-area: auto;
+	}
+}

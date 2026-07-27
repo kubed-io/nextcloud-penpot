@@ -52,6 +52,40 @@ Feature: Scheduled or manual pull from Penpot
 
   # ── what a pull produces ─────────────────────────────────────────────────────
 
+  # ── the manual controls in admin settings ────────────────────────────────────
+  # Both siblings expose a per-mapping "Sync now" button on each mapping card,
+  # plus a section-wide bulk sync in the Sync Actions panel. This app has the
+  # same two controls in the same two places — but only ONE direction, because
+  # there is no content push (saga §6.1). See admin-section.feature for where
+  # they sit; this is what they do.
+
+  @todo
+  Scenario: Sync now on a mapping card pulls just that team
+    Given the Penpot team "Ferronescotia" is mapped
+    When the admin uses that mapping's "Sync now" button
+    Then only "Ferronescotia" is pulled
+    And other mapped teams are left alone
+    # The per-mapping equivalent of "Sync from Penpot", exactly as in both
+    # siblings — the same button, in the same place on the card.
+
+  @todo
+  Scenario: Sync now reports honestly while the pull is unbuilt
+    Given the Penpot team "Ferronescotia" is mapped
+    When the admin uses that mapping's "Sync now" button
+    Then the card reports that per-team sync is not available yet
+    And nothing is mirrored
+    # The button ships BEFORE its engine, present and clickable, because
+    # present-but-honest keeps the finished shape of the card visible and makes
+    # enabling it later a one-line change. Silently doing nothing would be worse
+    # than either a disabled button or an absent one.
+
+  @todo
+  Scenario: Sync now on an unsaved mapping asks for a save first
+    Given the admin has added a mapping card but not saved it
+    When the admin uses that card's "Sync now" button
+    Then the card asks the admin to save the mapping first
+    # There is nothing to sync until the mapping is persisted.
+
   Scenario: Pulling mirrors Penpot's projects as folders and its files inside them
     Given the "Ferronescotia" team has a Penpot project "My Stuff" containing a file "My firsty"
     When the pull runs

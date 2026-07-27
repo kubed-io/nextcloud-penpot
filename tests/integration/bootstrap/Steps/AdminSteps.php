@@ -9,8 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
-use PHPUnit\Framework\Assert;
-
 /**
  * Admin connection steps — in this slice, the base URL and nothing else.
  *
@@ -19,13 +17,24 @@ use PHPUnit\Framework\Assert;
  * the same scenarios should keep passing unchanged once a UI exists — the
  * feature says "the admin sets the Penpot base URL", not "the admin runs occ".
  *
+ * NO PHPUnit ASSERTIONS IN HERE (saga R1.6). PHPUnit builds an assertion's
+ * failure *message* through `TextUI\Configuration\Registry`, which is null
+ * outside a PHPUnit-bootstrapped run — so under Behat a **failing** assertion
+ * dies with `Registry::get(): Return value must be of type Configuration, null
+ * returned`, replacing the diagnostic exactly when it matters. Passing
+ * assertions are unaffected, which is why this file looked fine for a whole
+ * slice: its assertions had simply never failed. Every check now throws a plain
+ * exception carrying the command's own output.
+ *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}.
  */
 trait AdminSteps {
 	/** @When the admin sets the Penpot base URL */
 	public function theAdminSetsThePenpotBaseUrl(): void {
 		$res = $this->occ('penpot_sync:set-url https://penpot.example.com');
-		Assert::assertSame(0, $res['exit'], "set-url failed:\n{$res['output']}");
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("set-url failed:\n{$res['output']}");
+		}
 	}
 
 	/**
@@ -50,29 +59,35 @@ trait AdminSteps {
 	 */
 	public function thePenpotBaseUrlIsStored(): void {
 		$res = $this->occ('penpot_sync:show-config');
-		Assert::assertSame(0, $res['exit'], "show-config reported nothing configured:\n{$res['output']}");
-		Assert::assertStringContainsString(
-			'https://penpot.example.com',
-			$res['output'],
-			'the configured URL did not come back from show-config',
-		);
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("show-config reported nothing configured:\n{$res['output']}");
+		}
+		if (!str_contains($res['output'], 'https://penpot.example.com')) {
+			throw new \RuntimeException("the configured URL did not come back from show-config:\n{$res['output']}");
+		}
 	}
 
 	/** @Then /^the Penpot base URL is "([^"]+)"$/ */
 	public function thePenpotBaseUrlIs(string $url): void {
 		$res = $this->occ('penpot_sync:show-config');
-		Assert::assertStringContainsString($url, $res['output']);
+		if (!str_contains($res['output'], $url)) {
+			throw new \RuntimeException("expected the stored URL to be {$url}:\n{$res['output']}");
+		}
 	}
 
 	/** @Then no Penpot base URL is configured */
 	public function noPenpotBaseUrlIsConfigured(): void {
 		$res = $this->occ('penpot_sync:show-config');
-		Assert::assertNotSame(0, $res['exit'], 'expected show-config to report nothing configured');
+		if ($res['exit'] === 0) {
+			throw new \RuntimeException("expected show-config to report nothing configured:\n{$res['output']}");
+		}
 	}
 
 	/** @Then setting the URL is rejected */
 	public function settingTheUrlIsRejected(): void {
-		Assert::assertNotSame(0, $this->lastExit, "expected the URL to be rejected, got:\n{$this->lastOutput}");
+		if ($this->lastExit === 0) {
+			throw new \RuntimeException("expected the URL to be rejected, got:\n{$this->lastOutput}");
+		}
 	}
 
 	/**
@@ -84,10 +99,8 @@ trait AdminSteps {
 	 */
 	public function theStoredUrlHasNoTrailingSlash(): void {
 		$res = $this->occ('penpot_sync:show-config');
-		Assert::assertDoesNotMatchRegularExpression(
-			'#https?://\S+/\s*$#m',
-			trim($res['output']),
-			'the stored URL kept a trailing slash',
-		);
+		if (preg_match('#https?://\S+/\s*$#m', trim($res['output'])) === 1) {
+			throw new \RuntimeException("the stored URL kept a trailing slash:\n{$res['output']}");
+		}
 	}
 }

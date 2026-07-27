@@ -128,9 +128,8 @@ Feature: Admin and per-user Penpot connection setup
     # view (get-teams is membership-scoped, confirmed §6.12). Viewer is the right
     # role: enough to list and export, no write access wanted.
 
-  @todo
   Scenario: The connection test tells an unset token apart from a rejected one
-    Given the admin has set the Penpot base URL
+    Given the Penpot base URL points at the test instance
     And no service-account token is configured
     When the admin tests the connection
     Then the connection test reports a failure
@@ -139,6 +138,28 @@ Feature: Admin and per-user Penpot connection setup
     And the admin tests the connection
     Then the connection test reports a failure
     And the connection test says the token was rejected
+    # These two need COMPLETELY different fixes — finish configuring, versus
+    # mint a new token — so collapsing them into "connection failed" sends
+    # people to the wrong one.
+
+  Scenario: A rejected token names the instance flag that is off by default
+    Given the Penpot base URL points at the test instance
+    When the admin saves an invalid service-account token
+    And the admin tests the connection
+    Then the connection test reports a failure
+    And the connection test names the "enable-access-tokens" instance flag
+    # `enable-access-tokens` is off by default upstream, and its absence produces
+    # a plain 401 — indistinguishable from a typo'd token unless we say so.
+
+  Scenario: A successful test reports the teams the account can actually see
+    Given the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    When the admin tests the connection
+    Then the connection test reports success
+    And the connection test lists at least one Penpot team
+    # Reporting TEAMS rather than "OK" is the point (saga §6.12/§6.18): Penpot
+    # visibility is always membership-scoped, so which teams the token can see is
+    # exactly the fact that decides what can be mapped.
 
   @todo
   Scenario: A connection test surfaces the required Penpot instance flag
