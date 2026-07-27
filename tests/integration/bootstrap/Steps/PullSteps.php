@@ -156,6 +156,10 @@ trait PullSteps {
 				// param map must serialise as `{}`, not `[]` (Penpot 500s on `[]`).
 				'body' => json_encode($params, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT),
 				'http_errors' => false,
+				// Bound the wait: a wedged Penpot must fail the scenario, not hang
+				// the whole integration job until the CI runner's global timeout.
+				'connect_timeout' => 10,
+				'timeout' => 30,
 			],
 		);
 

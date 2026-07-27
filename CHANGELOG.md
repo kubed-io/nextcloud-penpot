@@ -52,3 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `occ penpot_sync:status <path>` reports the Penpot metadata and the resolved membership (`in_project` / `drafts` / `personal` / `none`) for any mirrored node — read-only, and the first way to run the resolver against a real folder tree.
 - The pull provisions a plain admin-owned folder for the mapped team (the groupfolders Team Folder backend follows), stamps the team id on it, and re-pulls idempotently by matching folders on their project id and files on their file id rather than by name.
 - Integration suite now seeds a project directly in Penpot, runs the pull, and asserts the mirrored folder tree and its resolved membership through `occ penpot_sync:status` — the first end-to-end proof of the resolver on a live Nextcloud.
+- **Fixed:** a mirrored file's stored drift signal now carries `revn` **and** `modified-at` together, not `revn` alone — the scheduled pull's "has this file changed?" check can now tell a new edit at the same revision apart.
+- A bulk pull now contains a filesystem or metadata failure to the one mapping that hit it, so a single broken team no longer aborts every other team's mirror in the same run.
+- The pull indexes each folder's children once per team and per project instead of re-scanning on every file, so mirroring a large team is no longer quadratic.
+- **Fixed:** reading a node's Penpot metadata no longer materialises an empty record as a side effect, keeping "no record" an honest signal that a node is untracked.

@@ -216,22 +216,20 @@ final class PenpotMetadata {
 	 * @param list<string> $allowed
 	 */
 	private function writeKeys(int $fileId, array $values, array $allowed): void {
-		if ($values === []) {
+		// Narrow to the keys this list actually owns FIRST. If nothing survives,
+		// return before touching the store — `getMetadata($fileId, true)` creates
+		// a record on demand, so calling it for a no-op write would materialise a
+		// blank record and turn "untracked == no record" into a lie.
+		$updates = array_intersect_key($values, array_flip($allowed));
+		if ($updates === []) {
 			return;
 		}
 		$metadata = $this->manager->getMetadata($fileId, true);
-		$touched = false;
-		foreach ($allowed as $key) {
-			if (!array_key_exists($key, $values)) {
-				continue;
-			}
-			$stored = $this->modeToWire($key, $values[$key]);
+		foreach ($updates as $key => $value) {
+			$stored = $this->modeToWire($key, $value);
 			$metadata->setString($key, $stored, in_array($key, self::INDEXED_KEYS, true));
-			$touched = true;
 		}
-		if ($touched) {
-			$this->manager->saveMetadata($metadata);
-		}
+		$this->manager->saveMetadata($metadata);
 	}
 
 	/** Read a node's raw metadata record, or null when it has none. */

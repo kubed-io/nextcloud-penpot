@@ -101,8 +101,6 @@ final class PullService {
 	 * @return array{processed:int, folders:int, files:int, skipped:int, error:?string}
 	 */
 	public function pullOne(Mapping $mapping): array {
-		$empty = ['processed' => 0, 'folders' => 0, 'files' => 0, 'skipped' => 0, 'error' => null];
-
 		if (!$this->storage->isAvailable($mapping)) {
 			$this->logger->warning('penpot_sync pull skipped: storage backend not available for this mapping', [
 				'app' => Application::APP_ID,
@@ -115,6 +113,11 @@ final class PullService {
 		try {
 			$root = $this->storage->ensureRoot($mapping);
 			$this->metadata->writeFolder($root->getId(), [PenpotMetadata::KEY_TEAM_ID => $mapping->teamId]);
+
+			// Index the existing project folders ONCE (penpot_project_id -> folder)
+			// rather than re-listing the root for every project below — the pull is
+			// otherwise O(projects × children) on a big team.
+			$folderIndex = $this->indexProjectFolders($root);
 
 			$folders = 0;
 			$files = 0;
@@ -141,7 +144,7 @@ final class PullService {
 						$skipped++;
 						continue;
 					}
-					$target = $this->ensureProjectFolder($root, $projectId, $projectName);
+					$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName);
 					$folders++;
 				}
 
@@ -151,6 +154,16 @@ final class PullService {
 			return ['processed' => $processed, 'folders' => $folders, 'files' => $files, 'skipped' => $skipped, 'error' => null];
 		} catch (PenpotApiException $e) {
 			$this->logger->warning('penpot_sync pull failed', [
+				'app' => Application::APP_ID,
+				'mapping' => $mapping->id,
+				'exception' => $e,
+			]);
+			return ['processed' => 0, 'folders' => 0, 'files' => 0, 'skipped' => 0, 'error' => $e->getMessage()];
+		} catch (\Throwable $e) {
+			// A filesystem or metadata failure (ensureRoot, a folder write, a bad
+			// node) must not abort every OTHER mapping in a bulk pull — contain it
+			// to this mapping's error result, the same way an API failure is.
+			$this->logger->error('penpot_sync pull failed unexpectedly', [
 				'app' => Application::APP_ID,
 				'mapping' => $mapping->id,
 				'exception' => $e,
@@ -168,6 +181,9 @@ final class PullService {
 	 * @throws PenpotApiException
 	 */
 	private function pullProjectFiles(Folder $target, Mapping $mapping, string $projectId, int &$skipped): int {
+		// Index this folder's existing `.penpot` files ONCE (penpot_id -> file)
+		// instead of re-walking the directory listing for every Penpot file.
+		$fileIndex = $this->indexFilesByPenpotId($target);
 		$written = 0;
 		foreach ($this->client->getProjectFiles($projectId) as $file) {
 			$fileId = $this->str($file, 'id');
@@ -181,7 +197,7 @@ final class PullService {
 				$skipped++;
 				continue;
 			}
-			$this->upsertLinkFile($target, $mapping, $fileId, $baseName, (string)($file['revn'] ?? ''));
+			$this->upsertLinkFile($target, $fileIndex, $mapping, $fileId, $baseName, $file);
 			$written++;
 		}
 		return $written;
@@ -190,29 +206,39 @@ final class PullService {
 	/**
 	 * Find (by `penpot_project_id`) or create the folder for a project under the
 	 * team root, and (re)stamp its marker. A rename upstream renames the folder.
+	 *
+	 * @param array<string, Folder> $folderIndex penpot_project_id -> folder, built once by the caller
 	 */
-	private function ensureProjectFolder(Folder $root, string $projectId, string $name): Folder {
-		$existing = $this->findChildFolderByProject($root, $projectId);
+	private function ensureProjectFolder(Folder $root, array $folderIndex, string $projectId, string $name): Folder {
+		$existing = $folderIndex[$projectId] ?? null;
 		if ($existing !== null) {
 			$this->tryRename($existing, $root, $name);
-		} else {
-			$existing = $root->nodeExists($name) && $root->get($name) instanceof Folder
-				? $this->asFolder($root->get($name))
-				: $root->newFolder($this->freeName($root, $name));
+			$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
+			return $existing;
 		}
-		$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
-		return $existing;
+
+		// No folder yet carries this project id. Adopt a same-named folder if one
+		// happens to sit there (a first pull over a hand-made tree), else create.
+		$adopt = $root->nodeExists($name) ? $root->get($name) : null;
+		$folder = $adopt instanceof Folder ? $adopt : $root->newFolder($this->freeName($root, $name));
+		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
+		return $folder;
 	}
 
 	/**
 	 * Find (by `penpot_id`) or create the `.penpot` link file for a Penpot file,
 	 * refresh its body, and (re)stamp id / revision / mode.
+	 *
+	 * @param array<string, File> $fileIndex penpot_id -> file, built once by the caller
+	 * @param array<string, mixed> $file the decoded Penpot file record (carries `revn` + `modified-at`)
 	 */
-	private function upsertLinkFile(Folder $target, Mapping $mapping, string $fileId, string $baseName, string $revn): void {
+	private function upsertLinkFile(Folder $target, array $fileIndex, Mapping $mapping, string $fileId, string $baseName, array $file): void {
 		$name = $baseName . self::EXTENSION;
-		$body = $this->linkBody($mapping, $fileId, $baseName, $revn);
+		$revn = (string)($file['revn'] ?? '');
+		$modifiedAt = $this->str($file, 'modified-at');
+		$body = $this->linkBody($mapping, $fileId, $baseName, $revn, $modifiedAt);
 
-		$existing = $this->findChildFileByPenpotId($target, $fileId);
+		$existing = $fileIndex[$fileId] ?? null;
 		if ($existing !== null) {
 			$this->tryRename($existing, $target, $name);
 			$existing->putContent($body);
@@ -223,7 +249,11 @@ final class PullService {
 
 		$this->metadata->writeFile($node->getId(), [
 			PenpotMetadata::KEY_ID => $fileId,
-			PenpotMetadata::KEY_REVISION => $revn,
+			// The drift signal is `revn` + `modified-at` together (saga §5.5): revn
+			// alone cannot tell "same revn, newer modified-at" apart, which the
+			// scheduled-pull diff needs. Stored as one opaque string — callers
+			// compare it whole, never parse it.
+			PenpotMetadata::KEY_REVISION => $this->revisionSignal($revn, $modifiedAt),
 			PenpotMetadata::KEY_MODE => $mapping->mode,
 		]);
 	}
@@ -238,16 +268,28 @@ final class PullService {
 	 * body carries the ids and the instance base and leaves the exact link to
 	 * Course 4, which will verify it against a running Penpot.
 	 */
-	private function linkBody(Mapping $mapping, string $fileId, string $baseName, string $revn): string {
+	private function linkBody(Mapping $mapping, string $fileId, string $baseName, string $revn, string $modifiedAt): string {
 		$payload = [
 			'penpot' => 'reference/v1',
 			'id' => $fileId,
 			'name' => $baseName,
 			'revn' => $revn,
+			'modified_at' => $modifiedAt,
 			'team_id' => $mapping->teamId,
 			'instance_url' => $this->config->getValueString(Application::APP_ID, InstanceSettings::KEY_URL, ''),
 		];
-		return (string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+		// JSON_THROW_ON_ERROR, not a silent (string) cast: json_encode can return
+		// false (e.g. malformed UTF-8 in a file name), and writing an empty body
+		// would be a silently corrupt mirror file. Matches PenpotClient's encoding.
+		return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+	}
+
+	/** The opaque `revn` + `modified-at` drift signal stored as `penpot_revision`. */
+	private function revisionSignal(string $revn, string $modifiedAt): string {
+		if ($modifiedAt === '') {
+			return $revn;
+		}
+		return $revn . '@' . $modifiedAt;
 	}
 
 	/**
@@ -274,28 +316,44 @@ final class PullService {
 		return filter_var($project['is-default'] ?? false, FILTER_VALIDATE_BOOLEAN);
 	}
 
-	private function findChildFolderByProject(Folder $root, string $projectId): ?Folder {
+	/**
+	 * Index a team root's project folders by their `penpot_project_id` in a
+	 * single directory walk, so a pull is O(children) not O(projects × children).
+	 *
+	 * @return array<string, Folder> penpot_project_id -> folder (last wins on the impossible dup)
+	 */
+	private function indexProjectFolders(Folder $root): array {
+		$index = [];
 		foreach ($root->getDirectoryListing() as $node) {
 			if (!$node instanceof Folder) {
 				continue;
 			}
-			if ($this->metadata->readFolder($node->getId())->projectId === $projectId) {
-				return $node;
+			$projectId = $this->metadata->readFolder($node->getId())->projectId;
+			if ($projectId !== '') {
+				$index[$projectId] = $node;
 			}
 		}
-		return null;
+		return $index;
 	}
 
-	private function findChildFileByPenpotId(Folder $target, string $fileId): ?File {
+	/**
+	 * Index a folder's `.penpot` link files by their `penpot_id` in a single
+	 * directory walk, so upserting N files is O(children) not O(N × children).
+	 *
+	 * @return array<string, File> penpot_id -> file
+	 */
+	private function indexFilesByPenpotId(Folder $target): array {
+		$index = [];
 		foreach ($target->getDirectoryListing() as $node) {
 			if (!$node instanceof File) {
 				continue;
 			}
-			if ($this->metadata->readFile($node->getId())?->penpotId === $fileId) {
-				return $node;
+			$penpotId = $this->metadata->readFile($node->getId())?->penpotId ?? '';
+			if ($penpotId !== '') {
+				$index[$penpotId] = $node;
 			}
 		}
-		return null;
+		return $index;
 	}
 
 	/**
@@ -327,7 +385,18 @@ final class PullService {
 	 * cosmetic follow.
 	 */
 	private function tryRename(File|Folder $node, Folder $parent, string $name): void {
-		if ($node->getName() === $name || $parent->nodeExists($name)) {
+		if ($node->getName() === $name) {
+			return;
+		}
+		if ($parent->nodeExists($name)) {
+			// The desired name is already taken by a different node, so this rename
+			// would collide. Keep the old name rather than clobber — but say so, or
+			// a mirror stuck on a stale name looks like a silent bug.
+			$this->logger->debug('penpot_sync pull: skipping rename, target name already exists', [
+				'app' => Application::APP_ID,
+				'from' => $node->getName(),
+				'to' => $name,
+			]);
 			return;
 		}
 		try {
@@ -350,13 +419,6 @@ final class PullService {
 	/** @param array<string, mixed> $record */
 	private function str(array $record, string $key): string {
 		return is_string($record[$key] ?? null) ? $record[$key] : '';
-	}
-
-	private function asFolder(mixed $node): Folder {
-		if (!$node instanceof Folder) {
-			throw new \RuntimeException('expected a folder');
-		}
-		return $node;
 	}
 
 	/**
