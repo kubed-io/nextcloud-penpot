@@ -209,3 +209,66 @@ namespace OCP\Settings {
 		}
 	}
 }
+
+namespace OCP\FilesMetadata {
+	// PenpotMetadata wraps the Files-Metadata API. The PenpotMetadataTest drives
+	// it through an in-memory fake of this manager to pin the link↔reference wire
+	// and the file/folder key split. Declaration-only, just the methods
+	// PenpotMetadata calls.
+	if (!interface_exists(IFilesMetadataManager::class, false)) {
+		interface IFilesMetadataManager {
+			public function getMetadata(int $fileId, bool $generate = false): \OCP\FilesMetadata\Model\IFilesMetadata;
+
+			public function saveMetadata(\OCP\FilesMetadata\Model\IFilesMetadata $filesMetadata): void;
+
+			public function deleteMetadata(int $fileId): void;
+
+			public function initMetadata(string $key, string $type, bool $indexed, int $editPermission): void;
+		}
+	}
+}
+
+namespace OCP\FilesMetadata\Model {
+	if (!interface_exists(IFilesMetadata::class, false)) {
+		interface IFilesMetadata {
+			public function hasKey(string $needle): bool;
+
+			public function getString(string $key): string;
+
+			public function setString(string $key, string $value, bool $index = false): self;
+		}
+	}
+	if (!interface_exists(IMetadataValueWrapper::class, false)) {
+		interface IMetadataValueWrapper {
+			public const TYPE_STRING = 'string';
+			public const EDIT_FORBIDDEN = 0;
+		}
+	}
+}
+
+namespace OCP\FilesMetadata\Exceptions {
+	if (!class_exists(FilesMetadataNotFoundException::class, false)) {
+		class FilesMetadataNotFoundException extends \Exception {
+		}
+	}
+}
+
+namespace OCP\Files {
+	// MembershipResolver walks UP the folder tree via Node::getParent(), reading
+	// each ancestor's id. Declaration-only: the resolver test fakes a chain of
+	// these. `getParent()` throws NotFoundException past the storage root.
+	if (!interface_exists(Node::class, false)) {
+		interface Node {
+			public function getId(): int;
+
+			public function getParent(): Node;
+		}
+	}
+	// Thrown by Node::getParent() once the walk runs past the root — the
+	// resolver catches it to terminate the climb.
+	if (!class_exists(NotFoundException::class, false)) {
+		class NotFoundException extends \Exception {
+		}
+	}
+}
+
