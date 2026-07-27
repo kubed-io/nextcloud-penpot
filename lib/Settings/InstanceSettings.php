@@ -76,8 +76,14 @@ final class InstanceSettings implements IDeclarativeSettingsForm {
 	public function getSchema(): array {
 		$hasToken = $this->config->getValueString(Application::APP_ID, PenpotClient::KEY_TOKEN, '') !== '';
 
+		// Deliberately says "stored", not "stored (encrypted)": this flag is
+		// derived purely from the key being non-empty, which does not prove the
+		// value is decryptable or usable. An instance secret rotation, or a token
+		// written by some other route, both leave a non-empty value the app
+		// cannot actually use. Test connection is what answers that — so the copy
+		// claims only what it can see and points there for the rest.
 		$tokenDescription = $hasToken
-			? '✓ A service-account token is stored (encrypted). Paste a new one to replace it, '
+			? '✓ A service-account token is stored. Paste a new one to replace it, '
 				. 'or use Test connection below to check it still works.'
 			: 'No token stored yet. Create an access token on the Penpot service account '
 				. '(Profile → Access tokens) and paste it here. The Penpot instance needs '
