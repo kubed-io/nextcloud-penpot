@@ -14,6 +14,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\AdminSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\ModeSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PullSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 
@@ -41,6 +42,10 @@ use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
  *    mirrored it." → {@see PullSteps}. The pull itself is asserted through the
  *    app's own read path (`penpot_sync:status`), so the two channels cross-check
  *    each other.
+ *  - The same two channels carry the **archive** story → {@see ModeSteps}: seed a
+ *    file in Penpot, promote it with `set-mode`, and assert through `status`
+ *    that what landed on disk is a real ZIP. That is the only place the SSE
+ *    export and its second asset fetch (§5.1–§5.4) meet a real wire.
  */
 final class FeatureContext implements Context {
 	use OccTrait;
@@ -49,6 +54,7 @@ final class FeatureContext implements Context {
 	use ConnectionSteps;
 	use MappingSteps;
 	use PullSteps;
+	use ModeSteps;
 
 	private const APP_ID = 'penpot_sync';
 

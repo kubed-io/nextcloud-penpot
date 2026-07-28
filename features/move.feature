@@ -50,9 +50,13 @@
 # personal-token branch. Adding a production `occ` move command purely to trip
 # the events would be test scaffolding wearing a feature's clothes.
 #
-# NOT BUILT YET, and marked in place below: `sync` mode (so the move push is
-# dormant until export-binfile lands), the notification surface for a failed
+# NOT BUILT YET, and marked in place below: the notification surface for a failed
 # move, the restore offer, and the "hidden, not deleted" link state.
+#
+# NO LONGER DORMANT: `sync` mode landed with export-binfile, so the `move-files`
+# push above has real files to act on — a promoted design that changes project
+# is re-filed in Penpot for real. `occ penpot_sync:set-mode` is the escape hatch
+# every link refusal below offers.
 
 @todo
 Feature: Moving files and folders never destroys anything

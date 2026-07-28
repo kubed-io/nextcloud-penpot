@@ -22,6 +22,7 @@ use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
+use OCP\IL10N;
 
 /**
  * Gate-keeps a move *before* it happens (`move.feature`) — cut from both
@@ -56,12 +57,18 @@ use OCP\Files\NotFoundException;
  * able to survive the gesture being attempted.
  *
  * `sync` files earn their freedom by holding real content, so they are not
- * constrained here at all; `MotionService` re-files them in Penpot. Since `sync`
- * mode has not landed yet (its `export-binfile` is a later slice), *every*
- * mirrored file is a link today, and this rule is for now the whole
- * user-visible behaviour of a cross-project drag. That is the honest state
- * rather than an oversight: the push is built and tested behind it, waiting on
- * the mode that makes it legal.
+ * constrained here at all; `MotionService` re-files them in Penpot. The escape
+ * hatch the refusal offers is real and reachable today:
+ * `occ penpot_sync:set-mode <path> sync` fetches the archive, after which the
+ * file moves like any other.
+ *
+ * ## THE TWO MESSAGES ARE TRANSLATED, AND THAT IS NOT CEREMONY
+ *
+ * These strings are shown to a user mid-gesture, in a dialog, as the entire
+ * explanation for why their drag did not work. They are the only user-visible
+ * prose this app produces outside the settings pages, which are translated too.
+ * Each names the rule, the reason, and the way forward — a refusal that only
+ * says "not allowed" is worse than no refusal, because the user retries it.
  *
  * ## WHAT IS NOT GUARDED
  *
@@ -76,6 +83,7 @@ final class MoveGuardListener implements IEventListener {
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
 		private readonly SyncGuard $guard,
+		private readonly IL10N $l,
 	) {
 	}
 
@@ -119,12 +127,12 @@ final class MoveGuardListener implements IEventListener {
 			return;
 		}
 
-		throw new AbortedEventException(
-			'"' . $source->getName() . '" mirrors a Penpot project, so it has to stay inside '
-			. 'the team folder it belongs to. Moving a project between teams has to be done in '
-			. 'Penpot itself. Move it anywhere within that team folder instead, or move the '
-			. 'individual designs.',
-		);
+		throw new AbortedEventException($this->l->t(
+			'"%s" mirrors a Penpot project, so it has to stay inside the team folder it belongs '
+			. 'to. Moving a project between teams has to be done in Penpot itself. Move it '
+			. 'anywhere within that team folder instead, or move the individual designs.',
+			[$source->getName()],
+		));
 	}
 
 	/** Rule 2 (§6.43) — a `link` file may not change project. */
@@ -146,12 +154,13 @@ final class MoveGuardListener implements IEventListener {
 			return;
 		}
 
-		throw new AbortedEventException(
-			'"' . $source->getName() . '" is a link to a design that lives in Penpot — it holds '
-			. 'no copy of the design itself, so moving it out of its project would leave you '
-			. 'with an empty file. Switch it to "sync" mode first and Nextcloud will keep the '
-			. 'real archive, which can be moved anywhere.',
-		);
+		throw new AbortedEventException($this->l->t(
+			'"%s" is a link to a design that lives in Penpot — it holds no copy of the design '
+			. 'itself, so moving it out of its project would leave you with an empty file. Switch '
+			. 'it to "sync" mode first (occ penpot_sync:set-mode) and Nextcloud will keep the real '
+			. 'archive, which can be moved anywhere.',
+			[$source->getName()],
+		));
 	}
 
 	/**

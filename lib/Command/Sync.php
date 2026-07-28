@@ -80,12 +80,26 @@ final class Sync extends Command {
 		}
 
 		$output->writeln(sprintf(
-			'Pulled %d project(s): %d folder(s), %d file(s), %d skipped.',
+			'Pulled %d project(s): %d folder(s), %d file(s), %d archive(s) exported, %d skipped.',
 			$result['processed'],
 			$result['folders'],
 			$result['files'],
+			$result['exported'],
 			$result['skipped'],
 		));
+
+		// Reported separately from `skipped`, and separately from an error,
+		// because it is a third thing: those files ARE mirrored and current in
+		// every respect but their bytes, the previous archive is untouched, and
+		// the next pull retries. Silence here would let a team quietly stop
+		// being backed up while every pull still says "ok".
+		if ($result['failed'] > 0) {
+			$output->writeln(sprintf(
+				'<comment>%d archive(s) could not be exported. The previous content was kept; '
+				. 'the next pull will try again.</comment>',
+				$result['failed'],
+			));
+		}
 
 		if ($result['status'] !== 'ok') {
 			$output->writeln('<error>Some mappings failed: ' . (string)$result['message'] . '</error>');

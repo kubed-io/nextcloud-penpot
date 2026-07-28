@@ -302,4 +302,56 @@ final class TransitTest extends TestCase {
 
 		self::assertSame(['name' => 'My firsty'], $out);
 	}
+
+	// ── the tagged value in map form (saga §5.5) ────────────────────────────
+
+	/**
+	 * THE ONE JSON OBJECT THAT IS VALID TRANSIT — and therefore the one shape
+	 * the plain-JSON guard above must let through.
+	 *
+	 * Verbatim from `export-binfile`'s `end` event. Transit encodes a tagged
+	 * value as a single-entry object when there is no enclosing array to hang
+	 * the tag on, which is exactly the case at the top of a document.
+	 *
+	 * Without the exemption this threw the content-negotiation error — advice
+	 * that was both wrong and impossible to act on, since no Accept header was
+	 * being sent.
+	 */
+	public function testDecodesTheAssetUriFromAnEndEvent(): void {
+		$out = $this->transit->decode('{"~#uri":"https://penpot.example.com/assets/by-id/75b356e7"}');
+
+		self::assertSame('https://penpot.example.com/assets/by-id/75b356e7', $out);
+	}
+
+	/**
+	 * The exemption is narrow on purpose. A single-key object whose key is NOT a
+	 * tag is still plain JSON and still has to be refused — otherwise the guard
+	 * develops a hole exactly where a one-field camelCase response would slip in.
+	 */
+	public function testASingleKeyObjectThatIsNotTaggedIsStillRefused(): void {
+		$this->expectException(PenpotApiException::class);
+		$this->expectExceptionMessageMatches('/plain JSON, not Transit/');
+
+		$this->transit->decode('{"teamName":"Default"}');
+	}
+
+	/**
+	 * A tagged map does NOT consume a cache slot. It only ever appears as a whole
+	 * document (no earlier occurrence exists for a reference to point at), so
+	 * caching the tag would shift every index in a document that has none.
+	 *
+	 * The second record is what catches it: `^1` must resolve to `bbbb`. If the
+	 * `~#uri` tag took a slot it would sit at index 1 and `^1` would decode to
+	 * the tag — a wrong but entirely real-looking field name.
+	 */
+	public function testATaggedMapDoesNotConsumeACacheSlot(): void {
+		$out = $this->transit->decode(
+			'[["^ ","~:aaaa",{"~#uri":"https://x/y"},"~:bbbb",1],["^ ","^0","z","^1",2]]',
+		);
+
+		self::assertSame([
+			['aaaa' => 'https://x/y', 'bbbb' => 1],
+			['aaaa' => 'z', 'bbbb' => 2],
+		], $out);
+	}
 }

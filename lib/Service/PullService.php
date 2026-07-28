@@ -11,10 +11,8 @@ namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Exception\PenpotApiException;
-use OCA\PenpotSync\Settings\InstanceSettings;
 use OCP\Files\File;
 use OCP\Files\Folder;
-use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -52,14 +50,27 @@ use Psr\Log\LoggerInterface;
  *
  *   - **The project-folder visible tag** (§6.32) — the human pill. Metadata is
  *     written now; the systemtag lands with the Files-app surface.
- *   - **`sync` mode's archive download** (`export-binfile`) — Course 4. Both
- *     modes write a link marker for now; the stamped mode still differs.
  *   - **Prune of stale mirror files** whose Penpot object vanished — the pull is
  *     currently upsert-only. A file whose project or file was deleted upstream
  *     is left until the trash-aware reconciler (Course 5).
  *   - **The `/` guard as a reported skip** (§6.51) — a project or file whose
  *     Penpot name contains `/` (illegal as a single Nextcloud node name) is
  *     skipped and logged here; Course 4 turns that into the user-facing report.
+ *
+ * ## `sync` MODE: THE ONLY THING THAT COSTS ANYTHING (saga §6.22)
+ *
+ * A `link` file's body is rewritten every pull because it is a few hundred bytes
+ * of JSON. A `sync` file's body is a full export, so it is fetched only when
+ * {@see driftedOrMissing()} says it must be:
+ *
+ *   - the stored `revn`+`modified-at` signal moved (the design changed), or
+ *   - the file is stamped `sync` but holds no archive — a promotion whose export
+ *     has not succeeded yet, which this makes self-healing.
+ *
+ * **The revision stamp only advances when the mirror is genuinely current.** A
+ * failed export leaves the old signal in place, so the next pull retries instead
+ * of recording a lie and never looking again. That is §6.18 rule 3 read from the
+ * other direction: a remote failure must not silently rewrite local state.
  */
 final class PullService {
 	/** Nextcloud-side extension for a mirrored Penpot design (saga §6.4). */
@@ -70,8 +81,8 @@ final class PullService {
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly StorageService $storage,
+		private readonly ArchiveService $archives,
 		private readonly SyncGuard $guard,
-		private readonly IAppConfig $config,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -79,7 +90,7 @@ final class PullService {
 	/**
 	 * Pull one mapping, or every mapping when `$mappingId` is null/empty.
 	 *
-	 * @return array{processed:int, folders:int, files:int, skipped:int, status:string, message:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, status:string, message:?string}
 	 */
 	public function pull(?string $mappingId): array {
 		if ($mappingId !== null && $mappingId !== '') {
@@ -99,7 +110,7 @@ final class PullService {
 	/**
 	 * Pull a single mapping into its Nextcloud root folder.
 	 *
-	 * @return array{processed:int, folders:int, files:int, skipped:int, error:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, error:?string}
 	 */
 	public function pullOne(Mapping $mapping): array {
 		if (!$this->storage->isAvailable($mapping)) {
@@ -108,7 +119,7 @@ final class PullService {
 				'mapping' => $mapping->id,
 				'use_team_folder' => $mapping->useTeamFolder,
 			]);
-			return ['processed' => 0, 'folders' => 0, 'files' => 0, 'skipped' => 1, 'error' => null];
+			return $this->tally(['skipped' => 1]);
 		}
 
 		try {
@@ -128,6 +139,8 @@ final class PullService {
 
 				$folders = 0;
 				$files = 0;
+				$exported = 0;
+				$failed = 0;
 				$skipped = 0;
 				$processed = 0;
 
@@ -155,10 +168,17 @@ final class PullService {
 						$folders++;
 					}
 
-					$files += $this->pullProjectFiles($target, $mapping, $projectId, $skipped);
+					$files += $this->pullProjectFiles($target, $mapping, $projectId, $exported, $failed, $skipped);
 				}
 
-				return ['processed' => $processed, 'folders' => $folders, 'files' => $files, 'skipped' => $skipped, 'error' => null];
+				return $this->tally([
+					'processed' => $processed,
+					'folders' => $folders,
+					'files' => $files,
+					'exported' => $exported,
+					'failed' => $failed,
+					'skipped' => $skipped,
+				]);
 			});
 		} catch (PenpotApiException $e) {
 			$this->logger->warning('penpot_sync pull failed', [
@@ -166,7 +186,7 @@ final class PullService {
 				'mapping' => $mapping->id,
 				'exception' => $e,
 			]);
-			return ['processed' => 0, 'folders' => 0, 'files' => 0, 'skipped' => 0, 'error' => $e->getMessage()];
+			return $this->tally(['error' => $e->getMessage()]);
 		} catch (\Throwable $e) {
 			// A filesystem or metadata failure (ensureRoot, a folder write, a bad
 			// node) must not abort every OTHER mapping in a bulk pull — contain it
@@ -176,19 +196,43 @@ final class PullService {
 				'mapping' => $mapping->id,
 				'exception' => $e,
 			]);
-			return ['processed' => 0, 'folders' => 0, 'files' => 0, 'skipped' => 0, 'error' => $e->getMessage()];
+			return $this->tally(['error' => $e->getMessage()]);
 		}
+	}
+
+	/**
+	 * One per-mapping result, with every counter defaulted.
+	 *
+	 * Exists so a new counter is added in ONE place: the early returns above are
+	 * three separate literal arrays, and the version of this that spelled them out
+	 * had already drifted once.
+	 *
+	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, error?:?string} $counts
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, error:?string}
+	 */
+	private function tally(array $counts): array {
+		return $counts + [
+			'processed' => 0,
+			'folders' => 0,
+			'files' => 0,
+			'exported' => 0,
+			'failed' => 0,
+			'skipped' => 0,
+			'error' => null,
+		];
 	}
 
 	/**
 	 * Mirror the files of one project into $target, upserting by `penpot_id`.
 	 *
+	 * @param int $exported mutated in place: incremented per archive downloaded
+	 * @param int $failed mutated in place: incremented per export that failed
 	 * @param int $skipped mutated in place: incremented for each illegally-named file
 	 * @return int the number of files written (created or updated)
 	 *
 	 * @throws PenpotApiException
 	 */
-	private function pullProjectFiles(Folder $target, Mapping $mapping, string $projectId, int &$skipped): int {
+	private function pullProjectFiles(Folder $target, Mapping $mapping, string $projectId, int &$exported, int &$failed, int &$skipped): int {
 		// Index this folder's existing `.penpot` files ONCE (penpot_id -> file)
 		// instead of re-walking the directory listing for every Penpot file.
 		$fileIndex = $this->indexFilesByPenpotId($target);
@@ -205,7 +249,7 @@ final class PullService {
 				$skipped++;
 				continue;
 			}
-			$this->upsertLinkFile($target, $fileIndex, $mapping, $fileId, $baseName, $file);
+			$this->upsertMirrorFile($target, $fileIndex, $mapping, $fileId, $baseName, $file, $exported, $failed);
 			$written++;
 		}
 		return $written;
@@ -234,70 +278,107 @@ final class PullService {
 	}
 
 	/**
-	 * Find (by `penpot_id`) or create the `.penpot` link file for a Penpot file,
-	 * refresh its body, and (re)stamp id / revision / mode.
+	 * Find (by `penpot_id`) or create the mirror file for a Penpot file, refresh
+	 * its body according to its mode, and (re)stamp id / revision / mode.
+	 *
+	 * ## MODE IS PER-FILE, DEFAULTING PER-MAPPING (saga §6.22)
+	 *
+	 * An existing file keeps the mode stamped on it — that stamp is the user's
+	 * promotion or demotion, and a mapping's default must never retroactively
+	 * rewrite it (that would silently trigger a bulk download, or silently delete
+	 * a pile of archives). Only a file we are creating right now takes the
+	 * mapping's default.
+	 *
+	 * ## A NEW `sync` FILE IS BORN AS A LINK, THEN UPGRADED
+	 *
+	 * The pointer body is written first, unconditionally, and the archive
+	 * replaces it. That ordering is what makes a failed first export leave a
+	 * usable pointer rather than an empty file — the user still gets a mirror
+	 * that names the design and opens it, and the next pull retries the bytes.
 	 *
 	 * @param array<string, File> $fileIndex penpot_id -> file, built once by the caller
 	 * @param array<string, mixed> $file the decoded Penpot file record (carries `revn` + `modified-at`)
+	 * @param int $exported mutated in place
+	 * @param int $failed mutated in place
 	 */
-	private function upsertLinkFile(Folder $target, array $fileIndex, Mapping $mapping, string $fileId, string $baseName, array $file): void {
+	private function upsertMirrorFile(Folder $target, array $fileIndex, Mapping $mapping, string $fileId, string $baseName, array $file, int &$exported, int &$failed): void {
 		$name = $baseName . self::EXTENSION;
 		$revn = (string)($file['revn'] ?? '');
 		$modifiedAt = $this->str($file, 'modified-at');
-		$body = $this->linkBody($mapping, $fileId, $baseName, $revn, $modifiedAt);
+		// The drift signal is `revn` + `modified-at` together (saga §5.5): revn
+		// alone cannot tell "same revn, newer modified-at" apart, which the
+		// scheduled-pull diff needs. Stored as one opaque string — callers
+		// compare it whole, never parse it.
+		$signal = ArchiveService::signal($revn, $modifiedAt);
 
 		$existing = $fileIndex[$fileId] ?? null;
 		if ($existing !== null) {
 			$this->tryRename($existing, $target, $name);
-			$existing->putContent($body);
 			$node = $existing;
+			$stamped = $this->metadata->readFile($node->getId());
+			// AN EXISTING FILE KEEPS ITS OWN MODE. The mapping's default only ever
+			// reaches a file the moment it is created — changing a default must
+			// never retroactively download (or delete) a pile of archives.
+			$mode = $stamped !== null && $stamped->mode !== '' ? $stamped->mode : $mapping->mode;
+			$stored = $stamped?->revision ?? '';
 		} else {
-			$node = $target->newFile($this->freeName($target, $name), $body);
+			$node = $target->newFile($this->freeName($target, $name));
+			$mode = $mapping->mode;
+			$stored = '';
 		}
 
-		$this->metadata->writeFile($node->getId(), [
+		$wantsArchive = $mode === Mapping::MODE_SYNC;
+		if (!$wantsArchive || $existing === null) {
+			$this->archives->storeLink($node, $fileId, $baseName, $revn, $modifiedAt, $mapping->teamId);
+		}
+
+		// `true` when the mirror is current and the revision stamp may advance.
+		$current = true;
+		if ($wantsArchive && $this->driftedOrMissing($node, $stored, $signal)) {
+			try {
+				$this->archives->storeArchive($node, $fileId);
+				$exported++;
+			} catch (PenpotApiException $e) {
+				// ONE FILE'S EXPORT FAILING IS NOT A FAILED PULL. Everything else
+				// about this file — its name, its placement, its ids — reconciled
+				// fine and is worth keeping; only the bytes are stale. Leaving the
+				// revision stamp alone is what makes the next pull retry.
+				$this->logger->warning('penpot_sync pull: could not export a sync file, keeping the previous content', [
+					'app' => Application::APP_ID,
+					'file' => $name,
+					'penpot_id' => $fileId,
+					'exception' => $e,
+				]);
+				$failed++;
+				$current = false;
+			}
+		}
+
+		$values = [
 			PenpotMetadata::KEY_ID => $fileId,
-			// The drift signal is `revn` + `modified-at` together (saga §5.5): revn
-			// alone cannot tell "same revn, newer modified-at" apart, which the
-			// scheduled-pull diff needs. Stored as one opaque string — callers
-			// compare it whole, never parse it.
-			PenpotMetadata::KEY_REVISION => $this->revisionSignal($revn, $modifiedAt),
-			PenpotMetadata::KEY_MODE => $mapping->mode,
-		]);
+			PenpotMetadata::KEY_MODE => $mode,
+		];
+		if ($current) {
+			$values[PenpotMetadata::KEY_REVISION] = $signal;
+		}
+		$this->metadata->writeFile($node->getId(), $values);
 	}
 
 	/**
-	 * The `link` file body: a small JSON pointer carrying the Penpot ids and the
-	 * instance URL. The metadata keys are the machine contract; this body is a
-	 * human-readable copy plus enough to build a browser deep-link later.
+	 * Does this `sync` file need a fresh export?
 	 *
-	 * NO deep-link URL is fabricated here. Penpot's workspace route has not been
-	 * confirmed live (saga doctrine: call it before you design around it), so the
-	 * body carries the ids and the instance base and leaves the exact link to
-	 * Course 4, which will verify it against a running Penpot.
+	 * TWO REASONS, AND THE SECOND IS THE IMPORTANT ONE. Drift is obvious: the
+	 * design changed upstream. Missing bytes are subtler — a file stamped `sync`
+	 * that holds no archive is a promotion whose export never landed (or a pull
+	 * that was interrupted), and checking for it is what makes that state heal
+	 * itself on the next pass instead of persisting until someone notices the
+	 * "backup" is a pointer.
+	 *
+	 * The cheap test runs first: an unchanged signal is a string compare, and
+	 * only then do we touch the filesystem.
 	 */
-	private function linkBody(Mapping $mapping, string $fileId, string $baseName, string $revn, string $modifiedAt): string {
-		$payload = [
-			'penpot' => 'reference/v1',
-			'id' => $fileId,
-			'name' => $baseName,
-			'revn' => $revn,
-			'modified_at' => $modifiedAt,
-			'team_id' => $mapping->teamId,
-			'instance_url' => $this->config->getValueString(Application::APP_ID, InstanceSettings::KEY_URL, ''),
-		];
-		// JSON_THROW_ON_ERROR, not a silent (string) cast: json_encode can return
-		// false (e.g. malformed UTF-8 in a file name), and writing an empty body
-		// would be a silently corrupt mirror file. Matches PenpotClient's encoding.
-		return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
-	}
-
-	/** The opaque `revn` + `modified-at` drift signal stored as `penpot_revision`. */
-	private function revisionSignal(string $revn, string $modifiedAt): string {
-		if ($modifiedAt === '') {
-			return $revn;
-		}
-		return $revn . '@' . $modifiedAt;
+	private function driftedOrMissing(File $node, string $stored, string $signal): bool {
+		return $stored !== $signal || !$this->archives->holdsArchive($node);
 	}
 
 	/**
@@ -432,26 +513,26 @@ final class PullService {
 	/**
 	 * Fold the per-mapping results into one summary.
 	 *
-	 * @param list<array{processed:int, folders:int, files:int, skipped:int, error:?string}> $results
-	 * @return array{processed:int, folders:int, files:int, skipped:int, status:string, message:?string}
+	 * A FAILED EXPORT DOES NOT MAKE THE PULL AN ERROR. `failed` is reported as
+	 * its own count and the status stays `ok`: every other fact about those files
+	 * reconciled, the previous archive is intact, and the next pull retries. Only
+	 * a failure that stopped a whole mapping (`error`) is a failed pull.
+	 *
+	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, error:?string}> $results
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, status:string, message:?string}
 	 */
 	private function finalise(array $results): array {
-		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'skipped' => 0];
+		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0];
 		$errors = [];
 		foreach ($results as $res) {
-			$total['processed'] += $res['processed'];
-			$total['folders'] += $res['folders'];
-			$total['files'] += $res['files'];
-			$total['skipped'] += $res['skipped'];
+			foreach (array_keys($total) as $key) {
+				$total[$key] += $res[$key];
+			}
 			if (is_string($res['error']) && $res['error'] !== '') {
 				$errors[] = $res['error'];
 			}
 		}
-		return [
-			'processed' => $total['processed'],
-			'folders' => $total['folders'],
-			'files' => $total['files'],
-			'skipped' => $total['skipped'],
+		return $total + [
 			'status' => $errors === [] ? 'ok' : 'error',
 			'message' => $errors === [] ? null : implode('; ', $errors),
 		];

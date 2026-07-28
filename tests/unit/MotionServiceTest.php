@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MotionService;
@@ -152,6 +153,31 @@ final class MotionServiceTest extends TestCase {
 		self::assertFalse($this->motion->onMove($this->source(), $this->target('hand-made.penpot')));
 	}
 
+	/**
+	 * A `link` NEVER reaches the push, and this is checked here as well as in the
+	 * guard on purpose.
+	 *
+	 * The guard (§6.43) refuses every project-changing move of a link before it
+	 * happens, so in practice only a within-project link move can arrive — which
+	 * needs no `move-files` anyway. But relying on that means the guard is the
+	 * only thing standing between a pointer and a `move-files` call: relax it and
+	 * this service would silently start re-filing files that hold no bytes.
+	 *
+	 * So the rule is stated in both places, and this test is what makes removing
+	 * it a deliberate act rather than a quiet consequence.
+	 */
+	public function testALinkIsNeverPushed(): void {
+		$this->metadata->method('readFile')
+			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_LINK));
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_B, self::TEAM),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+		$this->client->expects($this->never())->method('moveFiles');
+
+		self::assertFalse($this->motion->onMove($this->source(), $this->target()));
+	}
+
 	public function testAPlainFileIsIgnored(): void {
 		$this->client->expects($this->never())->method('moveFiles');
 
@@ -170,9 +196,16 @@ final class MotionServiceTest extends TestCase {
 
 	// ── fixtures ────────────────────────────────────────────────────────────
 
+	/**
+	 * A managed file in `sync` mode — the only kind that reaches the push.
+	 *
+	 * A `link` is refused a project change by MoveGuardListener before the event
+	 * this service listens to is ever emitted, and {@see testALinkIsNeverPushed()}
+	 * pins the belt-and-braces return that says so here too.
+	 */
 	private function givenManagedFile(): void {
 		$this->metadata->method('readFile')
-			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@x', 'link'));
+			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC));
 	}
 
 	/**

@@ -60,15 +60,16 @@ use Psr\Log\LoggerInterface;
  * lookup here *and* the decoder's shape detection. See the header block in
  * {@see call()} — that comment is load-bearing, not decoration.
  *
- * ## 4. HTTP 200 will not mean success, once the binfile commands land
+ * ## 4. HTTP 200 does not mean success on the binfile commands
  *
- * `export-binfile`/`import-binfile` stream Server-Sent Events, and an ERROR
- * arrives as an event *inside* a 200 response (saga §5.1/§6.20). Neither is
- * implemented here yet — they arrive with the course that first needs an
- * export, together with an event reader — but the trap is named now because a
- * later contributor reading `decodeResponse()` could reasonably assume a 2xx
- * settles the question. For the ordinary RPC commands in the table below, it
- * does.
+ * `export-binfile` streams Server-Sent Events, and an ERROR arrives as an event
+ * *inside* a 200 response (saga §5.1/§6.20). {@see exportBinfile()} therefore has
+ * its own reader and its own failure classification, and never goes through
+ * {@see decodeResponse()} — which is right for every other command in the table
+ * and would silently call a failed export a success.
+ *
+ * It is also the only command here that needs **two** requests: the stream ends
+ * with an asset URL, and the bytes come from fetching that.
  *
  * ## 5. Success is not proof of success (saga §6.49)
  *
@@ -116,18 +117,41 @@ final class PenpotClient {
 		// Note `ids` is a SET of file ids, the one command in this table whose
 		// value is not a scalar — see wireParams()' widened type.
 		'move-files' => ['project' => 'project-id', 'files' => 'ids'],
+		// ── confirmed live, Chapter 1 §5.1/§5.4 ──
+		// CAMELCASE, and that is not a slip: §1918 established that `import-binfile`
+		// takes kebab (`project-id`) while `export-binfile` takes camel (`fileId`).
+		// The two halves of the same feature disagree with each other. This row is
+		// the whole reason the table exists.
+		'export-binfile' => ['file' => 'fileId', 'libraries' => 'includeLibraries', 'assets' => 'embedAssets'],
 	];
 
 	/**
 	 * Seconds to wait on an ordinary RPC call.
 	 *
-	 * NOTE the SSE commands (`export-binfile`, `import-binfile`) are deliberately
-	 * absent from this class entirely. They stream events, need a much longer
-	 * budget, and carry the HTTP-200-with-an-error-inside trap (saga §5.1/§6.20);
-	 * they land with the course that first needs an export, along with their own
-	 * event reader. Adding a half-built SSE path now would be untested surface.
+	 * The SSE command {@see exportBinfile()} does NOT use this — an export of a
+	 * large file streams progress for far longer than any listing takes, and
+	 * capping it here would turn "slow" into "failed". See EXPORT_TIMEOUT.
 	 */
 	private const TIMEOUT = 30;
+
+	/**
+	 * Seconds to wait on `export-binfile` and on the asset fetch that follows it.
+	 *
+	 * Five minutes, not thirty seconds: the server does real work per page and per
+	 * shape before the stream ends, and the whole point of `sync` mode is the files
+	 * worth keeping — which are the big ones. A timeout here is not a lost request,
+	 * it is a wasted export the server already paid for.
+	 */
+	private const EXPORT_TIMEOUT = 300;
+
+	/**
+	 * A `.penpot` archive is a ZIP, so it starts with the local-file-header magic.
+	 *
+	 * Checked because HTTP 200 is not proof here (penpot#7649 has shipped a
+	 * zero-byte "successful" export), and because the asset URL is served through
+	 * a proxy that can answer an HTML error page with a 200 (saga §5.3).
+	 */
+	private const ZIP_MAGIC = "PK\x03\x04";
 
 	public function __construct(
 		private readonly IAppConfig $config,
@@ -230,8 +254,8 @@ final class PenpotClient {
 	 *
 	 * NON-DESTRUCTIVE AND REVERSIBLE. Nothing is copied, re-imported or re-id'd:
 	 * the file keeps its id, its `revn` and its whole history, and dragging it back
-	 * is the same call in the other direction. That is why the user-facing drag
-	 * propagates rather than being refused or silently reverted (§6.35).
+	 * is the same call in the other direction (§6.34). That is why the user-facing
+	 * drag propagates rather than being refused or silently reverted.
 	 *
 	 * Penpot answers 204 with no body, like `rename-project`.
 	 *
@@ -249,6 +273,319 @@ final class PenpotClient {
 		}
 
 		$this->call('move-files', ['project' => $projectId, 'files' => $fileIds], $actorToken);
+	}
+
+	// ── the export surface ──────────────────────────────────────────────────
+
+	/**
+	 * Export one design and return the real `.penpot` archive bytes.
+	 *
+	 * THE ONLY TWO-REQUEST COMMAND IN THIS CLASS, and the only one where HTTP 200
+	 * settles nothing (saga §5.1). What actually happens:
+	 *
+	 *   1. `POST export-binfile` answers `text/event-stream`, not a body: a
+	 *      `progress` event per file and per page, then either `error` or `end`.
+	 *      **The failure arrives inside the 200.**
+	 *   2. `end`'s payload is a Transit tagged value in map form carrying an asset
+	 *      URL — `{"~#uri": "https://…/assets/by-id/<uuid>"}`.
+	 *   3. That URL is fetched with the same token to get the ZIP.
+	 *
+	 * BOTH FLAGS ARE SENT FALSE. penpot#7649: `includeLibraries` **and**
+	 * `embedAssets` together throw an opaque 500. Sending neither is the one
+	 * combination that is unambiguously outside the bug, and it is what the live
+	 * export in §5.4 was verified against. `embedAssets: true` is the obvious
+	 * future upgrade — it would make the archive self-contained — but turning it
+	 * on is a change to what a backup *is*, so it waits for its own probe rather
+	 * than riding in on this one.
+	 *
+	 * @return string the ZIP bytes, verified non-empty and ZIP-shaped
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function exportBinfile(string $fileId): string {
+		$stream = $this->postEventStream($fileId);
+		$assetUrl = $this->assetUrlFrom($fileId, $stream);
+		$archive = $this->fetchAsset($fileId, $assetUrl);
+
+		// A "successful" export that produced nothing is a real, witnessed
+		// failure mode (penpot#7649), and it is the worst one to pass on: the
+		// caller would store an empty file OVER a good archive and call it a
+		// backup. Refuse here so the caller's error path keeps the old bytes.
+		if (!str_starts_with($archive, self::ZIP_MAGIC)) {
+			throw new PenpotApiException(
+				sprintf(
+					'Penpot exported file %s but the download was not a ZIP archive (%d bytes). '
+					. 'The export may have produced an empty archive (penpot#7649), or a proxy '
+					. 'answered the asset URL with an error page.',
+					$fileId,
+					strlen($archive),
+				),
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		return $archive;
+	}
+
+	/**
+	 * Fire the export and return the raw event-stream text.
+	 *
+	 * @throws PenpotApiException
+	 */
+	private function postEventStream(string $fileId): string {
+		$url = $this->getBaseUrl() . self::RPC_PATH . 'export-binfile';
+		$body = $this->wireParams('export-binfile', ['file' => $fileId, 'libraries' => false, 'assets' => false]);
+
+		try {
+			$response = $this->clientService->newClient()->post($url, [
+				'headers' => [
+					'Authorization' => 'Token ' . $this->getToken(),
+					'Content-Type' => 'application/json',
+					// Still NO `Accept` header — see call(). The event payloads are
+					// Transit exactly like every other response, and asking for JSON
+					// breaks them the same way.
+				],
+				'body' => json_encode($body, JSON_THROW_ON_ERROR),
+				'timeout' => self::EXPORT_TIMEOUT,
+				'http_errors' => false,
+			]);
+		} catch (LocalServerException $e) {
+			throw new PenpotApiException(
+				'Nextcloud refused to connect to a local address. Set `allow_local_remote_servers` '
+				. 'if Penpot is reachable only in-cluster. (' . $e->getMessage() . ')',
+				0,
+				$e,
+				PenpotApiException::KIND_UNREACHABLE,
+			);
+		} catch (\Throwable $e) {
+			throw new PenpotApiException(
+				'Could not reach Penpot at ' . $url . ': ' . $e->getMessage(),
+				0,
+				$e,
+				PenpotApiException::KIND_UNREACHABLE,
+			);
+		}
+
+		$status = $response->getStatusCode();
+		if ($status < 200 || $status >= 300) {
+			// A non-2xx here is an ordinary RPC failure (a bad id, a bad token)
+			// that never reached the streaming stage, so it classifies like one.
+			throw $this->errorFor('export-binfile', $status, (string)$response->getBody());
+		}
+
+		return (string)$response->getBody();
+	}
+
+	/**
+	 * Read the event stream and return the asset URL its `end` event carries.
+	 *
+	 * @throws PenpotApiException on an `error` event, or a stream that ends
+	 *                            without one — silence is a failure too.
+	 */
+	private function assetUrlFrom(string $fileId, string $stream): string {
+		$url = null;
+
+		foreach ($this->events($stream) as [$name, $data]) {
+			if ($name === 'error') {
+				throw new PenpotApiException(
+					sprintf('Penpot failed to export file %s: %s', $fileId, $this->errorHint($data)),
+					0,
+					null,
+					PenpotApiException::KIND_PROTOCOL,
+				);
+			}
+
+			if ($name === 'end') {
+				$decoded = $this->transit->decode($data);
+				$url = is_string($decoded) ? $decoded : null;
+			}
+			// `progress` events are per-file and per-page bookkeeping. They are
+			// deliberately not logged: a big export emits one per shape, and the
+			// only fact they carry that we do not already have is a page name.
+		}
+
+		if ($url === null || $url === '') {
+			throw new PenpotApiException(
+				sprintf(
+					'Penpot\'s export of file %s ended without an asset URL. The stream may have been '
+					. 'cut short by a proxy timeout.',
+					$fileId,
+				),
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Split an SSE body into `[event, data]` pairs.
+	 *
+	 * Events are separated by a blank line; a `data:` field may be repeated and
+	 * the parts are joined with a newline (the SSE spec's rule, and Penpot's
+	 * Transit payloads are single-line today — but a payload that grew past the
+	 * server's line budget would otherwise decode as truncated JSON).
+	 *
+	 * An event with no `event:` field defaults to `message`, per the spec.
+	 *
+	 * @return list<array{0:string, 1:string}>
+	 */
+	private function events(string $stream): array {
+		$out = [];
+
+		foreach (preg_split('/\R\R+/', trim(str_replace("\r\n", "\n", $stream))) ?: [] as $block) {
+			if (trim($block) === '') {
+				continue;
+			}
+
+			$name = 'message';
+			$data = [];
+
+			foreach (explode("\n", $block) as $line) {
+				if (str_starts_with($line, 'event:')) {
+					$name = trim(substr($line, 6));
+				} elseif (str_starts_with($line, 'data:')) {
+					$data[] = ltrim(substr($line, 5), ' ');
+				}
+			}
+
+			$out[] = [$name, implode("\n", $data)];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Pull a human-readable reason out of an `error` event's Transit payload,
+	 * falling back to the raw data when it does not decode.
+	 *
+	 * The shape (saga §5.2): `{"~:type":"~:server-error","~:code":"~:unexpected",
+	 * "~:hint":"…"}`. The hint is the only part worth showing a user; the code is
+	 * worth keeping when there is no hint.
+	 */
+	private function errorHint(string $data): string {
+		try {
+			$decoded = $this->transit->decode($data);
+		} catch (PenpotApiException) {
+			return $data;
+		}
+
+		if (!is_array($decoded)) {
+			return $data;
+		}
+
+		foreach (['hint', 'code', 'type'] as $key) {
+			if (isset($decoded[$key]) && is_string($decoded[$key]) && $decoded[$key] !== '') {
+				return $decoded[$key];
+			}
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Fetch the archive bytes from the URL the `end` event handed us.
+	 *
+	 * The token is sent because the first hop is Penpot's own `/assets/by-id/…`,
+	 * which authenticates and then redirects to object storage. The HTTP client
+	 * drops the Authorization header across that host change on its own, which is
+	 * both correct and necessary — the storage URL carries its own signature.
+	 *
+	 * THIS HOP MUST LAND ON PENPOT'S FRONTEND, NOT ITS BACKEND — and WE DO NOT
+	 * CHOOSE WHICH. The URL comes from the `end` event, and Penpot builds it from
+	 * its own `PENPOT_PUBLIC_URI`. The backend does not serve the bytes: it
+	 * authenticates, then answers with **no body** and a redirect header naming
+	 * where the file really is, for **nginx** to act on. So a Penpot whose public
+	 * URI names its backend hands us an address that downloads nothing, no matter
+	 * what `penpot_url` is set to — see the empty-body branch below, which is the
+	 * only reason that is nameable instead of baffling (saga §C4.8).
+	 *
+	 * @throws PenpotApiException
+	 */
+	private function fetchAsset(string $fileId, string $url): string {
+		try {
+			$response = $this->clientService->newClient()->get($url, [
+				'headers' => ['Authorization' => 'Token ' . $this->getToken()],
+				'timeout' => self::EXPORT_TIMEOUT,
+				'http_errors' => false,
+			]);
+		} catch (\Throwable $e) {
+			throw new PenpotApiException(
+				sprintf('Could not download the exported archive for file %s: %s', $fileId, $e->getMessage()),
+				0,
+				$e,
+				PenpotApiException::KIND_UNREACHABLE,
+			);
+		}
+
+		$status = $response->getStatusCode();
+		if ($status < 200 || $status >= 300) {
+			// Saga §5.3: a misconfigured `internalResolver` makes this 502 while
+			// the export itself succeeded — so say WHICH half failed, or the next
+			// person debugs the export for an hour.
+			throw new PenpotApiException(
+				sprintf(
+					'Penpot exported file %s, but downloading the archive failed (HTTP %d). '
+					. 'The export itself succeeded — this is the asset fetch.',
+					$fileId,
+					$status,
+				),
+				$status,
+				null,
+				$status >= 500 ? PenpotApiException::KIND_UNREACHABLE : PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		$archive = (string)$response->getBody();
+
+		// AUTHENTICATED FINE, AND NOTHING IN IT. Penpot's backend answers exactly
+		// this way: it hands the real location to nginx in a header and lets nginx
+		// serve the file. Nothing else about the connection looks wrong — the token
+		// works, the export streams, the status is a success — so without naming it
+		// here, the only symptom is "my backups are empty."
+		if ($archive === '' && $this->redirectHeader($response) !== '') {
+			throw new PenpotApiException(
+				sprintf(
+					'Penpot exported file %s, but the archive download returned no content. '
+					. 'Penpot handed us <%s>, which reaches its BACKEND — only its frontend '
+					. '(nginx) serves exported files. This address comes from Penpot\'s own '
+					. 'PENPOT_PUBLIC_URI, so it must be fixed on the Penpot side.',
+					$fileId,
+					$url,
+				),
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		return $archive;
+	}
+
+	/**
+	 * The "a proxy was supposed to handle this" header, whichever name it arrived
+	 * under — the tell that we reached the backend directly.
+	 *
+	 * BOTH NAMES ARE REAL, and which one appears says which half of Penpot we hit.
+	 * The backend emits `x-accel-redirect` (its `fs` object storage) or a 3xx
+	 * `location` (its `s3` backend). Nginx, once it has acted on either, echoes
+	 * the resolved address back as `x-internal-redirect` — a diagnostic, not an
+	 * instruction. Keying off only one name means the check silently stops working
+	 * against half the Penpot deployments in existence, which is worse than not
+	 * having it: the failure it exists to explain would return, unexplained.
+	 */
+	private function redirectHeader(IResponse $response): string {
+		foreach (['x-accel-redirect', 'x-internal-redirect'] as $name) {
+			if ($response->getHeader($name) !== '') {
+				return $response->getHeader($name);
+			}
+		}
+
+		return '';
 	}
 
 	// ── connection test ─────────────────────────────────────────────────────
@@ -283,9 +620,9 @@ final class PenpotClient {
 	 * Issue one RPC command and decode its response.
 	 *
 	 * @param string $command The RPC command name, e.g. `get-teams`.
-	 * @param array<string, string|list<string>> $args Logical argument names —
-	 *                                                 translated to wire params through
-	 *                                                 {@see PARAMS}, never passed through raw.
+	 * @param array<string, string|bool|list<string>> $args Logical argument names —
+	 *                                                      translated to wire params through
+	 *                                                      {@see PARAMS}, never passed through raw.
 	 *
 	 * @return mixed The decoded body (`null` for a 204).
 	 *
@@ -372,9 +709,9 @@ final class PenpotClient {
 	/**
 	 * Translate logical argument names into the exact wire params for a command.
 	 *
-	 * @param array<string, string|list<string>> $args
+	 * @param array<string, string|bool|list<string>> $args
 	 *
-	 * @return array<string, string|list<string>>
+	 * @return array<string, string|bool|list<string>>
 	 *
 	 * @throws PenpotApiException on an unknown command or an unmapped argument —
 	 *                            both are programmer errors, and both would
