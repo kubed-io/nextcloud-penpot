@@ -476,18 +476,16 @@ final class PullService {
 			// THE LAST SNAPSHOT, taken before the file moves. A `sync` file that
 			// already holds its archive needs nothing; a pointer gets one attempt at
 			// becoming a real backup while Penpot's own trash still has the design.
+			$rescue = null;
 			if (!$this->archives->holdsArchive($node)) {
-				if ($this->snapshot($node, $penpotId)) {
+				$rescue = $this->snapshot($node, $penpotId);
+				if ($rescue) {
 					$this->metadata->writeFile($node->getId(), [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
-					$rescued++;
-				} else {
-					$lost++;
 				}
 			}
 
 			try {
 				$node->delete();
-				$pruned++;
 			} catch (\Throwable $e) {
 				// A mirror we could not trash is not a failed pull. It stays, Penpot
 				// stops naming it, and the next pull tries again — the same shape as
@@ -498,6 +496,20 @@ final class PullService {
 					'penpot_id' => $penpotId,
 					'exception' => $e,
 				]);
+				continue;
+			}
+
+			// COUNTED ONLY ONCE THE MIRROR IS ACTUALLY IN THE TRASH, because the CLI
+			// reports `rescued` and `lost` as a breakdown OF `pruned` — three numbers
+			// that must add up. A snapshot taken for a file that then failed to move
+			// is not lost work (it is still on disk, and the next pull's delete is now
+			// free) but it did not prune anything, so counting it here would print a
+			// sum that does not reconcile.
+			$pruned++;
+			if ($rescue === true) {
+				$rescued++;
+			} elseif ($rescue === false) {
+				$lost++;
 			}
 		}
 	}

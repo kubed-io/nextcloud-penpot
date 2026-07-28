@@ -333,6 +333,28 @@ final class PullServiceTest extends TestCase {
 	}
 
 	/**
+	 * A MIRROR THAT COULD NOT BE TRASHED COUNTS FOR NOTHING — not even its
+	 * snapshot. The CLI prints `rescued` and `lost` as a breakdown OF `pruned`, so
+	 * three numbers that do not add up would read as a bug in whichever one the
+	 * operator trusted least. The archive is still on disk and the next pull's
+	 * delete is now free; it simply did not prune anything this time.
+	 */
+	public function testAMirrorThatCannotBeTrashedIsCountedNowhere(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$stale], listing: []);
+		$this->archives->method('holdsArchive')->willReturn(false);
+		$this->archives->method('storeArchive')->willReturn(4096);
+		$stale->method('delete')->willThrowException(new \RuntimeException('locked'));
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(0, $result['pruned']);
+		self::assertSame(0, $result['rescued']);
+		self::assertSame(0, $result['lost']);
+		self::assertNull($result['error'], 'one stuck mirror is not a failed pull');
+	}
+
+	/**
 	 * THE ONE THAT MATTERS MOST. A project skipped for any reason means its files
 	 * were never enumerated, which is indistinguishable from Penpot no longer
 	 * having them. Pruning on that evidence would trash a whole project's mirrors

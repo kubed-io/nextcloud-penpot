@@ -136,7 +136,7 @@ that makes a Penpot team appear in Nextcloud.
 | **Nearest-ancestor resolver** | 🔴 | §6.29, *the single most load-bearing rule in the app*. Walk up folder metadata for the nearest `penpot_project_id`, then `penpot_team_id`. mapping-membership.feature is its spec. |
 | **Team Folder provisioning + fallback** | 🟢 | groupfolders when present, plain shared folder when not — both siblings' `TeamFolderService` "optional dependency" precedent (#10). |
 | **Folder metadata write/read** | 🟢 | Confirmed live on a real production Team Folder (§6.21). |
-| **The pull** | � | `get-teams` → `get-all-projects` → `get-project-files`. **1 + P calls per team, zero exports** for an unchanged instance (§5.5) — this is what makes it scale to many files or few. Reconciles both ways as of C5.1: it adds what appeared and prunes what vanished. |
+| **The pull** | 🟢 | `get-teams` → `get-all-projects` → `get-project-files`. **1 + P calls per team, zero exports** for an unchanged instance (§5.5) — this is what makes it scale to many files or few. Reconciles both ways as of C5.1: it adds what appeared and prunes what vanished. |
 | **Drafts as a state, never a folder** | 🔴 | §6.35. Files at team root are in Drafts. No `Drafts` folder is ever created. |
 | **Project folders + visible tag** | 🟡 | Project id as metadata, plus the human-visible pill (§6.32) — under free nesting, position no longer tells you. |
 | **`link` files** | 🟡 | The default. A pointer with `penpot_id` + metadata, deep-linking to the live design. **Never calls `export-binfile`.** |
@@ -171,7 +171,7 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **Three-layer delete/restore** | � | §6.52: NC trash → Penpot's own trash (~7 days, **id/revn/history intact**) → our archive (last resort, lossy). **Always check Penpot's trash first.** The prune's half is built (C5.1): a vanished design's mirror goes to the NC trash, never further. |
+| **Three-layer delete/restore** | 🟡 | §6.52: NC trash → Penpot's own trash (~7 days, **id/revn/history intact**) → our archive (last resort, lossy). **Always check Penpot's trash first.** The prune's half is built (C5.1): a vanished design's mirror goes to the NC trash, never further. |
 | **Trash-aware reconciler** | 🔴 | §6.37/§6.45 — a trashed file keeps its fileid and metadata, so "in the trash with a matching id" **is** the hidden-link state. No separate flag. **Match by fileid, never by filename** (#43 — trashed files carry a `.dTIMESTAMP` suffix). The remaining half of C5.1: needs `files_trashbin`. |
 | **`sync`↔`link` promotion** | 🟢 | Built early, in C4.8 — the move guard needed a real escape hatch to offer. `occ penpot_sync:set-mode`, confirmed on the lossy direction (#23). The Files-app surface is Course 6. |
 | **`penpot:ignore` marker** | 🟢 | Sync mode only (§6.23). |
