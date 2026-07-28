@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Command;
 
+use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\StorageService;
@@ -45,6 +46,7 @@ final class Status extends Command {
 		private StorageService $storage,
 		private MembershipResolver $resolver,
 		private PenpotMetadata $metadata,
+		private ArchiveService $archives,
 	) {
 		parent::__construct();
 	}
@@ -84,6 +86,12 @@ final class Status extends Command {
 			$output->writeln('penpot_id: ' . ($file?->penpotId ?? ''));
 			$output->writeln('penpot_revision: ' . ($file?->revision ?? ''));
 			$output->writeln('penpot_mode: ' . ($file?->mode ?? ''));
+			// The stamp says what the file is SUPPOSED to hold; this says what it
+			// actually holds. They can disagree — a `sync` file whose archive never
+			// arrived reads `sync` / `pointer`, which is precisely the drift the
+			// pull self-heals. Printing both is what makes that visible instead of
+			// something you infer from a byte count.
+			$output->writeln(sprintf('Content: %s (%d bytes)', $this->describe($node), $node->getSize()));
 		} elseif ($node instanceof Folder) {
 			$markers = $this->metadata->readFolder($node->getId());
 			$output->writeln('penpot_project_id: ' . $markers->projectId);
@@ -99,5 +107,14 @@ final class Status extends Command {
 		));
 
 		return 0;
+	}
+
+	/** What the file on disk actually is: a real export, a pointer, or nothing. */
+	private function describe(File $node): string {
+		if ($node->getSize() === 0) {
+			return 'empty';
+		}
+
+		return $this->archives->holdsArchive($node) ? 'archive' : 'pointer';
 	}
 }

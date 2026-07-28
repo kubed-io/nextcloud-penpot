@@ -9,16 +9,18 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Exception\PenpotApiException;
+use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
+use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
-use OCP\IAppConfig;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -48,6 +50,7 @@ final class PullServiceTest extends TestCase {
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private StorageService $storage;
+	private ArchiveService $archives;
 	private PullService $pull;
 
 	protected function setUp(): void {
@@ -56,16 +59,15 @@ final class PullServiceTest extends TestCase {
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->storage = $this->createMock(StorageService::class);
-		$config = $this->createStub(IAppConfig::class);
-		$config->method('getValueString')->willReturn('https://penpot.example');
+		$this->archives = $this->createMock(ArchiveService::class);
 
 		$this->pull = new PullService(
 			$this->mappings,
 			$this->client,
 			$this->metadata,
 			$this->storage,
+			$this->archives,
 			new SyncGuard(),
-			$config,
 			new NullLogger(),
 		);
 	}
@@ -142,13 +144,147 @@ final class PullServiceTest extends TestCase {
 		self::assertSame(1, $result['skipped']);
 	}
 
-	private function mapping(bool $useTeamFolder): Mapping {
+	// ── `sync` mode: the only thing that costs anything (saga §6.22) ────────
+
+	/**
+	 * THE COST PROPERTY THE WHOLE MODE AXIS EXISTS FOR. A team of `link` files
+	 * reconciles names, placement and revisions for nothing — the listing already
+	 * carries all three (§5.5) — and `export-binfile` is never called.
+	 *
+	 * If this ever fails, a 500-file team has quietly become 500 exports a pull.
+	 */
+	public function testALinkTeamNeverExports(): void {
+		$this->givenOneFile(Mapping::MODE_LINK, stampedMode: '', stored: '', holdsArchive: false);
+
+		$this->archives->expects($this->never())->method('storeArchive');
+		$this->archives->expects($this->once())->method('storeLink');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(0, $result['exported']);
+	}
+
+	/**
+	 * An unchanged `sync` file that already holds its archive costs nothing
+	 * either. The drift signal is compared first precisely so that the common
+	 * case — nothing changed upstream — never touches the filesystem or the wire.
+	 */
+	public function testAnUnchangedSyncFileIsNotReExported(): void {
+		$this->givenOneFile(Mapping::MODE_SYNC, stampedMode: Mapping::MODE_SYNC, stored: '5@t1', holdsArchive: true);
+
+		$this->archives->expects($this->never())->method('storeArchive');
+		// The pointer body is NOT rewritten over a stored archive either — that
+		// would delete the backup on every pull, which is the exact accident this
+		// ordering exists to prevent.
+		$this->archives->expects($this->never())->method('storeLink');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(0, $result['exported']);
+	}
+
+	/** The design moved on upstream, so the archive is refetched. */
+	public function testASyncFileWhoseRevisionMovedIsReExported(): void {
+		$this->givenOneFile(Mapping::MODE_SYNC, stampedMode: Mapping::MODE_SYNC, stored: '4@t0', holdsArchive: true);
+
+		$this->archives->expects($this->once())->method('storeArchive')->willReturn(1234);
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['exported']);
+		self::assertSame(0, $result['failed']);
+	}
+
+	/**
+	 * THE SELF-HEALING CASE, and the reason the check is not a pure string
+	 * compare. A file stamped `sync` that holds no archive is a promotion whose
+	 * export never landed. Trusting the stamp alone would leave it a pointer
+	 * wearing a backup's label until someone went looking.
+	 */
+	public function testASyncFileMissingItsArchiveIsExportedEvenWithoutDrift(): void {
+		$this->givenOneFile(Mapping::MODE_SYNC, stampedMode: Mapping::MODE_SYNC, stored: '5@t1', holdsArchive: false);
+
+		$this->archives->expects($this->once())->method('storeArchive')->willReturn(99);
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['exported']);
+	}
+
+	/**
+	 * A FAILED EXPORT DOES NOT ADVANCE THE REVISION STAMP (saga §6.18 rule 3).
+	 * Recording the new signal would tell every later pull "this mirror is
+	 * current" about a file that never got its bytes — one transient 502 and the
+	 * backup silently stops updating forever.
+	 */
+	public function testAFailedExportLeavesTheRevisionStampAloneSoTheNextPullRetries(): void {
+		$this->givenOneFile(Mapping::MODE_SYNC, stampedMode: Mapping::MODE_SYNC, stored: '4@t0', holdsArchive: true);
+
+		$this->archives->method('storeArchive')
+			->willThrowException(new PenpotApiException('boom'));
+
+		$this->metadata->expects($this->once())
+			->method('writeFile')
+			->with(30, self::callback(static fn (array $v): bool => !array_key_exists(PenpotMetadata::KEY_REVISION, $v)));
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		// Reported, and NOT an error: the file's name, placement and ids all
+		// reconciled, and the previous archive is untouched.
+		self::assertSame(1, $result['failed']);
+		self::assertSame(0, $result['exported']);
+		self::assertNull($result['error']);
+	}
+
+	/**
+	 * A MAPPING DEFAULT NEVER REWRITES A FILE'S OWN MODE. Flipping a mapping to
+	 * `sync` must not retroactively download every file that a user deliberately
+	 * left as a link — nor the reverse, which would delete a pile of archives.
+	 */
+	public function testAnExistingFileKeepsItsOwnModeAgainstTheMappingDefault(): void {
+		$this->givenOneFile(Mapping::MODE_SYNC, stampedMode: Mapping::MODE_LINK, stored: '5@t1', holdsArchive: false);
+
+		$this->archives->expects($this->never())->method('storeArchive');
+
+		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false, mode: Mapping::MODE_SYNC))['exported']);
+	}
+
+	/**
+	 * One team, one Drafts project, one existing file — the fixture every
+	 * mode test above varies.
+	 *
+	 * @param string $mappingMode the mapping's default (only reaches a NEW file)
+	 * @param string $stampedMode what is stamped on the existing file ('' = none)
+	 * @param string $stored the file's stored revision signal
+	 */
+	private function givenOneFile(string $mappingMode, string $stampedMode, string $stored, bool $holdsArchive): void {
+		$file = $this->emptyFile(30);
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$file]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-drafts', 'name' => 'Drafts', 'team-id' => self::TEAM_ID, 'is-default' => true],
+		]);
+		// `revn` 5 at `modified-at` t1 — the signal the stored value is compared to.
+		$this->client->method('getProjectFiles')->willReturn([
+			['id' => 'file-1', 'name' => 'Login', 'revn' => 5, 'modified-at' => 't1'],
+		]);
+
+		$this->metadata->method('readFile')->willReturn(
+			new PenpotFileMetadata('file-1', $stored, $stampedMode !== '' ? $stampedMode : $mappingMode),
+		);
+		$this->archives->method('holdsArchive')->willReturn($holdsArchive);
+	}
+
+	private function mapping(bool $useTeamFolder, string $mode = Mapping::MODE_LINK): Mapping {
 		return Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
 			'team_name' => 'North Wind',
 			'nc_folder' => 'Penpot',
 			'use_team_folder' => $useTeamFolder,
-			'mode' => Mapping::MODE_LINK,
+			'mode' => $mode,
 		]);
 	}
 

@@ -58,13 +58,17 @@ use Psr\Log\LoggerInterface;
  * ## ONLY `sync` FILES GET HERE (saga §6.43, locked)
  *
  * A `link` file is a pointer with no content, and §6.43 confines it to its own
- * project — every project-changing move of a link is refused by the guard, so it
- * never reaches this service. Which means: today, when `sync` mode has not landed
- * yet and every mirrored file is a link, this service is built, tested and
- * deliberately dormant. It is written now rather than later because the
- * classification above is the part that has to be right, and it is far easier to
- * get right against the resolver than retrofitted alongside an archive download.
- * No mode check is duplicated here — one gate, in one place, is the point.
+ * project — every project-changing move of a link is refused by
+ * {@see \OCA\PenpotSync\Listener\MoveGuardListener} before it happens. What can
+ * still reach this service is a link moved *within* its project, which needs no
+ * push; {@see onMove()} returns on it explicitly rather than relying on the
+ * comparison to come out equal.
+ *
+ * This service was written before `sync` mode existed, and was dormant until it
+ * did: the classification below is the part that has to be right, and it was far
+ * easier to get right against the resolver alone than retrofitted alongside an
+ * archive download. Promoting a file with `occ penpot_sync:set-mode` is now what
+ * wakes it up.
  *
  * ## SCOPE — SAME-STORAGE MOVES ONLY (inherited from both siblings)
  *
@@ -120,6 +124,19 @@ final class MotionService {
 		if ($meta === null || !$meta->isManaged()) {
 			// A `.penpot` we do not track. Creating it in Penpot on the way in is
 			// the §6.33 carve-out, a later course — never a side effect of a drag.
+			return false;
+		}
+		if ($meta->isLink()) {
+			// A `link` file is confined to its project (§6.43), so MoveGuardListener
+			// has already refused every move that could change one. What is left is
+			// a move WITHIN the project — which by definition needs no `move-files`.
+			//
+			// Returning here rather than falling through to the project comparison
+			// is not just an optimisation, though it is one (two resolver walks and
+			// possibly a `get-all-projects` for a Drafts lookup, per drag). It makes
+			// the guard's rule true in this class too: if the guard is ever relaxed,
+			// this is the line that has to be deliberately removed, instead of the
+			// push quietly starting to fire on files that hold no bytes.
 			return false;
 		}
 

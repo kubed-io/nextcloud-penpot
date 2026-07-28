@@ -92,8 +92,8 @@ have partially misread would only encode the misreading.
 |---|---|---|
 | **Transit decode** | 🔴 | `~:kw`, `~u<uuid>`, `~m<millis>`, `~#set`, and the **cache-reference** form (`^0`, `^1`… back-references into earlier keys — visible in every live response in Ch1). This is the single most under-appreciated risk: a naive JSON parse *appears* to work on small payloads and silently mangles large ones. |
 | **Per-command param table** | 🔴 | The four confirmed rows above, as explicit config — never inferred. Open question #21, promoted from tidy-up to prerequisite. |
-| **SSE response handling** | 🟡 | `export-binfile`/`import-binfile` stream progress then `end`\|`error`. **HTTP 200 does not mean success** (§5.1/§6.20) — an error arrives as an event *inside* a 200. |
-| **The two-step asset fetch** | 🟡 | The `end` event carries a *separate* `/assets/by-id/<uuid>` URL needing a **second authenticated** request (401 without the token, §6.20). |
+| **SSE response handling** | � | `export-binfile`/`import-binfile` stream progress then `end`\|`error`. **HTTP 200 does not mean success** (§5.1/§6.20) — an error arrives as an event *inside* a 200. Built and live in C4.8. |
+| **The two-step asset fetch** | 🟢 | The `end` event carries a *separate* `/assets/by-id/<uuid>` URL needing a **second authenticated** request (401 without the token, §6.20). Built in C4.8; the two failures are reported apart, because §5.3's 502 was the fetch, not the export. |
 | **Re-read after write** | 🔴 | §6.49's gotcha: `restore-deleted-team-files` reported success while `deleted_at` was still set. **Never trust the `end` event** — confirm by re-reading. |
 | **`get-projects` workaround** | 🟡 | Upstream bug (§6.42, re-confirmed live in §6.54): it never filters `deleted_at`. Use `get-all-projects`. Isolate this so it can be deleted when upstream fixes it (#39). |
 | **Typed errors** | 🟢 | Map `:validation`, `:not-found`, auth failures to app exceptions — errors.feature already specifies the behaviour. |
@@ -161,7 +161,7 @@ failure **the local state always stands** (§6.18 rule 3).
 | **File rename → `rename-file`** | 🟢 | Ratified §6.54. Strip/re-add `.penpot`; send under plain **`id`**. |
 | **Project folder rename → `rename-project`** | 🟢 | §6.36/§6.39 — its own flow, *not* a variant of file rename. Different event, id, RPC, and response (204, no body). |
 | **Move between projects → `move-files`** | 🟢 | Confirmed working both directions (§6.34 probe). Built and gated: `sync` files re-file, `link` files are refused (§6.43). |
-| **`sync` mode + `export-binfile`** | 🟡 | Opt-in per file. Downloads the real archive when `revn` moves. |
+| **`sync` mode + `export-binfile`** | � | Opt-in per file via `occ penpot_sync:set-mode`. Downloads the real archive when `revn` moves — or when the archive is missing (self-healing). C4.8. |
 | **The `/` guard, both levels** | 🔴 | `nested` mode refuses `/` in project *and* file names (§6.51/§6.54), reports which object, skips only that one. |
 | ⛔ **Content push** | ⛔ | **Never.** §6.1 is the app's spine: Nextcloud mirrors, it does not edit shape data. |
 
@@ -173,7 +173,7 @@ failure **the local state always stands** (§6.18 rule 3).
 |---|---|---|
 | **Three-layer delete/restore** | 🔴 | §6.52: NC trash → Penpot's own trash (~7 days, **id/revn/history intact**) → our archive (last resort, lossy). **Always check Penpot's trash first.** |
 | **Trash-aware reconciler** | 🔴 | §6.37/§6.45 — a trashed file keeps its fileid and metadata, so "in the trash with a matching id" **is** the hidden-link state. No separate flag. **Match by fileid, never by filename** (#43 — trashed files carry a `.dTIMESTAMP` suffix). |
-| **`sync`↔`link` promotion** | 🟡 | Demotion deletes a local archive, so the confirmation wording matters (#23). |
+| **`sync`↔`link` promotion** | � | Built early, in C4.8 — the move guard needed a real escape hatch to offer. `occ penpot_sync:set-mode`, confirmed on the lossy direction (#23). The Files-app surface is Course 6. |
 | **`penpot:ignore` marker** | 🟢 | Sync mode only (§6.23). |
 | **Grace-window rescue** | 🔴 | §6.42: `export-binfile` still exports a soft-deleted file. Converts an unrecoverable `link` deletion into a recoverable one (#38/#42). |
 | **Permanent delete, explicit** | 🟡 | `permanently-delete-team-files` is the only irreversible call — never reachable from an ordinary delete. |
@@ -186,7 +186,7 @@ failure **the local state always stands** (§6.18 rule 3).
 |---|---|---|
 | **Open in Penpot** | 🟢 | Deep link built from the carried `penpot_id` — zero extra lookup. |
 | **Mode pills** | 🟢 | `penpot:sync` / `penpot:link`, app-maintained, mutually exclusive. |
-| **"+ New" → design** | 🟡 | §6.33: scoped to where it is unambiguous; lands in Drafts otherwise. Needs `create-file` called live first (#27 — never exercised). |
+| **"+ New" → design** | 🟡 | §6.33: scoped to where it is unambiguous; lands in Drafts otherwise. **#27 settled in C4.8** — `create-file` is now called live by the integration fixture; `projectId` and `project-id` are both honoured. |
 | **Notifications** | 🟢 | Pull results, skipped objects, divergences. |
 | **Personal projects** | 🟡 | §6.31 — mounts at the user's home root, the one project with no team ancestor. A **second pull pathway** with its own scheduling story (#28). Build last. |
 
@@ -649,3 +649,103 @@ this write?" now lives on `PersonalTokenService::tokenForActor()` instead of
 being re-derived by each write path. Two callers is where that stops being
 premature — and where, left alone, one of them would eventually have forgotten to
 honour a personal token at all.
+
+> **Retired in C4.8:** `sync` mode has landed, so the `move-files` push is no
+> longer dormant — a promoted design that changes project is re-filed in Penpot
+> for real. This section is left as written to record why the classification was
+> built first and proved alone.
+
+### C4.8 — The archive, and the four things a mock would have let us believe
+
+This is the slice that gives the app something to *hold*. Until now every
+mirrored file was a pointer, because §6.43 confines links and `export-binfile`
+had never been called — which meant the guard was the whole visible behaviour of
+a drag (C4.7), the push was dormant, and "sync mode" was a word in a config
+table. Now `occ penpot_sync:set-mode <path> sync` fetches the real `.penpot`
+archive, and everything §6.43 was protecting people from stops applying to that
+file.
+
+**The export is four unmockable steps, and each was found by watching.** The
+survey (§5.1–§5.4) had already established the shape; building it turned each
+observation into a thing the code has to survive:
+
+1. **HTTP 200 is not success.** The response is an **SSE stream**, and a failure
+   arrives as an `error` *event inside* a 200. So `postEventStream()` parses
+   events rather than checking a status code, and an `error` event raises the
+   same exception a transport failure would.
+2. **The stream ends by naming a URL, not by carrying bytes.** The `end` event's
+   payload is `{"~#uri": "https://…/assets/by-id/<uuid>"}`, which needs a
+   **second authenticated GET** — a different path, on which the token is
+   mandatory (401 without it, §6.20). This is the step §5.3 caught failing in
+   production for a reason nothing in this app could see: an nginx
+   `internalResolver` bug made the asset fetch 502 while the export itself
+   "succeeded". So the fetch reports its own failures in its own words — *"the
+   export succeeded; this is the asset fetch"* — because the two failures have
+   completely different causes and completely different fixes.
+3. **The last check is physical.** What comes back is asserted to begin with
+   `PK\x03\x04`. Not "the request returned 200" — a ZIP arrived. That single
+   assertion is what a proxy returning an HTML error page cannot pass.
+4. **Both boolean flags are sent `false`** (penpot#7649: both `true` returns an
+   opaque 500), and the params are **camelCase** — `fileId`, `includeLibraries`,
+   `embedAssets` — while its own mirror image `import-binfile` is kebab. That
+   disagreement is not ours to rationalise, so the param table records it with a
+   comment and a test row rather than a rule.
+
+**And a fifth thing, found by reading rather than by failing.** Transit's tagged
+values have a *map form* — `{"~#uri": "…"}` — as well as the array form the
+survey saw. `Transit::assertNotPlainJson()` did not know that, so decoding the
+`end` event would have thrown **"Penpot returned plain JSON… send no `Accept`
+header"**: advice that is both wrong and unactionable, since the client already
+sends no `Accept` header (R1.4). The fix is narrow — a single-entry map whose
+one key starts with `~#` is a tagged value, unwrap it, and deliberately **do not
+cache the tag**. It is worth recording because of *how* it was caught: the
+error message that would have appeared was so confidently misleading that it
+would have sent the next person hunting a content-negotiation bug that does not
+exist.
+
+**The pull's rule: `sync` mode is the only thing that costs anything.** A team of
+links costs one listing, because the listing already carries `name`,
+`projectId`, `revn` and `modifiedAt` for every file (§5.5). So a pull exports
+only when it must, and "must" is two conditions, cheap one first:
+
+- the stored revision differs from the live `revn@modifiedAt` — real drift; or
+- the file does not actually hold an archive — **self-healing**, which covers a
+  promotion whose export failed, a restored-from-trash placeholder, and any
+  file that was stamped `sync` while holding a pointer.
+
+The second is the one that keeps a stamp from lying. A stamp says what a file is
+*supposed* to hold; only the bytes say what it does. `occ penpot_sync:status`
+now prints both, so a `sync` / `pointer` disagreement is visible rather than
+inferred from a byte count.
+
+**A failed export must never advance the revision stamp** (§6.18 rule 3, applied
+to a counter). If it did, the pull would record "you are at revision N" for a
+file that never got revision N's bytes, and the drift check — the very thing
+meant to fix it — would agree everything was fine forever. So a failure logs,
+counts, keeps the previous content, and leaves the stamp where it was, which
+makes the *next* pull retry automatically. For the same reason the pull reports
+`failed` separately and does **not** treat it as an error: one design that would
+not export must not make a 200-file mirror look broken.
+
+**`set-mode` exports before it stamps**, for exactly that reason one level up.
+Stamping first would leave a file claiming to be a backup while holding a
+pointer; export first and a failure changes nothing at all. The two directions
+are deliberately asymmetrical: promotion is additive, safe, and free to retry,
+while demotion **deletes a local backup** that nobody upstream is keeping — so it
+confirms first, `--force` is the explicit way to skip the question, and it does
+not touch the revision stamp, because demoting does not change which revision the
+mirror reflects.
+
+**What this cost, in practice: nothing, until asked.** On the pod a full pull
+across three projects reports `0 archive(s) exported`; one `set-mode … sync`
+stores 54 171 bytes; the next pull reports `0` again. That last zero is the
+whole claim of `link` mode, so it is asserted in CI rather than assumed — a
+regression that quietly exported every file would pass every other scenario and
+first be noticed as a bandwidth bill.
+
+**Settled in passing (open question #27):** `create-file` had never been called
+live. It has now, both spellings, and both `projectId` and `project-id` are
+accepted and honoured — the file lands in the named project, not Drafts. The
+integration fixture uses it to seed a design to export, so the question is closed
+by something that keeps re-answering it.
+

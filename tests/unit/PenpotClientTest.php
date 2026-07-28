@@ -66,15 +66,15 @@ final class PenpotClientTest extends TestCase {
 	 * piece of logic in the class and it is deliberately not public — testing it
 	 * through a mocked HTTP stack would assert on the mock, not on the table.
 	 *
-	 * @param array<string, string|list<string>> $args
+	 * @param array<string, string|bool|list<string>> $args
 	 *
-	 * @return array<string, string|list<string>>
+	 * @return array<string, string|bool|list<string>>
 	 */
 	private function wireParams(string $command, array $args): array {
 		$method = new \ReflectionMethod(PenpotClient::class, 'wireParams');
 		$method->setAccessible(true);
 
-		/** @var array<string, string|list<string>> $result */
+		/** @var array<string, string|bool|list<string>> $result */
 		$result = $method->invoke($this->client, $command, $args);
 
 		return $result;
@@ -120,14 +120,22 @@ final class PenpotClientTest extends TestCase {
 		yield 'move-files uses kebab project-id and a set under ids' => [
 			'move-files', ['project' => 'p1', 'files' => ['f1', 'f2']], ['project-id' => 'p1', 'ids' => ['f1', 'f2']],
 		];
+		// THE ONE THAT DISAGREES WITH ITS OWN SIBLING. §1918: `import-binfile`
+		// takes kebab (`project-id`) while `export-binfile` takes camel (`fileId`)
+		// — the two halves of the same feature, on the same server, disagreeing.
+		yield 'export-binfile uses CAMEL fileId, not kebab' => [
+			'export-binfile',
+			['file' => 'f1', 'libraries' => false, 'assets' => false],
+			['fileId' => 'f1', 'includeLibraries' => false, 'embedAssets' => false],
+		];
 		yield 'no-arg commands send nothing' => [
 			'get-teams', [], [],
 		];
 	}
 
 	/**
-	 * @param array<string, string|list<string>> $args
-	 * @param array<string, string|list<string>> $expected
+	 * @param array<string, string|bool|list<string>> $args
+	 * @param array<string, string|bool|list<string>> $expected
 	 */
 	#[\PHPUnit\Framework\Attributes\DataProvider('paramTableProvider')]
 	public function testTheParamTableMatchesWhatPenpotConfirmedLive(
@@ -281,6 +289,94 @@ final class PenpotClientTest extends TestCase {
 		$method->setAccessible(true);
 
 		return $method->invoke($this->client, 'get-teams', $response);
+	}
+
+	// ── the event stream (saga §5.1) ────────────────────────────────────────
+
+	/**
+	 * The real transcript from §5.5, byte for byte: two `progress` events and an
+	 * `end` whose payload is a Transit tagged value in MAP form.
+	 *
+	 * That last shape is the one that bit us. `{"~#uri": "…"}` is the only Transit
+	 * payload in the app that is a genuine JSON object, so the decoder's
+	 * plain-JSON guard used to reject it — and the message it produced blamed a
+	 * content-negotiation header that was never sent.
+	 */
+	public function testTheAssetUrlIsReadFromTheEndEvent(): void {
+		$stream = "event: progress\n"
+			. "data: {\"~:section\":\"~:file\",\"~:name\":\"My firsty\"}\n"
+			. "\n"
+			. "event: progress\n"
+			. "data: {\"~:section\":\"~:page\",\"~:name\":\"Page 1\"}\n"
+			. "\n"
+			. "event: end\n"
+			. "data: {\"~#uri\":\"https://penpot.example.com/assets/by-id/75b356e7\"}\n\n";
+
+		self::assertSame('https://penpot.example.com/assets/by-id/75b356e7', $this->assetUrlFrom($stream));
+	}
+
+	/**
+	 * THE HTTP-200-WITH-AN-ERROR-INSIDE TRAP (saga §5.1/§6.20). The transport
+	 * succeeded; the export did not. Anything that reads only the status code
+	 * calls this a success and stores whatever came back.
+	 */
+	public function testAnErrorEventIsAFailureEvenThoughTheRequestSucceeded(): void {
+		$stream = "event: progress\ndata: {\"~:section\":\"~:file\"}\n\n"
+			. "event: error\n"
+			. "data: {\"~:type\":\"~:server-error\",\"~:code\":\"~:unexpected\",\"~:hint\":\"Invalid argument. (Service: S3)\"}\n\n";
+
+		try {
+			$this->assetUrlFrom($stream);
+			self::fail('expected a PenpotApiException');
+		} catch (PenpotApiException $e) {
+			// The HINT is what reaches the user — §5.2's whole debugging story
+			// started from that string, and dropping it for a generic message
+			// would have cost the S3 checksum diagnosis.
+			self::assertStringContainsString('Invalid argument. (Service: S3)', $e->getMessage());
+		}
+	}
+
+	/**
+	 * A stream that stops without `end` or `error` — what a proxy timeout looks
+	 * like from here. Silence must not read as success, because the alternative
+	 * is an empty asset URL and a confusing failure one layer down.
+	 */
+	public function testAStreamThatEndsWithoutAnEndEventIsAFailure(): void {
+		$this->expectException(PenpotApiException::class);
+
+		$this->assetUrlFrom("event: progress\ndata: {\"~:section\":\"~:file\"}\n\n");
+	}
+
+	/** CRLF line endings and a repeated `data:` field are both legal SSE. */
+	public function testTheReaderHandlesCrlfAndMultiLineData(): void {
+		$stream = "event: end\r\ndata: {\"~#uri\":\r\ndata: \"https://penpot.example.com/a\"}\r\n\r\n";
+
+		self::assertSame('https://penpot.example.com/a', $this->assetUrlFrom($stream));
+	}
+
+	/**
+	 * An error payload that is not Transit at all (a proxy's plain-text 502 body
+	 * arriving inside the stream) still has to produce a message with the reason
+	 * in it, not a decode failure that hides it.
+	 */
+	public function testAnUndecodableErrorPayloadStillReachesTheMessage(): void {
+		try {
+			$this->assetUrlFrom("event: error\ndata: upstream connect error\n\n");
+			self::fail('expected a PenpotApiException');
+		} catch (PenpotApiException $e) {
+			self::assertStringContainsString('upstream connect error', $e->getMessage());
+		}
+	}
+
+	/** Drive the private SSE reader. */
+	private function assetUrlFrom(string $stream): string {
+		$method = new \ReflectionMethod(PenpotClient::class, 'assetUrlFrom');
+		$method->setAccessible(true);
+
+		/** @var string $url */
+		$url = $method->invoke($this->client, 'file-1', $stream);
+
+		return $url;
 	}
 
 	private function givenConfigured(): void {

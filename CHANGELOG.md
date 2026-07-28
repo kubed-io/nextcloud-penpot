@@ -64,7 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moving a design out of every mapped folder no longer pushes anything at all: Penpot keeps the file exactly where it is, because unmapping is a deliberate action rather than something to infer from a drag.
 - A project folder can now be organised freely inside its team folder, and is refused — with an explanation, before the move happens — if dragged out of it, since moving a project between teams has to be done in Penpot.
 - A `link` file is now confined to its own project: it moves freely within it, and any move that would change its project is refused with an offer to switch it to `sync` mode first, so nobody is left holding a pointer that looks like a design and isn't.
+- **`sync` mode: mirrored designs can now hold the real thing.** `occ penpot_sync:set-mode <path> sync` exports a design from Penpot and stores the actual `.penpot` archive in Nextcloud, so it opens, downloads and backs up like any other file; `… link` puts the lightweight pointer back, after confirming, since that deletes a local backup Penpot is not keeping for you.
+- A pull re-exports a `sync` file only when its Penpot revision has moved or its archive is missing, so a team of `link` files still costs one listing and no downloads — and a file stamped `sync` that never got its archive quietly repairs itself on the next pull.
+- A design that fails to export no longer loses what it had: the previous content and revision are kept, the pull reports how many failed without calling the whole run an error, and the next pull retries automatically.
+- `occ penpot_sync:status` now reports what a mirrored file actually holds — a real archive, a pointer, or nothing — alongside the mode it is stamped with, so the two can be seen to disagree instead of inferred from a byte count.
+- Integration suite now promotes a design against a real Penpot and asserts the stored bytes really are a `.penpot` archive, and that mirroring a team of links performs zero exports.
 
 ### Fixed
 
+- Penpot's export response could not be read at all: its `end` event carries the archive URL as a Transit *tagged map*, a form the decoder mistook for plain JSON and rejected with advice that did not apply.
 - A bulk pull no longer aborts every mapping after the first when sharing a plain folder trips a broken notifications app: the dangling database transaction that leak left behind (Postgres `SQLSTATE[25P02]`) is now discarded, so later mappings' file writes succeed.

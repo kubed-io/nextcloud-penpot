@@ -27,7 +27,21 @@
 # That's local data the user may be relying on as a backup, so it is confirmed,
 # and it is the only operation in this file that can lose bytes.
 #
-# @todo — no lib/Service/ exists yet.
+# BUILD STATE (Course 4, the sync slice). THE ENGINE IS BUILT AND PROVEN ON THE
+# WIRE: `PenpotClient::exportBinfile` performs the real two-step export (an SSE
+# stream, then a second authenticated GET for the ZIP it names — saga §5.1–§5.4,
+# §C4.8), `ArchiveService` stores the result, `PullService` re-exports only on
+# drift or a missing archive, and `occ penpot_sync:set-mode` is the per-file
+# promote/demote.
+#
+# The half of this file CI can prove today has moved to **set-mode.feature**,
+# where it runs live: a promotion is asserted to leave real ZIP bytes on disk,
+# and a team of links is asserted to cost exactly zero exports.
+#
+# WHAT STAYS @todo HERE is everything that needs a surface the app does not have
+# yet — the Files-app mode indicator and switcher, the ignore tag's interaction
+# with demotion, and re-deriving files from a changed mapping default. The
+# scenarios below remain the specification those will be built against.
 
 @todo
 Feature: Choosing whether a mirrored file stores its archive

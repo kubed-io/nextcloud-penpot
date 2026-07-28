@@ -78,6 +78,17 @@ use OCA\PenpotSync\Exception\PenpotApiException;
  *     ["~#set", [...]]  →  the list (we do not model set-ness; Penpot only uses
  *                          it for `features`, which we treat as a plain list)
  *
+ * **5. Tagged values in MAP FORM** — the one shape that is a genuine JSON
+ * object, and the reason {@see assertNotPlainJson()} has an exemption:
+ *
+ *     {"~#uri": "https://…/assets/by-id/<uuid>"}  →  the string
+ *
+ * Transit encodes a tagged value at the TOP of a document as a single-entry
+ * object rather than the two-element array, because there is no enclosing array
+ * to hang the tag on. `export-binfile`'s `end` event is exactly this (saga
+ * §5.5), and it is the *only* payload in this app that arrives that way — every
+ * RPC command answers a map or a list of maps.
+ *
  * ## What this class does NOT do
  *
  * There is no encoder. Every request we send uses plain JSON with plain string
@@ -162,12 +173,23 @@ final class Transit {
 	 * the first element, since Penpot's listing commands return a LIST of
 	 * records — `[{...},{...}]` — so the objects are one level down.
 	 *
+	 * THE ONE EXEMPTION is the tagged value in map form ({@see isTaggedMap()}):
+	 * `{"~#uri": "…"}` IS a JSON object and IS valid Transit. Without the
+	 * exemption this guard fires on `export-binfile`'s `end` event and reports a
+	 * content-negotiation problem that isn't there — the most misleading error
+	 * this class could produce, since the advice it gives ("send no Accept
+	 * header") is already being followed.
+	 *
 	 * @param mixed $raw
 	 *
 	 * @throws PenpotApiException
 	 */
 	private function assertNotPlainJson(mixed $raw): void {
 		if (!is_array($raw) || $raw === []) {
+			return;
+		}
+
+		if ($this->isTaggedMap($raw)) {
 			return;
 		}
 
@@ -216,6 +238,18 @@ final class Transit {
 
 		if ($node === []) {
 			return [];
+		}
+
+		if ($this->isTaggedMap($node)) {
+			// {"~#uri": "…"} — a tagged value with no enclosing array to hang the
+			// tag on. The tag is NOT cached: Transit's write cache holds map keys
+			// and tags encountered inside a document, and this form only ever
+			// appears as the whole document (the `end` event's payload). Caching
+			// it would shift every later index in a document that has none.
+			/** @var TransitValue $tagged */
+			$tagged = $node[array_key_first($node)];
+
+			return $this->walk($tagged, $cache);
 		}
 
 		if ($this->isMap($node)) {
@@ -412,6 +446,26 @@ final class Transit {
 	/** True if this array is an encoded map (first element is the `"^ "` marker). */
 	private function isMap(array $node): bool {
 		return ($node[0] ?? null) === self::MAP_MARKER;
+	}
+
+	/**
+	 * True if this array is a tagged value in MAP form: a single-entry JSON
+	 * object whose key is a literal tag, e.g. `{"~#uri": "https://…"}`.
+	 *
+	 * Deliberately strict on all three counts — one entry, a string key, and a
+	 * literal `~#` prefix. A cache reference is NOT accepted here (unlike
+	 * {@see isTaggedComposite()}): this form only ever appears as a whole
+	 * document, so there is no earlier occurrence for a reference to point at,
+	 * and loosening it would start swallowing ordinary single-key objects.
+	 */
+	private function isTaggedMap(array $node): bool {
+		if (count($node) !== 1) {
+			return false;
+		}
+
+		$key = array_key_first($node);
+
+		return is_string($key) && str_starts_with($key, '~#');
 	}
 
 	/**

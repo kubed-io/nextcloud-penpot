@@ -54,7 +54,14 @@ final class MoveGuardListenerTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->guard = new SyncGuard();
-		$this->listener = new MoveGuardListener($this->metadata, $this->resolver, $this->guard);
+		$l = $this->createStub(\OCP\IL10N::class);
+		// The identity translator: these two messages are the app's only user-facing
+		// prose outside settings, and the tests below assert on their WORDING.
+		$l->method('t')->willReturnCallback(
+			static fn (string $text, array $parameters = []): string => vsprintf($text, $parameters),
+		);
+
+		$this->listener = new MoveGuardListener($this->metadata, $this->resolver, $this->guard, $l);
 	}
 
 	// ── §6.30, project folders ──────────────────────────────────────────────

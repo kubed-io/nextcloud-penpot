@@ -25,20 +25,32 @@ folder tree you can organise however you like.
 >   (`list-teams`, `add-mapping`, `list-mappings`, `remove-mapping`, …).
 > - **The pull** (Penpot → Nextcloud): `occ penpot_sync:sync pull` mirrors a
 >   mapped team into a plain Nextcloud folder — projects become folders and files
->   become `.penpot` link pointers, each stamped with Penpot metadata, and
->   re-pulling reconciles in place instead of duplicating. `occ
->   penpot_sync:status <path>` shows a node's metadata and the project/team the
->   **membership resolver** derives by walking its ancestor folders.
+>   become `.penpot` files, each stamped with Penpot metadata, and re-pulling
+>   reconciles in place instead of duplicating. `occ penpot_sync:status <path>`
+>   shows a node's metadata, what the file actually holds, and the project/team
+>   the **membership resolver** derives by walking its ancestor folders.
+> - **Moving things** — the two illegal moves are refused *before* they happen
+>   (a project folder leaving its team folder; a `link` file changing project),
+>   and moving a stored design between project folders re-files it in Penpot for
+>   real via `move-files`.
+> - **`sync` mode — real archives.** `occ penpot_sync:set-mode <path> sync`
+>   exports a design from Penpot and stores the actual `.penpot` ZIP in
+>   Nextcloud; `… link` puts the lightweight pointer back (after confirming, as
+>   that deletes a local backup). A pull re-exports a `sync` file only when its
+>   Penpot revision moved or its archive went missing, so **a team of links
+>   costs zero exports.**
 >
 > Verified against a real Nextcloud *and* a real Penpot in CI — including a pull
-> asserted end-to-end against a project seeded directly in Penpot.
+> asserted end-to-end against a project seeded directly in Penpot, and a
+> promotion asserted to leave real ZIP bytes on disk.
 >
-> **This is the first slice that actually mirrors.** It is still narrow: only the
-> plain admin-owned folder backend (the groupfolders Team Folder backend, the
-> Files-app surface, `sync`-mode downloads, and the write-back paths are the next
-> slices), and controls that configure an unbuilt part still say so. The admin
-> surface was built *whole* first so that every later feature is something you
-> configure rather than something that ships twice.
+> **It mirrors, it keeps the bytes you ask it to, and it respects your folder
+> layout.** It is still narrow: only the plain admin-owned folder backend (the
+> groupfolders Team Folder backend, the Files-app surface, and the remaining
+> write-back paths are the next slices), and controls that configure an unbuilt
+> part still say so. The admin surface was built *whole* first so that every
+> later feature is something you configure rather than something that ships
+> twice.
 >
 > **Everything else below is the design**, written as if it already worked
 > because that is how the spec is written. Each `.feature` file stays tagged
@@ -615,18 +627,29 @@ token), Sync Settings, Team mappings, and Sync Actions — plus a personal
 per-user token page. Every control persists and has an `occ` twin
 (`set-url`, `set-token`, `test-connection`, `list-teams`, `add-mapping`,
 `list-mappings`, `remove-mapping`, `set-personal-token`, `show-config`, `probe`).
-Covered by unit tests and by Behat scenarios that install the app on a real
-Nextcloud and drive the CLI against a real Penpot.
 
-**Not implemented:** the pull, file actions, and the Files-app frontend. Nothing
-is mirrored yet — you can configure the app completely and it will still not
-create a single file. There is no `src/` yet.
+On top of that, **the mirror itself**: `sync pull` walks a mapped team into a
+plain Nextcloud folder, `status` inspects any node (metadata, resolved
+membership, and whether the file holds a real archive or a pointer), `set-mode`
+promotes a design to a stored `.penpot` archive or demotes it back, and a move
+between project folders is either refused or propagated to Penpot. Covered by
+unit tests and by Behat scenarios that install the app on a real Nextcloud and
+drive the CLI against a real Penpot — including an export asserted to land real
+ZIP bytes on disk.
 
-**Design chapter 1 is closed.** The [`saga/`](saga/) is the authoritative
-"where are we" record, ahead of this README and the feature files. Start with
-[Chapter 1: First Contact](saga/Chapter_1_First_Contact.md) — read §6.18–§6.48
-first if you want the decisions rather than the survey that produced them, and
-its closing section for what's settled, what's open, and where to build next.
+**Not implemented:** the Files-app frontend (there is no `src/` yet), the
+groupfolders Team Folder backend, creating designs from Nextcloud, the ignore
+and restore actions, pruning, and every remaining write-back path. The scheduled
+pull is configurable but does not yet run.
+
+**The [`saga/`](saga/) is the authoritative "where are we" record**, ahead of
+this README and the feature files.
+[Chapter 1: First Contact](saga/Chapter_1_First_Contact.md) is the API survey and
+the decisions it forced — read §6.18–§6.48 first if you want the decisions rather
+than the survey that produced them, and its closing section for what's settled,
+what's open, and where to build next. [Chapter 2: The
+Colony](saga/Chapter_2_The_Colony.md) is what has actually been built, course by
+course, and its table is the honest map of what is done and what is next.
 
 ### Executable specification
 
@@ -640,7 +663,9 @@ The specs *are* the requirements, read before any code lands.
 | [`admin-mapping.feature`](features/admin-mapping.feature) | Mapping a team; the service-account precondition. |
 | [`mapping-membership.feature`](features/mapping-membership.feature) | The nearest-ancestor rule — the app's most load-bearing spec. |
 | [`sync-mode.feature`](features/sync-mode.feature) | `link` vs `sync`, promotion, and the one lossy direction. |
+| [`set-mode.feature`](features/set-mode.feature) | **Live.** The real export: promotion leaves ZIP bytes, links cost zero exports. |
 | [`reconcile.feature`](features/reconcile.feature) | The pull, revision gating, and safe pruning. |
+| [`pull.feature`](features/pull.feature) | **Live.** The pull as CI proves it, end to end against a real Penpot. |
 | [`create-design.feature`](features/create-design.feature) | New → Penpot design, and Drafts semantics. |
 | [`move.feature`](features/move.feature) | Free nesting; the project-folder restriction. |
 | [`project-folder.feature`](features/project-folder.feature) | Renaming, tagging, and why copying a project folder is refused. |
