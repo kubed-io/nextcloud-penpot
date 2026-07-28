@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ArchiveService;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
@@ -79,6 +80,10 @@ final class PullServiceTest extends TestCase {
 		$this->metadata->method('readFile')->willReturnCallback(
 			fn (int $nodeId): ?PenpotFileMetadata => $this->stamps[$nodeId] ?? null,
 		);
+		// A folder with no markers. Unlike readFile there is no null state here, so
+		// this has to be a real value object — a mock's auto-stub would hand back an
+		// object whose readonly promoted properties were never initialised.
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
 
 		$this->pull = new PullService(
 			$this->mappings,
@@ -477,7 +482,8 @@ final class PullServiceTest extends TestCase {
 	 * @param string $stampedMode what is stamped on the existing file ('' = none)
 	 * @param string $stored the file's stored revision signal
 	 */
-	private function givenOneFile(string $mappingMode, string $stampedMode, string $stored, bool $holdsArchive): void {		$file = $this->emptyFile(30);
+	private function givenOneFile(string $mappingMode, string $stampedMode, string $stored, bool $holdsArchive): void {
+		$file = $this->emptyFile(30);
 		$root = $this->createMock(Folder::class);
 		$root->method('getId')->willReturn(10);
 		$root->method('getDirectoryListing')->willReturn([$file]);
