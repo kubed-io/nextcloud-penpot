@@ -113,7 +113,28 @@ jobs:
           PENPOT_DATABASE_USERNAME: penpot
           PENPOT_DATABASE_PASSWORD: penpot
           PENPOT_REDIS_URI: redis://valkey/0
-          PENPOT_PUBLIC_URI: http://localhost:6060
+          # The PUBLIC uri is the FRONTEND, because that is the address the app —
+          # and every browser — actually talks to. See the frontend service below.
+          PENPOT_PUBLIC_URI: http://localhost:9001
+      # THE FRONTEND IS NOT OPTIONAL, and finding that out cost a red build.
+      #
+      # Penpot's backend does not serve exported files. It authenticates the
+      # `/assets/by-id/<uuid>` request and then answers **200 with an empty body**
+      # plus an `x-internal-redirect` header for nginx to follow. So a suite that
+      # talks to the backend alone sees every export "succeed" and download zero
+      # bytes — which is precisely the failure `exportBinfile`'s ZIP-magic check
+      # exists to catch, and precisely the misconfiguration a user could hit.
+      #
+      # Running the real two-container topology is what makes the integration
+      # suite's claim ("a promotion stores a real archive") mean anything.
+      penpot-frontend:
+        image: penpotapp/frontend:2.17.0
+        ports:
+        - 9001:8080
+        env:
+          PENPOT_FLAGS: enable-access-tokens disable-email-verification disable-onboarding disable-secure-session-cookies
+          PENPOT_BACKEND_URI: http://penpot:6060
+          PENPOT_EXPORTER_URI: http://penpot:6061
 
     steps:
     # ── Provision: install everything up front, before any action runs ───────
@@ -151,7 +172,7 @@ jobs:
           --admin-pass="$NC_ADMIN_PASS"
         ./occ config:system:set trusted_domains 1 --value=localhost
         # Nextcloud's SSRF guard refuses outbound requests to local addresses,
-        # so the app cannot reach the Penpot service container at localhost:6060
+        # so the app cannot reach the Penpot service container at localhost:9001
         # without this. The client reports it precisely — "Host localhost
         # violates local access rules" — which is how this was diagnosed.
         #
@@ -179,10 +200,14 @@ jobs:
     # cannot overrun (bash's `sleep 1` loop drifts by the request duration), and
     # errors while the container is still booting are caught rather than
     # tripping `set -e`.
+    #
+    # POLLED THROUGH THE FRONTEND, so one gate covers the whole topology: nginx
+    # proxies `/api` to the backend, so a 200 here means both containers are up
+    # and talking — and it is the exact path the app will use.
     - name: Wait for Penpot
       uses: actions/github-script@v9
       env:
-        PENPOT_URL: http://localhost:6060
+        PENPOT_URL: http://localhost:9001
       with:
         script: |
           const url = `${process.env.PENPOT_URL}/api/rpc/command/get-profile`;
@@ -227,7 +252,7 @@ jobs:
       id: penpot_token
       uses: actions/github-script@v9
       env:
-        PENPOT_URL: http://localhost:6060
+        PENPOT_URL: http://localhost:9001
       with:
         script: |
           const base = `${process.env.PENPOT_URL}/api/rpc/command`;
@@ -291,7 +316,7 @@ jobs:
       working-directory: apps/${{ env.APP_ID }}/tests/integration
       env:
         OCC: php ${{ github.workspace }}/occ
-        PENPOT_URL: http://localhost:6060
+        PENPOT_URL: http://localhost:9001
         PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
       run: vendor/bin/behat --config behat.dist.yml
 

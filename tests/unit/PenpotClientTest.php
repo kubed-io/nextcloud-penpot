@@ -12,7 +12,9 @@ namespace OCA\PenpotSync\Tests\Unit;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\Transit;
+use OCP\Http\Client\IClient;
 use OCP\Http\Client\IClientService;
+use OCP\Http\Client\IResponse;
 use OCP\IAppConfig;
 use OCP\Security\ICrypto;
 use PHPUnit\Framework\TestCase;
@@ -366,6 +368,67 @@ final class PenpotClientTest extends TestCase {
 		} catch (PenpotApiException $e) {
 			self::assertStringContainsString('upstream connect error', $e->getMessage());
 		}
+	}
+
+	/**
+	 * A 200 WITH AN EMPTY BODY IS PENPOT'S BACKEND ANSWERING, not a failure — the
+	 * backend authenticates the asset request and hands the real location to
+	 * nginx in `x-internal-redirect` for nginx to serve. Point the app at the
+	 * backend and every export succeeds while storing nothing, so the message has
+	 * to name the misconfiguration rather than describe the symptom (saga §C4.8).
+	 */
+	public function testAnEmptyBodyWithAnInternalRedirectNamesTheBackendMistake(): void {
+		$response = $this->createStub(IResponse::class);
+		$response->method('getStatusCode')->willReturn(200);
+		$response->method('getBody')->willReturn('');
+		$response->method('getHeader')->willReturn('https://storage.example.com/signed');
+
+		try {
+			$this->fetchAssetWith($response);
+			self::fail('expected a PenpotApiException');
+		} catch (PenpotApiException $e) {
+			self::assertStringContainsString('BACKEND', $e->getMessage());
+			self::assertStringContainsString('frontend', $e->getMessage());
+		}
+	}
+
+	/**
+	 * …but an empty body with no such header is a different problem, and must not
+	 * be mislabelled as one. Blaming the URL for penpot#7649's empty export would
+	 * send someone to change a setting that was right all along.
+	 */
+	public function testAnEmptyBodyWithoutTheHeaderIsNotBlamedOnTheUrl(): void {
+		$response = $this->createStub(IResponse::class);
+		$response->method('getStatusCode')->willReturn(200);
+		$response->method('getBody')->willReturn('');
+		$response->method('getHeader')->willReturn('');
+
+		self::assertSame('', $this->fetchAssetWith($response));
+	}
+
+	/** Drive the private asset fetch against a canned response. */
+	private function fetchAssetWith(IResponse $response): string {
+		$http = $this->createStub(IClient::class);
+		$http->method('get')->willReturn($response);
+
+		$service = $this->createStub(IClientService::class);
+		$service->method('newClient')->willReturn($http);
+
+		$client = new PenpotClient(
+			$this->config,
+			$this->crypto,
+			$service,
+			new Transit(),
+			$this->createStub(LoggerInterface::class),
+		);
+
+		$method = new \ReflectionMethod(PenpotClient::class, 'fetchAsset');
+		$method->setAccessible(true);
+
+		/** @var string $body */
+		$body = $method->invoke($client, 'file-1', 'https://penpot.example.com/assets/by-id/abc');
+
+		return $body;
 	}
 
 	/** Drive the private SSE reader. */

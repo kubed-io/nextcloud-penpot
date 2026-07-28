@@ -684,12 +684,43 @@ observation into a thing the code has to survive:
    completely different causes and completely different fixes.
 3. **The last check is physical.** What comes back is asserted to begin with
    `PK\x03\x04`. Not "the request returned 200" — a ZIP arrived. That single
-   assertion is what a proxy returning an HTML error page cannot pass.
+   assertion is what a proxy returning an HTML error page cannot pass — and it
+   immediately earned its keep, see below.
 4. **Both boolean flags are sent `false`** (penpot#7649: both `true` returns an
    opaque 500), and the params are **camelCase** — `fileId`, `includeLibraries`,
    `embedAssets` — while its own mirror image `import-binfile` is kebab. That
    disagreement is not ours to rationalise, so the param table records it with a
    comment and a test row rather than a rule.
+
+**The ZIP check caught a real one on its first CI run: Penpot's BACKEND does not
+serve exported files.** The integration suite ran `penpotapp/backend` alone —
+reasonably enough, since that is what answers the RPC bus — and every export
+"succeeded" while downloading **zero bytes**. Reproduced deliberately against our
+own instance, the two answers to the same `/assets/by-id/<uuid>` are:
+
+| Asked | Answer |
+|---|---|
+| `penpot-backend:6060` | **HTTP 200**, `Content-Length: 0`, plus `x-internal-redirect: <signed storage URL>` |
+| `penpot:8080` (nginx) | **HTTP 200**, `Content-Type: application/zip`, `Content-Length: 54171` |
+
+The backend authenticates the request and then hands the real location to
+**nginx**, which follows it and streams the file. Nothing about the failure looks
+like a failure — the token works, the stream completes, the status is 200 — so
+the only symptom is *empty backups*.
+
+**And we do not choose which one we get.** The asset address arrives in the `end`
+event, built by Penpot from its own `PENPOT_PUBLIC_URI` — so `penpot_url` is
+irrelevant to this hop. Verified deliberately: pointing the app's `penpot_url`
+straight at our backend still exported 1 964 389 bytes, because the URL Penpot
+handed back still named the frontend. The failure is therefore a *Penpot-side*
+misconfiguration, and the error now says so, quoting the address it was given
+rather than blaming a setting the operator can see. CI hit it because its
+`PENPOT_PUBLIC_URI` was the backend; the fix was in the stack, not the client.
+
+The CI stack now runs the real two-container topology, because a suite that talks
+to the backend alone cannot prove the sentence it exists to prove. It also
+retro-explains §5.3: nginx returning 502 was nginx failing to *follow* this
+redirect, not the export failing.
 
 **And a fifth thing, found by reading rather than by failing.** Transit's tagged
 values have a *map form* — `{"~#uri": "…"}` — as well as the array form the

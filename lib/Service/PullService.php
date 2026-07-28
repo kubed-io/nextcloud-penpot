@@ -316,7 +316,10 @@ final class PullService {
 			$this->tryRename($existing, $target, $name);
 			$node = $existing;
 			$stamped = $this->metadata->readFile($node->getId());
-			$mode = ($stamped?->mode ?? '') !== '' ? $stamped->mode : $mapping->mode;
+			// AN EXISTING FILE KEEPS ITS OWN MODE. The mapping's default only ever
+			// reaches a file the moment it is created — changing a default must
+			// never retroactively download (or delete) a pile of archives.
+			$mode = $stamped !== null && $stamped->mode !== '' ? $stamped->mode : $mapping->mode;
 			$stored = $stamped?->revision ?? '';
 		} else {
 			$node = $target->newFile($this->freeName($target, $name));

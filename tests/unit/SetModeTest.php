@@ -66,7 +66,7 @@ final class SetModeTest extends TestCase {
 			->method('writeFile')
 			->with(30, [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
 
-		$tester = $this->run([self::PATH, 'sync']);
+		$tester = $this->setMode([self::PATH, 'sync']);
 
 		self::assertSame(0, $tester->getStatusCode());
 		self::assertStringContainsString('54171 bytes', $tester->getDisplay());
@@ -86,7 +86,7 @@ final class SetModeTest extends TestCase {
 		$this->archives->method('storeArchive')->willThrowException(new PenpotApiException('the export stream errored'));
 		$this->metadata->expects($this->never())->method('writeFile');
 
-		$tester = $this->run([self::PATH, 'sync']);
+		$tester = $this->setMode([self::PATH, 'sync']);
 
 		self::assertSame(1, $tester->getStatusCode());
 		self::assertStringContainsString('still in "link" mode', $tester->getDisplay());
@@ -104,7 +104,7 @@ final class SetModeTest extends TestCase {
 		$this->archives->expects($this->never())->method('storeLink');
 		$this->metadata->expects($this->never())->method('writeFile');
 
-		$tester = $this->run([self::PATH, 'link'], answers: ['no']);
+		$tester = $this->setMode([self::PATH, 'link'], answers: ['no']);
 
 		self::assertSame(0, $tester->getStatusCode());
 		self::assertStringContainsString('Nothing was deleted', $tester->getDisplay());
@@ -115,7 +115,7 @@ final class SetModeTest extends TestCase {
 		$this->givenStamped(Mapping::MODE_SYNC);
 		$this->archives->method('holdsArchive')->willReturn(true);
 
-		$display = $this->run([self::PATH, 'link'], answers: ['no'])->getDisplay();
+		$display = $this->setMode([self::PATH, 'link'], answers: ['no'])->getDisplay();
 
 		self::assertStringContainsString('LOCAL backup', $display);
 		self::assertStringContainsString('fresh export', $display);
@@ -133,7 +133,7 @@ final class SetModeTest extends TestCase {
 			->method('writeFile')
 			->with(30, [PenpotMetadata::KEY_MODE => Mapping::MODE_LINK]);
 
-		$tester = $this->run([self::PATH, 'link'], answers: ['yes']);
+		$tester = $this->setMode([self::PATH, 'link'], answers: ['yes']);
 
 		self::assertSame(0, $tester->getStatusCode());
 		self::assertStringContainsString('Penpot was never contacted', $tester->getDisplay());
@@ -145,7 +145,7 @@ final class SetModeTest extends TestCase {
 		$this->archives->method('holdsArchive')->willReturn(true);
 		$this->archives->expects($this->once())->method('storeLink');
 
-		self::assertSame(0, $this->run([self::PATH, 'link', '--force' => true])->getStatusCode());
+		self::assertSame(0, $this->setMode([self::PATH, 'link', '--force' => true])->getStatusCode());
 	}
 
 	/**
@@ -158,7 +158,7 @@ final class SetModeTest extends TestCase {
 		$this->archives->method('holdsArchive')->willReturn(false);
 		$this->archives->expects($this->once())->method('storeLink');
 
-		$tester = $this->run([self::PATH, 'link']);
+		$tester = $this->setMode([self::PATH, 'link']);
 
 		self::assertSame(0, $tester->getStatusCode());
 		self::assertStringNotContainsString('LOCAL backup', $tester->getDisplay());
@@ -167,7 +167,7 @@ final class SetModeTest extends TestCase {
 	// ── refusals ────────────────────────────────────────────────────────────
 
 	public function testAnUnknownModeIsRefused(): void {
-		$tester = $this->run([self::PATH, 'archive']);
+		$tester = $this->setMode([self::PATH, 'archive']);
 
 		self::assertSame(1, $tester->getStatusCode());
 		self::assertStringContainsString('"sync" or "link"', $tester->getDisplay());
@@ -177,7 +177,7 @@ final class SetModeTest extends TestCase {
 	public function testAnUntrackedFileIsRefused(): void {
 		$this->metadata->method('readFile')->willReturn(null);
 
-		$tester = $this->run([self::PATH, 'sync']);
+		$tester = $this->setMode([self::PATH, 'sync']);
 
 		self::assertSame(1, $tester->getStatusCode());
 		self::assertStringContainsString('not a mirrored Penpot design', $tester->getDisplay());
@@ -192,7 +192,7 @@ final class SetModeTest extends TestCase {
 		$this->archives->expects($this->never())->method('storeArchive');
 		$this->archives->expects($this->never())->method('storeLink');
 
-		$tester = $this->run([self::PATH, 'sync']);
+		$tester = $this->setMode([self::PATH, 'sync']);
 
 		self::assertSame(0, $tester->getStatusCode());
 		self::assertStringContainsString('Already in "sync" mode', $tester->getDisplay());
@@ -203,7 +203,7 @@ final class SetModeTest extends TestCase {
 		$this->home->method('nodeExists')->willReturn(true);
 		$this->home->method('get')->willReturn($this->createMock(Folder::class));
 
-		$tester = $this->run(['Penpot/Acme', 'sync']);
+		$tester = $this->setMode(['Penpot/Acme', 'sync']);
 
 		self::assertSame(1, $tester->getStatusCode());
 		self::assertStringContainsString('Modes are per-file', $tester->getDisplay());
@@ -217,7 +217,7 @@ final class SetModeTest extends TestCase {
 	 * @param array<array-key, string|bool> $input
 	 * @param list<string> $answers responses fed to the confirmation prompt
 	 */
-	private function run(array $input, array $answers = []): CommandTester {
+	private function setMode(array $input, array $answers = []): CommandTester {
 		$rootFolder = $this->createStub(IRootFolder::class);
 		$rootFolder->method('getUserFolder')->willReturn($this->home);
 

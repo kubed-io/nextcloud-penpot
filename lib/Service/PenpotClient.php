@@ -495,6 +495,15 @@ final class PenpotClient {
 	 * drops the Authorization header across that host change on its own, which is
 	 * both correct and necessary — the storage URL carries its own signature.
 	 *
+	 * THIS HOP MUST LAND ON PENPOT'S FRONTEND, NOT ITS BACKEND — and WE DO NOT
+	 * CHOOSE WHICH. The URL comes from the `end` event, and Penpot builds it from
+	 * its own `PENPOT_PUBLIC_URI`. The backend does not serve the bytes: it
+	 * authenticates, then answers **200 with an empty body** and an
+	 * `x-internal-redirect` header for **nginx** to follow. So a Penpot whose
+	 * public URI names its backend hands us an address that downloads nothing,
+	 * no matter what `penpot_url` is set to — see the 0-byte branch below, which
+	 * is the only reason that is nameable instead of baffling (saga §C4.8).
+	 *
 	 * @throws PenpotApiException
 	 */
 	private function fetchAsset(string $fileId, string $url): string {
@@ -531,7 +540,30 @@ final class PenpotClient {
 			);
 		}
 
-		return (string)$response->getBody();
+		$archive = (string)$response->getBody();
+
+		// 200 AND NOTHING IN IT. Penpot's backend answers exactly this way: it
+		// hands the real location to nginx in a header and lets nginx serve the
+		// file. Nothing else about the connection looks wrong — the token works,
+		// the export streams, the status is 200 — so without naming it here, the
+		// only symptom is "my backups are empty."
+		if ($archive === '' && $response->getHeader('x-internal-redirect') !== '') {
+			throw new PenpotApiException(
+				sprintf(
+					'Penpot exported file %s, but the archive download returned no content. '
+					. 'Penpot handed us <%s>, which reaches its BACKEND — only its frontend '
+					. '(nginx) serves exported files. This address comes from Penpot\'s own '
+					. 'PENPOT_PUBLIC_URI, so it must be fixed on the Penpot side.',
+					$fileId,
+					$url,
+				),
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		return $archive;
 	}
 
 	// ── connection test ─────────────────────────────────────────────────────
