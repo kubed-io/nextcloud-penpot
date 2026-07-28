@@ -722,6 +722,19 @@ to the backend alone cannot prove the sentence it exists to prove. It also
 retro-explains §5.3: nginx returning 502 was nginx failing to *follow* this
 redirect, not the export failing.
 
+**Adding the frontend was necessary and not sufficient**, and the second failure
+is the more interesting half. With nginx in front, the downloads stopped being
+empty and started being **404** — which is a better error, because an empty 200
+tells you nothing and a 404 tells you nginx looked for something and could not
+find it. The reason: the backend's answer is `x-accel-redirect`, a path under
+`/opt/data/assets`, and **nginx then serves that file off its own filesystem.**
+It is not a proxy hop. The archive the backend had just written existed only in
+the backend's container. Penpot's own compose file shares one `penpot_assets`
+volume between exactly those two services, for exactly this reason; ours now
+does too. The topology is not "an app server and a proxy" — it is *one* file
+server split across two containers, and the split is invisible until something
+asks for a file.
+
 **And a fifth thing, found by reading rather than by failing.** Transit's tagged
 values have a *map form* — `{"~#uri": "…"}` — as well as the array form the
 survey saw. `Transit::assertNotPlainJson()` did not know that, so decoding the
