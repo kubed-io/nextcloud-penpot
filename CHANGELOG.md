@@ -6,10 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!--
-  These ARE the release notes. One line per entry, written for a user — never a
-  paragraph. Length tracks impact: functional changes get the most words (still
-  one line); refactors/types/tests stay short; CI/devops are shortest. Only
-  **BREAKING:** may stretch. Deeper detail lives in the saga or the PR, not here.
+  These ARE the release notes. One SHORT line per entry, written for a user —
+  never a paragraph. Say what someone can now do, not how it was built. Only
+  **BREAKING:** may stretch. Internal work — CI, refactors, types, tests —
+  usually earns no line at all, and never more than a terse one. Deeper detail
+  lives in the saga or the PR, not here.
 
   ONLY EVER EDIT THE [Unreleased] SECTION. Every section below it carries a
   version number and is IMMUTABLE — those notes shipped with a release and must
@@ -17,60 +18,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   See CONTRIBUTING.md / AGENTS.md.
 -->
 
+
 ## [Unreleased]
 
 ### Added
 
-- Project scaffolding: docs, tooling config, and CI for the read-only Penpot → Nextcloud mirror app, ahead of any application code (see `saga/Chapter_1_First_Contact.md`).
-- Admin setting for the Penpot base URL, with `occ penpot_sync:set-url` and `occ penpot_sync:show-config` — the app can now be pointed at a Penpot instance entirely headlessly.
-- Unit suite covering the URL setting and its CLI, plus a Behat integration suite that installs the app on a real Nextcloud and drives those commands.
-- The integration workflow mints a Penpot access token headlessly per run, so the suite needs no repository secret.
-- Saga Chapter 1: the full design record for the Penpot integration, every API claim verified against a live instance — including a per-team, immutable choice between two mutually-exclusive folder models.
-- Penpot API client: decodes Penpot's Transit wire format and carries an explicit per-command parameter table, because Penpot uses four different parameter conventions across four commands with no rule connecting them.
-- `occ penpot_sync:set-token` stores the Penpot service-account token encrypted, and `occ penpot_sync:probe` checks the connection — reporting the teams and projects that token can actually see, since Penpot visibility is always membership-scoped.
-- `occ penpot_sync:show-config` now also reports whether a service-account token is stored (never its value).
-- Integration suite now runs against a real Penpot container, with a token minted per run — the only place the wire format is asserted, since mocking a protocol we have misread would only encode the misreading.
-- Saga Chapter 2: the build plan, in dependency order, committing to the client before the admin surface.
-- Documented that `allow_local_remote_servers` must be enabled when Penpot is reached at a private or in-cluster address — otherwise Nextcloud's SSRF guard blocks every request, and `occ penpot_sync:probe` now names that case specifically.
-- Admin settings for the Penpot service-account token, stored encrypted, with a field that shows whether a token is set without ever echoing it back.
-- Admin team mappings: map a Penpot team to a Nextcloud folder, with a per-mapping default file mode and an immutable folder mode — plus `occ penpot_sync:list-teams`, `add-mapping`, `list-mappings`, and `remove-mapping`.
-- A team can only be mapped if the service account can actually see it in Penpot, because Penpot has no instance-wide view — the app now explains that up front instead of creating a mapping that would silently mirror nothing.
-- Admin "Test connection", and `occ penpot_sync:test-connection`, which tell an unset token, a rejected token, and an unreachable Penpot apart — and name the `enable-access-tokens` instance flag, whose absence otherwise looks exactly like a bad token.
-- Admin settings for the scheduled pull (on/off and how often), stored now and honoured when the background job lands.
-- An optional personal Penpot token per Nextcloud user, so changes made from Nextcloud are attributed to that person in Penpot's history instead of to the shared service account — with `occ penpot_sync:set-personal-token`.
-- `occ penpot_sync:show-config` now also reports the configured mappings and the pull schedule.
-- A mapping now names the Nextcloud folder its Penpot team is mirrored into — leave it blank and it uses the team's own name, the same way the Grafana integration defaults its folder mappings. Project folders inside it still always match their Penpot project's name exactly.
-- Each mapping records the Nextcloud groups its folder is shared with, and whether it uses a Team Folder or a plain shared folder — the same controls, defaults, and meanings as the n8n and Grafana integrations.
-- Two mappings can no longer target the same Nextcloud folder, and a folder name must be a single folder rather than a path.
-- The admin section now matches the n8n and Grafana integrations: one **Instance** card holding the URL and the token, **Sync Settings**, **Team mappings** as one card per mapping, and a **Sync Actions** panel collecting every button at the bottom.
-- **Fixed:** the "pull on a schedule" setting silently reverted after saving. A declarative checkbox cannot persist on current Nextcloud — its value reaches a string-typed setter and the save aborts with no visible error — so the control is now a two-option radio, which saves correctly.
-- A mapping's team, Nextcloud folder, Team Folder setting, default mode and folder mode are all fixed once it is created — changing any of them would migrate already-mirrored content, so removing and re-adding the mapping makes that cost visible. The groups it is shared with stay editable.
-- Each mapping card carries its own **Sync now** button, in the same place as in the n8n and Grafana integrations — it reports that per-team sync is not available yet rather than silently doing nothing.
-- Penpot Files-Metadata keys are now registered at boot: `penpot_id` / `penpot_revision` / `penpot_mode` on mirrored files and `penpot_project_id` / `penpot_team_id` on folders — advertised over WebDAV and indexed for search, ahead of the pull that writes them.
-- Membership resolver: a `.penpot` file's project and team are derived by walking up the folder tree to the nearest ancestor carrying each id, so Nextcloud can nest project folders freely while Penpot stays flat — including the team-Drafts and personal-project states, and never storing a mapping on the file itself.
-- The pull: `occ penpot_sync:sync pull` mirrors a mapped Penpot team into Nextcloud — the team's projects become folders and its files become `.penpot` link pointers, each stamped with the Penpot metadata the resolver reads back; Drafts stays a state at the team root, never a folder.
-- `occ penpot_sync:status <path>` reports the Penpot metadata and the resolved membership (`in_project` / `drafts` / `personal` / `none`) for any mirrored node — read-only, and the first way to run the resolver against a real folder tree.
-- The pull provisions a plain admin-owned folder for the mapped team (the groupfolders Team Folder backend follows), stamps the team id on it, and re-pulls idempotently by matching folders on their project id and files on their file id rather than by name.
-- Integration suite now seeds a project directly in Penpot, runs the pull, and asserts the mirrored folder tree and its resolved membership through `occ penpot_sync:status` — the first end-to-end proof of the resolver on a live Nextcloud.
-- **Fixed:** a mirrored file's stored drift signal now carries `revn` **and** `modified-at` together, not `revn` alone — the scheduled pull's "has this file changed?" check can now tell a new edit at the same revision apart.
-- A bulk pull now contains a filesystem or metadata failure to the one mapping that hit it, so a single broken team no longer aborts every other team's mirror in the same run.
-- The pull indexes each folder's children once per team and per project instead of re-scanning on every file, so mirroring a large team is no longer quadratic.
-- **Fixed:** reading a node's Penpot metadata no longer materialises an empty record as a side effect, keeping "no record" an honest signal that a node is untracked.
-- Renaming a mirrored `.penpot` file or a project folder in Nextcloud now propagates to Penpot (`rename-file` / `rename-project`), attributed to the acting user's personal token when they have one and the service account otherwise — the first Nextcloud → Penpot write path (content stays strictly one-way).
-- Team Folder (groupfolders) provisioning is now built: a mapping set to use a Team Folder is mirrored into an ownerless groupfolders mount shared with the mapping's groups, falling back to a plain admin-owned folder when the groupfolders app is absent — the same backend pattern as the n8n and Grafana integrations.
-- A plain admin-owned mapping folder is now shared with the mapping's Nextcloud groups (read + update — the least permission Nextcloud offers that allows a rename; content edits are possible but never pushed and are reverted on the next pull), so the mapped team can see and rename their mirrored designs without an admin sharing the folder by hand.
-- A pull no longer echoes its own follow-renames back to Penpot: a re-entrancy guard fences the pull's filesystem writes off from the new rename write-back listener.
-- Dragging a mirrored design into a different project folder now re-files it in Penpot (`move-files`), and dragging it to the team root files it into that team's Drafts — the gesture Nextcloud users already know is the Penpot operation, with the design keeping its id, revision and history.
-- Moving a design out of every mapped folder no longer pushes anything at all: Penpot keeps the file exactly where it is, because unmapping is a deliberate action rather than something to infer from a drag.
-- A project folder can now be organised freely inside its team folder, and is refused — with an explanation, before the move happens — if dragged out of it, since moving a project between teams has to be done in Penpot.
-- A `link` file is now confined to its own project: it moves freely within it, and any move that would change its project is refused with an offer to switch it to `sync` mode first, so nobody is left holding a pointer that looks like a design and isn't.
-- **`sync` mode: mirrored designs can now hold the real thing.** `occ penpot_sync:set-mode <path> sync` exports a design from Penpot and stores the actual `.penpot` archive in Nextcloud, so it opens, downloads and backs up like any other file; `… link` puts the lightweight pointer back, after confirming, since that deletes a local backup Penpot is not keeping for you.
-- A pull re-exports a `sync` file only when its Penpot revision has moved or its archive is missing, so a team of `link` files still costs one listing and no downloads — and a file stamped `sync` that never got its archive quietly repairs itself on the next pull.
-- A design that fails to export no longer loses what it had: the previous content and revision are kept, the pull reports how many failed without calling the whole run an error, and the next pull retries automatically.
-- `occ penpot_sync:status` now reports what a mirrored file actually holds — a real archive, a pointer, or nothing — alongside the mode it is stamped with, so the two can be seen to disagree instead of inferred from a byte count.
-- Integration suite now promotes a design against a real Penpot and asserts the stored bytes really are a `.penpot` archive, and that mirroring a team of links performs zero exports.
+- Point the app at a Penpot instance and store an encrypted service-account token, from the admin UI or entirely headlessly over `occ`.
+- **Test connection** tells an unset token, a rejected token, and an unreachable Penpot apart — and names the `enable-access-tokens` flag, whose absence looks exactly like a bad token.
+- Map a Penpot team to a Nextcloud folder, shared with chosen groups, as a Team Folder or a plain folder. A team can only be mapped if the service account can actually see it.
+- Optional per-user Penpot token, so a user's changes are attributed to them in Penpot's history rather than to the shared account.
+- Choose whether to pull on a schedule, and how often.
+- `occ penpot_sync:sync pull` mirrors a mapped team: projects become folders, designs become `.penpot` files stamped with their Penpot ids. Drafts stays a state at the team root, never a folder.
+- **`sync` mode.** `occ penpot_sync:set-mode <path> sync` stores the design's real exported `.penpot` archive, so it opens, downloads and backs up like any other file. `… link` restores the lightweight pointer, after confirming — that deletes a local backup Penpot is not keeping for you.
+- A pull re-exports a `sync` file only when its Penpot revision moved or its archive is missing, so a team of links costs one listing and no downloads.
+- An export that fails costs nothing: the previous content and revision are kept, the run reports how many failed rather than failing outright, and the next pull retries.
+- `occ penpot_sync:status <path>` reports a mirrored node's Penpot metadata, which project and team it resolves to, and whether it holds a real archive, a pointer, or nothing.
+- Renaming a mirrored design or project folder in Nextcloud renames it in Penpot.
+- Dragging a design into another project folder re-files it in Penpot; dragging it to the team root files it into that team's Drafts. The design keeps its id, revision and history.
+- Moves Penpot cannot express are refused before they happen, with the reason: a project dragged out of its team, or a `link` leaving its project — which offers `sync` mode instead, so nobody is left holding a pointer that looks like a design and isn't.
+- Moving a design out of every mapped folder pushes nothing at all, since unmapping is a deliberate act rather than something to infer from a drag.
+- Penpot ids are exposed over WebDAV and indexed for search: `penpot_id`, `penpot_revision`, `penpot_mode` on files, `penpot_project_id` and `penpot_team_id` on folders.
+- `occ penpot_sync:show-config` reports the URL, whether each token is set (never its value), the mappings, and the schedule.
+- Design record in `saga/`, with every Penpot API claim verified against a live instance.
 
 ### Fixed
 
-- Penpot's export response could not be read at all: its `end` event carries the archive URL as a Transit *tagged map*, a form the decoder mistook for plain JSON and rejected with advice that did not apply.
-- A bulk pull no longer aborts every mapping after the first when sharing a plain folder trips a broken notifications app: the dangling database transaction that leak left behind (Postgres `SQLSTATE[25P02]`) is now discarded, so later mappings' file writes succeed.
+- Penpot's export response could not be read at all: the archive URL arrives as a Transit *tagged map*, which the decoder mistook for plain JSON and rejected with advice that did not apply.
+- The "pull on a schedule" setting silently reverted after saving.
+- A mirrored file's drift signal now carries `revn` **and** `modified-at`, so an edit made at the same revision is noticed.
+- One broken mapping no longer aborts every other team in a bulk pull.
+- Reading a node's Penpot metadata no longer creates an empty record as a side effect, keeping "no record" an honest signal that a node is untracked.
+- Mirroring a large team is no longer quadratic: each folder's children are indexed once.
+- A pull no longer echoes its own renames back to Penpot.

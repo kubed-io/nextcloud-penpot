@@ -498,11 +498,11 @@ final class PenpotClient {
 	 * THIS HOP MUST LAND ON PENPOT'S FRONTEND, NOT ITS BACKEND — and WE DO NOT
 	 * CHOOSE WHICH. The URL comes from the `end` event, and Penpot builds it from
 	 * its own `PENPOT_PUBLIC_URI`. The backend does not serve the bytes: it
-	 * authenticates, then answers **200 with an empty body** and an
-	 * `x-internal-redirect` header for **nginx** to follow. So a Penpot whose
-	 * public URI names its backend hands us an address that downloads nothing,
-	 * no matter what `penpot_url` is set to — see the 0-byte branch below, which
-	 * is the only reason that is nameable instead of baffling (saga §C4.8).
+	 * authenticates, then answers with **no body** and a redirect header naming
+	 * where the file really is, for **nginx** to act on. So a Penpot whose public
+	 * URI names its backend hands us an address that downloads nothing, no matter
+	 * what `penpot_url` is set to — see the empty-body branch below, which is the
+	 * only reason that is nameable instead of baffling (saga §C4.8).
 	 *
 	 * @throws PenpotApiException
 	 */
@@ -542,12 +542,12 @@ final class PenpotClient {
 
 		$archive = (string)$response->getBody();
 
-		// 200 AND NOTHING IN IT. Penpot's backend answers exactly this way: it
-		// hands the real location to nginx in a header and lets nginx serve the
-		// file. Nothing else about the connection looks wrong — the token works,
-		// the export streams, the status is 200 — so without naming it here, the
-		// only symptom is "my backups are empty."
-		if ($archive === '' && $response->getHeader('x-internal-redirect') !== '') {
+		// AUTHENTICATED FINE, AND NOTHING IN IT. Penpot's backend answers exactly
+		// this way: it hands the real location to nginx in a header and lets nginx
+		// serve the file. Nothing else about the connection looks wrong — the token
+		// works, the export streams, the status is a success — so without naming it
+		// here, the only symptom is "my backups are empty."
+		if ($archive === '' && $this->redirectHeader($response) !== '') {
 			throw new PenpotApiException(
 				sprintf(
 					'Penpot exported file %s, but the archive download returned no content. '
@@ -564,6 +564,28 @@ final class PenpotClient {
 		}
 
 		return $archive;
+	}
+
+	/**
+	 * The "a proxy was supposed to handle this" header, whichever name it arrived
+	 * under — the tell that we reached the backend directly.
+	 *
+	 * BOTH NAMES ARE REAL, and which one appears says which half of Penpot we hit.
+	 * The backend emits `x-accel-redirect` (its `fs` object storage) or a 3xx
+	 * `location` (its `s3` backend). Nginx, once it has acted on either, echoes
+	 * the resolved address back as `x-internal-redirect` — a diagnostic, not an
+	 * instruction. Keying off only one name means the check silently stops working
+	 * against half the Penpot deployments in existence, which is worse than not
+	 * having it: the failure it exists to explain would return, unexplained.
+	 */
+	private function redirectHeader(IResponse $response): string {
+		foreach (['x-accel-redirect', 'x-internal-redirect'] as $name) {
+			if ($response->getHeader($name) !== '') {
+				return $response->getHeader($name);
+			}
+		}
+
+		return '';
 	}
 
 	// ── connection test ─────────────────────────────────────────────────────

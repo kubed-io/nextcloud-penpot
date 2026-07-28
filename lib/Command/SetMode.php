@@ -176,16 +176,19 @@ final class SetMode extends Command {
 
 		$membership = $this->resolver->resolve($node);
 		$stamped = $this->metadata->readFile($node->getId());
+		// The stamp is the joined drift signal; the pointer body keeps the two
+		// halves in separate fields, so it has to come back apart here.
+		[$revn, $modifiedAt] = ArchiveService::splitSignal($stamped?->revision ?? '');
 
-		$this->guard->run(function () use ($node, $penpotId, $stamped, $membership): void {
+		$this->guard->run(function () use ($node, $penpotId, $revn, $modifiedAt, $membership): void {
 			$this->archives->storeLink(
 				$node,
 				$penpotId,
 				// The pointer's `name` is the design's Penpot name, which is the
 				// mirror's name minus the Nextcloud-side extension (§6.4).
 				preg_replace('/\.penpot$/', '', $node->getName()) ?? $node->getName(),
-				$stamped?->revision ?? '',
-				'',
+				$revn,
+				$modifiedAt,
 				$membership->teamId ?? '',
 			);
 		});

@@ -371,17 +371,26 @@ final class PenpotClientTest extends TestCase {
 	}
 
 	/**
-	 * A 200 WITH AN EMPTY BODY IS PENPOT'S BACKEND ANSWERING, not a failure — the
-	 * backend authenticates the asset request and hands the real location to
-	 * nginx in `x-internal-redirect` for nginx to serve. Point the app at the
-	 * backend and every export succeeds while storing nothing, so the message has
-	 * to name the misconfiguration rather than describe the symptom (saga §C4.8).
+	 * AN EMPTY BODY PLUS A REDIRECT HEADER IS PENPOT'S BACKEND ANSWERING, not a
+	 * failure — the backend authenticates the asset request and hands the real
+	 * location on for nginx to act on. Point the app at the backend and every
+	 * export succeeds while storing nothing, so the message has to name the
+	 * misconfiguration rather than describe the symptom (saga §C4.8).
+	 *
+	 * BOTH HEADER NAMES ARE TESTED because both are real and neither is ours to
+	 * pick: `x-accel-redirect` is what the backend sends under `fs` storage,
+	 * `x-internal-redirect` is nginx's echo of whatever it resolved. Keying off
+	 * one name passed against our own instance and would have gone quiet against
+	 * a stock docker install.
 	 */
-	public function testAnEmptyBodyWithAnInternalRedirectNamesTheBackendMistake(): void {
+	#[\PHPUnit\Framework\Attributes\DataProvider('redirectHeaders')]
+	public function testAnEmptyBodyWithARedirectHeaderNamesTheBackendMistake(string $header, string $value): void {
 		$response = $this->createStub(IResponse::class);
 		$response->method('getStatusCode')->willReturn(200);
 		$response->method('getBody')->willReturn('');
-		$response->method('getHeader')->willReturn('https://storage.example.com/signed');
+		$response->method('getHeader')->willReturnCallback(
+			static fn (string $name): string => $name === $header ? $value : '',
+		);
 
 		try {
 			$this->fetchAssetWith($response);
@@ -390,6 +399,14 @@ final class PenpotClientTest extends TestCase {
 			self::assertStringContainsString('BACKEND', $e->getMessage());
 			self::assertStringContainsString('frontend', $e->getMessage());
 		}
+	}
+
+	/** @return array<string, array{0: string, 1: string}> */
+	public static function redirectHeaders(): array {
+		return [
+			'fs storage — the backend\'s own header' => ['x-accel-redirect', '/internal/assets/ab/cdef'],
+			'nginx\'s echo of what it resolved' => ['x-internal-redirect', 'https://storage.example.com/signed'],
+		];
 	}
 
 	/**

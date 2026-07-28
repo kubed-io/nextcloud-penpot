@@ -158,4 +158,44 @@ final class ArchiveService {
 		// would be a silently corrupt mirror file. Matches PenpotClient's encoding.
 		$node->putContent(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
 	}
+
+	/**
+	 * THE DRIFT SIGNAL, and the only place its shape is written down.
+	 *
+	 * `revn` alone cannot tell "same revn, newer modified-at" apart, which the
+	 * scheduled pull needs (saga §5.5), so the stamp is the two joined. Callers
+	 * compare it whole and never parse it — with one exception: the pointer body
+	 * has a separate field for each half, so a demotion writing a pointer from a
+	 * stamp has to take it apart again.
+	 *
+	 * Joining in one file and splitting in another is how the two drift, and a
+	 * pointer reading `"revn": "5@1785203299480", "modified_at": ""` is wrong in
+	 * a way nothing would fail on — so both halves live here, next to the only
+	 * consumer that cares.
+	 */
+	public static function signal(string $revn, string $modifiedAt): string {
+		if ($modifiedAt === '') {
+			return $revn;
+		}
+
+		return $revn . '@' . $modifiedAt;
+	}
+
+	/**
+	 * Take a stamped signal back apart into `[revn, modifiedAt]`.
+	 *
+	 * A signal with no `@` is a bare revn (that is what {@see signal()} writes
+	 * when Penpot gave us no modified-at), so the second half is legitimately
+	 * empty rather than missing.
+	 *
+	 * @return array{0: string, 1: string}
+	 */
+	public static function splitSignal(string $signal): array {
+		$at = strpos($signal, '@');
+		if ($at === false) {
+			return [$signal, ''];
+		}
+
+		return [substr($signal, 0, $at), substr($signal, $at + 1)];
+	}
 }

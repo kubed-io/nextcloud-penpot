@@ -130,21 +130,26 @@ jobs:
       # THE FRONTEND IS NOT OPTIONAL, and finding that out cost a red build.
       #
       # Penpot's backend does not serve exported files. It authenticates the
-      # `/assets/by-id/<uuid>` request and then answers **200 with an empty body**
-      # plus an `x-internal-redirect` header for nginx to follow. So a suite that
-      # talks to the backend alone sees every export "succeed" and download zero
-      # bytes — which is precisely the failure `exportBinfile`'s ZIP-magic check
-      # exists to catch, and precisely the misconfiguration a user could hit.
+      # `/assets/by-id/<uuid>` request and then answers **with no body** plus a
+      # redirect header for nginx to act on. So a suite that talks to the backend
+      # alone sees every export "succeed" and download zero bytes — which is
+      # precisely the failure `exportBinfile`'s ZIP-magic check exists to catch,
+      # and precisely the misconfiguration a user could hit.
       #
       # Running the real two-container topology is what makes the integration
       # suite's claim ("a promotion stores a real archive") mean anything.
       #
-      # HOW THE HANDOFF ACTUALLY WORKS, since it is not a plain proxy: the
-      # backend authenticates the request and answers nginx with an
-      # `x-accel-redirect` naming a path under `/opt/data/assets`. Nginx then
+      # HOW THE HANDOFF ACTUALLY WORKS, since it is not a plain proxy: with the
+      # `fs` object storage these images default to, the backend answers 204 with
+      # an `x-accel-redirect` naming a path under `/opt/data/assets`. Nginx then
       # serves that file FROM ITS OWN FILESYSTEM. So the two containers must
       # share the assets volume or every download 404s — the frontend would be
       # looking for a file only the backend has.
+      #
+      # (With `s3` storage the backend answers 307 + `location` instead and nginx
+      # follows the signed URL, needing no shared volume. Either way nginx adds
+      # its own `x-internal-redirect` echo — which is why the client checks for
+      # both names and not just the one our production instance happens to show.)
       penpot-frontend:
         image: penpotapp/frontend:2.17.0
         ports:

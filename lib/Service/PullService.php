@@ -309,7 +309,7 @@ final class PullService {
 		// alone cannot tell "same revn, newer modified-at" apart, which the
 		// scheduled-pull diff needs. Stored as one opaque string — callers
 		// compare it whole, never parse it.
-		$signal = $this->revisionSignal($revn, $modifiedAt);
+		$signal = ArchiveService::signal($revn, $modifiedAt);
 
 		$existing = $fileIndex[$fileId] ?? null;
 		if ($existing !== null) {
@@ -379,14 +379,6 @@ final class PullService {
 	 */
 	private function driftedOrMissing(File $node, string $stored, string $signal): bool {
 		return $stored !== $signal || !$this->archives->holdsArchive($node);
-	}
-
-	/** The opaque `revn` + `modified-at` drift signal stored as `penpot_revision`. */
-	private function revisionSignal(string $revn, string $modifiedAt): string {
-		if ($modifiedAt === '') {
-			return $revn;
-		}
-		return $revn . '@' . $modifiedAt;
 	}
 
 	/**

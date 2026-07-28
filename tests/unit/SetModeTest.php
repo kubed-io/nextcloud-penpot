@@ -127,8 +127,11 @@ final class SetModeTest extends TestCase {
 		$this->archives->expects($this->once())
 			->method('storeLink')
 			// The pointer keeps the design's PENPOT name — the mirror's name minus
-			// the Nextcloud-side extension (§6.4).
-			->with($this->file, 'file-1', 'Login', '5@t1', '', 'team-9');
+			// the Nextcloud-side extension (§6.4) — and the stamp `5@t1` arrives
+			// back apart, because the body has a field for each half. Writing the
+			// joined signal into `revn` and leaving `modified_at` empty is wrong in
+			// a way nothing downstream would fail on, which is why it is asserted.
+			->with($this->file, 'file-1', 'Login', '5', 't1', 'team-9');
 		$this->metadata->expects($this->once())
 			->method('writeFile')
 			->with(30, [PenpotMetadata::KEY_MODE => Mapping::MODE_LINK]);

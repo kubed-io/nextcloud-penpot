@@ -139,6 +139,35 @@ final class ArchiveServiceTest extends TestCase {
 		$this->archives->storeLink($this->createMock(File::class), 'file-1', 'Login', '5', 't1', 'team-9');
 	}
 
+	/**
+	 * THE SIGNAL MUST SURVIVE A ROUND TRIP, because a demotion writes a pointer
+	 * from a stamp and the pointer keeps the two halves apart. The pull joins,
+	 * the demotion splits, and when those two lived in different files they
+	 * disagreed: `revn` got the whole `5@t1` and `modified_at` got nothing —
+	 * a wrong pointer that nothing downstream would have failed on.
+	 *
+	 * @param array{0: string, 1: string} $parts
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider('signals')]
+	public function testTheRevisionSignalSurvivesARoundTrip(array $parts, string $joined): void {
+		self::assertSame($joined, ArchiveService::signal($parts[0], $parts[1]));
+		self::assertSame($parts, ArchiveService::splitSignal($joined));
+	}
+
+	/** @return array<string, array{0: array{0: string, 1: string}, 1: string}> */
+	public static function signals(): array {
+		return [
+			'both halves' => [['5', 't1'], '5@t1'],
+			// Penpot does not always give us a modified-at; a bare revn is the
+			// signal then, and must not come back as a revn of "".
+			'no modified-at' => [['5', ''], '5'],
+			'never stamped' => [['', ''], ''],
+			// Penpot's timestamps are opaque to us — splitting on the FIRST `@`
+			// keeps a value containing one from eating the revn.
+			'an at-sign in the timestamp' => [['5', 't1@x'], '5@t1@x'],
+		];
+	}
+
 	/** A File whose stored content is $body, readable through fopen(). */
 	private function fileHolding(string $body): File {
 		$handle = fopen('php://memory', 'r+b');

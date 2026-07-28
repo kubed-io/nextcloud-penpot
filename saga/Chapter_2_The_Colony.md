@@ -92,7 +92,7 @@ have partially misread would only encode the misreading.
 |---|---|---|
 | **Transit decode** | 🔴 | `~:kw`, `~u<uuid>`, `~m<millis>`, `~#set`, and the **cache-reference** form (`^0`, `^1`… back-references into earlier keys — visible in every live response in Ch1). This is the single most under-appreciated risk: a naive JSON parse *appears* to work on small payloads and silently mangles large ones. |
 | **Per-command param table** | 🔴 | The four confirmed rows above, as explicit config — never inferred. Open question #21, promoted from tidy-up to prerequisite. |
-| **SSE response handling** | � | `export-binfile`/`import-binfile` stream progress then `end`\|`error`. **HTTP 200 does not mean success** (§5.1/§6.20) — an error arrives as an event *inside* a 200. Built and live in C4.8. |
+| **SSE response handling** | 🟢 | `export-binfile`/`import-binfile` stream progress then `end`\|`error`. **HTTP 200 does not mean success** (§5.1/§6.20) — an error arrives as an event *inside* a 200. Built and live in C4.8. |
 | **The two-step asset fetch** | 🟢 | The `end` event carries a *separate* `/assets/by-id/<uuid>` URL needing a **second authenticated** request (401 without the token, §6.20). Built in C4.8; the two failures are reported apart, because §5.3's 502 was the fetch, not the export. |
 | **Re-read after write** | 🔴 | §6.49's gotcha: `restore-deleted-team-files` reported success while `deleted_at` was still set. **Never trust the `end` event** — confirm by re-reading. |
 | **`get-projects` workaround** | 🟡 | Upstream bug (§6.42, re-confirmed live in §6.54): it never filters `deleted_at`. Use `get-all-projects`. Isolate this so it can be deleted when upstream fixes it (#39). |
@@ -161,7 +161,7 @@ failure **the local state always stands** (§6.18 rule 3).
 | **File rename → `rename-file`** | 🟢 | Ratified §6.54. Strip/re-add `.penpot`; send under plain **`id`**. |
 | **Project folder rename → `rename-project`** | 🟢 | §6.36/§6.39 — its own flow, *not* a variant of file rename. Different event, id, RPC, and response (204, no body). |
 | **Move between projects → `move-files`** | 🟢 | Confirmed working both directions (§6.34 probe). Built and gated: `sync` files re-file, `link` files are refused (§6.43). |
-| **`sync` mode + `export-binfile`** | � | Opt-in per file via `occ penpot_sync:set-mode`. Downloads the real archive when `revn` moves — or when the archive is missing (self-healing). C4.8. |
+| **`sync` mode + `export-binfile`** | 🟢 | Opt-in per file via `occ penpot_sync:set-mode`. Downloads the real archive when `revn` moves — or when the archive is missing (self-healing). C4.8. |
 | **The `/` guard, both levels** | 🔴 | `nested` mode refuses `/` in project *and* file names (§6.51/§6.54), reports which object, skips only that one. |
 | ⛔ **Content push** | ⛔ | **Never.** §6.1 is the app's spine: Nextcloud mirrors, it does not edit shape data. |
 
@@ -173,7 +173,7 @@ failure **the local state always stands** (§6.18 rule 3).
 |---|---|---|
 | **Three-layer delete/restore** | 🔴 | §6.52: NC trash → Penpot's own trash (~7 days, **id/revn/history intact**) → our archive (last resort, lossy). **Always check Penpot's trash first.** |
 | **Trash-aware reconciler** | 🔴 | §6.37/§6.45 — a trashed file keeps its fileid and metadata, so "in the trash with a matching id" **is** the hidden-link state. No separate flag. **Match by fileid, never by filename** (#43 — trashed files carry a `.dTIMESTAMP` suffix). |
-| **`sync`↔`link` promotion** | � | Built early, in C4.8 — the move guard needed a real escape hatch to offer. `occ penpot_sync:set-mode`, confirmed on the lossy direction (#23). The Files-app surface is Course 6. |
+| **`sync`↔`link` promotion** | 🟢 | Built early, in C4.8 — the move guard needed a real escape hatch to offer. `occ penpot_sync:set-mode`, confirmed on the lossy direction (#23). The Files-app surface is Course 6. |
 | **`penpot:ignore` marker** | 🟢 | Sync mode only (§6.23). |
 | **Grace-window rescue** | 🔴 | §6.42: `export-binfile` still exports a soft-deleted file. Converts an unrecoverable `link` deletion into a recoverable one (#38/#42). |
 | **Permanent delete, explicit** | 🟡 | `permanently-delete-team-files` is the only irreversible call — never reachable from an ordinary delete. |
@@ -704,9 +704,30 @@ own instance, the two answers to the same `/assets/by-id/<uuid>` are:
 | `penpot:8080` (nginx) | **HTTP 200**, `Content-Type: application/zip`, `Content-Length: 54171` |
 
 The backend authenticates the request and then hands the real location to
-**nginx**, which follows it and streams the file. Nothing about the failure looks
-like a failure — the token works, the stream completes, the status is 200 — so
-the only symptom is *empty backups*.
+**nginx**, which acts on it and streams the file. Nothing about the failure looks
+like a failure — the token works, the stream completes, the status is a success —
+so the only symptom is *empty backups*.
+
+**A review caught us naming the wrong culprit, and the correction is the useful
+part.** `x-internal-redirect` is not the backend's header at all — it is nginx's,
+an `add_header` echo of what it just resolved, and reading it off our own
+instance we mistook a diagnostic for an instruction. What the *backend* sends
+depends on how its object storage is configured, which is why one name was never
+going to be enough:
+
+| Backend storage | The backend answers |
+|---|---|
+| `fs` (the docker default, and CI) | **204**, `x-accel-redirect: /internal/assets/…` |
+| `s3` (ours — GCS behind the S3 API) | **307**, `location: <signed storage URL>` |
+
+Nginx then either serves the aliased path from disk or follows the signed URL,
+and *in both cases* adds `x-internal-redirect` naming what it resolved. So the
+empty-body check keyed off a header that only exists once the request has gone
+through the very component whose absence it was written to detect — it happened
+to work where we tested it and would have gone quiet everywhere else, including
+against our own CI. It now accepts either name. The lesson is narrower than
+"test more": we read a header off a live response and assumed the thing that
+answered was the thing that set it.
 
 **And we do not choose which one we get.** The asset address arrives in the `end`
 event, built by Penpot from its own `PENPOT_PUBLIC_URI` — so `penpot_url` is
