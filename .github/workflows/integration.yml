@@ -116,6 +116,17 @@ jobs:
           # The PUBLIC uri is the FRONTEND, because that is the address the app —
           # and every browser — actually talks to. See the frontend service below.
           PENPOT_PUBLIC_URI: http://localhost:9001
+          # Named explicitly rather than left to the default, because the frontend
+          # has to be told the same path and a silent default drift between the
+          # two images would be a 404 with no obvious cause.
+          PENPOT_OBJECTS_STORAGE_FS_DIRECTORY: /opt/data/assets
+        # The exported archive is written here by the backend and READ BACK OFF
+        # DISK BY NGINX (see the frontend service). One volume, both containers,
+        # exactly as Penpot's own compose file does it — a named volume rather
+        # than a bind mount so Docker seeds it with the image's own ownership
+        # (uid 1001) instead of a root-owned empty host directory.
+        volumes:
+        - penpot_assets:/opt/data/assets
       # THE FRONTEND IS NOT OPTIONAL, and finding that out cost a red build.
       #
       # Penpot's backend does not serve exported files. It authenticates the
@@ -127,6 +138,13 @@ jobs:
       #
       # Running the real two-container topology is what makes the integration
       # suite's claim ("a promotion stores a real archive") mean anything.
+      #
+      # HOW THE HANDOFF ACTUALLY WORKS, since it is not a plain proxy: the
+      # backend authenticates the request and answers nginx with an
+      # `x-accel-redirect` naming a path under `/opt/data/assets`. Nginx then
+      # serves that file FROM ITS OWN FILESYSTEM. So the two containers must
+      # share the assets volume or every download 404s — the frontend would be
+      # looking for a file only the backend has.
       penpot-frontend:
         image: penpotapp/frontend:2.17.0
         ports:
@@ -135,6 +153,8 @@ jobs:
           PENPOT_FLAGS: enable-access-tokens disable-email-verification disable-onboarding disable-secure-session-cookies
           PENPOT_BACKEND_URI: http://penpot:6060
           PENPOT_EXPORTER_URI: http://penpot:6061
+        volumes:
+        - penpot_assets:/opt/data/assets
 
     steps:
     # ── Provision: install everything up front, before any action runs ───────
