@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`sync` mode.** `occ penpot_sync:set-mode <path> sync` stores the design's real exported `.penpot` archive, so it opens, downloads and backs up like any other file. `… link` restores the lightweight pointer, after confirming — that deletes a local backup Penpot is not keeping for you.
 - A pull re-exports a `sync` file only when its Penpot revision moved or its archive is missing, so a team of links costs one listing and no downloads.
 - An export that fails costs nothing: the previous content and revision are kept, the run reports how many failed rather than failing outright, and the next pull retries.
+- A design deleted in Penpot no longer leaves a mirror that opens nothing — the pull moves it to the Nextcloud trash, where it stays recoverable.
+- A pointer gets one last export on its way to the trash, so a deleted design leaves you a real, openable `.penpot` archive instead of a dead link.
+- Pruning switches off entirely whenever a listing is incomplete, so a network blip is never mistaken for "Penpot deleted everything". Files you added yourself are never touched.
 - `occ penpot_sync:status <path>` reports a mirrored node's Penpot metadata, which project and team it resolves to, and whether it holds a real archive, a pointer, or nothing.
 - Renaming a mirrored design or project folder in Nextcloud renames it in Penpot.
 - Dragging a design into another project folder re-files it in Penpot; dragging it to the team root files it into that team's Drafts. The design keeps its id, revision and history.

@@ -101,6 +101,20 @@ final class Sync extends Command {
 			));
 		}
 
+		// The prune is the one thing here that removes something, so it always
+		// says so — and says where it went. `rescued` is the pointer that became a
+		// real archive on its way out; `lost` is the one Penpot could no longer
+		// export, which is the honest word for a pointer to a design that is gone.
+		if ($result['pruned'] > 0) {
+			$output->writeln(sprintf(
+				'<comment>%d design(s) no longer exist in Penpot. Their mirrors were moved to the '
+				. 'Nextcloud trash: %d saved as a final archive first, %d could not be recovered.</comment>',
+				$result['pruned'],
+				$result['rescued'],
+				$result['lost'],
+			));
+		}
+
 		if ($result['status'] !== 'ok') {
 			$output->writeln('<error>Some mappings failed: ' . (string)$result['message'] . '</error>');
 

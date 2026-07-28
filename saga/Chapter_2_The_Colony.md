@@ -136,7 +136,7 @@ that makes a Penpot team appear in Nextcloud.
 | **Nearest-ancestor resolver** | 🔴 | §6.29, *the single most load-bearing rule in the app*. Walk up folder metadata for the nearest `penpot_project_id`, then `penpot_team_id`. mapping-membership.feature is its spec. |
 | **Team Folder provisioning + fallback** | 🟢 | groupfolders when present, plain shared folder when not — both siblings' `TeamFolderService` "optional dependency" precedent (#10). |
 | **Folder metadata write/read** | 🟢 | Confirmed live on a real production Team Folder (§6.21). |
-| **The pull** | 🟡 | `get-teams` → `get-all-projects` → `get-project-files`. **1 + P calls per team, zero exports** for an unchanged instance (§5.5) — this is what makes it scale to many files or few. |
+| **The pull** | � | `get-teams` → `get-all-projects` → `get-project-files`. **1 + P calls per team, zero exports** for an unchanged instance (§5.5) — this is what makes it scale to many files or few. Reconciles both ways as of C5.1: it adds what appeared and prunes what vanished. |
 | **Drafts as a state, never a folder** | 🔴 | §6.35. Files at team root are in Drafts. No `Drafts` folder is ever created. |
 | **Project folders + visible tag** | 🟡 | Project id as metadata, plus the human-visible pill (§6.32) — under free nesting, position no longer tells you. |
 | **`link` files** | 🟡 | The default. A pointer with `penpot_id` + metadata, deep-linking to the live design. **Never calls `export-binfile`.** |
@@ -171,11 +171,11 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **Three-layer delete/restore** | 🔴 | §6.52: NC trash → Penpot's own trash (~7 days, **id/revn/history intact**) → our archive (last resort, lossy). **Always check Penpot's trash first.** |
-| **Trash-aware reconciler** | 🔴 | §6.37/§6.45 — a trashed file keeps its fileid and metadata, so "in the trash with a matching id" **is** the hidden-link state. No separate flag. **Match by fileid, never by filename** (#43 — trashed files carry a `.dTIMESTAMP` suffix). |
+| **Three-layer delete/restore** | � | §6.52: NC trash → Penpot's own trash (~7 days, **id/revn/history intact**) → our archive (last resort, lossy). **Always check Penpot's trash first.** The prune's half is built (C5.1): a vanished design's mirror goes to the NC trash, never further. |
+| **Trash-aware reconciler** | 🔴 | §6.37/§6.45 — a trashed file keeps its fileid and metadata, so "in the trash with a matching id" **is** the hidden-link state. No separate flag. **Match by fileid, never by filename** (#43 — trashed files carry a `.dTIMESTAMP` suffix). The remaining half of C5.1: needs `files_trashbin`. |
 | **`sync`↔`link` promotion** | 🟢 | Built early, in C4.8 — the move guard needed a real escape hatch to offer. `occ penpot_sync:set-mode`, confirmed on the lossy direction (#23). The Files-app surface is Course 6. |
 | **`penpot:ignore` marker** | 🟢 | Sync mode only (§6.23). |
-| **Grace-window rescue** | 🔴 | §6.42: `export-binfile` still exports a soft-deleted file. Converts an unrecoverable `link` deletion into a recoverable one (#38/#42). |
+| **Grace-window rescue** | 🟢 | §6.42: `export-binfile` still exports a soft-deleted file. Built in C5.1 — a doomed `link` is exported one last time before it is trashed, converting an unrecoverable deletion into a recoverable one (#38/#42). |
 | **Permanent delete, explicit** | 🟡 | `permanently-delete-team-files` is the only irreversible call — never reachable from an ordinary delete. |
 
 ---
@@ -814,3 +814,93 @@ accepted and honoured — the file lands in the named project, not Drafts. The
 integration fixture uses it to seed a design to export, so the question is closed
 by something that keeps re-answering it.
 
+
+---
+
+## Course 5 — where the salvage yard stands
+
+### C5.1 — The prune, and the one deletion that had to be built backwards
+
+Until now the pull only ever added. A design deleted in Penpot left its mirror
+behind forever — a `.penpot` file that opens nothing, clicks through to a 404,
+and is indistinguishable from a real one. That is not a cosmetic gap: the whole
+value of the mirror is that it is *honest about what Penpot has*, and a mirror
+that only grows stops being that on the first deletion.
+
+**So this slice builds the app's most dangerous operation, and almost all of the
+work is in refusing to perform it.** The prune is driven by a single negative
+fact — *Penpot did not name this file* — and every way of failing to ask
+produces exactly the same fact:
+
+| What actually happened | What the seen-set says |
+|---|---|
+| The design was deleted | not named |
+| `get-project-files` returned 502 | not named |
+| A project was skipped for a `/` in its name | not named |
+| The token expired mid-walk | not named |
+
+Nothing downstream can tell those apart, and three of the four must never delete
+anything. So the pull now carries a `$complete` flag beside its seen-set, and the
+prune runs only if it is still true at the end. **A skip is not free any more** —
+that is the part that had to be built backwards from the failure. The existing
+code skipped an illegally-named project with a warning and carried on, which was
+correct when the pull was upsert-only and becomes *a project's worth of deleted
+mirrors* the moment a prune exists. The same line of code changed meaning
+without changing.
+
+**The one skip that stays cheap is the one that has an id.** A file Penpot names
+but that we refuse to mirror — a `/` in its name — is recorded in the seen-set
+*before* the legality check, because "we would not write this" is not evidence
+about what Penpot holds. Only a file with no id at all takes the prune down, and
+only because there is nothing to record.
+
+**Trash, never destroy.** `delete()` on a user-visible node is a move to the
+Nextcloud trash, recoverable for as long as the instance's retention allows.
+Verified on the pod: the pruned mirror came back out of
+`occ trashbin:restore --dry-run` naming its original path.
+
+**And the stamp is the only thing that makes a file ours.** Not the `.penpot`
+extension, not its position — under free nesting a mirror may sit in any plain
+subfolder the user made, and any file may sit in a project folder. A node with no
+`penpot_id` is never touched, which is what keeps a mapped folder usable as an
+ordinary folder. For the same reason the prune's walk is **recursive** while the
+upsert's index is not: a one-level prune would leave every moved mirror behind
+forever, and would be right often enough to look like it worked.
+
+**The final snapshot: the app's one lossy moment, fixed by something Penpot does
+for us.** A pruned `link` is a pointer to something that no longer exists, with
+nothing to rebuild from — the worst outcome in the app, and it arrives by doing
+nothing wrong. But §6.42 established that `export-binfile` still exports a
+soft-deleted design for as long as Penpot's own trash holds it, so a doomed
+pointer gets **one last export on its way out** and is trashed as a real archive.
+Confirmed end to end on the pod: seed a design, pull, `delete-file` (204), pull
+again —
+
+```
+Pulled 3 project(s): 1 folder(s), 2 file(s), 0 archive(s) exported, 0 skipped.
+1 design(s) no longer exist in Penpot. Their mirrors were moved to the Nextcloud
+trash: 1 saved as a final archive first, 0 could not be recovered.
+```
+
+— and the trashed file is a real ZIP, not the pointer it was a second earlier.
+
+**Best-effort, and it says so.** Past the grace window the export simply fails.
+The pointer is trashed anyway (leaving a mirror of nothing would be worse) and
+counted as `lost`, because the alternative — claiming a snapshot that was never
+taken — is the failure mode this app keeps refusing everywhere else. `rescued`
+and `lost` are separate counters for that reason: one number would let a
+completely unsuccessful rescue read as a completed one.
+
+**This is the only live claim in the suite about Penpot's behaviour rather than
+its wire format**, which is why it earns an integration scenario. Everywhere else
+the live tests exist because Transit, SSE and the asset hop cannot be mocked
+faithfully. Here a mock would return bytes for a design that never existed and
+prove nothing at all — the sentence under test is *Penpot keeps exporting it*,
+and only Penpot can be asked.
+
+**Deliberately not built, and named so it does not get assumed:** adopting a
+mirror out of the **Nextcloud** trash (§6.37). A design that comes back — because
+a human restored it in Penpot's own UI — is currently re-created beside its
+trashed mirror instead of being matched to it by `penpot_id`. That needs
+`files_trashbin` as an optional dependency and is its own slice; nothing here
+hard-deletes, so the cost of the gap is a duplicate, not a loss.

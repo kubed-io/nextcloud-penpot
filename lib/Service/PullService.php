@@ -50,12 +50,33 @@ use Psr\Log\LoggerInterface;
  *
  *   - **The project-folder visible tag** (§6.32) — the human pill. Metadata is
  *     written now; the systemtag lands with the Files-app surface.
- *   - **Prune of stale mirror files** whose Penpot object vanished — the pull is
- *     currently upsert-only. A file whose project or file was deleted upstream
- *     is left until the trash-aware reconciler (Course 5).
+ *   - **Adopting a mirror out of the Nextcloud trash** (§6.37) — a design that
+ *     comes back is currently re-created beside its trashed mirror rather than
+ *     matched to it by `penpot_id`. That needs `files_trashbin` and is its own
+ *     slice; nothing here hard-deletes, so no data is at risk in the meantime.
  *   - **The `/` guard as a reported skip** (§6.51) — a project or file whose
  *     Penpot name contains `/` (illegal as a single Nextcloud node name) is
  *     skipped and logged here; Course 4 turns that into the user-facing report.
+ *
+ * ## THE PRUNE, AND WHY IT IS GATED ON A COMPLETE LISTING (saga §6.25)
+ *
+ * A mirror whose Penpot design was deleted is moved to the **Nextcloud trash**,
+ * never hard-deleted. It runs from a `penpot_id` seen-set built while walking the
+ * team, and **only when every project in that team listed cleanly** — a failed,
+ * partial, or skipped listing is indistinguishable from "everything was deleted",
+ * and reading a network blip as evidence that a user's files are gone is the one
+ * mistake this app must never make. Skipping is therefore *not* free: a project
+ * passed over for an illegal name takes the whole prune down with it, because its
+ * files are exactly as unseen as deleted ones.
+ *
+ * ## THE FINAL SNAPSHOT (saga §6.42/§6.46)
+ *
+ * A pruned `link` is a pointer to something that no longer exists — the app's one
+ * genuinely lossy moment. But `export-binfile` still exports a soft-deleted file
+ * for as long as Penpot's own trash holds it, so a `link` gets **one last export**
+ * on its way out and is trashed as a real archive. Best-effort by construction:
+ * past the grace window the export fails, and the pointer is trashed anyway and
+ * counted as lost rather than a snapshot being faked.
  *
  * ## `sync` MODE: THE ONLY THING THAT COSTS ANYTHING (saga §6.22)
  *
@@ -90,7 +111,7 @@ final class PullService {
 	/**
 	 * Pull one mapping, or every mapping when `$mappingId` is null/empty.
 	 *
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, status:string, message:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, status:string, message:?string}
 	 */
 	public function pull(?string $mappingId): array {
 		if ($mappingId !== null && $mappingId !== '') {
@@ -110,7 +131,7 @@ final class PullService {
 	/**
 	 * Pull a single mapping into its Nextcloud root folder.
 	 *
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, error:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, error:?string}
 	 */
 	public function pullOne(Mapping $mapping): array {
 		if (!$this->storage->isAvailable($mapping)) {
@@ -143,12 +164,22 @@ final class PullService {
 				$failed = 0;
 				$skipped = 0;
 				$processed = 0;
+				$pruned = 0;
+				$rescued = 0;
+				$lost = 0;
+
+				// Every `penpot_id` Penpot named during this walk. Anything mirrored
+				// under the root and NOT in here is a candidate for the prune — which
+				// is why $complete has to travel with it.
+				$seen = [];
+				$complete = true;
 
 				foreach ($this->teamProjects($mapping->teamId) as $project) {
 					$processed++;
 					$projectId = $this->str($project, 'id');
 					if ($projectId === '') {
 						$skipped++;
+						$complete = false;
 						continue;
 					}
 
@@ -162,13 +193,25 @@ final class PullService {
 								'name' => $projectName,
 							]);
 							$skipped++;
+							// A SKIPPED PROJECT IS AN INCOMPLETE LISTING. Its files were
+							// never enumerated, so they are indistinguishable from files
+							// Penpot no longer has — and pruning them would delete a whole
+							// project's mirrors over a slash in a name.
+							$complete = false;
 							continue;
 						}
 						$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName);
 						$folders++;
 					}
 
-					$files += $this->pullProjectFiles($target, $mapping, $projectId, $exported, $failed, $skipped);
+					$files += $this->pullProjectFiles($target, $mapping, $projectId, $seen, $exported, $failed, $skipped, $complete);
+				}
+
+				// Only now, and only if nothing was missed. An exception on any listing
+				// has already left this closure entirely, which is the same protection
+				// stated as control flow rather than as a flag.
+				if ($complete) {
+					$this->prune($root, $seen, $pruned, $rescued, $lost);
 				}
 
 				return $this->tally([
@@ -178,6 +221,9 @@ final class PullService {
 					'exported' => $exported,
 					'failed' => $failed,
 					'skipped' => $skipped,
+					'pruned' => $pruned,
+					'rescued' => $rescued,
+					'lost' => $lost,
 				]);
 			});
 		} catch (PenpotApiException $e) {
@@ -207,8 +253,8 @@ final class PullService {
 	 * three separate literal arrays, and the version of this that spelled them out
 	 * had already drifted once.
 	 *
-	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, error?:?string} $counts
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, error:?string}
+	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, pruned?:int, rescued?:int, lost?:int, error?:?string} $counts
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, error:?string}
 	 */
 	private function tally(array $counts): array {
 		return $counts + [
@@ -218,6 +264,9 @@ final class PullService {
 			'exported' => 0,
 			'failed' => 0,
 			'skipped' => 0,
+			'pruned' => 0,
+			'rescued' => 0,
+			'lost' => 0,
 			'error' => null,
 		];
 	}
@@ -225,14 +274,16 @@ final class PullService {
 	/**
 	 * Mirror the files of one project into $target, upserting by `penpot_id`.
 	 *
+	 * @param array<string, true> $seen mutated in place: every `penpot_id` Penpot named
 	 * @param int $exported mutated in place: incremented per archive downloaded
 	 * @param int $failed mutated in place: incremented per export that failed
 	 * @param int $skipped mutated in place: incremented for each illegally-named file
+	 * @param bool $complete mutated in place: cleared if any file here was not enumerated
 	 * @return int the number of files written (created or updated)
 	 *
 	 * @throws PenpotApiException
 	 */
-	private function pullProjectFiles(Folder $target, Mapping $mapping, string $projectId, int &$exported, int &$failed, int &$skipped): int {
+	private function pullProjectFiles(Folder $target, Mapping $mapping, string $projectId, array &$seen, int &$exported, int &$failed, int &$skipped, bool &$complete): int {
 		// Index this folder's existing `.penpot` files ONCE (penpot_id -> file)
 		// instead of re-walking the directory listing for every Penpot file.
 		$fileIndex = $this->indexFilesByPenpotId($target);
@@ -240,6 +291,12 @@ final class PullService {
 		foreach ($this->client->getProjectFiles($projectId) as $file) {
 			$fileId = $this->str($file, 'id');
 			$baseName = $this->str($file, 'name');
+			if ($fileId !== '') {
+				// Recorded BEFORE the legality check: an unmirrorable name is still
+				// proof the design exists, and the prune must never read "we refused
+				// to write this" as "Penpot no longer has this".
+				$seen[$fileId] = true;
+			}
 			if ($fileId === '' || !$this->isLegalName($baseName)) {
 				$this->logger->warning('penpot_sync pull: skipping file with a missing id or illegal name', [
 					'app' => Application::APP_ID,
@@ -247,6 +304,11 @@ final class PullService {
 					'name' => $baseName,
 				]);
 				$skipped++;
+				if ($fileId === '') {
+					// No id means nothing to record in the seen-set, so this file's
+					// mirror — if it has one — would look deleted.
+					$complete = false;
+				}
 				continue;
 			}
 			$this->upsertMirrorFile($target, $fileIndex, $mapping, $fileId, $baseName, $file, $exported, $failed);
@@ -379,6 +441,121 @@ final class PullService {
 	 */
 	private function driftedOrMissing(File $node, string $stored, string $signal): bool {
 		return $stored !== $signal || !$this->archives->holdsArchive($node);
+	}
+
+	/**
+	 * Move every mirror under $root whose design Penpot no longer has into the
+	 * **Nextcloud trash** — the most dangerous thing this app does, and the
+	 * reason the caller may only reach it on a complete listing.
+	 *
+	 * ## WHAT IS EVEN A CANDIDATE
+	 *
+	 * A file carrying a `penpot_id`. Not "a `.penpot` file", not "a file in a
+	 * project folder" — the stamp is the only thing that says *we made this*, and
+	 * under free nesting position proves nothing. Anything unstamped is a file the
+	 * user put there and is never touched, which is what keeps a mapped folder
+	 * usable as an ordinary folder.
+	 *
+	 * ## TRASH, NEVER DESTROY
+	 *
+	 * `delete()` on a user-visible node is a move to the trash, recoverable for as
+	 * long as the instance's retention allows. Nothing in the pull hard-deletes;
+	 * the only irreversible call in the whole app is an explicit, confirmed one.
+	 *
+	 * @param array<string, true> $seen every `penpot_id` this pull was told exists
+	 * @param int $pruned mutated in place
+	 * @param int $rescued mutated in place
+	 * @param int $lost mutated in place
+	 */
+	private function prune(Folder $root, array $seen, int &$pruned, int &$rescued, int &$lost): void {
+		foreach ($this->collectMirrors($root) as $penpotId => $node) {
+			if (isset($seen[$penpotId])) {
+				continue;
+			}
+
+			// THE LAST SNAPSHOT, taken before the file moves. A `sync` file that
+			// already holds its archive needs nothing; a pointer gets one attempt at
+			// becoming a real backup while Penpot's own trash still has the design.
+			if (!$this->archives->holdsArchive($node)) {
+				if ($this->snapshot($node, $penpotId)) {
+					$this->metadata->writeFile($node->getId(), [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
+					$rescued++;
+				} else {
+					$lost++;
+				}
+			}
+
+			try {
+				$node->delete();
+				$pruned++;
+			} catch (\Throwable $e) {
+				// A mirror we could not trash is not a failed pull. It stays, Penpot
+				// stops naming it, and the next pull tries again — the same shape as
+				// every other per-file failure here.
+				$this->logger->warning('penpot_sync pull: could not move a vanished mirror to the trash', [
+					'app' => Application::APP_ID,
+					'file' => $node->getName(),
+					'penpot_id' => $penpotId,
+					'exception' => $e,
+				]);
+			}
+		}
+	}
+
+	/**
+	 * One last `export-binfile` for a design that is already gone.
+	 *
+	 * BEST-EFFORT BY DESIGN (saga §6.42): Penpot keeps a deleted file exportable
+	 * only while its own trash holds it, so past that window this simply fails and
+	 * the caller trashes the pointer anyway. It never pretends — a snapshot is
+	 * counted only when real bytes landed.
+	 *
+	 * @return bool true when an archive was stored
+	 */
+	private function snapshot(File $node, string $penpotId): bool {
+		try {
+			$this->archives->storeArchive($node, $penpotId);
+
+			return true;
+		} catch (PenpotApiException $e) {
+			$this->logger->warning('penpot_sync pull: no final archive could be recovered for a vanished design', [
+				'app' => Application::APP_ID,
+				'file' => $node->getName(),
+				'penpot_id' => $penpotId,
+				'exception' => $e,
+			]);
+
+			return false;
+		}
+	}
+
+	/**
+	 * Every stamped mirror file anywhere under $root, keyed by `penpot_id`.
+	 *
+	 * RECURSIVE, unlike {@see indexFilesByPenpotId()}, because free nesting means a
+	 * mirror may sit in any plain subfolder the user made (saga §6.29). A prune
+	 * that only looked one level down would leave the moved ones behind forever —
+	 * and, worse, would be *correct* often enough to look like it worked.
+	 *
+	 * @return array<string, File> penpot_id -> file
+	 */
+	private function collectMirrors(Folder $folder): array {
+		$found = [];
+		foreach ($folder->getDirectoryListing() as $node) {
+			if ($node instanceof Folder) {
+				$found += $this->collectMirrors($node);
+				continue;
+			}
+			if (!$node instanceof File) {
+				continue;
+			}
+			$penpotId = $this->metadata->readFile($node->getId())?->penpotId ?? '';
+			if ($penpotId !== '') {
+				$found[$penpotId] = $node;
+			}
+		}
+
+		return $found;
 	}
 
 	/**
@@ -518,11 +695,11 @@ final class PullService {
 	 * reconciled, the previous archive is intact, and the next pull retries. Only
 	 * a failure that stopped a whole mapping (`error`) is a failed pull.
 	 *
-	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, error:?string}> $results
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, status:string, message:?string}
+	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, error:?string}> $results
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, status:string, message:?string}
 	 */
 	private function finalise(array $results): array {
-		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0];
+		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0, 'pruned' => 0, 'rescued' => 0, 'lost' => 0];
 		$errors = [];
 		foreach ($results as $res) {
 			foreach (array_keys($total) as $key) {
