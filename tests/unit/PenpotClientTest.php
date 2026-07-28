@@ -414,9 +414,16 @@ final class PenpotClientTest extends TestCase {
 		$service = $this->createStub(IClientService::class);
 		$service->method('newClient')->willReturn($http);
 
+		// The fetch sends the token, so a configured one has to exist or the
+		// "unconfigured" guard fires first and hides what is being tested.
+		$config = $this->createStub(IAppConfig::class);
+		$config->method('getValueString')->willReturn('sealed');
+		$crypto = $this->createStub(ICrypto::class);
+		$crypto->method('decrypt')->willReturn('a-token');
+
 		$client = new PenpotClient(
-			$this->config,
-			$this->crypto,
+			$config,
+			$crypto,
 			$service,
 			new Transit(),
 			$this->createStub(LoggerInterface::class),

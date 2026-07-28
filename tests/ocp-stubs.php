@@ -303,10 +303,31 @@ namespace OCP\Files {
 			public function newFile(string $path, mixed $content = null): File;
 		}
 	}
-	// A mirrored `.penpot` link file: the pull rewrites its body on re-pull.
+	// A mirrored `.penpot` file. It is written whole (a link body), read back a
+	// few bytes at a time (is this an archive?), and — since Course 4 — asked how
+	// big it is before either, because opening an empty node to sniff four magic
+	// bytes is work with a knowable answer.
 	if (!interface_exists(File::class, false)) {
 		interface File extends Node {
 			public function putContent(mixed $data): void;
+
+			public function getSize(): int|float;
+
+			/**
+			 * Upstream returns `resource|false`. `resource` is not a type PHP accepts
+			 * in a signature, so the stub widens it — ArchiveService treats anything
+			 * that is not a usable stream as "no archive".
+			 *
+			 * @return resource|false
+			 */
+			public function fopen(string $mode): mixed;
+		}
+	}
+	// The sync actor's home is reached through the root folder — the entry point
+	// every `occ` command uses to turn a path argument into a node.
+	if (!interface_exists(IRootFolder::class, false)) {
+		interface IRootFolder {
+			public function getUserFolder(string $userId): Folder;
 		}
 	}
 	// Thrown by Node::getParent() once the walk runs past the root — the
