@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\AppInfo;
 
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
 use OCA\PenpotSync\Service\PenpotMetadata;
@@ -58,9 +60,16 @@ use OCP\Files\Events\Node\NodeRenamedEvent;
  * (§6.30), and a `link` file leaving the project it points into (§6.43).
  * The `SyncGuard` keeps the pull's own follow-renames from looping through either.
  *
- * The background job, the rest of the Files-app surface and the remaining write
- * paths still land in Courses 4–6. Don't scaffold those here ahead of the code
- * that uses them.
+ * The Files-app surface opens now (saga Ch2 Course 6): a
+ * {@see LoadFilesScriptListener} loads the frontend bundle and hands it the
+ * instance base URL, which is the one thing it cannot read off the file listing.
+ * That is what turns a mirrored `.penpot` row into a click through to the live
+ * design. It is the app's FIRST browser-side code — everything before it was
+ * `occ`, settings forms and server-side listeners.
+ *
+ * The background job, the mode pills, "+ New → design" and the remaining Course
+ * 6 surface still land later. Don't scaffold those here ahead of the code that
+ * uses them.
  */
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
@@ -99,6 +108,12 @@ final class Application extends App implements IBootstrap {
 		// (a cross-team reparent in Penpot) nor ignoring it (a silent desync) is
 		// acceptable. Aborting the event shows the user why, at the moment they try.
 		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveGuardListener::class);
+
+		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
+		// and hands it the instance base URL, which is all the browser needs to
+		// build `<base>/#/workspace?file-id=<penpot_id>` — the id itself already
+		// rides the directory PROPFIND as file metadata.
+		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadFilesScriptListener::class);
 	}
 
 	#[\Override]

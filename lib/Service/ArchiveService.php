@@ -11,9 +11,7 @@ namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Exception\PenpotApiException;
-use OCA\PenpotSync\Settings\InstanceSettings;
 use OCP\Files\File;
-use OCP\IAppConfig;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -22,7 +20,7 @@ use Psr\Log\LoggerInterface;
  * The `link`/`sync` axis is not about which way edits flow — §6.1 already
  * settled that content is one-way forever. It is about **weight**:
  *
- *     link  — a small JSON pointer. `export-binfile` is never called for it.
+ *     link  — nothing at all: zero bytes. `export-binfile` is never called.
  *     sync  — the real archive, exported from Penpot and stored.
  *
  * A `sync` file is a backup **and** a link, never one at the expense of the
@@ -32,11 +30,11 @@ use Psr\Log\LoggerInterface;
  * ## WHY THIS IS ITS OWN SERVICE
  *
  * Two callers need the same two answers, and they are not the same caller:
- * {@see PullService} writes bodies while walking a team, and the per-file mode
- * change ({@see \OCA\PenpotSync\Command\SetMode}) writes exactly one on demand.
- * Left in the pull, the mode command would have to reach into it or duplicate
- * the JSON shape — and a link body that differs by which code path wrote it is
- * the kind of drift that only shows up as a support question.
+ * {@see PullService} sets a file's content while walking a team, and the
+ * per-file mode change ({@see \OCA\PenpotSync\Command\SetMode}) sets exactly one
+ * on demand. Keeping "what is a link" and "what is an archive" in one place is
+ * what stopped the two paths from disagreeing about it — and is why flipping a
+ * link from a JSON body to zero bytes (§C6.6) was a one-method change.
  *
  * ## THE DEMOTION IS THE ONLY LOSSY OPERATION IN THIS APP
  *
@@ -49,20 +47,19 @@ use Psr\Log\LoggerInterface;
  */
 final class ArchiveService {
 	/**
-	 * The ZIP local-file-header magic — how we tell a stored archive from a
-	 * stored pointer without trusting the metadata stamp.
+	 * The ZIP local-file-header magic — how we tell a stored archive from an
+	 * empty `link` without trusting the metadata stamp.
 	 *
-	 * The stamp and the bytes CAN disagree: an export that failed halfway
-	 * through a promotion leaves a file stamped `sync` holding a link body. That
-	 * is a state the next pull must notice and repair, which it can only do by
-	 * looking (saga §6.18 rule 3 — a remote failure never rewrites local state,
-	 * so the stale body stays until a later export succeeds).
+	 * The stamp and the bytes CAN disagree: an export that failed halfway through
+	 * a promotion leaves a file stamped `sync` holding nothing. That is a state
+	 * the next pull must notice and repair, which it can only do by looking (saga
+	 * §6.18 rule 3 — a remote failure never rewrites local state, so the empty
+	 * file stays until a later export succeeds).
 	 */
 	private const ZIP_MAGIC = "PK\x03\x04";
 
 	public function __construct(
 		private readonly PenpotClient $client,
-		private readonly IAppConfig $config,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -132,31 +129,54 @@ final class ArchiveService {
 	}
 
 	/**
-	 * Store the `link` pointer body — a small JSON reference, no design data.
+	 * Make this mirror a `link`: **zero bytes**. Penpot is never contacted.
 	 *
-	 * Penpot is never contacted. Called for every `link` file on every pull (it
-	 * is cheap and keeps the pointer's `revn` honest), and once by a demotion,
-	 * where it is what actually deletes the archive.
+	 * Called for every `link` file on every pull, and once by a demotion, where
+	 * it is what actually deletes the archive.
 	 *
-	 * NO DEEP-LINK URL IS FABRICATED. The body carries the ids and the instance
-	 * base; the exact workspace route is confirmed live with the Files-app
-	 * surface that needs it, not guessed here.
+	 * ## WHY A LINK HOLDS NOTHING AT ALL (saga §C6.6)
+	 *
+	 * It used to hold a small JSON pointer naming the ids and the instance base.
+	 * That body was written before the metadata keys had a consumer, and once
+	 * `penpot_id` / `penpot_revision` / `penpot_mode` ride the file's own
+	 * metadata — server-side, over DAV, and indexed — the body was a **second
+	 * copy of facts already recorded elsewhere**. Two copies of a fact drift; the
+	 * only question is when. The body even split the drift signal back into its
+	 * two halves, which this class's own {@see signal()} docblock warned was
+	 * exactly how the two would diverge.
+	 *
+	 * ## AND NOT AN EMPTY ARCHIVE, WHICH WOULD BE WORSE THAN EITHER
+	 *
+	 * A ZIP containing a metadata entry begins with the same `PK\x03\x04` magic a
+	 * real export does, so {@see holdsArchive()} could not tell them apart. That
+	 * would quietly disable the prune's grace-window rescue (a doomed pointer
+	 * would look like it already held its backup and be trashed without one),
+	 * make a demotion demand confirmation to delete an archive that does not
+	 * exist, and report `archive` in `occ penpot_sync:status`. Zero bytes is the
+	 * one representation that CANNOT be mistaken for an export.
+	 *
+	 * ## THE BYTES STAY AUTHORITATIVE — THIS STRENGTHENS THAT, NOT WEAKENS IT
+	 *
+	 * The mode stamp says what a file is *supposed* to hold; only the bytes say
+	 * what it does, which is what lets the pull self-heal a promotion whose
+	 * export died halfway (§6.18 rule 3). An empty file fails
+	 * {@see holdsArchive()} on the size check before it ever reads a byte, so
+	 * "no content" is now unambiguous rather than inferred from a body we wrote.
+	 *
+	 * ## IDEMPOTENT ON PURPOSE
+	 *
+	 * The old body was rewritten on every pull to keep its `revn` current. There
+	 * is nothing left to keep current, and rewriting an already-empty file would
+	 * still move its mtime and etag — which makes every desktop client re-sync
+	 * every `link` file after every pull. So an empty file is left strictly
+	 * alone.
 	 */
-	public function storeLink(File $node, string $penpotId, string $name, string $revn, string $modifiedAt, string $teamId): void {
-		$payload = [
-			'penpot' => 'reference/v1',
-			'id' => $penpotId,
-			'name' => $name,
-			'revn' => $revn,
-			'modified_at' => $modifiedAt,
-			'team_id' => $teamId,
-			'instance_url' => $this->config->getValueString(Application::APP_ID, InstanceSettings::KEY_URL, ''),
-		];
+	public function storeLink(File $node): void {
+		if ($node->getSize() === 0) {
+			return;
+		}
 
-		// JSON_THROW_ON_ERROR, not a silent (string) cast: json_encode can return
-		// false (e.g. malformed UTF-8 in a file name), and writing an empty body
-		// would be a silently corrupt mirror file. Matches PenpotClient's encoding.
-		$node->putContent(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+		$node->putContent('');
 	}
 
 	/**
@@ -164,14 +184,14 @@ final class ArchiveService {
 	 *
 	 * `revn` alone cannot tell "same revn, newer modified-at" apart, which the
 	 * scheduled pull needs (saga §5.5), so the stamp is the two joined. Callers
-	 * compare it whole and never parse it — with one exception: the pointer body
-	 * has a separate field for each half, so a demotion writing a pointer from a
-	 * stamp has to take it apart again.
+	 * compare it whole and **never parse it** — there is no longer any exception.
 	 *
-	 * Joining in one file and splitting in another is how the two drift, and a
-	 * pointer reading `"revn": "5@1785203299480", "modified_at": ""` is wrong in
-	 * a way nothing would fail on — so both halves live here, next to the only
-	 * consumer that cares.
+	 * There used to be one: the JSON pointer body kept the two halves in separate
+	 * fields, so a demotion had to take the signal back apart to write it, and
+	 * this docblock warned that "joining in one file and splitting in another is
+	 * how the two drift." A `link` holds no body now (§C6.6), so the splitter is
+	 * gone and the signal is opaque everywhere — the drift it warned about is
+	 * structurally impossible rather than merely documented.
 	 */
 	public static function signal(string $revn, string $modifiedAt): string {
 		if ($modifiedAt === '') {
@@ -179,23 +199,5 @@ final class ArchiveService {
 		}
 
 		return $revn . '@' . $modifiedAt;
-	}
-
-	/**
-	 * Take a stamped signal back apart into `[revn, modifiedAt]`.
-	 *
-	 * A signal with no `@` is a bare revn (that is what {@see signal()} writes
-	 * when Penpot gave us no modified-at), so the second half is legitimately
-	 * empty rather than missing.
-	 *
-	 * @return array{0: string, 1: string}
-	 */
-	public static function splitSignal(string $signal): array {
-		$at = strpos($signal, '@');
-		if ($at === false) {
-			return [$signal, ''];
-		}
-
-		return [substr($signal, 0, $at), substr($signal, $at + 1)];
 	}
 }

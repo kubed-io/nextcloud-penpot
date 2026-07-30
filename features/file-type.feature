@@ -48,7 +48,30 @@
 # them among ordinary folders — which matters under free nesting, where position
 # alone no longer tells you what a folder is.
 #
-# @todo — no lib/Service/ exists yet.
+# BUILD STATE, corrected at C6.1 (the old note read "no lib/Service/ exists yet",
+# which has been false since Course 3):
+#
+#   BUILT — the metadata keys, all five, written by the pull and advertised over
+#   DAV at `{nc:}metadata-<key>` with the indexed ones queryable (Course 3). The
+#   mapping-is-derived-from-folders rule, via MembershipResolver. The read-only
+#   guarantee: every key is registered EDIT_FORBIDDEN, so PROPPATCH is refused by
+#   core, not by us.
+#
+#   BUILT AT C6.1 — the custom mimetype and icon. `application/vnd.penpot`, with
+#   no structured suffix: `+json` would be a lie for a `sync` mirror (a real ZIP)
+#   and `+zip` for a `link` one (a JSON pointer), and `+zip` is the worse lie
+#   because it invites a client to unpack a pointer. Registered by
+#   lib/Migration/RegisterMimetype.php on every install/upgrade, reverted on
+#   uninstall (uninstall.feature).
+#
+#   NOT BUILT — the project folder's visible system TAG (§6.32). The folder
+#   metadata is written; the human-visible pill is still Course 6 work. The
+#   fourth scenario below asserts both halves and only the metadata half holds.
+#
+# @todo — the scenarios are all DAV/mimetype assertions and the integration
+# harness is occ-only. The mimetype registration in particular is UNASSERTED IN
+# CI right now: a repair step that silently failed to merge the config would look
+# exactly like one that worked. Named here so it is not assumed to be covered.
 
 @todo
 Feature: A mirrored Penpot file is a first-class file type

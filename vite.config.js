@@ -12,13 +12,10 @@
  * instead, same as the sibling apps.
  *
  * Output: `dist/penpot_sync-files.js` (single self-contained file, no chunks).
- * Intended to be loaded via `Util::addScript('penpot_sync',
- * '../dist/penpot_sync-files', 'files')` once a Files-row listener exists
- * (Chapter 2+) so NC's loader walks out of `js/` and into `dist/`. All
+ * Loaded by `Listener\LoadFilesScriptListener` via `Util::addScript('penpot_sync',
+ * '../dist/penpot_sync-files')` — NC's loader appends `js/<file>.js` to the app
+ * root, so the `../dist/` prefix walks back out of `js/` and into `dist/`. All
  * generated artefacts stay under `dist/` (gitignored).
- *
- * NOTE: `src/files.js` does not exist yet in this pre-code skeleton — this
- * config is here so the build tooling is wired up ahead of that code landing.
  */
 import { defineConfig } from 'vite'
 

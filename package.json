@@ -11,10 +11,10 @@
     "watch": "vite --mode development build --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "test:watch": "vitest"
   },
-  "comment": "No src/ yet \u2014 the JS frontend (Files row action + Open in Penpot) lands with the file-type slice, mirroring nextcloud-grafana's src/files.js. The @nextcloud/* runtime deps are declared ahead of it so the lockfile and CI cache are stable.",
+  "comment": "src/files.js registers ONE file action, \"Open in Penpot\", and deliberately no text-editor opener \u2014 a .penpot archive has no coherent hand-edit (saga \u00a76.1). That omission is why this frontend is a fraction of the size of nextcloud-grafana's.",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",

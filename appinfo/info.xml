@@ -90,9 +90,23 @@ this app integrates with.
     <command>OCA\PenpotSync\Command\Status</command>
     <command>OCA\PenpotSync\Command\SetMode</command>
   </commands>
-  <!--
-    No <repair-steps> yet — the custom .penpot mimetype registration
-    (OCA\PenpotSync\Migration\RegisterMimetype) belongs to the file-type slice.
-    Don't fabricate class references ahead of the code.
-  -->
+  <repair-steps>
+    <!--
+      Installs the application/vnd.penpot mimetype + icon mapping on every
+      install/upgrade. Idempotent; see lib/Migration/RegisterMimetype.php.
+    -->
+    <install>
+      <step>OCA\PenpotSync\Migration\RegisterMimetype</step>
+    </install>
+    <post-migration>
+      <step>OCA\PenpotSync\Migration\RegisterMimetype</step>
+    </post-migration>
+    <uninstall>
+      <!-- Mirror image of RegisterMimetype: reverts the core-tree mimetype/icon
+           registration so removing the app leaves core as it found it. Never
+           touches the user's .penpot files, their metadata, or Penpot.
+           See lib/Migration/UnregisterMimetype.php + uninstall.feature. -->
+      <step>OCA\PenpotSync\Migration\UnregisterMimetype</step>
+    </uninstall>
+  </repair-steps>
 </info>

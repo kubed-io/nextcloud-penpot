@@ -197,9 +197,11 @@ final class PullServiceTest extends TestCase {
 		$this->givenOneFile(Mapping::MODE_SYNC, stampedMode: Mapping::MODE_SYNC, stored: '5@t1', holdsArchive: true);
 
 		$this->archives->expects($this->never())->method('storeArchive');
-		// The pointer body is NOT rewritten over a stored archive either — that
-		// would delete the backup on every pull, which is the exact accident this
-		// ordering exists to prevent.
+		// storeLink() is NOT called over a stored archive either — since §C6.6 it
+		// empties the file, so calling it here would delete the backup on every
+		// pull. That is the exact accident this ordering exists to prevent, and
+		// the stakes went UP when a link stopped being a body and became a
+		// truncation.
 		$this->archives->expects($this->never())->method('storeLink');
 
 		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));

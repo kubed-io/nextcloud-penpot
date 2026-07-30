@@ -92,6 +92,7 @@ final class Status extends Command {
 			// pull self-heals. Printing both is what makes that visible instead of
 			// something you infer from a byte count.
 			$output->writeln(sprintf('Content: %s (%d bytes)', $this->describe($node), $node->getSize()));
+			$output->writeln('penpot_team_id: ' . ($file?->teamId ?? ''));
 		} elseif ($node instanceof Folder) {
 			$markers = $this->metadata->readFolder($node->getId());
 			$output->writeln('penpot_project_id: ' . $markers->projectId);
@@ -105,6 +106,27 @@ final class Status extends Command {
 			$membership->teamId ?? '',
 			$membership->projectId ?? '',
 		));
+
+		// THE FOLDER WALK VERIFIES THE STAMP (§C6.7). `penpot_team_id` is cached on
+		// the file because the browser cannot afford to walk a freely-nested tree
+		// to build a deep link — but a cache with no way to check it is just a
+		// rumour. The resolver is the authority, so where the two disagree, say so
+		// here rather than let a link quietly open the wrong team's workspace.
+		//
+		// Only a MISMATCH is reported, and only when the walk actually found a
+		// team: a file resolving to no team is the *unmapped* state, where the
+		// stamp is the last surviving record of where the design lives and is
+		// therefore right to differ.
+		if ($node instanceof File
+			&& $membership->teamId !== null
+			&& ($file?->teamId ?? '') !== ''
+			&& $file->teamId !== $membership->teamId) {
+			$output->writeln(sprintf(
+				'<comment>Team mismatch: stamped %s, folders say %s. The next pull re-stamps it.</comment>',
+				$file->teamId,
+				$membership->teamId,
+			));
+		}
 
 		return 0;
 	}

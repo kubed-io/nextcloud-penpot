@@ -13,7 +13,6 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCP\Files\File;
-use OCP\IAppConfig;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -37,24 +36,31 @@ final class ArchiveServiceTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->client = $this->createMock(PenpotClient::class);
-		$config = $this->createStub(IAppConfig::class);
-		$config->method('getValueString')->willReturn('https://penpot.example.com');
-
-		$this->archives = new ArchiveService($this->client, $config, new NullLogger());
+		$this->archives = new ArchiveService($this->client, new NullLogger());
 	}
 
-	// ── telling an archive from a pointer ───────────────────────────────────
+	// ── telling an archive from a link ──────────────────────────────────────
 
 	public function testRecognisesARealArchiveByItsMagicBytes(): void {
 		self::assertTrue($this->archives->holdsArchive($this->fileHolding(self::ZIP . 'and then the rest')));
 	}
 
 	/**
-	 * A `link` body is JSON, so it fails the magic check — which is the point:
-	 * this is how a file stamped `sync` but holding a pointer gets noticed and
-	 * healed by the next pull.
+	 * A `link` is empty, so it fails the magic check on SIZE before a byte is
+	 * read — which is the point: this is how a file stamped `sync` but holding no
+	 * archive gets noticed and healed by the next pull.
 	 */
-	public function testAPointerBodyIsNotAnArchive(): void {
+	public function testAnEmptyLinkIsNotAnArchive(): void {
+		self::assertFalse($this->archives->holdsArchive($this->fileHolding('')));
+	}
+
+	/**
+	 * A legacy JSON pointer body, written by a version before §C6.6, is not an
+	 * archive either. Kept as its own case because such files exist in the wild
+	 * until their next pull truncates them, and every guard that protects a real
+	 * archive has to keep treating them as "no bytes".
+	 */
+	public function testALegacyPointerBodyIsNotAnArchive(): void {
 		self::assertFalse($this->archives->holdsArchive($this->fileHolding('{"penpot":"reference/v1"}')));
 	}
 
@@ -113,45 +119,73 @@ final class ArchiveServiceTest extends TestCase {
 		$this->archives->storeArchive($file, 'file-1');
 	}
 
-	/** The pointer body carries the ids and the instance base — and no design data. */
-	public function testThePointerBodyCarriesTheIdsAndNoContent(): void {
+	/**
+	 * A `link` is emptied, not described. This is the assertion that stops anyone
+	 * reintroducing a body: whatever the file held, it holds nothing afterwards.
+	 */
+	public function testStoringALinkEmptiesTheFile(): void {
 		$written = null;
 		$file = $this->createMock(File::class);
+		$file->method('getSize')->willReturn(1_964_389);
 		$file->method('putContent')->willReturnCallback(static function (string $body) use (&$written): void {
 			$written = $body;
 		});
 
-		$this->archives->storeLink($file, 'file-1', 'Login', '5', 't1', 'team-9');
+		$this->archives->storeLink($file);
 
-		$payload = json_decode((string)$written, true);
-		self::assertSame('reference/v1', $payload['penpot']);
-		self::assertSame('file-1', $payload['id']);
-		// The Penpot name, WITHOUT the Nextcloud-side `.penpot` extension (§6.4).
-		self::assertSame('Login', $payload['name']);
-		self::assertSame('team-9', $payload['team_id']);
-		self::assertSame('https://penpot.example.com', $payload['instance_url']);
-	}
-
-	/** Writing a pointer never contacts Penpot — that is what makes demotion free. */
-	public function testWritingAPointerNeverContactsPenpot(): void {
-		$this->client->expects($this->never())->method('exportBinfile');
-
-		$this->archives->storeLink($this->createMock(File::class), 'file-1', 'Login', '5', 't1', 'team-9');
+		self::assertSame('', $written);
 	}
 
 	/**
-	 * THE SIGNAL MUST SURVIVE A ROUND TRIP, because a demotion writes a pointer
-	 * from a stamp and the pointer keeps the two halves apart. The pull joins,
-	 * the demotion splits, and when those two lived in different files they
-	 * disagreed: `revn` got the whole `5@t1` and `modified_at` got nothing —
-	 * a wrong pointer that nothing downstream would have failed on.
+	 * A legacy JSON body is truncated on contact — which is the entire migration
+	 * story for files written before §C6.6. No repair step, no version check: the
+	 * next pull calls storeLink() on every `link` and the body is gone.
+	 */
+	public function testALegacyPointerBodyIsTruncated(): void {
+		$file = $this->createMock(File::class);
+		$file->method('getSize')->willReturn(220);
+		$file->expects($this->once())->method('putContent')->with('');
+
+		$this->archives->storeLink($file);
+	}
+
+	/**
+	 * AN ALREADY-EMPTY LINK IS LEFT STRICTLY ALONE. Rewriting it would be a no-op
+	 * in content and a very real one in metadata: putContent moves the mtime and
+	 * etag, so every desktop client would re-download every `link` file after
+	 * every pull. The pull calls this once per link per pass, so this guard is
+	 * the difference between a quiet sync and a recurring storm.
+	 */
+	public function testAnAlreadyEmptyLinkIsNotRewritten(): void {
+		$file = $this->createMock(File::class);
+		$file->method('getSize')->willReturn(0);
+		$file->expects($this->never())->method('putContent');
+
+		$this->archives->storeLink($file);
+	}
+
+	/** Emptying a file never contacts Penpot — that is what makes demotion free. */
+	public function testWritingALinkNeverContactsPenpot(): void {
+		$this->client->expects($this->never())->method('exportBinfile');
+
+		$file = $this->createMock(File::class);
+		$file->method('getSize')->willReturn(99);
+
+		$this->archives->storeLink($file);
+	}
+
+	/**
+	 * The signal is JOINED HERE AND NEVER TAKEN APART. It used to have a splitter,
+	 * because the JSON pointer body kept the two halves in separate fields — and
+	 * that pairing was a live drift hazard the class documented against itself.
+	 * §C6.6 deleted the body and the splitter with it, so this now pins one
+	 * direction only: callers compare the signal whole.
 	 *
 	 * @param array{0: string, 1: string} $parts
 	 */
 	#[\PHPUnit\Framework\Attributes\DataProvider('signals')]
-	public function testTheRevisionSignalSurvivesARoundTrip(array $parts, string $joined): void {
+	public function testTheRevisionSignalIsJoinedIntoOneOpaqueString(array $parts, string $joined): void {
 		self::assertSame($joined, ArchiveService::signal($parts[0], $parts[1]));
-		self::assertSame($parts, ArchiveService::splitSignal($joined));
 	}
 
 	/** @return array<string, array{0: array{0: string, 1: string}, 1: string}> */
@@ -162,8 +196,8 @@ final class ArchiveServiceTest extends TestCase {
 			// signal then, and must not come back as a revn of "".
 			'no modified-at' => [['5', ''], '5'],
 			'never stamped' => [['', ''], ''],
-			// Penpot's timestamps are opaque to us — splitting on the FIRST `@`
-			// keeps a value containing one from eating the revn.
+			// Penpot's timestamps are opaque to us, and the signal is never
+			// parsed, so an @ inside one is simply carried.
 			'an at-sign in the timestamp' => [['5', 't1@x'], '5@t1@x'],
 		];
 	}

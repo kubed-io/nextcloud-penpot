@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-FileCopyrightText: 2026 kubed-io
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  Filetype icon for application/vnd.penpot (.penpot files).
+  RegisterMimetype copies this exact file into core/img/filetypes/penpot.svg,
+  where Nextcloud's GenerateMimetypeFileBuilder enumerates it, so it shows on
+  every .penpot row in the Files app.
+
+  THE MARK: a pen pot — three pen tips standing in a container. That is what
+  Penpot's own logo depicts (the name is the joke), so this reads as "Penpot"
+  instead of as a generic file. An earlier version here was an artboard with a
+  dot, which was both unrecognisable and shapeless at row size.
+
+  Drawn as FILLED paths, never strokes. Nextcloud paints icons by setting a
+  fill, so a stroke-and-fill:none drawing collapses into a solid block the
+  moment any surface applies its own fill — which is exactly what happened to
+  the first cut of the menu variant. Shapes are separated by GAPS in the
+  geometry, not by a second colour, so the mark survives being recoloured
+  wholesale.
+
+  THE FILL IS HARDCODED, and this file is NOT the menu icon. NC renders mimetype
+  icons as-is out of core/img/filetypes/ and never recolours them, so a
+  currentColor mark would be invisible here. The context-menu glyph is
+  img/icons/penpot.svg — same geometry, currentColor.
+
+  An original mark, not a copy of Penpot's logo artwork: "Penpot" and its logo
+  are trademarks of Kaleidos Ventures SL, and this community integration is not
+  affiliated with, endorsed by, or sponsored by Penpot. The pen-pot motif is
+  used to identify the service this app integrates with.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <g fill="#5b4bd6">
+    <path d="M5.4 11.5V7.2L7.2 3l1.8 4.2v4.3z"/>
+    <path d="M10.2 11.5V7.2L12 3l1.8 4.2v4.3z"/>
+    <path d="M15 11.5V7.2L16.8 3l1.8 4.2v4.3z"/>
+    <path d="M3.4 10.2h17.2l-1.85 9.6a1 1 0 0 1-.98.8H6.23a1 1 0 0 1-.98-.8z"/>
+  </g>
+</svg>

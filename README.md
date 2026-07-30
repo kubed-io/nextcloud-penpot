@@ -35,8 +35,8 @@ folder tree you can organise however you like.
 >   real via `move-files`.
 > - **`sync` mode — real archives.** `occ penpot_sync:set-mode <path> sync`
 >   exports a design from Penpot and stores the actual `.penpot` ZIP in
->   Nextcloud; `… link` puts the lightweight pointer back (after confirming, as
->   that deletes a local backup). A pull re-exports a `sync` file only when its
+>   Nextcloud; `… link` empties the file again (after confirming, as that
+>   deletes a local backup). A pull re-exports a `sync` file only when its
 >   Penpot revision moved or its archive went missing, so **a team of links
 >   costs zero exports.**
 > - **The prune, with a parachute.** A design deleted in Penpot no longer leaves
@@ -90,7 +90,7 @@ Every mirrored file is one of two things, and you choose per file:
 
 | Mode | What it is | What it costs |
 |---|---|---|
-| **`link`** *(default)* | A pointer to the live design. Opens in Penpot. | Nothing — never exports |
+| **`link`** *(default)* | An empty file that points at the live design. Opens in Penpot. | Nothing — never exports, stores no bytes |
 | **`sync`** *(opt-in)* | A real, downloaded `.penpot` archive you can open offline | One export whenever the design changes |
 
 **Neither mode ever pushes design content to Penpot.** In the sibling apps for
@@ -571,6 +571,35 @@ generic archives, and expose their state over WebDAV:
 Folders carry `penpot_project_id` / `penpot_team_id` the same way. All of it is
 read-only over DAV — the sync engine owns these properties.
 
+The mimetype is `application/vnd.penpot`, and it carries no `+json` / `+zip`
+suffix on purpose: a `sync` mirror really is a ZIP archive while a `link` mirror
+holds nothing at all, so either suffix would be wrong for half your files.
+Removing the app reverts the registration and leaves Nextcloud as it found it.
+
+**A `link` file is empty — zero bytes.** Everything that identifies it (the
+design id, the revision it reflects, its mode) lives in the metadata above, so a
+body would only be a second copy of the same facts, free to drift from the first.
+It is deliberately *not* a small placeholder archive either: that would be
+indistinguishable from a real export, which is how you end up trusting a backup
+that was never taken. `occ penpot_sync:status` tells you which a file is.
+
+### Opening a design
+
+Clicking a mirrored `.penpot` file opens the live design in Penpot. That is the
+only opener it gets — unlike this app's siblings for n8n and Grafana, there is no
+"edit as text" action, in any mode, for any file. A `.penpot` archive is opaque
+nested design data; there is nothing coherent to hand-edit and no way to
+re-import it if there were.
+
+`sync` and `link` files open **identically**. The mode decides whether the
+archive is stored on your Nextcloud, never whether the design can be opened.
+
+The link is built from the design id the file already carries, so it keeps
+working after you rename the file or drag it somewhere else — including out of
+its mapped folder entirely. The one case where the action disappears is a file
+whose design was deleted in Penpot: that id is permanently dead, so the app hides
+the action rather than send you to a 404.
+
 ---
 
 ## Administration
@@ -644,11 +673,15 @@ Covered by unit tests and by Behat scenarios that install the app on a real
 Nextcloud and drive the CLI against a real Penpot — including an export asserted
 to land real ZIP bytes on disk.
 
-**Not implemented:** the Files-app frontend (there is no `src/` yet), the
-groupfolders Team Folder backend, creating designs from Nextcloud, the ignore
-and restore actions, adopting a mirror back out of the Nextcloud trash, and
-every remaining write-back path. The scheduled pull is configurable but does not
-yet run.
+The Files-app surface has opened: a mirrored design carries its own file type and
+icon, and **"Open in Penpot"** is the default click — a deep link built from the
+id the file already carries, so it survives being renamed and moved. It is the
+only opener a `.penpot` file gets; there is deliberately no "edit as text".
+
+**Not implemented:** creating designs from Nextcloud, the ignore and restore
+actions, the mode pills, refusing to download a `link` file as though it were an
+archive, adopting a mirror back out of the Nextcloud trash, and personal
+projects. The scheduled pull is configurable but does not yet run.
 
 **The [`saga/`](saga/) is the authoritative "where are we" record**, ahead of
 this README and the feature files.

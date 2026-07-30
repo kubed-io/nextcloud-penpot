@@ -140,7 +140,12 @@ final class MotionService {
 			return false;
 		}
 
-		$to = $this->destinationProject($target);
+		// ONE resolver walk, used twice: the project decides whether to push, and
+		// the team decides whether the file's cached `penpot_team_id` still tells
+		// the truth (§C6.7).
+		$membership = $this->resolver->resolve($target);
+
+		$to = $this->destinationProject($membership);
 		if ($to === null) {
 			// Landed outside every mapped folder, or in a team whose Drafts we
 			// could not resolve. Penpot keeps the file where it is: unmapping is
@@ -167,18 +172,42 @@ final class MotionService {
 			'fromProject' => $from,
 			'toProject' => $to,
 		]);
+
+		// RE-STAMP THE TEAM, but only now — after Penpot accepted the move.
+		//
+		// With two teams mapped to two folders, dragging a mirror from one tree to
+		// the other really does change which Penpot team owns the design, and the
+		// `penpot_team_id` cached on the file would otherwise keep naming the old
+		// one until the next pull. That stamp is what the workspace deep link is
+		// built from (§C6.7), so a stale one is a link that opens the wrong team's
+		// workspace — the exact failure this key was added to fix.
+		//
+		// The resolver is the authority for which team a node now sits under; the
+		// stamp is only a copy the browser can reach without walking the tree. So
+		// the resolver writes it, here and in the pull, and nowhere else.
+		//
+		// AFTER the call, never before: a `moveFiles` that throws leaves the design
+		// in its old team, and a stamp written first would describe a move that did
+		// not happen (§6.18 rule 3).
+		if ($membership->teamId !== null && $membership->teamId !== $meta->teamId) {
+			$this->metadata->writeFile($target->getId(), [PenpotMetadata::KEY_TEAM_ID => $membership->teamId]);
+		}
+
 		return true;
 	}
 
 	/**
-	 * The Penpot project the node now belongs to, or null when it belongs to none.
+	 * The Penpot project a resolved membership points at, or null for none.
 	 *
 	 * A resolved project id is used as-is. A team with no project above the node
 	 * is Penpot's Drafts (§6.35), which IS a real project — the team's default
 	 * one — so it is looked up rather than treated as "no project".
+	 *
+	 * Takes the resolved {@see Membership} rather than the node, so the caller
+	 * that also needs the destination TEAM (to verify the file's cached
+	 * `penpot_team_id`, §C6.7) can walk the tree once instead of twice.
 	 */
-	private function destinationProject(Node $node): ?string {
-		$membership = $this->resolver->resolve($node);
+	private function destinationProject(Membership $membership): ?string {
 		if ($membership->projectId !== null) {
 			return $membership->projectId;
 		}
@@ -206,7 +235,7 @@ final class MotionService {
 			return null;
 		}
 
-		return $this->destinationProject($parent);
+		return $this->destinationProject($this->resolver->resolve($parent));
 	}
 
 	/**

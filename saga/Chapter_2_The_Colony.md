@@ -139,8 +139,8 @@ that makes a Penpot team appear in Nextcloud.
 | **The pull** | 🟢 | `get-teams` → `get-all-projects` → `get-project-files`. **1 + P calls per team, zero exports** for an unchanged instance (§5.5) — this is what makes it scale to many files or few. Reconciles both ways as of C5.1: it adds what appeared and prunes what vanished. |
 | **Drafts as a state, never a folder** | 🔴 | §6.35. Files at team root are in Drafts. No `Drafts` folder is ever created. |
 | **Project folders + visible tag** | 🟡 | Project id as metadata, plus the human-visible pill (§6.32) — under free nesting, position no longer tells you. |
-| **`link` files** | 🟡 | The default. A pointer with `penpot_id` + metadata, deep-linking to the live design. **Never calls `export-binfile`.** |
-| **Custom mimetype + Penpot icon** | 🟢 | `.penpot` (§6.4). |
+| **`link` files** | 🟡 | The default. **Zero bytes** as of C6.6 — the identity lives entirely on the file's metadata, which is what the deep link is built from. **Never calls `export-binfile`.** |
+| **Custom mimetype + Penpot icon** | 🟢 | `.penpot` (§6.4). Built in C6.3 as `application/vnd.penpot` — no structured suffix, because `+json` lies for a `sync` mirror and `+zip` for a `link` one. |
 | **`occ penpot_sync:sync pull`** | 🟢 | |
 
 **Deferred into this course's own edges, decided when the code exists:** the
@@ -184,7 +184,7 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **Open in Penpot** | 🟢 | Deep link built from the carried `penpot_id` — zero extra lookup. |
+| **Open in Penpot** | 🟢 | **Built (C6.1), fixed (C6.7).** `<base>/#/workspace?team-id=<team>&file-id=<id>` — **both required**; the `file-id`-only form C6.1 shipped returns an internal error. Both ids ride the directory PROPFIND, so the click costs no lookup. Confirmed by opening one. |
 | **Mode pills** | 🟢 | `penpot:sync` / `penpot:link`, app-maintained, mutually exclusive. |
 | **"+ New" → design** | 🟡 | §6.33: scoped to where it is unambiguous; lands in Drafts otherwise. **#27 settled in C4.8** — `create-file` is now called live by the integration fixture; `projectId` and `project-id` are both honoured. |
 | **Notifications** | 🟢 | Pull results, skipped objects, divergences. |
@@ -454,6 +454,14 @@ workspace route has **not** been called live, and Chapter 1's whole method is
 and the instance base URL and stops there; the browser deep-link is Course 4's,
 built against a running Penpot. Writing a plausible `/#/workspace/…` now would be
 the exact guess this saga exists to refuse.
+
+> **Answered in Course 6 (see C6.1):** the route was read off a live instance's
+> own route table, and it is `/#/workspace?file-id=…` — a **query** parameter,
+> not the path segment this section was on the verge of inventing. The plausible
+> guess was the wrong one, and the shape it would have produced still resolves
+> today as a *legacy* route, so it would have worked well enough to look correct
+> and quietly failed on the one case that matters (a mirror moved out of its
+> project folder). Left as written, because that near-miss is the argument.
 
 ### C3.5 — What this slice deliberately does not do
 
@@ -904,3 +912,313 @@ a human restored it in Penpot's own UI — is currently re-created beside its
 trashed mirror instead of being matched to it by `penpot_id`. That needs
 `files_trashbin` as an optional dependency and is its own slice; nothing here
 hard-deletes, so the cost of the gap is a duplicate, not a loss.
+
+---
+
+## Course 6 — where the town square stands
+
+### C6.1 — The route was read, not reasoned about
+
+Course 3 wrote a `link` pointer that carried ids and an instance URL and
+deliberately stopped short of a deep link, because *"Penpot's workspace route has
+not been called live"* (C3.4). That refusal is the only reason this slice is
+short: the work was not designing a URL, it was **asking the instance what its
+URLs are** and then writing down the answer.
+
+The instance answers in its own compiled route table, served at `js/main.js`:
+
+```
+["/workspace",                       :workspace]
+["/workspace/:project-id/:file-id",  :workspace-legacy]
+```
+
+and its router resolves a route as `(match->path (match-by-name router id)
+params)` — `match-by-name` is handed **no** path params, so everything reitit
+receives lands in the **query string**. The `:workspace` route has no path
+segments at all. Two call sites in the dashboard bundle navigate with `file-id`
+alone; others add `page-id`. So:
+
+```
+<base>/#/workspace?file-id=<penpot_id>
+```
+
+> **⚠️ THE SECOND HALF OF THIS SECTION WAS WRONG, AND SHIPPED.** What follows the
+> route table below was corrected in **§C6.7** after the link was clicked and
+> returned an internal error. The route table is right; the conclusion drawn
+> about its *parameters* was not. Left standing, with the refutation inline,
+> because how it was gotten wrong is the useful part.
+
+~~**The guess C3.4 refused was the wrong one, and it would not have looked
+wrong.**~~ The obvious invention was `/#/workspace/<project-id>/<file-id>` — and
+that route still exists and still resolves, as `:workspace-legacy`. ~~It fails on
+exactly one case: a mirror **moved out of its project folder** is *unmapped* and
+has no ancestor carrying a project id.~~
+
+~~The current route needs **only the id the file itself carries**, which is why
+the deep link now survives every move.~~ **It does not.** It needs `team-id` as
+well, and without one Penpot errors out. §C6.7 has the correction and the
+evidence — including the fact that `:workspace-legacy` exists precisely *because*
+the modern route cannot work from a project id alone.
+
+**`page-id` is deliberately omitted, and this part held up.** Confirmed live: a
+URL carrying only `team-id` and `file-id` opens the design at its first page.
+Penpot's own legacy redirect passes `page-id` through as nil when the legacy URL
+had none, so the workspace has always had to cope without one. A mirror does not
+know which page a user wants, and inventing one would be the same class of
+mistake one level down.
+
+### C6.2 — One action, and the absence is the feature
+
+Both siblings register two openers: theirs, and "Open with text editor" as a
+default click for whichever modes hold editable JSON. This app registers **one**,
+in every mode, for every file, forever (§6.1). A `.penpot` archive is an opaque
+ZIP of nested design-shape JSON: there is no coherent hand-edit and no way to
+re-import one if there were, so a text editor would be offering a round-trip that
+does not exist.
+
+That single omission is why `src/files.js` is a third the size of its siblings' —
+no editor modal, no save path, no injected stylesheet, no `NodeWrittenEvent`, no
+priority fight between two openers over which one wins a click. **The read-only
+architecture is not being worked around here. It is why the surface is this
+small.**
+
+**And the mode axis does not gate the opener**, which is the sharp break from
+both siblings and the thing most likely to be "fixed" by someone porting their
+code. Their modes change what a click *means*. Here `sync` and `link` differ only
+in whether the archive is stored locally (§6.22); both carry the same `penpot_id`
+and both point at the same live design. What *does* gate the action is having a
+design to open at all: `unmapped` means the id is real but its Penpot original is
+gone, and a deleted design never returns at its old id (§6.20), so the action
+hides rather than follow a link it knows is dead.
+
+### C6.3 — A mimetype that refuses to claim a structure
+
+`.penpot` is a real, Penpot-specific, **single-token** extension — the one clean
+win over both siblings' compound `.n8n.json` / `.grafana.json` (§6.4). But Penpot
+serves an export as plain `application/zip`, so there is no branded type to
+inherit, and a search turns up no registered mimetype for the format. We pick
+one.
+
+We picked `application/vnd.penpot`, **with no structured suffix**, and the reason
+is the `sync`/`link` axis. A `sync` mirror holds a real ZIP; a `link` mirror holds
+a small JSON pointer. `+json` is a lie for half our files and `+zip` for the
+other half — and `+zip` is the *worse* lie, because it actively invites a client
+to try to unpack a pointer. So the type claims only what is true of every
+`.penpot` row: that it is Penpot's. The vendor tree rather than `x-` because
+Penpot is a real vendor and RFC 6838 deprecates `x-` for new types.
+
+The same asymmetry decides the **uninstall** revert. Both siblings re-stamp their
+rows to `application/json` on removal; ours go to `application/zip`, which is what
+Penpot's own server calls the format. That is right for a `sync` mirror and wrong
+for a `link` one, and no extension-keyed mimetype can be right for both — but the
+pointer is an implementation detail of an app that is being removed, while the
+archive is the thing the user is left holding.
+
+### C6.4 — A sibling bug not inherited
+
+Both siblings resolve their own directory as `\OC::$SERVERROOT . '/custom_apps/'
+. APP_ID`. That is right only for a store install. **This repo's own integration
+workflow checks the app out into `apps/penpot_sync`**, where that path does not
+exist — so the icon copy would have missed, warned into a log nobody reads, and
+left every `.penpot` file with a generic glyph while every other step in the
+repair reported success. Ported verbatim, the bug would have shipped and been
+invisible in exactly the environment built to catch it.
+
+The path is resolved through `IAppManager::getAppPath()` instead, which knows
+whichever apps directory the app actually lives in. Worth recording not for the
+one-line fix but for the shape: **copying a sibling is this project's default,
+and the defaults it copies were written for a different deployment.**
+
+### C6.5 — What is asserted, and what is only claimed
+
+Honest scope, because this slice's most important pieces are the least testable
+in CI:
+
+- **Asserted** (`tests/js/files-helpers.test.js`, 32 cases): the deep-link shape,
+  including negative assertions that it is *not* the legacy path form and carries
+  no project id; the `reference` → `link` wire translation; both modes offering
+  the opener identically; `unmapped` hiding it.
+- **Not asserted, and named so it is not assumed:** the mimetype registration
+  itself. A repair step that silently failed to merge `config/mimetype*.json`
+  would look exactly like one that worked. The integration harness is occ-only,
+  and every scenario in `open-with.feature` is a click — so the registration, the
+  default-click promotion, and the icon are all **claimed, not proven**.
+- **Half-built, deliberately:** the deleted-design case. Hiding the opener for an
+  `unmapped` file is the "instead of dead-linking" half; *reporting* why, and
+  offering the restore, is a later slice. Hiding is the safe subset.
+
+### C6.6 — A `link` stops carrying a body, because the metadata already was one
+
+Course 3 gave a `link` file a small JSON pointer — ids, name, `revn`,
+`modified_at`, `team_id`, `instance_url`. It was written at a moment when the
+metadata keys existed but nothing consumed them, so the body was the only place
+those facts were legible. C6.1 removed that condition: the deep link is now built
+from `penpot_id` read off the file's own metadata, over DAV, in the browser.
+
+Which left the body as **a second copy of facts already recorded elsewhere.** Two
+copies of a fact drift; the only question is when. And this pair had a named
+mechanism ready to do it: the stamp joins `revn` and `modifiedAt` into one opaque
+signal, while the body kept them in separate fields — so a demotion had to take
+the signal back apart to write a pointer. `ArchiveService::signal()`'s own
+docblock warned about exactly this, in exactly these words: *"Joining in one file
+and splitting in another is how the two drift."* The class had documented its own
+future bug and then shipped it anyway, because there was nowhere better to put
+the halves.
+
+**So a `link` is now zero bytes.** The splitter is deleted, the body is deleted,
+and with them the `json_encode` failure path, the `instance_url` copy that went
+stale the moment an admin changed the base URL, and `storeLink()`'s five
+parameters — it takes a `File` and nothing else, because there is nothing left to
+describe.
+
+**The rejected alternative is the instructive one: an empty ZIP carrying the
+metadata.** It is the obvious shape — the file is *supposed* to be a `.penpot`,
+which is a ZIP, so make it a real but empty one. It would have been a quiet
+disaster. A ZIP containing any entry begins with `PK\x03\x04`, the same magic
+`holdsArchive()` reads, and `holdsArchive()` is the app's only independent
+witness to what a file actually holds. Three things would have broken silently:
+
+| What reads the bytes | What an empty ZIP would do to it |
+|---|---|
+| The prune's grace-window rescue (C5.1) | Every doomed `link` looks like it already holds its backup → trashed with **no final snapshot**, losing the one thing C5.1 was built to save |
+| `set-mode … link` | Demands confirmation to delete an "archive" that does not exist |
+| `occ penpot_sync:status` | Reports `archive` for a file holding no design |
+
+None of those would have thrown. It is also precisely the "quiet lie" this app
+refuses everywhere else — `open-with.feature` and `restore.feature` both exist to
+avoid handing someone a placeholder that looks like a design export.
+
+**Zero bytes is the only representation that cannot be mistaken for one**, and it
+fails `holdsArchive()` on the size check before a byte is read.
+
+**One clarification worth keeping, because the obvious reading of this change is
+wrong.** It is tempting to conclude that the *mode stamp* is now how you know
+whether a file holds data. It is not, and inverting that would break C4.8's
+self-healing: an export that dies halfway leaves a file stamped `sync` holding
+nothing, and only *looking at the bytes* catches it. The stamp says what a file
+is supposed to hold; the bytes say what it does. This change **strengthens** that
+split rather than softening it — "no bytes" used to be inferred from a body we
+had written ourselves, and is now simply true.
+
+**Two things fall out for free.** `storeLink()` became idempotent — an
+already-empty file is left strictly alone, because `putContent('')` still moves
+the mtime and etag, and the pull calls it once per `link` per pass. Written the
+naive way, every desktop client would re-download every `link` file after every
+pull. And a legacy JSON body needs no repair step or version check: the next pull
+calls `storeLink()` on it and the body is gone.
+
+`occ penpot_sync:status` keeps `pointer` as a third state alongside `archive` and
+`empty`, and it now means something useful — *a body from before this change,
+not yet truncated*. The integration step that used to accept it now demands
+`empty`, so a demotion that left a body behind is a test failure rather than a
+shrug.
+
+**A closing note on where this decision actually came from.** The README has said
+*"a `link` file holds no bytes"* since it was written, as the justification for
+why a link may not be moved out of its project — an empty husk that looks like a
+design and isn't. The spec described zero bytes; the implementation shipped a
+JSON body; and the gap survived four courses because nothing ever forced the two
+to be compared. It took someone reading the mirror and asking *"if everything we
+need is in the metadata, why even have the JSON?"* This slice did not invent a
+new design. It made the code agree with the document that had been sitting on top
+of it the whole time.
+
+
+### C6.7 — The route was read. The parameters were assumed. It shipped broken.
+
+`/#/workspace?file-id=<uuid>` returns **an internal error**. C6.1 shipped it as
+the deep link, and it took one click on a live instance to disprove a section
+that had been written with some confidence.
+
+**The route table reading was correct.** `["/workspace" :workspace]`, no path
+params, `router/resolve` puts everything in the query string — all true, all
+still true. The failure is entirely in the next step: *which* query params the
+workspace actually requires.
+
+**The bad inference, precisely.** The bundle's `go-to-workspace` call sites pass
+`file-id` alone, and that was read as "file-id is sufficient." Those are **in-app
+navigations**. The user is already inside a team; `team-id` is already in the URL
+and is carried across the transition. A cold load from outside carries nothing at
+all. The evidence was real, and it was evidence about a *different situation than
+the one being designed for* — a link arriving from Nextcloud is by definition
+never an in-app navigation.
+
+**The refutation was sitting in the same file, unread.** `:workspace-legacy`
+takes `/#/workspace/<project-id>/<file-id>` and — this is the whole tell — calls
+**`get-project {id}` purely to look up the team id**, then navigates with
+`{team-id, file-id, page-id, layout}`. An entire RPC round trip exists in
+Penpot's own code for no other purpose than obtaining a team id before opening a
+workspace. C6.1 read that redirect's *route* and stopped before its *body*. Had
+it read ten lines further, the requirement was stated outright.
+
+**And the conclusion drawn from the bad premise was the confident one.** C6.1
+argued the modern route was *better* than the legacy form because it needed only
+the id the file carries, so an unmapped mirror would still link. The opposite is
+true: the legacy form needs a project id, the modern form needs a team id, and
+**neither is on the file**. The section congratulated itself for a property the
+design did not have.
+
+#### Where the team id comes from, and why not the resolver
+
+`penpot_team_id` is now stamped on the file. The obvious objection — *we have a
+whole membership resolver for exactly this* — is right that the mechanism exists
+and wrong about which end it serves:
+
+|  | Resolver at click time | Stamp on the file |
+|---|---|---|
+| Where it runs | Server-side PHP, walking `Folder` nodes | Rides the directory PROPFIND the browser already has |
+| Cost per click | An endpoint + a round trip | Zero |
+| Mirror dragged out of its mapping | Resolves to **nothing** — no ancestor left | Still correct: the design never moved in Penpot |
+
+That last row decides it. `unmapped` means the *position* was lost, not the
+design — it is alive and openable, and the file's own stamp is the only surviving
+record of where it lives. A resolver-backed link would break exactly when someone
+rearranged their files.
+
+#### But the resolver is still the authority — as the writer
+
+The stamp is a **cache**, and a cache with no way to check it is a rumour. Two
+mapped team folders means dragging a mirror from one tree to the other genuinely
+changes which team owns the design, and a stamp left naming the old team is a
+link that opens the *wrong team's workspace*. So:
+
+- **`MotionService` re-stamps** from the resolved destination, *after* Penpot
+  accepts the move — never before, or a failed `move-files` would leave a stamp
+  describing a move that did not happen (§6.18 rule 3).
+- **`occ penpot_sync:status` reports a mismatch** between the stamp and the
+  folder walk, the same way it already contrasts the mode stamp against the
+  actual bytes. A disagreement is visible rather than inferred.
+- A file resolving to **no** team is not reported as a mismatch: that is the
+  unmapped state, where the stamp is *supposed* to be the only record.
+
+This is the shape the whole app already uses, arrived at from the other
+direction: **the stamp says what something is supposed to be; looking says what
+it is; and the thing that looks is what corrects the stamp.**
+
+#### A second bug, found while fixing the first
+
+The opener was gated on `canOpenInPenpot(mode)`, hiding itself for `unmapped` —
+described in C6.1 (and to the project owner, who approved a fallback on the
+strength of it) as "the design was deleted, so the id is dead."
+
+`unmapped` does not mean that. `PenpotMetadata` defines it as *carries a
+`penpot_id` but resolves to no Penpot ancestor* — a mirror moved out of its
+mapped folder, whose design is perfectly alive. Hiding the opener there would
+have broken the link precisely in the case the deep link is meant to survive.
+
+It was also **dead code**: nothing in the app has ever written `MODE_UNMAPPED`.
+The pull stamps `sync` or `link` and nothing else. And the state it was reaching
+for is unreachable anyway, because the prune (C5.1) moves a vanished design's
+mirror to the Nextcloud trash rather than leaving it in the tree. A gate that
+could never fire, guarding against a state that cannot occur, justified by a
+definition that was wrong.
+
+#### The lesson, narrower than "test more"
+
+C3.4 refused to invent this URL and was right to. C6.1 then *did* call the live
+instance — and still got it wrong, because it called the thing that answers
+"what are the routes?" and not the thing that answers "what happens when a
+stranger opens this link?" **Reading an implementation is not the same as
+exercising an entry point**, and the gap between them is exactly wide enough to
+fit a confident paragraph. The check that found this was a person clicking a
+link, which no amount of further reading would have replaced.

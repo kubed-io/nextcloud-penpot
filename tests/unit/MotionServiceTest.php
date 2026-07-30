@@ -194,6 +194,49 @@ final class MotionServiceTest extends TestCase {
 		self::assertFalse($this->motion->onMove($this->source(), $folder));
 	}
 
+	/**
+	 * A DRAG BETWEEN TWO MAPPED TEAM FOLDERS RE-STAMPS THE FILE'S TEAM (§C6.7).
+	 *
+	 * `penpot_team_id` is cached on the file because the browser cannot walk a
+	 * freely-nested tree to build a deep link. With two teams mapped to two
+	 * folders, dragging a mirror from one tree to the other genuinely changes
+	 * which Penpot team owns the design — and a stamp left naming the old team is
+	 * a link that opens the WRONG team's workspace. The resolver is the authority
+	 * for where the node now sits, so it writes the correction.
+	 */
+	public function testAMoveBetweenTeamsRestampsTheTeamId(): void {
+		$this->metadata->method('readFile')
+			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC, 'team-OLD'));
+		$this->givenMembership([
+			'target' => new Membership('proj-new', 'team-NEW'),
+			'oldParent' => new Membership('proj-old', 'team-OLD'),
+		]);
+
+		$this->metadata->expects($this->once())
+			->method('writeFile')
+			->with(30, [PenpotMetadata::KEY_TEAM_ID => 'team-NEW']);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * A move WITHIN one team touches no metadata at all. The stamp is already
+	 * right, and rewriting it would churn the file's metadata on every ordinary
+	 * drag between two project folders — the common case by far.
+	 */
+	public function testAMoveWithinOneTeamDoesNotRestamp(): void {
+		$this->metadata->method('readFile')
+			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC, 'team-SAME'));
+		$this->givenMembership([
+			'target' => new Membership('proj-new', 'team-SAME'),
+			'oldParent' => new Membership('proj-old', 'team-SAME'),
+		]);
+
+		$this->metadata->expects($this->never())->method('writeFile');
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
 	// ── fixtures ────────────────────────────────────────────────────────────
 
 	/**

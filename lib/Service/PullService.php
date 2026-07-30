@@ -71,11 +71,11 @@ use Psr\Log\LoggerInterface;
  *
  * ## THE FINAL SNAPSHOT (saga §6.42/§6.46)
  *
- * A pruned `link` is a pointer to something that no longer exists — the app's one
+ * A pruned `link` points at something that no longer exists — the app's one
  * genuinely lossy moment. But `export-binfile` still exports a soft-deleted file
  * for as long as Penpot's own trash holds it, so a `link` gets **one last export**
  * on its way out and is trashed as a real archive. Best-effort by construction:
- * past the grace window the export fails, and the pointer is trashed anyway and
+ * past the grace window the export fails, and the empty mirror is trashed anyway and
  * counted as lost rather than a snapshot being faked.
  *
  * ## `sync` MODE: THE ONLY THING THAT COSTS ANYTHING (saga §6.22)
@@ -353,10 +353,18 @@ final class PullService {
 	 *
 	 * ## A NEW `sync` FILE IS BORN AS A LINK, THEN UPGRADED
 	 *
-	 * The pointer body is written first, unconditionally, and the archive
-	 * replaces it. That ordering is what makes a failed first export leave a
-	 * usable pointer rather than an empty file — the user still gets a mirror
-	 * that names the design and opens it, and the next pull retries the bytes.
+	 * {@see ArchiveService::storeLink()} runs first, then the archive replaces
+	 * what it left. Since C6.6 a `link` is zero bytes and a freshly created node
+	 * already is, so for a NEW file this call is a no-op — the ordering survives
+	 * for what it does to an EXISTING one: it truncates whatever the file held
+	 * before, which is how a legacy JSON pointer body from an earlier version
+	 * migrates itself away on the next pull, with no repair step.
+	 *
+	 * A first export that fails now leaves an empty file stamped `sync`, and that
+	 * is a *better* failure than the old one: the stamp and the bytes disagree
+	 * loudly, {@see driftedOrMissing()} sees no archive, and the next pull
+	 * retries. The old behaviour left a pointer body stamped `sync` — a file
+	 * whose own contents contradicted its mode.
 	 *
 	 * @param array<string, File> $fileIndex penpot_id -> file, built once by the caller
 	 * @param array<string, mixed> $file the decoded Penpot file record (carries `revn` + `modified-at`)
@@ -391,7 +399,7 @@ final class PullService {
 
 		$wantsArchive = $mode === Mapping::MODE_SYNC;
 		if (!$wantsArchive || $existing === null) {
-			$this->archives->storeLink($node, $fileId, $baseName, $revn, $modifiedAt, $mapping->teamId);
+			$this->archives->storeLink($node);
 		}
 
 		// `true` when the mirror is current and the revision stamp may advance.
@@ -419,6 +427,12 @@ final class PullService {
 		$values = [
 			PenpotMetadata::KEY_ID => $fileId,
 			PenpotMetadata::KEY_MODE => $mode,
+			// The design's TEAM, stamped on the file itself (§C6.7). Penpot's
+			// workspace route will not open a file without it, and the browser
+			// cannot reach an ancestor Team Folder's marker without walking a
+			// freely-nested tree on every render. Re-stamped every pull, so a
+			// design that changes team upstream corrects itself.
+			PenpotMetadata::KEY_TEAM_ID => $mapping->teamId,
 		];
 		if ($current) {
 			$values[PenpotMetadata::KEY_REVISION] = $signal;
@@ -434,7 +448,7 @@ final class PullService {
 	 * that holds no archive is a promotion whose export never landed (or a pull
 	 * that was interrupted), and checking for it is what makes that state heal
 	 * itself on the next pass instead of persisting until someone notices the
-	 * "backup" is a pointer.
+	 * "backup" is empty.
 	 *
 	 * The cheap test runs first: an unchanged signal is a string compare, and
 	 * only then do we touch the filesystem.
@@ -474,8 +488,8 @@ final class PullService {
 			}
 
 			// THE LAST SNAPSHOT, taken before the file moves. A `sync` file that
-			// already holds its archive needs nothing; a pointer gets one attempt at
-			// becoming a real backup while Penpot's own trash still has the design.
+			// already holds its archive needs nothing; an empty `link` gets one attempt
+			// at becoming a real backup while Penpot's own trash still has the design.
 			$rescue = null;
 			if (!$this->archives->holdsArchive($node)) {
 				$rescue = $this->snapshot($node, $penpotId);
@@ -519,7 +533,7 @@ final class PullService {
 	 *
 	 * BEST-EFFORT BY DESIGN (saga §6.42): Penpot keeps a deleted file exportable
 	 * only while its own trash holds it, so past that window this simply fails and
-	 * the caller trashes the pointer anyway. It never pretends — a snapshot is
+	 * the caller trashes the empty mirror anyway. It never pretends — a snapshot is
 	 * counted only when real bytes landed.
 	 *
 	 * @return bool true when an archive was stored
@@ -548,6 +562,20 @@ final class PullService {
 	 * mirror may sit in any plain subfolder the user made (saga §6.29). A prune
 	 * that only looked one level down would leave the moved ones behind forever —
 	 * and, worse, would be *correct* often enough to look like it worked.
+	 *
+	 * ## THE `+` IS FIRST-WINS, AND THAT IS THE SAFE DIRECTION HERE
+	 *
+	 * Two mirrors can carry the same `penpot_id`: nothing wipes a copy's metadata
+	 * yet (the copy listener is Course 6's), and a design restored in Penpot's own
+	 * UI is re-created beside its still-trashed mirror (§6.37). Array union keeps
+	 * the first one found and drops the rest, so ONE duplicate is pruned per
+	 * pass rather than all of them at once. That is deliberately the opposite of
+	 * {@see indexFilesByPenpotId()}, which is last-wins because the upsert wants
+	 * the newest node to receive the write.
+	 *
+	 * Prefer under-deleting: a duplicate that survives a pass is a visible extra
+	 * file the next pull will take, while over-deleting is the one mistake this
+	 * whole method is written to avoid.
 	 *
 	 * @return array<string, File> penpot_id -> file
 	 */

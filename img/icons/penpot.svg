@@ -1,0 +1,36 @@
+<!--
+  SPDX-FileCopyrightText: 2026 kubed-io
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  The "Open in Penpot" file-action mark, themed via currentColor so it follows
+  the surface it lands on — white in the Files context menu, dark on light.
+  Imported (?raw) and inlined by src/files.js, so this folder is the single
+  source of truth for the menu mark.
+
+  THE MARK: a pen pot — three pen tips standing in a container, matching
+  img/penpot.svg exactly so the row icon and the menu entry are one identity.
+
+  FILLED PATHS, NEVER STROKES, and this is not a style preference. The first cut
+  drew the mark as a stroked outline with fill="none"; Nextcloud's menu styling
+  applies its own `fill: currentColor` to inline icons, which overrode that and
+  rendered the outline as a SOLID WHITE SQUARE. A filled mark cannot fail that
+  way — a surface recolouring it just recolours it. Separation between the pens
+  is empty space in the geometry, not a second colour, for the same reason.
+  (nextcloud-n8n's mark is a single filled path for exactly this reason.)
+
+  The colour twin is img/penpot.svg, which hardcodes its fill because NC renders
+  mimetype icons out of core/img/filetypes/ without recolouring them.
+
+  An original mark, not a copy of Penpot's logo artwork: "Penpot" and its logo
+  are trademarks of Kaleidos Ventures SL, and this community integration is not
+  affiliated with, endorsed by, or sponsored by Penpot. The pen-pot motif is
+  used to identify the service this app integrates with.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <g fill="currentColor">
+    <path d="M5.4 11.5V7.2L7.2 3l1.8 4.2v4.3z"/>
+    <path d="M10.2 11.5V7.2L12 3l1.8 4.2v4.3z"/>
+    <path d="M15 11.5V7.2L16.8 3l1.8 4.2v4.3z"/>
+    <path d="M3.4 10.2h17.2l-1.85 9.6a1 1 0 0 1-.98.8H6.23a1 1 0 0 1-.98-.8z"/>
+  </g>
+</svg>

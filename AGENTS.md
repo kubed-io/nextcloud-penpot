@@ -13,10 +13,17 @@ mirrors Penpot design files into Nextcloud folders as read-only `.penpot` files.
 Lives under the [kubed-io](https://github.com/kubed-io) GitHub org. Licensed
 AGPL-3.0-or-later. Target: the official Nextcloud app store, eventually.
 
-**This repo is in its FIRST SLICE.** `lib/`, `tests/` and `img/` exist and are
-small on purpose: an admin Instance card holding the Penpot base URL, two `occ`
-commands, and the tests that cover them. There is no `src/`, `templates/` or
-`css/` yet, and no sync engine, credentials, or file actions.
+**The app mirrors for real, and is now clickable.** The admin surface, the
+membership resolver, the pull (both directions — it adds what appeared and
+prunes what vanished), the confirmed write paths (rename, move, `sync`-mode
+export) and the Files-app opener are all built. `src/` landed with Course 6 and
+holds exactly one file action, "Open in Penpot".
+
+Still absent: the scheduled background job, the mode pills, "+ New → design",
+personal projects, and notifications. See the Course tables in
+[`saga/Chapter_2_The_Colony.md`](saga/Chapter_2_The_Colony.md) for the live
+status of every structure — that table is maintained per slice and is the
+fastest way to see what exists.
 
 Chapter 1 of the saga is CLOSED and carries a complete architecture — but read
 it before building, because several load-bearing decisions are still open forks
@@ -82,13 +89,13 @@ CONTRIBUTING.md owns that — don't ask the human to re-explain the PR flow.
 | Path | What's there |
 |---|---|
 | [appinfo/](appinfo/) | NC app metadata (`info.xml` only — no `routes.php` yet; it would reference Controller classes that don't exist). |
-| [lib/](lib/) | PHP backend (`OCA\PenpotSync`). Currently `AppInfo/`, `Settings/` (Instance card + AdminSection) and `Command/` (set-url, show-config). `Service/`, `Listener/`, `BackgroundJob/` arrive with the sync engine. |
-| `src/` | **Does not exist yet.** JS frontend, Vite-built to `dist/penpot_sync-files.js` per [vite.config.js](vite.config.js) — config is wired ahead of the code. Lands with the file-type slice. |
+| [lib/](lib/) | PHP backend (`OCA\PenpotSync`). `AppInfo/`, `Settings/`, `Command/` (the `occ` twins), `Service/` (client, pull, push, archive, metadata, resolver), `Listener/` (rename/move guards + the Files script) and `Migration/` (the mimetype repair steps). `BackgroundJob/` arrives with the scheduled pull. |
+| [src/](src/) | JS frontend, Vite-built to `dist/penpot_sync-files.js` per [vite.config.js](vite.config.js). `files.js` registers the one file action; `files-helpers.js` holds the pure logic so Vitest can reach it without `@nextcloud/*` imports. |
 | [tests/](tests/) | `unit/` (standalone, no NC server — see `bootstrap.php` + `ocp-stubs.php`) and `integration/` (Behat against a real Nextcloud; the Penpot token is minted by the workflow). `ocp-stubs.php` grows one entry per OCP interface a test mocks. |
 | [.github/workflows/](.github/workflows/) | CI: `tests.yml`, `quality.yml`, `integration.yml`, `pr.yml`, `package.yml`, `publish.yml`, `copilot-setup-steps.yml`. All green on the current slice. |
 | [.devcontainer/](.devcontainer/) | PHP 8.3 + Node + GH CLI dev environment. |
 | [saga/](saga/) | The long-form design narrative. **Read Chapter 1 before touching anything design-relevant.** |
-| [composer.json](composer.json) [package.json](package.json) | Dep manifests + script entrypoints, matching the sibling apps' tooling (PHPUnit, Psalm, php-cs-fixer / ESLint, Vite, Vitest) even though there's no code to run them against yet. |
+| [composer.json](composer.json) [package.json](package.json) | Dep manifests + script entrypoints, matching the sibling apps' tooling (PHPUnit, Psalm, php-cs-fixer / ESLint, Vite, Vitest). |
 | [psalm.xml](psalm.xml) [.php-cs-fixer.dist.php](.php-cs-fixer.dist.php) | Static analysis + style config, copied from the apprentice with only namespace/product-name changes. |
 | [CHANGELOG.md](CHANGELOG.md) | Every PR adds a line under `## [Unreleased]`. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Process. **Read it.** |
@@ -114,15 +121,15 @@ composer run cs:fix          # auto-fix style
 composer run psalm           # static analysis
 composer run lint            # php -l across lib/
 
-# JS (once src/ exists)
+# JS
 npm ci
 npm run build                # produces dist/penpot_sync-files.js
 npm run watch                # rebuild on save
 ```
 
-Same commands as the sibling apps. The unit suite and Psalm run for real today;
-the JS build is a no-op until `src/` exists. Integration runs via Behat from
-`tests/integration/` (see `.github/workflows/integration.yml`).
+Same commands as the sibling apps, and all of them run for real today.
+Integration runs via Behat from `tests/integration/` (see
+`.github/workflows/integration.yml`).
 
 CI runs the JS/PHP install + lint/build steps today; see
 [CONTRIBUTING.md §What CI expects](CONTRIBUTING.md#what-ci-expects) for exactly
