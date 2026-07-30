@@ -28,7 +28,36 @@
 # is permanently dead (saga §6.20), so the opener reports that instead of
 # following a link it knows is broken.
 #
-# @todo — no src/files.js exists yet.
+# BUILT AS OF C6.1 — and still @todo here, for a reason that changed. It used to
+# be "no src/files.js exists yet"; src/files.js now exists and registers exactly
+# one action, "Open in Penpot", as the default click. What is missing is a way to
+# RUN these scenarios: every one of them is a click or a context menu, and the
+# integration harness is occ-only with no browser driver (the same wall
+# rename.feature and admin-section.feature describe). @todo here means "not
+# executable from this file", not "unimplemented".
+#
+# WHAT IS ASSERTED INSTEAD, and where: tests/js/files-helpers.test.js covers the
+# logic these scenarios would exercise — that both modes offer the opener
+# identically, that `unmapped` hides it, and the exact deep-link shape. The parts
+# no unit test can reach are the registration itself and the default-click
+# promotion.
+#
+# THE DEEP LINK IS <base>/#/workspace?file-id=<penpot_id> (saga §C6.1), read off
+# a live Penpot's own route table rather than guessed — §C3.4 refused to write it
+# until it could be confirmed. It keys on the file id ALONE, which is why the
+# "moved out of its mapped folder" case still links: no ancestor folder is
+# consulted.
+#
+# STILL GENUINELY UNBUILT, not merely unrunnable, and named so C6.1 is not
+# credited with it:
+#   - the download-refusal for a `link` file — needs a WebDAV-layer guard (the
+#     siblings' LinkWriteGuardPlugin shape); today a `link` downloads its pointer
+#     JSON without comment.
+#   - the deleted-design case is built only HALFWAY. C6.1 hides "Open in Penpot"
+#     for an `unmapped` file rather than following a dead id (§6.20), which is
+#     the "instead of dead-linking" half. It does not yet REPORT why, and does
+#     not offer the restore. Hiding is the safe subset; the sentence the scenario
+#     asks for is a later slice.
 
 @todo
 Feature: Opening a mirrored Penpot file (Open in Penpot only)

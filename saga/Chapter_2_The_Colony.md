@@ -140,7 +140,7 @@ that makes a Penpot team appear in Nextcloud.
 | **Drafts as a state, never a folder** | 🔴 | §6.35. Files at team root are in Drafts. No `Drafts` folder is ever created. |
 | **Project folders + visible tag** | 🟡 | Project id as metadata, plus the human-visible pill (§6.32) — under free nesting, position no longer tells you. |
 | **`link` files** | 🟡 | The default. A pointer with `penpot_id` + metadata, deep-linking to the live design. **Never calls `export-binfile`.** |
-| **Custom mimetype + Penpot icon** | 🟢 | `.penpot` (§6.4). |
+| **Custom mimetype + Penpot icon** | 🟢 | `.penpot` (§6.4). Built in C6.3 as `application/vnd.penpot` — no structured suffix, because `+json` lies for a `sync` mirror and `+zip` for a `link` one. |
 | **`occ penpot_sync:sync pull`** | 🟢 | |
 
 **Deferred into this course's own edges, decided when the code exists:** the
@@ -184,7 +184,7 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **Open in Penpot** | 🟢 | Deep link built from the carried `penpot_id` — zero extra lookup. |
+| **Open in Penpot** | 🟢 | **Built (C6.1).** `<base>/#/workspace?file-id=<penpot_id>`, read off a live instance's route table, not guessed (C3.4's refusal, answered). The id rides the directory PROPFIND, so zero extra lookup — and keying on `file-id` alone is what keeps an *unmapped* mirror linkable. |
 | **Mode pills** | 🟢 | `penpot:sync` / `penpot:link`, app-maintained, mutually exclusive. |
 | **"+ New" → design** | 🟡 | §6.33: scoped to where it is unambiguous; lands in Drafts otherwise. **#27 settled in C4.8** — `create-file` is now called live by the integration fixture; `projectId` and `project-id` are both honoured. |
 | **Notifications** | 🟢 | Pull results, skipped objects, divergences. |
@@ -454,6 +454,14 @@ workspace route has **not** been called live, and Chapter 1's whole method is
 and the instance base URL and stops there; the browser deep-link is Course 4's,
 built against a running Penpot. Writing a plausible `/#/workspace/…` now would be
 the exact guess this saga exists to refuse.
+
+> **Answered in Course 6 (see C6.1):** the route was read off a live instance's
+> own route table, and it is `/#/workspace?file-id=…` — a **query** parameter,
+> not the path segment this section was on the verge of inventing. The plausible
+> guess was the wrong one, and the shape it would have produced still resolves
+> today as a *legacy* route, so it would have worked well enough to look correct
+> and quietly failed on the one case that matters (a mirror moved out of its
+> project folder). Left as written, because that near-miss is the argument.
 
 ### C3.5 — What this slice deliberately does not do
 
@@ -904,3 +912,132 @@ a human restored it in Penpot's own UI — is currently re-created beside its
 trashed mirror instead of being matched to it by `penpot_id`. That needs
 `files_trashbin` as an optional dependency and is its own slice; nothing here
 hard-deletes, so the cost of the gap is a duplicate, not a loss.
+
+---
+
+## Course 6 — where the town square stands
+
+### C6.1 — The route was read, not reasoned about
+
+Course 3 wrote a `link` pointer that carried ids and an instance URL and
+deliberately stopped short of a deep link, because *"Penpot's workspace route has
+not been called live"* (C3.4). That refusal is the only reason this slice is
+short: the work was not designing a URL, it was **asking the instance what its
+URLs are** and then writing down the answer.
+
+The instance answers in its own compiled route table, served at `js/main.js`:
+
+```
+["/workspace",                       :workspace]
+["/workspace/:project-id/:file-id",  :workspace-legacy]
+```
+
+and its router resolves a route as `(match->path (match-by-name router id)
+params)` — `match-by-name` is handed **no** path params, so everything reitit
+receives lands in the **query string**. The `:workspace` route has no path
+segments at all. Two call sites in the dashboard bundle navigate with `file-id`
+alone; others add `page-id`. So:
+
+```
+<base>/#/workspace?file-id=<penpot_id>
+```
+
+**The guess C3.4 refused was the wrong one, and it would not have looked wrong.**
+The obvious invention was `/#/workspace/<project-id>/<file-id>` — and that route
+still exists and still resolves, as `:workspace-legacy`. Every manual test would
+have passed. It fails on exactly one case: a mirror **moved out of its project
+folder** is *unmapped* (file-type.feature) and has no ancestor carrying a project
+id, so there is no project id to put in the path. The link would have died on the
+files most likely to be dragged around, and the failure would have read as a
+Nextcloud bug rather than a URL we made up.
+
+The current route needs **only the id the file itself carries**, which is why the
+deep link now survives every move — the same property that makes `penpot_id` the
+join everywhere else in this app. The route table did not just answer the
+question; it answered it *better than the design that would have been built
+around a guess*.
+
+**`page-id` is deliberately omitted.** It is accepted, and Penpot's own dashboard
+sometimes sends it — but a mirror does not know which page a user wants, and the
+file's first page is the right destination for "open this design." Sending a page
+id we invented would be the same class of mistake one level down.
+
+### C6.2 — One action, and the absence is the feature
+
+Both siblings register two openers: theirs, and "Open with text editor" as a
+default click for whichever modes hold editable JSON. This app registers **one**,
+in every mode, for every file, forever (§6.1). A `.penpot` archive is an opaque
+ZIP of nested design-shape JSON: there is no coherent hand-edit and no way to
+re-import one if there were, so a text editor would be offering a round-trip that
+does not exist.
+
+That single omission is why `src/files.js` is a third the size of its siblings' —
+no editor modal, no save path, no injected stylesheet, no `NodeWrittenEvent`, no
+priority fight between two openers over which one wins a click. **The read-only
+architecture is not being worked around here. It is why the surface is this
+small.**
+
+**And the mode axis does not gate the opener**, which is the sharp break from
+both siblings and the thing most likely to be "fixed" by someone porting their
+code. Their modes change what a click *means*. Here `sync` and `link` differ only
+in whether the archive is stored locally (§6.22); both carry the same `penpot_id`
+and both point at the same live design. What *does* gate the action is having a
+design to open at all: `unmapped` means the id is real but its Penpot original is
+gone, and a deleted design never returns at its old id (§6.20), so the action
+hides rather than follow a link it knows is dead.
+
+### C6.3 — A mimetype that refuses to claim a structure
+
+`.penpot` is a real, Penpot-specific, **single-token** extension — the one clean
+win over both siblings' compound `.n8n.json` / `.grafana.json` (§6.4). But Penpot
+serves an export as plain `application/zip`, so there is no branded type to
+inherit, and a search turns up no registered mimetype for the format. We pick
+one.
+
+We picked `application/vnd.penpot`, **with no structured suffix**, and the reason
+is the `sync`/`link` axis. A `sync` mirror holds a real ZIP; a `link` mirror holds
+a small JSON pointer. `+json` is a lie for half our files and `+zip` for the
+other half — and `+zip` is the *worse* lie, because it actively invites a client
+to try to unpack a pointer. So the type claims only what is true of every
+`.penpot` row: that it is Penpot's. The vendor tree rather than `x-` because
+Penpot is a real vendor and RFC 6838 deprecates `x-` for new types.
+
+The same asymmetry decides the **uninstall** revert. Both siblings re-stamp their
+rows to `application/json` on removal; ours go to `application/zip`, which is what
+Penpot's own server calls the format. That is right for a `sync` mirror and wrong
+for a `link` one, and no extension-keyed mimetype can be right for both — but the
+pointer is an implementation detail of an app that is being removed, while the
+archive is the thing the user is left holding.
+
+### C6.4 — A sibling bug not inherited
+
+Both siblings resolve their own directory as `\OC::$SERVERROOT . '/custom_apps/'
+. APP_ID`. That is right only for a store install. **This repo's own integration
+workflow checks the app out into `apps/penpot_sync`**, where that path does not
+exist — so the icon copy would have missed, warned into a log nobody reads, and
+left every `.penpot` file with a generic glyph while every other step in the
+repair reported success. Ported verbatim, the bug would have shipped and been
+invisible in exactly the environment built to catch it.
+
+The path is resolved through `IAppManager::getAppPath()` instead, which knows
+whichever apps directory the app actually lives in. Worth recording not for the
+one-line fix but for the shape: **copying a sibling is this project's default,
+and the defaults it copies were written for a different deployment.**
+
+### C6.5 — What is asserted, and what is only claimed
+
+Honest scope, because this slice's most important pieces are the least testable
+in CI:
+
+- **Asserted** (`tests/js/files-helpers.test.js`, 32 cases): the deep-link shape,
+  including negative assertions that it is *not* the legacy path form and carries
+  no project id; the `reference` → `link` wire translation; both modes offering
+  the opener identically; `unmapped` hiding it.
+- **Not asserted, and named so it is not assumed:** the mimetype registration
+  itself. A repair step that silently failed to merge `config/mimetype*.json`
+  would look exactly like one that worked. The integration harness is occ-only,
+  and every scenario in `open-with.feature` is a click — so the registration, the
+  default-click promotion, and the icon are all **claimed, not proven**.
+- **Half-built, deliberately:** the deleted-design case. Hiding the opener for an
+  `unmapped` file is the "instead of dead-linking" half; *reporting* why, and
+  offering the restore, is a later slice. Hiding is the safe subset.

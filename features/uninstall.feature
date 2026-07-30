@@ -30,8 +30,23 @@
 # it), so it stays @todo; the data-orphan + reinstall-reconnect legs are provable via
 # disable/re-enable + a pull, which exercises the same metadata-keyed reconcile.
 #
-# @todo — no lib/ exists yet (zero code, v0.1.0); every scenario below describes
-# intended behaviour once the sync engine and mimetype registration are built.
+# @todo — the old note here read "no lib/ exists yet (zero code, v0.1.0)", which
+# has been false for four courses. The sync engine and the mimetype registration
+# are both BUILT: lib/Migration/UnregisterMimetype.php is wired to the
+# <uninstall> repair step in appinfo/info.xml as of C6.1, and it is a deliberate
+# mirror image of the install step — config keys removed, icon deleted, filecache
+# rows re-stamped, mimetypelist.js regenerated, and nothing of the user's touched.
+#
+# What is missing is still only the DRIVER: a repair step registered under
+# <uninstall> runs on a real app removal, which CI does not perform. So the
+# system-cleanup leg stays unproven rather than unbuilt.
+#
+# ONE CHOICE WORTH READING BEFORE ASSERTING ON IT: the revert re-stamps `.penpot`
+# rows to `application/zip`, not `application/json`. Both siblings revert to JSON
+# because their mirrors always were JSON; ours are ZIP in `sync` mode and JSON in
+# `link` mode, and no extension-keyed mimetype can be right for both. `zip` is
+# what Penpot's own server calls the format (§6.4, confirmed live), so it is the
+# honest answer for the archive the user is left holding.
 
 @todo
 Feature: Uninstall reverts the system and reinstall reconnects the data
