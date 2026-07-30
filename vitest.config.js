@@ -7,8 +7,8 @@
  * helpers this app's JS will need. Mirrors the nextcloud-libraries convention
  * (dedicated vitest.config) and the sibling apps' setup.
  *
- * NOTE: tests/js/ does not exist yet in this pre-code skeleton — `test` runs
- * with `--passWithNoTests` (see package.json) until it does.
+ * tests/js/ now holds the helper suite (files-helpers.test.js), so `npm test`
+ * no longer needs `--passWithNoTests`.
  */
 import { defineConfig } from 'vitest/config'
 
