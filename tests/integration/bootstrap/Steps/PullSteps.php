@@ -141,7 +141,13 @@ trait PullSteps {
 	 * alone would have failed a delete that worked perfectly — the same "there is
 	 * no convention, only a table" lesson the client's param table records.
 	 *
-	 * @param array<string, string> $params kebab-cased wire params (saga §6.38)
+	 * PARAM CASING IS PER-COMMAND, NOT A HOUSE RULE. Most creators take
+	 * kebab-case on the wire (`project-id`, saga §6.38), but `delete-file` and
+	 * `rename-file` take a plain `id` (§6.54) — so callers spell each key the way
+	 * that one command's schema does, and this helper passes them through
+	 * untouched rather than normalising anything.
+	 *
+	 * @param array<string, string> $params the command's own wire params, verbatim
 	 */
 	private function penpotRpc(string $command, array $params): void {
 		$url = getenv('PENPOT_URL');

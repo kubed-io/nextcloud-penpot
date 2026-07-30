@@ -549,6 +549,20 @@ final class PullService {
 	 * that only looked one level down would leave the moved ones behind forever —
 	 * and, worse, would be *correct* often enough to look like it worked.
 	 *
+	 * ## THE `+` IS FIRST-WINS, AND THAT IS THE SAFE DIRECTION HERE
+	 *
+	 * Two mirrors can carry the same `penpot_id`: nothing wipes a copy's metadata
+	 * yet (the copy listener is Course 6's), and a design restored in Penpot's own
+	 * UI is re-created beside its still-trashed mirror (§6.37). Array union keeps
+	 * the first one found and drops the rest, so ONE duplicate is pruned per
+	 * pass rather than all of them at once. That is deliberately the opposite of
+	 * {@see indexFilesByPenpotId()}, which is last-wins because the upsert wants
+	 * the newest node to receive the write.
+	 *
+	 * Prefer under-deleting: a duplicate that survives a pass is a visible extra
+	 * file the next pull will take, while over-deleting is the one mistake this
+	 * whole method is written to avoid.
+	 *
 	 * @return array<string, File> penpot_id -> file
 	 */
 	private function collectMirrors(Folder $folder): array {
