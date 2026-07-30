@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ArchiveService;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
@@ -35,7 +36,10 @@ use Psr\Log\NullLogger;
  *     project folder, file id/revn/mode on a `.penpot`;
  *   - an illegally-named object (a `/` in the Penpot name) is skipped, not
  *     mirrored, and does not abort the run;
- *   - a Team-Folder mapping is skipped while only the plain backend is built.
+ *   - a Team-Folder mapping is skipped while only the plain backend is built;
+ *   - and **the prune** — which of the many ways a listing can be incomplete
+ *     must switch it off entirely, since every one of them looks exactly like
+ *     "Penpot deleted everything".
  *
  * The Nextcloud filesystem is mocked ({@see Folder}/{@see File} are large public
  * OCP interfaces, so a mock auto-implements every method and only the handful
@@ -53,6 +57,16 @@ final class PullServiceTest extends TestCase {
 	private ArchiveService $archives;
 	private PullService $pull;
 
+	/**
+	 * Node id -> what {@see PenpotMetadata::readFile()} reports for it. One map
+	 * instead of a per-test stub, because several tests now need DIFFERENT answers
+	 * for different nodes in the same run, and re-stubbing one mock method twice is
+	 * how a fixture starts lying.
+	 *
+	 * @var array<int, PenpotFileMetadata>
+	 */
+	private array $stamps = [];
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->mappings = $this->createMock(MappingService::class);
@@ -60,6 +74,16 @@ final class PullServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->storage = $this->createMock(StorageService::class);
 		$this->archives = $this->createMock(ArchiveService::class);
+
+		// An unstamped node reads back as null — *untracked*, the state that makes a
+		// file the user's rather than ours.
+		$this->metadata->method('readFile')->willReturnCallback(
+			fn (int $nodeId): ?PenpotFileMetadata => $this->stamps[$nodeId] ?? null,
+		);
+		// A folder with no markers. Unlike readFile there is no null state here, so
+		// this has to be a real value object — a mock's auto-stub would hand back an
+		// object whose readonly promoted properties were never initialised.
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
 
 		$this->pull = new PullService(
 			$this->mappings,
@@ -247,6 +271,231 @@ final class PullServiceTest extends TestCase {
 		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false, mode: Mapping::MODE_SYNC))['exported']);
 	}
 
+	// ── the prune: the most dangerous thing this app does (saga §6.25/§6.46) ──
+
+	/**
+	 * A design deleted in Penpot takes its mirror to the **trash**, and a `link`
+	 * gets one last export on the way so the user is left with something real
+	 * rather than a pointer to nothing (saga §6.42/§6.46).
+	 */
+	public function testAVanishedDesignIsSnapshottedThenTrashed(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$stale], listing: []);
+		$this->archives->method('holdsArchive')->willReturn(false);
+
+		$this->archives->expects($this->once())->method('storeArchive')->with($stale, 'file-gone')->willReturn(4096);
+		// Promoted as it leaves: the file now holds an archive, so its stamp has
+		// to say so or `status` would call a real backup a pointer.
+		$this->metadata->expects($this->once())->method('writeFile')->with(31, [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
+		$stale->expects($this->once())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertSame(1, $result['rescued']);
+		self::assertSame(0, $result['lost']);
+	}
+
+	/** A `sync` file already holds its snapshot, so pruning it costs no export. */
+	public function testAVanishedSyncFileIsTrashedWithoutAnExtraExport(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$stale], listing: []);
+		$this->archives->method('holdsArchive')->willReturn(true);
+
+		$this->archives->expects($this->never())->method('storeArchive');
+		$stale->expects($this->once())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertSame(0, $result['rescued']);
+	}
+
+	/**
+	 * Past Penpot's grace window the export simply fails. The pointer is still
+	 * trashed — leaving it would be a mirror of nothing — and the loss is counted
+	 * rather than a snapshot being claimed.
+	 */
+	public function testASnapshotThatCannotBeTakenIsReportedNotFaked(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$stale], listing: []);
+		$this->archives->method('holdsArchive')->willReturn(false);
+		$this->archives->method('storeArchive')->willThrowException(new PenpotApiException('gone for good'));
+
+		$stale->expects($this->once())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertSame(0, $result['rescued']);
+		self::assertSame(1, $result['lost']);
+		self::assertNull($result['error'], 'an unrecoverable snapshot is reported, not a failed pull');
+	}
+
+	/**
+	 * A MIRROR THAT COULD NOT BE TRASHED COUNTS FOR NOTHING — not even its
+	 * snapshot. The CLI prints `rescued` and `lost` as a breakdown OF `pruned`, so
+	 * three numbers that do not add up would read as a bug in whichever one the
+	 * operator trusted least. The archive is still on disk and the next pull's
+	 * delete is now free; it simply did not prune anything this time.
+	 */
+	public function testAMirrorThatCannotBeTrashedIsCountedNowhere(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$stale], listing: []);
+		$this->archives->method('holdsArchive')->willReturn(false);
+		$this->archives->method('storeArchive')->willReturn(4096);
+		$stale->method('delete')->willThrowException(new \RuntimeException('locked'));
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(0, $result['pruned']);
+		self::assertSame(0, $result['rescued']);
+		self::assertSame(0, $result['lost']);
+		self::assertNull($result['error'], 'one stuck mirror is not a failed pull');
+	}
+
+	/**
+	 * THE ONE THAT MATTERS MOST. A project skipped for any reason means its files
+	 * were never enumerated, which is indistinguishable from Penpot no longer
+	 * having them. Pruning on that evidence would trash a whole project's mirrors
+	 * because of a slash in a name — so an incomplete listing prunes nothing at
+	 * all, not even the files it *did* see.
+	 */
+	public function testAnIncompleteListingPrunesNothing(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$stale]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-bad', 'name' => 'a/b', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+
+		$stale->expects($this->never())->method('delete');
+		$this->archives->expects($this->never())->method('storeArchive');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['skipped']);
+		self::assertSame(0, $result['pruned']);
+	}
+
+	/**
+	 * A LISTING FAILURE PRUNES NOTHING EITHER — stated here as a test rather than
+	 * left to control flow, because "the exception happens to escape before the
+	 * prune" is exactly the kind of protection a later refactor removes silently.
+	 */
+	public function testAFailedListingPrunesNothing(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$stale], listing: []);
+		$this->client->method('getProjectFiles')->willThrowException(new PenpotApiException('502'));
+
+		$stale->expects($this->never())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(0, $result['pruned']);
+		self::assertSame('502', $result['error']);
+	}
+
+	/**
+	 * An unstamped file is a file the user put there. Position proves nothing
+	 * under free nesting, so the `penpot_id` stamp is the only thing that makes a
+	 * node ours to remove — and a mapped folder stays usable as an ordinary one.
+	 */
+	public function testAnUnstampedFileIsNeverPruned(): void {
+		$theirs = $this->createMock(File::class);
+		$theirs->method('getId')->willReturn(31);
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$theirs]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-drafts', 'name' => 'Drafts', 'team-id' => self::TEAM_ID, 'is-default' => true],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$theirs->expects($this->never())->method('delete');
+
+		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
+	}
+
+	/**
+	 * The prune walks the whole tree, because free nesting lets a mirror sit in
+	 * any plain subfolder the user made (saga §6.29). A one-level prune would
+	 * leave the moved ones behind forever while looking like it worked.
+	 */
+	public function testAMirrorInAPlainSubfolderIsStillPruned(): void {
+		$stale = $this->mirror(31, 'file-gone');
+		$nested = $this->createMock(Folder::class);
+		$nested->method('getId')->willReturn(20);
+		$nested->method('getDirectoryListing')->willReturn([$stale]);
+		$nested->method('nodeExists')->willReturn(false);
+
+		$this->givenRootHolding([$nested], listing: []);
+		$this->archives->method('holdsArchive')->willReturn(true);
+
+		$stale->expects($this->once())->method('delete');
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
+	}
+
+	/**
+	 * A stale mirror alongside a live one: only the vanished design is trashed.
+	 * The seen-set is per-`penpot_id`, not per-folder, so a design that moved
+	 * project in Penpot is never mistaken for a deleted one.
+	 */
+	public function testAStillPresentDesignIsLeftAlone(): void {
+		$live = $this->mirror(30, 'file-1', revision: '5@t1');
+		$stale = $this->mirror(31, 'file-gone');
+		$this->givenRootHolding([$live, $stale], listing: [
+			['id' => 'file-1', 'name' => 'Login', 'revn' => 5, 'modified-at' => 't1'],
+		]);
+		$this->archives->method('holdsArchive')->willReturn(true);
+
+		$live->expects($this->never())->method('delete');
+		$stale->expects($this->once())->method('delete');
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
+	}
+
+	/**
+	 * A root holding $nodes, mirroring a Drafts project whose files are $listing.
+	 *
+	 * @param list<File|Folder> $nodes what already sits in the mapped folder
+	 * @param list<array<string, mixed>> $listing what Penpot says the team has
+	 */
+	private function givenRootHolding(array $nodes, array $listing): void {
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn($nodes);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-drafts', 'name' => 'Drafts', 'team-id' => self::TEAM_ID, 'is-default' => true],
+		]);
+		if ($listing !== []) {
+			$this->client->method('getProjectFiles')->willReturn($listing);
+		}
+	}
+
+	/** A mirror file: node id $id, stamped with Penpot file id $penpotId in `link` mode. */
+	private function mirror(int $id, string $penpotId, string $revision = ''): File {
+		$file = $this->createMock(File::class);
+		$file->method('getId')->willReturn($id);
+		$this->stamps[$id] = new PenpotFileMetadata($penpotId, $revision, Mapping::MODE_LINK);
+
+		return $file;
+	}
+
 	/**
 	 * One team, one Drafts project, one existing file — the fixture every
 	 * mode test above varies.
@@ -272,12 +521,9 @@ final class PullServiceTest extends TestCase {
 			['id' => 'file-1', 'name' => 'Login', 'revn' => 5, 'modified-at' => 't1'],
 		]);
 
-		$this->metadata->method('readFile')->willReturn(
-			new PenpotFileMetadata('file-1', $stored, $stampedMode !== '' ? $stampedMode : $mappingMode),
-		);
+		$this->stamps[30] = new PenpotFileMetadata('file-1', $stored, $stampedMode !== '' ? $stampedMode : $mappingMode);
 		$this->archives->method('holdsArchive')->willReturn($holdsArchive);
 	}
-
 	private function mapping(bool $useTeamFolder, string $mode = Mapping::MODE_LINK): Mapping {
 		return Mapping::fromArray([
 			'team_id' => self::TEAM_ID,

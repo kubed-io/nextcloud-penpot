@@ -133,8 +133,13 @@ trait PullSteps {
 
 	/**
 	 * Post a command straight to Penpot's RPC bus with the minted service-account
-	 * token — the seed/assertion channel, bypassing the app. Asserts HTTP 200;
-	 * the Transit response body is not decoded (nothing here needs it).
+	 * token — the seed/assertion channel, bypassing the app. The Transit response
+	 * body is not decoded (nothing here needs it).
+	 *
+	 * SUCCESS IS 200 **OR** 204, because Penpot's own answers disagree: the
+	 * creators return a body, `delete-file` returns nothing at all. Asserting 200
+	 * alone would have failed a delete that worked perfectly — the same "there is
+	 * no convention, only a table" lesson the client's param table records.
 	 *
 	 * @param array<string, string> $params kebab-cased wire params (saga §6.38)
 	 */
@@ -163,7 +168,7 @@ trait PullSteps {
 			],
 		);
 
-		if ($response->getStatusCode() !== 200) {
+		if ($response->getStatusCode() !== 200 && $response->getStatusCode() !== 204) {
 			throw new \RuntimeException(sprintf(
 				"Penpot %s failed: HTTP %d\n%s",
 				$command,

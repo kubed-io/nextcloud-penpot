@@ -15,6 +15,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ModeSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\PruneSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PullSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 
@@ -46,6 +47,10 @@ use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
  *    file in Penpot, promote it with `set-mode`, and assert through `status`
  *    that what landed on disk is a real ZIP. That is the only place the SSE
  *    export and its second asset fetch (§5.1–§5.4) meet a real wire.
+ *  - And they carry the **prune** → {@see PruneSteps}, which is the only claim
+ *    here about Penpot's *own* behaviour rather than its wire format: a deleted
+ *    design is still exportable while Penpot's trash holds it, which is what a
+ *    doomed `link` file's last snapshot is built on.
  */
 final class FeatureContext implements Context {
 	use OccTrait;
@@ -55,6 +60,7 @@ final class FeatureContext implements Context {
 	use MappingSteps;
 	use PullSteps;
 	use ModeSteps;
+	use PruneSteps;
 
 	private const APP_ID = 'penpot_sync';
 

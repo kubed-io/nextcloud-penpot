@@ -39,6 +39,12 @@ folder tree you can organise however you like.
 >   that deletes a local backup). A pull re-exports a `sync` file only when its
 >   Penpot revision moved or its archive went missing, so **a team of links
 >   costs zero exports.**
+> - **The prune, with a parachute.** A design deleted in Penpot no longer leaves
+>   a mirror that opens nothing: the pull moves it to the **Nextcloud trash** —
+>   never a hard delete — and a pointer gets one last export on the way out, so
+>   what lands in the trash is a real, openable archive. Any incomplete listing
+>   switches pruning off entirely, because a network blip and "everything was
+>   deleted" look identical from here.
 >
 > Verified against a real Nextcloud *and* a real Penpot in CI — including a pull
 > asserted end-to-end against a project seeded directly in Penpot, and a
@@ -631,16 +637,18 @@ per-user token page. Every control persists and has an `occ` twin
 On top of that, **the mirror itself**: `sync pull` walks a mapped team into a
 plain Nextcloud folder, `status` inspects any node (metadata, resolved
 membership, and whether the file holds a real archive or a pointer), `set-mode`
-promotes a design to a stored `.penpot` archive or demotes it back, and a move
-between project folders is either refused or propagated to Penpot. Covered by
-unit tests and by Behat scenarios that install the app on a real Nextcloud and
-drive the CLI against a real Penpot — including an export asserted to land real
-ZIP bytes on disk.
+promotes a design to a stored `.penpot` archive or demotes it back, a move
+between project folders is either refused or propagated to Penpot, and a design
+deleted in Penpot has its mirror snapshotted and moved to the Nextcloud trash.
+Covered by unit tests and by Behat scenarios that install the app on a real
+Nextcloud and drive the CLI against a real Penpot — including an export asserted
+to land real ZIP bytes on disk.
 
 **Not implemented:** the Files-app frontend (there is no `src/` yet), the
 groupfolders Team Folder backend, creating designs from Nextcloud, the ignore
-and restore actions, pruning, and every remaining write-back path. The scheduled
-pull is configurable but does not yet run.
+and restore actions, adopting a mirror back out of the Nextcloud trash, and
+every remaining write-back path. The scheduled pull is configurable but does not
+yet run.
 
 **The [`saga/`](saga/) is the authoritative "where are we" record**, ahead of
 this README and the feature files.
@@ -665,6 +673,7 @@ The specs *are* the requirements, read before any code lands.
 | [`sync-mode.feature`](features/sync-mode.feature) | `link` vs `sync`, promotion, and the one lossy direction. |
 | [`set-mode.feature`](features/set-mode.feature) | **Live.** The real export: promotion leaves ZIP bytes, links cost zero exports. |
 | [`reconcile.feature`](features/reconcile.feature) | The pull, revision gating, and safe pruning. |
+| [`prune.feature`](features/prune.feature) | **Live.** A deleted design's mirror is snapshotted, then trashed — and an unchanged pull prunes nothing. |
 | [`pull.feature`](features/pull.feature) | **Live.** The pull as CI proves it, end to end against a real Penpot. |
 | [`create-design.feature`](features/create-design.feature) | New → Penpot design, and Drafts semantics. |
 | [`move.feature`](features/move.feature) | Free nesting; the project-folder restriction. |

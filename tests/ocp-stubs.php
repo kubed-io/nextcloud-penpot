@@ -285,6 +285,10 @@ namespace OCP\Files {
 			public function getPath(): string;
 
 			public function move(string $targetPath): Node;
+
+			// The prune's only removal, and the reason it is not destructive: on a
+			// user-visible node this is a move to the Nextcloud trash.
+			public function delete(): void;
 		}
 	}
 	// A folder the pull mirrors into: it lists children, checks/creates nodes,

@@ -38,6 +38,22 @@
 # mutations produced zero POSTs. Cron is the sole trigger until that's explained.
 #
 # @todo — no lib/Service/SyncService or lib/BackgroundJob/ exists yet.
+#
+# BUILD STATE (Course 5, the prune slice). THE PRUNE AND ITS FINAL SNAPSHOT ARE
+# BUILT: `PullService` collects every `penpot_id` Penpot names while it walks a
+# team, then moves any mirror under the mapped folder that was NOT named to the
+# Nextcloud trash — and a doomed `link` gets one last `export-binfile` on the way
+# out, so the user is left with a real archive rather than a pointer to nothing
+# (saga §6.42/§6.46, §C5.1). The prune is switched off entirely by any incomplete
+# listing, including a project skipped for an illegal name.
+#
+# The half of this file CI can prove today has moved to **prune.feature**, where
+# it runs live against a design this suite really deletes in Penpot.
+#
+# WHAT STAYS @todo HERE: adopting a mirror out of the Nextcloud TRASH (§6.37) —
+# both the "don't duplicate a trashed mirror" and the "a design restored in
+# Penpot's own UI comes back" scenarios need `files_trashbin`, and are their own
+# slice. So do the ignore marker, the scheduled job, and the admin buttons.
 
 @todo
 Feature: Scheduled or manual pull from Penpot
