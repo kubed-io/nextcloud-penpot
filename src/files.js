@@ -38,11 +38,16 @@ import { registerDavProperty, getDefaultPropfind, getClient, getRootPath } from 
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { getPenpotId, getPenpotTeamId, buildUrl, isPenpotFile } from './files-helpers.js'
-// The mark lives as a real SVG under img/ (the single source of truth for the
-// app's glyphs) and Vite inlines it at build time via ?raw, so nothing is
-// hand-pasted here. It is the SAME file RegisterMimetype copies into
-// core/img/filetypes/, so the row icon and this menu entry are one mark.
-import penpotMarkIcon from '../img/penpot.svg?raw'
+// The MENU mark — `fill="currentColor"`, so Nextcloud themes it white in the
+// context menu like every other action glyph. Vite inlines it at build time via
+// ?raw, so nothing is hand-pasted here.
+//
+// Deliberately NOT ../img/penpot.svg. That is the FILETYPE icon, and it carries
+// a hardcoded fill because NC renders mimetype icons straight out of
+// core/img/filetypes/ without recolouring them. Inlining it here paints a solid
+// purple tile into a menu row. Same mark, two treatments, two files — the
+// arrangement nextcloud-n8n uses (img/n8n.svg + img/icons/n8n.svg).
+import penpotMarkIcon from '../img/icons/penpot.svg?raw'
 
 const APP_ID = 'penpot_sync'
 

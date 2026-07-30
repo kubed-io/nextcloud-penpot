@@ -6,9 +6,15 @@
   Filetype icon for application/vnd.penpot (.penpot files).
   RegisterMimetype copies this exact file into core/img/filetypes/penpot.svg,
   where Nextcloud's GenerateMimetypeFileBuilder enumerates it, so it shows on
-  every .penpot row in the Files app. src/files.js also inlines it (?raw) as
-  the "Open in Penpot" action glyph, so the row icon and the menu entry are
-  literally the same mark.
+  every .penpot row in the Files app.
+
+  THE FILL IS HARDCODED ON PURPOSE, and this file is NOT the menu icon.
+  Nextcloud renders mimetype icons as-is out of core/img/filetypes/ and never
+  recolours them, so a currentColor mark would come out invisible here. The
+  context-menu glyph is a separate currentColor file, img/icons/penpot.svg —
+  same geometry, opposite treatment. Collapsing the two puts a solid tile in a
+  menu row, or an invisible icon in the file list, depending which way you
+  collapse them.
 
   Geometry mirrors img/app.svg (the settings-section mark) at 1.5x — an
   artboard with a rule grid and one placed shape — so the file glyph and the

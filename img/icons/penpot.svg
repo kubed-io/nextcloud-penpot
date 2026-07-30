@@ -1,0 +1,27 @@
+<!--
+  SPDX-FileCopyrightText: 2026 kubed-io
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  The "Open in Penpot" file-action mark, themed via currentColor so it follows
+  the surface it lands on — white in the Files context menu, where Nextcloud
+  paints menu glyphs light, and dark on a light background. Imported (?raw) and
+  inlined by src/files.js, so this folder is the single source of truth for the
+  menu mark.
+
+  THE FILETYPE ICON IS A SEPARATE FILE (img/penpot.svg) AND MUST STAY THAT WAY.
+  That one keeps a hardcoded fill because Nextcloud does NOT recolour mimetype
+  icons — it enumerates them straight out of core/img/filetypes/ and renders
+  them as-is. Inlining the coloured one here instead paints a solid tile into a
+  menu that expected a monochrome glyph. Same geometry, two treatments: the row
+  icon is an object, the menu icon is text.
+
+  An artboard with a rule grid and one placed shape — an ORIGINAL mark, not
+  Penpot's logo. "Penpot" and its logo are trademarks of Kaleidos Ventures SL;
+  this is a community integration and is not affiliated with, endorsed by, or
+  sponsored by Penpot.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+  <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+  <path d="M3 9h18M9 3v18" stroke-width="1.2" opacity=".65"/>
+  <circle cx="15.5" cy="15.5" r="2.6" fill="currentColor" stroke="none"/>
+</svg>
