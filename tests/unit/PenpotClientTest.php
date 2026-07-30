@@ -122,6 +122,13 @@ final class PenpotClientTest extends TestCase {
 		yield 'move-files uses kebab project-id and a set under ids' => [
 			'move-files', ['project' => 'p1', 'files' => ['f1', 'f2']], ['project-id' => 'p1', 'ids' => ['f1', 'f2']],
 		];
+		// KEBAB, and the saga said camel. §6.28 recorded `duplicate-file` as taking
+		// `fileId`; the live schema (§C6.8) says `file-id`. This row is the
+		// corrected one, and it is here because a wrong row in a table nobody
+		// re-reads is indistinguishable from a right one until something 400s.
+		yield 'duplicate-file uses kebab file-id, correcting §6.28' => [
+			'duplicate-file', ['file' => 'f1', 'name' => 'N'], ['file-id' => 'f1', 'name' => 'N'],
+		];
 		// THE ONE THAT DISAGREES WITH ITS OWN SIBLING. §1918: `import-binfile`
 		// takes kebab (`project-id`) while `export-binfile` takes camel (`fileId`)
 		// — the two halves of the same feature, on the same server, disagreeing.
