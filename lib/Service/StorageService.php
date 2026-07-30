@@ -38,13 +38,14 @@ use Psr\Log\LoggerInterface;
  * admin-managed. The pull calls {@see ensureRoot()} / {@see findRoot()} and never
  * learns which backend answered.
  *
- * ## PERMISSIONS ARE READ + RENAME, NOT FULL WRITE (penpot-specific)
+ * ## PERMISSIONS ARE THE ORDINARY FOLDER SURFACE (corrected, §C6.8)
  *
- * The mirror is read-only for *content* (§6.1) but a *rename* propagates to
- * Penpot (§6.2, Course 4), so the content groups get read + UPDATE and nothing
- * more — create and delete wait for §6.33 / Course 5. Unlike the siblings, the
- * grant does not vary with the mapping's `mode`, because penpot's `link`/`sync`
- * is a per-file archive choice, not a folder-wide read-vs-write stance.
+ * Content groups get READ|UPDATE|CREATE|DELETE — what any Nextcloud folder
+ * grants, and what both siblings grant. An earlier cut withheld CREATE and
+ * DELETE to express "read-only"; see {@see CONTENT_PERMISSIONS} for why that
+ * expressed nothing except a broken folder. Unlike the siblings, the grant does
+ * not vary with the mapping's `mode`, because penpot's `link`/`sync` is a
+ * per-file archive choice, not a folder-wide read-vs-write stance.
  *
  * ## NO EXPLICIT FS SETUP ON THE PLAIN PATH
  *
@@ -58,17 +59,40 @@ final class StorageService {
 	public const ADMIN_GROUP = 'admin';
 
 	/**
-	 * Content-group rights on a managed Penpot folder: read + UPDATE, never
-	 * create or delete. Kept identical to {@see TeamFolderService} so both
-	 * backends grant the same surface.
+	 * Content-group rights on a managed Penpot folder: the same surface Nextcloud
+	 * gives any ordinary folder, and for the same reason.
 	 *
-	 * NB: Nextcloud has no "rename-only" permission bit — `PERMISSION_UPDATE` is
-	 * the least that lets a group rename a node, and it also allows editing an
-	 * existing file's contents. We accept that over-grant: a content edit is not
-	 * a rename, so it is never pushed to Penpot ({@see PushService}) and is
-	 * overwritten on the next pull, keeping content effectively one-way.
+	 * ## THIS USED TO BE READ + UPDATE, AND THAT BROKE THE APP'S OWN DESIGN
+	 *
+	 * The grant was READ|UPDATE — "read-only for content (§6.1), plus rename" —
+	 * with create and delete deferred to §6.33 / Course 5. The deferral read as
+	 * conservative. It was not: withholding CREATE removed the **+ New button
+	 * entirely** from every mapped folder, so the folders behaved unlike every
+	 * other folder in Nextcloud, and it made three built features unreachable:
+	 *
+	 *   - **§6.29 free nesting**, the most load-bearing rule in the app. The whole
+	 *     nearest-ancestor resolver exists so a user can group mirrors into plain
+	 *     subfolders of their own. You cannot create a subfolder without CREATE.
+	 *   - **Course 4's move writeback.** A cross-folder move needs DELETE on the
+	 *     source, so `MotionService` and `move-files` could not be reached by a
+	 *     drag at all.
+	 *   - **"a mapped folder stays usable as an ordinary folder"** — asserted in
+	 *     the prune's own docblock as the reason unstamped files are left alone,
+	 *     while nothing could be put there in the first place.
+	 *
+	 * §6.1 is about CONTENT never flowing back to Penpot, and it still holds
+	 * absolutely: it is enforced by the listeners and by there being no content
+	 * push, not by making the folder awkward. A permission bit was the wrong
+	 * place to express it — it did not stop a single write to Penpot, it only
+	 * stopped the user from using their own files.
+	 *
+	 * Kept identical to {@see TeamFolderService} so both backends grant the same
+	 * surface, and identical to both sibling apps.
 	 */
-	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE;
+	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ
+		| Constants::PERMISSION_UPDATE
+		| Constants::PERMISSION_CREATE
+		| Constants::PERMISSION_DELETE;
 
 	public function __construct(
 		private readonly TeamFolderService $teamFolders,

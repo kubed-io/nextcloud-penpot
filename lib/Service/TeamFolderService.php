@@ -69,7 +69,10 @@ final class TeamFolderService {
 	 * a rename, so it is never pushed to Penpot ({@see \OCA\PenpotSync\Service\PushService})
 	 * and is overwritten on the next pull, keeping content effectively one-way.
 	 */
-	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE;
+	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ
+		| Constants::PERMISSION_UPDATE
+		| Constants::PERMISSION_CREATE
+		| Constants::PERMISSION_DELETE;
 
 	public function __construct(
 		private readonly ContainerInterface $container,
