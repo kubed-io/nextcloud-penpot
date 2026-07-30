@@ -101,9 +101,20 @@ trait ModeSteps {
 		$this->mustContain($this->status($path), 'Content: archive', $path);
 	}
 
-	/** @Then /^the file "([^"]*)" holds only a pointer$/ */
-	public function theFileHoldsOnlyAPointer(string $path): void {
-		$this->mustContain($this->status($path), 'Content: pointer', $path);
+	/**
+	 * The negative twin of the assertion above, and it got STRICTER at §C6.6.
+	 *
+	 * A `link` used to hold a small JSON body, so "not an archive" was the most
+	 * this could claim. A link is now zero bytes, so `status` reports `empty` and
+	 * this asserts the absence of content itself. `Content: pointer` still exists
+	 * as a third state — a legacy body not yet truncated by a pull — and this
+	 * step deliberately does NOT accept it: a demotion that left a body behind
+	 * would be a real regression.
+	 *
+	 * @Then /^the file "([^"]*)" holds no content at all$/
+	 */
+	public function theFileHoldsNoContentAtAll(string $path): void {
+		$this->mustContain($this->status($path), 'Content: empty', $path);
 	}
 
 	/** @Then /^the file "([^"]*)" still carries its Penpot id$/ */

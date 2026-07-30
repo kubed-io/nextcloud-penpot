@@ -129,6 +129,16 @@ export function isPenpotFile(context) {
  * whose design was deleted, whose id is permanently dead (§6.20). Following that
  * link would open a 404, so the action hides rather than lie.
  *
+ * ## HIDING HANDS THE FILE BACK TO NEXTCLOUD, AND THAT IS THE INTENDED ENDING
+ *
+ * With no action registered for it, a click falls through to core's default for
+ * the mimetype, which is a download. That is the right answer rather than a
+ * consolation prize: there is nothing left that can open the design, and the
+ * bytes on disk are all that survives it. A `sync` mirror downloads its real
+ * archive — the one case where the local backup is the entire remaining value of
+ * the file. Deciding to hide is therefore a decision about what a click SHOULD
+ * do, not just what it should not.
+ *
  * An absent mode ('' — the first-load PROPFIND race, or an untracked file) stays
  * permissive: the action shows, and resolves to nothing harmlessly if there is
  * no id behind it.

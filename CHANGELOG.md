@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Click a mirrored design to open it in Penpot.** "Open in Penpot" is the default click and the only opener a `.penpot` file gets — there is no "edit as text", in any mode, because a design archive has nothing to hand-edit.
 - Both `sync` and `link` files open the same live design; the mode only decides whether the archive is stored locally. A file whose design was deleted hides the action instead of following a dead link.
 - Mirrored designs get their own file type and icon rather than showing as generic archives. Removing the app puts the mimetype registration back exactly as it found it.
+- A `link` file is now **empty** instead of holding a small JSON stub. Everything it used to say — the design id, the revision, the mode — already rides the file's metadata, and one copy cannot disagree with itself. Existing files are emptied by the next pull; nothing else changes.
 - `occ penpot_sync:show-config` reports the URL, whether each token is set (never its value), the mappings, and the schedule.
 - Design record in `saga/`, with every Penpot API claim verified against a live instance.
 

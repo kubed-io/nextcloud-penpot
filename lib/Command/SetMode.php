@@ -12,7 +12,6 @@ namespace OCA\PenpotSync\Command;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\Mapping;
-use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\SyncGuard;
@@ -28,8 +27,8 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 /**
  * `occ penpot_sync:set-mode <path> <sync|link> [--force]`
  *
- * Promote a mirrored design to a stored archive, or demote it back to a pointer
- * (saga §6.22). "Which files are worth backing up" is a human judgement that
+ * Promote a mirrored design to a stored archive, or demote it back to an empty
+ * `link` (saga §6.22, §C6.6). "Which files are worth backing up" is a human judgement that
  * cannot be derived — a mapping carries a default, and this is how one file
  * departs from it.
  *
@@ -58,7 +57,6 @@ final class SetMode extends Command {
 	public function __construct(
 		private IRootFolder $rootFolder,
 		private StorageService $storage,
-		private MembershipResolver $resolver,
 		private PenpotMetadata $metadata,
 		private ArchiveService $archives,
 		private SyncGuard $guard,
@@ -107,14 +105,14 @@ final class SetMode extends Command {
 
 		return $mode === Mapping::MODE_SYNC
 			? $this->promote($node, $stamped->penpotId, $output)
-			: $this->demote($node, $stamped->penpotId, $input, $output);
+			: $this->demote($node, $input, $output);
 	}
 
 	/**
 	 * Fetch the archive, then stamp the mode.
 	 *
 	 * THE ORDER IS THE POINT. Stamping first would leave a file claiming to be a
-	 * backup while holding a pointer if the export failed — and the pull's
+	 * backup while holding nothing if the export failed — and the pull's
 	 * self-healing check would then quietly re-export it later, turning a visible
 	 * failure into a delayed surprise. Export first, and a failure changes
 	 * nothing at all.
@@ -142,14 +140,14 @@ final class SetMode extends Command {
 	}
 
 	/**
-	 * Confirm, then replace the archive with a pointer.
+	 * Confirm, then throw the archive away and leave the file empty.
 	 *
 	 * The revision stamp is deliberately LEFT ALONE. It describes which Penpot
 	 * revision this mirror reflects, and demoting does not change that — the
-	 * pointer still names revision N. Clearing it would make the next promotion
-	 * look like drift rather than a promotion.
+	 * `link` still names revision N on its metadata. Clearing it would make the
+	 * next promotion look like drift rather than a promotion.
 	 */
-	private function demote(File $node, string $penpotId, InputInterface $input, OutputInterface $output): int {
+	private function demote(File $node, InputInterface $input, OutputInterface $output): int {
 		$holdsArchive = $this->archives->holdsArchive($node);
 
 		if ($holdsArchive && !$input->getOption('force')) {
@@ -174,23 +172,12 @@ final class SetMode extends Command {
 			}
 		}
 
-		$membership = $this->resolver->resolve($node);
-		$stamped = $this->metadata->readFile($node->getId());
-		// The stamp is the joined drift signal; the pointer body keeps the two
-		// halves in separate fields, so it has to come back apart here.
-		[$revn, $modifiedAt] = ArchiveService::splitSignal($stamped?->revision ?? '');
-
-		$this->guard->run(function () use ($node, $penpotId, $revn, $modifiedAt, $membership): void {
-			$this->archives->storeLink(
-				$node,
-				$penpotId,
-				// The pointer's `name` is the design's Penpot name, which is the
-				// mirror's name minus the Nextcloud-side extension (§6.4).
-				preg_replace('/\.penpot$/', '', $node->getName()) ?? $node->getName(),
-				$revn,
-				$modifiedAt,
-				$membership->teamId ?? '',
-			);
+		// Emptying the file IS the demotion (saga §C6.6). Nothing has to be
+		// gathered first: a `link` holds no body, so there are no ids, no name and
+		// no revision halves to reassemble — all of that already lives on the
+		// file's own metadata, which this demotion deliberately leaves alone.
+		$this->guard->run(function () use ($node): void {
+			$this->archives->storeLink($node);
 		});
 
 		$this->metadata->writeFile($node->getId(), [PenpotMetadata::KEY_MODE => Mapping::MODE_LINK]);

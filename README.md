@@ -35,8 +35,8 @@ folder tree you can organise however you like.
 >   real via `move-files`.
 > - **`sync` mode — real archives.** `occ penpot_sync:set-mode <path> sync`
 >   exports a design from Penpot and stores the actual `.penpot` ZIP in
->   Nextcloud; `… link` puts the lightweight pointer back (after confirming, as
->   that deletes a local backup). A pull re-exports a `sync` file only when its
+>   Nextcloud; `… link` empties the file again (after confirming, as that
+>   deletes a local backup). A pull re-exports a `sync` file only when its
 >   Penpot revision moved or its archive went missing, so **a team of links
 >   costs zero exports.**
 > - **The prune, with a parachute.** A design deleted in Penpot no longer leaves
@@ -90,7 +90,7 @@ Every mirrored file is one of two things, and you choose per file:
 
 | Mode | What it is | What it costs |
 |---|---|---|
-| **`link`** *(default)* | A pointer to the live design. Opens in Penpot. | Nothing — never exports |
+| **`link`** *(default)* | An empty file that points at the live design. Opens in Penpot. | Nothing — never exports, stores no bytes |
 | **`sync`** *(opt-in)* | A real, downloaded `.penpot` archive you can open offline | One export whenever the design changes |
 
 **Neither mode ever pushes design content to Penpot.** In the sibling apps for
@@ -573,8 +573,15 @@ read-only over DAV — the sync engine owns these properties.
 
 The mimetype is `application/vnd.penpot`, and it carries no `+json` / `+zip`
 suffix on purpose: a `sync` mirror really is a ZIP archive while a `link` mirror
-is a small JSON pointer, so either suffix would be wrong for half your files.
+holds nothing at all, so either suffix would be wrong for half your files.
 Removing the app reverts the registration and leaves Nextcloud as it found it.
+
+**A `link` file is empty — zero bytes.** Everything that identifies it (the
+design id, the revision it reflects, its mode) lives in the metadata above, so a
+body would only be a second copy of the same facts, free to drift from the first.
+It is deliberately *not* a small placeholder archive either: that would be
+indistinguishable from a real export, which is how you end up trusting a backup
+that was never taken. `occ penpot_sync:status` tells you which a file is.
 
 ### Opening a design
 

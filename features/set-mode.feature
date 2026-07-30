@@ -38,7 +38,7 @@
 # The interactive confirmation on a demotion: Behat has no tty to answer it. The
 # prompt is unit-tested where the answer can be scripted (SetModeTest); the steps
 # here pass `--force` and assert the CONSEQUENCE instead — the archive is gone,
-# the pointer is back, and Penpot was never contacted.
+# the file is empty again, and Penpot was never contacted.
 
 @sync-mode
 Feature: Storing and discarding a mirrored design's archive
@@ -82,7 +82,7 @@ Feature: Storing and discarding a mirrored design's archive
     # Mode is stored PER FILE, and an unchanged revision means an unchanged
     # archive — so staying in sync mode is free until the design actually moves.
 
-  Scenario: Demoting replaces the archive with a pointer and never contacts Penpot
+  Scenario: Demoting throws the archive away and never contacts Penpot
     Given a Penpot project named "Demote Me" exists in that team
     And a Penpot file named "Sketch" exists in the project "Demote Me"
     When the admin runs a pull
@@ -90,7 +90,7 @@ Feature: Storing and discarding a mirrored design's archive
     And the admin demotes "Penpot/Demote Me/Sketch.penpot" to "link" mode
     Then the mode change succeeds
     And the file "Penpot/Demote Me/Sketch.penpot" is in "link" mode
-    And the file "Penpot/Demote Me/Sketch.penpot" holds only a pointer
+    And the file "Penpot/Demote Me/Sketch.penpot" holds no content at all
     And the file "Penpot/Demote Me/Sketch.penpot" still carries its Penpot id
     # The design in Penpot is completely unaffected: demotion deletes a LOCAL
     # backup and nothing else.

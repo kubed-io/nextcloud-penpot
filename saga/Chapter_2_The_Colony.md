@@ -139,7 +139,7 @@ that makes a Penpot team appear in Nextcloud.
 | **The pull** | 🟢 | `get-teams` → `get-all-projects` → `get-project-files`. **1 + P calls per team, zero exports** for an unchanged instance (§5.5) — this is what makes it scale to many files or few. Reconciles both ways as of C5.1: it adds what appeared and prunes what vanished. |
 | **Drafts as a state, never a folder** | 🔴 | §6.35. Files at team root are in Drafts. No `Drafts` folder is ever created. |
 | **Project folders + visible tag** | 🟡 | Project id as metadata, plus the human-visible pill (§6.32) — under free nesting, position no longer tells you. |
-| **`link` files** | 🟡 | The default. A pointer with `penpot_id` + metadata, deep-linking to the live design. **Never calls `export-binfile`.** |
+| **`link` files** | 🟡 | The default. **Zero bytes** as of C6.6 — the identity lives entirely on the file's metadata, which is what the deep link is built from. **Never calls `export-binfile`.** |
 | **Custom mimetype + Penpot icon** | 🟢 | `.penpot` (§6.4). Built in C6.3 as `application/vnd.penpot` — no structured suffix, because `+json` lies for a `sync` mirror and `+zip` for a `link` one. |
 | **`occ penpot_sync:sync pull`** | 🟢 | |
 
@@ -1041,3 +1041,79 @@ in CI:
 - **Half-built, deliberately:** the deleted-design case. Hiding the opener for an
   `unmapped` file is the "instead of dead-linking" half; *reporting* why, and
   offering the restore, is a later slice. Hiding is the safe subset.
+
+### C6.6 — A `link` stops carrying a body, because the metadata already was one
+
+Course 3 gave a `link` file a small JSON pointer — ids, name, `revn`,
+`modified_at`, `team_id`, `instance_url`. It was written at a moment when the
+metadata keys existed but nothing consumed them, so the body was the only place
+those facts were legible. C6.1 removed that condition: the deep link is now built
+from `penpot_id` read off the file's own metadata, over DAV, in the browser.
+
+Which left the body as **a second copy of facts already recorded elsewhere.** Two
+copies of a fact drift; the only question is when. And this pair had a named
+mechanism ready to do it: the stamp joins `revn` and `modifiedAt` into one opaque
+signal, while the body kept them in separate fields — so a demotion had to take
+the signal back apart to write a pointer. `ArchiveService::signal()`'s own
+docblock warned about exactly this, in exactly these words: *"Joining in one file
+and splitting in another is how the two drift."* The class had documented its own
+future bug and then shipped it anyway, because there was nowhere better to put
+the halves.
+
+**So a `link` is now zero bytes.** The splitter is deleted, the body is deleted,
+and with them the `json_encode` failure path, the `instance_url` copy that went
+stale the moment an admin changed the base URL, and `storeLink()`'s five
+parameters — it takes a `File` and nothing else, because there is nothing left to
+describe.
+
+**The rejected alternative is the instructive one: an empty ZIP carrying the
+metadata.** It is the obvious shape — the file is *supposed* to be a `.penpot`,
+which is a ZIP, so make it a real but empty one. It would have been a quiet
+disaster. A ZIP containing any entry begins with `PK\x03\x04`, the same magic
+`holdsArchive()` reads, and `holdsArchive()` is the app's only independent
+witness to what a file actually holds. Three things would have broken silently:
+
+| What reads the bytes | What an empty ZIP would do to it |
+|---|---|
+| The prune's grace-window rescue (C5.1) | Every doomed `link` looks like it already holds its backup → trashed with **no final snapshot**, losing the one thing C5.1 was built to save |
+| `set-mode … link` | Demands confirmation to delete an "archive" that does not exist |
+| `occ penpot_sync:status` | Reports `archive` for a file holding no design |
+
+None of those would have thrown. It is also precisely the "quiet lie" this app
+refuses everywhere else — `open-with.feature` and `restore.feature` both exist to
+avoid handing someone a placeholder that looks like a design export.
+
+**Zero bytes is the only representation that cannot be mistaken for one**, and it
+fails `holdsArchive()` on the size check before a byte is read.
+
+**One clarification worth keeping, because the obvious reading of this change is
+wrong.** It is tempting to conclude that the *mode stamp* is now how you know
+whether a file holds data. It is not, and inverting that would break C4.8's
+self-healing: an export that dies halfway leaves a file stamped `sync` holding
+nothing, and only *looking at the bytes* catches it. The stamp says what a file
+is supposed to hold; the bytes say what it does. This change **strengthens** that
+split rather than softening it — "no bytes" used to be inferred from a body we
+had written ourselves, and is now simply true.
+
+**Two things fall out for free.** `storeLink()` became idempotent — an
+already-empty file is left strictly alone, because `putContent('')` still moves
+the mtime and etag, and the pull calls it once per `link` per pass. Written the
+naive way, every desktop client would re-download every `link` file after every
+pull. And a legacy JSON body needs no repair step or version check: the next pull
+calls `storeLink()` on it and the body is gone.
+
+`occ penpot_sync:status` keeps `pointer` as a third state alongside `archive` and
+`empty`, and it now means something useful — *a body from before this change,
+not yet truncated*. The integration step that used to accept it now demands
+`empty`, so a demotion that left a body behind is a test failure rather than a
+shrug.
+
+**A closing note on where this decision actually came from.** The README has said
+*"a `link` file holds no bytes"* since it was written, as the justification for
+why a link may not be moved out of its project — an empty husk that looks like a
+design and isn't. The spec described zero bytes; the implementation shipped a
+JSON body; and the gap survived four courses because nothing ever forced the two
+to be compared. It took someone reading the mirror and asking *"if everything we
+need is in the metadata, why even have the JSON?"* This slice did not invent a
+new design. It made the code agree with the document that had been sitting on top
+of it the whole time.

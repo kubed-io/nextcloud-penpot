@@ -13,8 +13,6 @@ use OCA\PenpotSync\Command\SetMode;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\Mapping;
-use OCA\PenpotSync\Service\Membership;
-use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\StorageService;
@@ -121,17 +119,17 @@ final class SetModeTest extends TestCase {
 		self::assertStringContainsString('fresh export', $display);
 	}
 
-	public function testConfirmingADemotionReplacesTheArchiveWithAPointer(): void {
+	public function testConfirmingADemotionEmptiesTheFile(): void {
 		$this->givenStamped(Mapping::MODE_SYNC);
 		$this->archives->method('holdsArchive')->willReturn(true);
 		$this->archives->expects($this->once())
 			->method('storeLink')
-			// The pointer keeps the design's PENPOT name — the mirror's name minus
-			// the Nextcloud-side extension (§6.4) — and the stamp `5@t1` arrives
-			// back apart, because the body has a field for each half. Writing the
-			// joined signal into `revn` and leaving `modified_at` empty is wrong in
-			// a way nothing downstream would fail on, which is why it is asserted.
-			->with($this->file, 'file-1', 'Login', '5', 't1', 'team-9');
+			// The node, and nothing else. A demotion used to have to reassemble the
+			// id, the Penpot-side name and both halves of the drift signal to write
+			// a pointer body; since §C6.6 there is no body, so there is nothing to
+			// get wrong — the archive is simply dropped and the metadata, which
+			// already holds all of that, is left alone.
+			->with($this->file);
 		$this->metadata->expects($this->once())
 			->method('writeFile')
 			->with(30, [PenpotMetadata::KEY_MODE => Mapping::MODE_LINK]);
@@ -227,10 +225,7 @@ final class SetModeTest extends TestCase {
 		$storage = $this->createStub(StorageService::class);
 		$storage->method('resolveActorUid')->willReturn('penpot');
 
-		$resolver = $this->createStub(MembershipResolver::class);
-		$resolver->method('resolve')->willReturn(new Membership('proj-1', 'team-9'));
-
-		$command = new SetMode($rootFolder, $storage, $resolver, $this->metadata, $this->archives, new SyncGuard());
+		$command = new SetMode($rootFolder, $storage, $this->metadata, $this->archives, new SyncGuard());
 		// The question helper only exists on a command attached to an Application,
 		// and the demotion path asks for it by type — so this is not scaffolding,
 		// it is the environment the confirmation actually runs in.
