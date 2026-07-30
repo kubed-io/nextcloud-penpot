@@ -216,7 +216,7 @@ final class MotionServiceTest extends TestCase {
 			->method('writeFile')
 			->with(30, [PenpotMetadata::KEY_TEAM_ID => 'team-NEW']);
 
-		self::assertTrue($this->service->onMove($this->source(), $this->target()));
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
 	}
 
 	/**
@@ -234,7 +234,7 @@ final class MotionServiceTest extends TestCase {
 
 		$this->metadata->expects($this->never())->method('writeFile');
 
-		self::assertTrue($this->service->onMove($this->source(), $this->target()));
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
 	}
 
 	// ── fixtures ────────────────────────────────────────────────────────────

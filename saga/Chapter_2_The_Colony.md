@@ -184,7 +184,7 @@ failure **the local state always stands** (§6.18 rule 3).
 
 | Structure | Kind | Notes |
 |---|---|---|
-| **Open in Penpot** | 🟢 | **Built (C6.1).** `<base>/#/workspace?file-id=<penpot_id>`, read off a live instance's route table, not guessed (C3.4's refusal, answered). The id rides the directory PROPFIND, so zero extra lookup — and keying on `file-id` alone is what keeps an *unmapped* mirror linkable. |
+| **Open in Penpot** | 🟢 | **Built (C6.1), fixed (C6.7).** `<base>/#/workspace?team-id=<team>&file-id=<id>` — **both required**; the `file-id`-only form C6.1 shipped returns an internal error. Both ids ride the directory PROPFIND, so the click costs no lookup. Confirmed by opening one. |
 | **Mode pills** | 🟢 | `penpot:sync` / `penpot:link`, app-maintained, mutually exclusive. |
 | **"+ New" → design** | 🟡 | §6.33: scoped to where it is unambiguous; lands in Drafts otherwise. **#27 settled in C4.8** — `create-file` is now called live by the integration fixture; `projectId` and `project-id` are both honoured. |
 | **Notifications** | 🟢 | Pull results, skipped objects, divergences. |
@@ -942,25 +942,30 @@ alone; others add `page-id`. So:
 <base>/#/workspace?file-id=<penpot_id>
 ```
 
-**The guess C3.4 refused was the wrong one, and it would not have looked wrong.**
-The obvious invention was `/#/workspace/<project-id>/<file-id>` — and that route
-still exists and still resolves, as `:workspace-legacy`. Every manual test would
-have passed. It fails on exactly one case: a mirror **moved out of its project
-folder** is *unmapped* (file-type.feature) and has no ancestor carrying a project
-id, so there is no project id to put in the path. The link would have died on the
-files most likely to be dragged around, and the failure would have read as a
-Nextcloud bug rather than a URL we made up.
+> **⚠️ THE SECOND HALF OF THIS SECTION WAS WRONG, AND SHIPPED.** What follows the
+> route table below was corrected in **§C6.7** after the link was clicked and
+> returned an internal error. The route table is right; the conclusion drawn
+> about its *parameters* was not. Left standing, with the refutation inline,
+> because how it was gotten wrong is the useful part.
 
-The current route needs **only the id the file itself carries**, which is why the
-deep link now survives every move — the same property that makes `penpot_id` the
-join everywhere else in this app. The route table did not just answer the
-question; it answered it *better than the design that would have been built
-around a guess*.
+~~**The guess C3.4 refused was the wrong one, and it would not have looked
+wrong.**~~ The obvious invention was `/#/workspace/<project-id>/<file-id>` — and
+that route still exists and still resolves, as `:workspace-legacy`. ~~It fails on
+exactly one case: a mirror **moved out of its project folder** is *unmapped* and
+has no ancestor carrying a project id.~~
 
-**`page-id` is deliberately omitted.** It is accepted, and Penpot's own dashboard
-sometimes sends it — but a mirror does not know which page a user wants, and the
-file's first page is the right destination for "open this design." Sending a page
-id we invented would be the same class of mistake one level down.
+~~The current route needs **only the id the file itself carries**, which is why
+the deep link now survives every move.~~ **It does not.** It needs `team-id` as
+well, and without one Penpot errors out. §C6.7 has the correction and the
+evidence — including the fact that `:workspace-legacy` exists precisely *because*
+the modern route cannot work from a project id alone.
+
+**`page-id` is deliberately omitted, and this part held up.** Confirmed live: a
+URL carrying only `team-id` and `file-id` opens the design at its first page.
+Penpot's own legacy redirect passes `page-id` through as nil when the legacy URL
+had none, so the workspace has always had to cope without one. A mirror does not
+know which page a user wants, and inventing one would be the same class of
+mistake one level down.
 
 ### C6.2 — One action, and the absence is the feature
 
@@ -1117,3 +1122,103 @@ to be compared. It took someone reading the mirror and asking *"if everything we
 need is in the metadata, why even have the JSON?"* This slice did not invent a
 new design. It made the code agree with the document that had been sitting on top
 of it the whole time.
+
+
+### C6.7 — The route was read. The parameters were assumed. It shipped broken.
+
+`/#/workspace?file-id=<uuid>` returns **an internal error**. C6.1 shipped it as
+the deep link, and it took one click on a live instance to disprove a section
+that had been written with some confidence.
+
+**The route table reading was correct.** `["/workspace" :workspace]`, no path
+params, `router/resolve` puts everything in the query string — all true, all
+still true. The failure is entirely in the next step: *which* query params the
+workspace actually requires.
+
+**The bad inference, precisely.** The bundle's `go-to-workspace` call sites pass
+`file-id` alone, and that was read as "file-id is sufficient." Those are **in-app
+navigations**. The user is already inside a team; `team-id` is already in the URL
+and is carried across the transition. A cold load from outside carries nothing at
+all. The evidence was real, and it was evidence about a *different situation than
+the one being designed for* — a link arriving from Nextcloud is by definition
+never an in-app navigation.
+
+**The refutation was sitting in the same file, unread.** `:workspace-legacy`
+takes `/#/workspace/<project-id>/<file-id>` and — this is the whole tell — calls
+**`get-project {id}` purely to look up the team id**, then navigates with
+`{team-id, file-id, page-id, layout}`. An entire RPC round trip exists in
+Penpot's own code for no other purpose than obtaining a team id before opening a
+workspace. C6.1 read that redirect's *route* and stopped before its *body*. Had
+it read ten lines further, the requirement was stated outright.
+
+**And the conclusion drawn from the bad premise was the confident one.** C6.1
+argued the modern route was *better* than the legacy form because it needed only
+the id the file carries, so an unmapped mirror would still link. The opposite is
+true: the legacy form needs a project id, the modern form needs a team id, and
+**neither is on the file**. The section congratulated itself for a property the
+design did not have.
+
+#### Where the team id comes from, and why not the resolver
+
+`penpot_team_id` is now stamped on the file. The obvious objection — *we have a
+whole membership resolver for exactly this* — is right that the mechanism exists
+and wrong about which end it serves:
+
+|  | Resolver at click time | Stamp on the file |
+|---|---|---|
+| Where it runs | Server-side PHP, walking `Folder` nodes | Rides the directory PROPFIND the browser already has |
+| Cost per click | An endpoint + a round trip | Zero |
+| Mirror dragged out of its mapping | Resolves to **nothing** — no ancestor left | Still correct: the design never moved in Penpot |
+
+That last row decides it. `unmapped` means the *position* was lost, not the
+design — it is alive and openable, and the file's own stamp is the only surviving
+record of where it lives. A resolver-backed link would break exactly when someone
+rearranged their files.
+
+#### But the resolver is still the authority — as the writer
+
+The stamp is a **cache**, and a cache with no way to check it is a rumour. Two
+mapped team folders means dragging a mirror from one tree to the other genuinely
+changes which team owns the design, and a stamp left naming the old team is a
+link that opens the *wrong team's workspace*. So:
+
+- **`MotionService` re-stamps** from the resolved destination, *after* Penpot
+  accepts the move — never before, or a failed `move-files` would leave a stamp
+  describing a move that did not happen (§6.18 rule 3).
+- **`occ penpot_sync:status` reports a mismatch** between the stamp and the
+  folder walk, the same way it already contrasts the mode stamp against the
+  actual bytes. A disagreement is visible rather than inferred.
+- A file resolving to **no** team is not reported as a mismatch: that is the
+  unmapped state, where the stamp is *supposed* to be the only record.
+
+This is the shape the whole app already uses, arrived at from the other
+direction: **the stamp says what something is supposed to be; looking says what
+it is; and the thing that looks is what corrects the stamp.**
+
+#### A second bug, found while fixing the first
+
+The opener was gated on `canOpenInPenpot(mode)`, hiding itself for `unmapped` —
+described in C6.1 (and to the project owner, who approved a fallback on the
+strength of it) as "the design was deleted, so the id is dead."
+
+`unmapped` does not mean that. `PenpotMetadata` defines it as *carries a
+`penpot_id` but resolves to no Penpot ancestor* — a mirror moved out of its
+mapped folder, whose design is perfectly alive. Hiding the opener there would
+have broken the link precisely in the case the deep link is meant to survive.
+
+It was also **dead code**: nothing in the app has ever written `MODE_UNMAPPED`.
+The pull stamps `sync` or `link` and nothing else. And the state it was reaching
+for is unreachable anyway, because the prune (C5.1) moves a vanished design's
+mirror to the Nextcloud trash rather than leaving it in the tree. A gate that
+could never fire, guarding against a state that cannot occur, justified by a
+definition that was wrong.
+
+#### The lesson, narrower than "test more"
+
+C3.4 refused to invent this URL and was right to. C6.1 then *did* call the live
+instance — and still got it wrong, because it called the thing that answers
+"what are the routes?" and not the thing that answers "what happens when a
+stranger opens this link?" **Reading an implementation is not the same as
+exercising an entry point**, and the gap between them is exactly wide enough to
+fit a confident paragraph. The check that found this was a person clicking a
+link, which no amount of further reading would have replaced.

@@ -123,10 +123,11 @@ export function getPenpotMode(node) {
  *
  * So: `team-id` and `file-id`, both required, both stamped on the file.
  *
- * `page-id` is omitted. Penpot's own legacy redirect passes it through as nil
- * when the legacy URL had none, so the workspace must cope without one — and a
- * mirror has no way to know which page a user wants. Getting one would cost a
- * `get-file` per design.
+ * `page-id` is omitted, and that IS confirmed by opening one: a URL carrying
+ * team-id + file-id lands in the design at its first page. (Penpot's legacy
+ * redirect passes page-id through as nil when the legacy URL had none, so the
+ * workspace has always had to cope without one.) A mirror cannot know which page
+ * a user wants, and fetching one would cost a `get-file` per design.
  *
  * The base url is passed in rather than closed over so this stays pure.
  *
