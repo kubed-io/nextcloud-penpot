@@ -137,6 +137,61 @@ Feature: Admin configures team mappings
     When the admin maps the first visible team shared with the group "admin"
     Then the mapping's groups are "admin"
 
+  # ── what a mapped folder LETS YOU DO (saga §C6.8) ─────────────────────────
+  #
+  # A mapped folder is an ORDINARY Nextcloud folder that happens to be mirrored.
+  # Its groups get read, write, create and delete — the same surface any other
+  # folder grants, and the same surface both siblings grant.
+  #
+  # AN EARLIER BUILD WITHHELD CREATE AND DELETE to express "the mirror is
+  # read-only" (§6.1). That was the wrong tool, and the damage was invisible from
+  # the code: Nextcloud hides the "+ New" button entirely on a folder with no
+  # CREATE, so mapped folders silently behaved unlike every other folder in the
+  # instance — no new file, no new subfolder, no paste. It also made three BUILT
+  # features unreachable:
+  #
+  #   - free nesting (§6.29), the app's most load-bearing rule, whose entire
+  #     point is that a user may group mirrors into plain subfolders of their own;
+  #   - the move write-back, since a cross-folder move needs DELETE on the source;
+  #   - "a mapped folder stays usable as an ordinary folder", which the prune
+  #     relies on when it leaves unstamped files alone.
+  #
+  # §6.1 still holds absolutely — it is enforced by there being no content push,
+  # not by a permission bit. Withholding CREATE stopped no write to Penpot; it
+  # only stopped the user from using their own files.
+
+  @todo
+  Scenario: A mapped folder behaves like any other Nextcloud folder
+    Given a folder mapped to the Penpot team "Northwind"
+    When a member of its groups opens the folder in the Files app
+    Then the "+ New" button is available, as in any other folder
+    And they can create a plain subfolder inside it
+    And they can paste a file into it
+
+  @todo
+  Scenario: The folder grants the same rights as the sibling apps
+    Given a folder mapped to the Penpot team "Northwind"
+    Then each content group is granted read, update, create and delete
+    And the grant does not vary with the mapping's "link" / "sync" mode
+    # Unlike the siblings, the grant is mode-independent: penpot's link/sync is a
+    # per-file archive choice, not a folder-wide read-vs-write stance.
+
+  @todo
+  Scenario: Both storage backends grant the same surface
+    Given one mapping using a Team Folder and one using a plain shared folder
+    Then the content groups hold the same rights on both
+    # A user should not be able to tell which backend answered (§14.1).
+
+  @todo
+  Scenario: Creating a file in a mapped folder never writes to Penpot by itself
+    Given a folder mapped to the Penpot team "Northwind"
+    When a user creates an ordinary file there
+    Then Penpot is never contacted
+    And the file is untracked, and no pull ever touches it
+    # Having CREATE does not mean a landing file becomes a design. Deliberate
+    # creation is create-design.feature; a copy is copy.feature. Everything else
+    # is just a file living in a folder.
+
   Scenario: A mapping defaults to a Team Folder with no groups
     Given no Penpot teams are mapped
     When the admin maps the first team the service account can see

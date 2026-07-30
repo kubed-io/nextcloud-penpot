@@ -24,6 +24,26 @@
 #                     meaning something different from both siblings: not "which
 #                     way do edits flow" (they never flow out) but "do we store
 #                     the bytes at all."
+#   penpot_team_id  — the Penpot TEAM the design belongs to (saga §C6.7). Added
+#                     when the Files-app deep link needed it: Penpot's workspace
+#                     route refuses to open without a team, and a browser holding
+#                     one directory PROPFIND cannot walk up a freely-nested tree
+#                     to find the Team Folder's marker. See below for why this is
+#                     not a relapse into the removed "penpot_mapping" key.
+#
+# WHY penpot_team_id IS NOT THE RETURN OF "penpot_mapping". The removed key
+# cached the file's POSITION — project AND team, as resolved from the folder tree
+# — and position is exactly what a move changes, so every move had to rewrite it
+# or it lied. A team id is not position: it is a property of the DESIGN in
+# Penpot, in the same category as penpot_id and penpot_revision. The PROJECT id
+# is still deliberately NOT stored on a file, because that one is position and
+# does change locally.
+#
+# The folder walk stays the authority and VERIFIES the stamp: a move between two
+# mapped team folders really does change the owning team, so the move path
+# re-stamps from the resolver, and "occ penpot_sync:status" reports a
+# stamp-vs-folders disagreement rather than letting a stale link open the wrong
+# team's workspace.
 #
 # DELIBERATELY REMOVED: "penpot_mapping". An earlier draft stored the file's
 # mapping on the file. That's redundant now that folder-level metadata is
@@ -95,8 +115,16 @@ Feature: A mirrored Penpot file is a first-class file type
       | nc:metadata-penpot_id       |
       | nc:metadata-penpot_revision |
       | nc:metadata-penpot_mode     |
+      | nc:metadata-penpot_team_id  |
 
-  Scenario: A file's mapping is derived from its folders, not stored on the file
+  Scenario: A file carries the team its design belongs to
+    Given a mirrored ".penpot" file
+    Then its "nc:metadata-penpot_team_id" property names the Penpot team
+    And it still carries no project id of its own
+    And moving the file between two mapped team folders re-stamps the team
+    And "occ penpot_sync:status" reports a stamp that disagrees with the folders
+
+  Scenario: A file's project is derived from its folders, not stored on the file
     Given a mirrored ".penpot" file inside a project folder
     Then the file carries no mapping key of its own
     And its project is read from the nearest ancestor folder carrying a project id
