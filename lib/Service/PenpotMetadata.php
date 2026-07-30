@@ -142,10 +142,15 @@ final class PenpotMetadata {
 	 * mode is given in the canonical vocabulary (`sync`/`link`/`unmapped`);
 	 * `link` is stored as `reference` on the wire (see class docblock).
 	 *
-	 * @param array{penpot_id?:string, penpot_revision?:string, penpot_mode?:string} $values
+	 * `penpot_team_id` is shared with the folder key set on purpose (§C6.7): on a
+	 * Team Folder it marks what the folder IS, and on a file it records which
+	 * team the design belongs to, which is what the workspace deep link needs and
+	 * what no ancestor walk can supply to a browser cheaply.
+	 *
+	 * @param array{penpot_id?:string, penpot_revision?:string, penpot_mode?:string, penpot_team_id?:string} $values
 	 */
 	public function writeFile(int $fileId, array $values): void {
-		$this->writeKeys($fileId, $values, [self::KEY_ID, self::KEY_REVISION, self::KEY_MODE]);
+		$this->writeKeys($fileId, $values, [self::KEY_ID, self::KEY_REVISION, self::KEY_MODE, self::KEY_TEAM_ID]);
 	}
 
 	/**
@@ -175,6 +180,7 @@ final class PenpotMetadata {
 			$get(self::KEY_ID),
 			$get(self::KEY_REVISION),
 			$this->modeFromWire($get(self::KEY_MODE)),
+			$get(self::KEY_TEAM_ID),
 		);
 	}
 

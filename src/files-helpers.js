@@ -43,6 +43,23 @@ export function getPenpotId(node) {
 }
 
 /**
+ * Read the Penpot TEAM id the design belongs to.
+ *
+ * Stamped on the file itself by the pull (§C6.7) rather than resolved by walking
+ * up to the Team Folder, because this runs in a browser holding one directory
+ * PROPFIND: the file's own properties are free, an ancestor's are not. It is
+ * also the only copy that survives a mirror being dragged out of its mapped
+ * folder — at which point the design is still perfectly alive in Penpot, and the
+ * folder walk has nothing left to find.
+ *
+ * @param {{attributes?: Record<string, unknown>}} [node]
+ * @return {string}
+ */
+export function getPenpotTeamId(node) {
+  return readMetadata(node, 'penpot_team_id')
+}
+
+/**
  * Read the file's mode, translating the WIRE value back.
  *
  * `link` is stored as `reference` because the literal string `link` is
@@ -50,8 +67,29 @@ export function getPenpotId(node) {
  * PenpotMetadata's class docblock. This is the browser end of that same
  * translation, and the only place in the frontend that knows about it.
  *
+ * ## THE MODE DOES NOT GATE THE OPENER — A CORRECTION (§C6.7)
+ *
+ * An earlier cut of this file hid "Open in Penpot" for `unmapped`, believing
+ * `unmapped` meant "the design was deleted, so the id is dead." It does not.
+ * PenpotMetadata defines it as *carries a `penpot_id` but resolves to no Penpot
+ * ancestor* — a mirror dragged OUT of its mapped folder. The design is alive and
+ * perfectly openable; only its position was lost. Hiding the opener there would
+ * have broken the link exactly when someone rearranged their files, which is the
+ * case the deep link is supposed to survive.
+ *
+ * It was dead code as well: nothing in the app writes `unmapped`. The pull
+ * stamps `sync` or `link`, and nothing else ever calls writeFile with a mode.
+ *
+ * The state that gate was reaching for — an id whose design no longer exists —
+ * is not reachable either: the prune moves a vanished design's mirror to the
+ * Nextcloud trash (C5.1) rather than leaving it in the tree.
+ *
+ * So no mode is consulted when deciding to show the action. This is kept because
+ * the wire translation is real knowledge, and because the mode-pill and
+ * download-guard slices both need the mode on the listing.
+ *
  * @param {{attributes?: Record<string, unknown>}} [node]
- * @return {string}  '' | 'sync' | 'link' | 'unmapped'
+ * @return {string}  '' | 'sync' | 'link'
  */
 export function getPenpotMode(node) {
   const mode = readMetadata(node, 'penpot_mode')
@@ -59,40 +97,49 @@ export function getPenpotMode(node) {
 }
 
 /**
- * Build the Penpot deep link for a design id.
+ * Build the Penpot workspace deep link.
  *
- * ## THE ROUTE IS CONFIRMED, NOT GUESSED (saga §C3.4 → §C6.1)
+ * ## THE ROUTE WAS READ; THE REQUIRED PARAMS WERE NOT, AND THAT WAS THE BUG
  *
- * Course 3 deliberately refused to write this function: the workspace route had
- * never been called, and inventing a plausible one is the exact guess the saga
- * exists to refuse. It was then read out of a live instance's own route table:
+ * The route table is genuinely this (read from a live instance's `js/main.js`):
  *
  *     ["/workspace",                      :workspace]
  *     ["/workspace/:project-id/:file-id",  :workspace-legacy]
  *
- * and `router/resolve` is `(match->path (match-by-name router id) params)` —
- * `match-by-name` is handed no path params, so everything reitit receives rides
- * the QUERY STRING. Hence `?file-id=`, not a path segment.
+ * and `router/resolve` is `(match->path (match-by-name router id) params)` with
+ * no path params, so everything rides the QUERY STRING. All correct.
  *
- * THE NEW ROUTE NEEDS ONLY THE ID THE FILE ITSELF CARRIES. That is why the
- * legacy form is not used even though it still resolves: it needs a project id,
- * which lives on an ancestor folder, so an *unmapped* mirror (one dragged out of
- * its project folder, file-type.feature) could not build a link at all. Keying
- * on `file-id` alone means the deep link survives every move.
+ * What was WRONG was the next step: `go-to-workspace` call sites in the bundle
+ * pass `file-id` alone, and that was read as "file-id is sufficient". Those are
+ * IN-APP navigations, where `team-id` is already in the URL and is carried over.
+ * A cold load from outside carries nothing, and `?file-id=` alone lands on an
+ * internal error. Confirmed the hard way, by clicking one.
  *
- * `page-id` is optional — Penpot's own dashboard navigates with `file-id` alone
- * and lands on the file's first page, which is the right destination for us.
+ * The authority is Penpot's own legacy-route redirect, which exists to convert
+ * `/#/workspace/<project-id>/<file-id>` into the modern form. It calls
+ * `get-project {id: project-id}` **purely to look up the team id**, then
+ * navigates with `{team-id, file-id, page-id, layout}`. Penpot will not open a
+ * workspace without a team, which is exactly why that RPC round trip exists.
+ *
+ * So: `team-id` and `file-id`, both required, both stamped on the file.
+ *
+ * `page-id` is omitted. Penpot's own legacy redirect passes it through as nil
+ * when the legacy URL had none, so the workspace must cope without one — and a
+ * mirror has no way to know which page a user wants. Getting one would cost a
+ * `get-file` per design.
  *
  * The base url is passed in rather than closed over so this stays pure.
  *
  * @param {string} penpotUrl  Trailing-slash-trimmed Penpot base URL.
+ * @param {string} teamId     The Penpot team id (a uuid).
  * @param {string} penpotId   The Penpot file id (a uuid).
- * @return {string}  '' when either half is missing (the caller hides the action).
+ * @return {string}  '' when any part is missing (the caller hides the action).
  */
-export function buildUrl(penpotUrl, penpotId) {
-  return penpotUrl && penpotId
-    ? `${penpotUrl}/#/workspace?file-id=${encodeURIComponent(penpotId)}`
-    : ''
+export function buildUrl(penpotUrl, teamId, penpotId) {
+  if (!penpotUrl || !teamId || !penpotId) return ''
+  return `${penpotUrl}/#/workspace`
+    + `?team-id=${encodeURIComponent(teamId)}`
+    + `&file-id=${encodeURIComponent(penpotId)}`
 }
 
 /**
@@ -111,41 +158,4 @@ export function isPenpotFile(context) {
   if (!node || context.nodes.length !== 1) return false
   return node.mime === PENPOT_MIME
     || (typeof node.basename === 'string' && node.basename.endsWith(PENPOT_EXT))
-}
-
-/**
- * Should "Open in Penpot" be offered for a file in this mode?
- *
- * ## THE MODE AXIS DOES NOT GATE THE OPENER — THE ID DOES
- *
- * This is the sharp break from both siblings, and open-with.feature is explicit
- * about it: their modes change what a click *means*, so they have a row per
- * mode. Here `sync` and `link` differ only in whether the ARCHIVE is stored
- * locally (§6.22); both carry the same `penpot_id` and both deep-link to the
- * same live design. So mode is not consulted at all.
- *
- * What does gate it is having an id to link to. `unmapped` is the one state that
- * means "this file has a penpot_id but no live design behind it" — a mirror
- * whose design was deleted, whose id is permanently dead (§6.20). Following that
- * link would open a 404, so the action hides rather than lie.
- *
- * ## HIDING HANDS THE FILE BACK TO NEXTCLOUD, AND THAT IS THE INTENDED ENDING
- *
- * With no action registered for it, a click falls through to core's default for
- * the mimetype, which is a download. That is the right answer rather than a
- * consolation prize: there is nothing left that can open the design, and the
- * bytes on disk are all that survives it. A `sync` mirror downloads its real
- * archive — the one case where the local backup is the entire remaining value of
- * the file. Deciding to hide is therefore a decision about what a click SHOULD
- * do, not just what it should not.
- *
- * An absent mode ('' — the first-load PROPFIND race, or an untracked file) stays
- * permissive: the action shows, and resolves to nothing harmlessly if there is
- * no id behind it.
- *
- * @param {string} mode
- * @return {boolean}
- */
-export function canOpenInPenpot(mode) {
-  return mode !== 'unmapped'
 }

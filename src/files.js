@@ -37,7 +37,7 @@ import { registerFileAction, DefaultType } from '@nextcloud/files'
 import { registerDavProperty, getDefaultPropfind, getClient, getRootPath } from '@nextcloud/files/dav'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
-import { getPenpotId, getPenpotMode, buildUrl, isPenpotFile, canOpenInPenpot } from './files-helpers.js'
+import { getPenpotId, getPenpotTeamId, buildUrl, isPenpotFile } from './files-helpers.js'
 // The mark lives as a real SVG under img/ (the single source of truth for the
 // app's glyphs) and Vite inlines it at build time via ?raw, so nothing is
 // hand-pasted here. It is the SAME file RegisterMimetype copies into
@@ -50,9 +50,14 @@ const APP_ID = 'penpot_sync'
 // PROPFIND (this writes to the shared scope store core's PROPFIND reads). `nc`
 // is a default namespace, so the bare prefixed name is enough.
 registerDavProperty('nc:metadata-penpot_id')
-// The mode does NOT decide the opener here (see canOpenInPenpot) — it is
-// registered because the action's enabled() reads it to spot the one state that
-// has an id but no live design behind it.
+// The team the design belongs to. Penpot's workspace route REFUSES to open a
+// file without it (§C6.7) — its own legacy-route redirect calls `get-project`
+// purely to look this up — so it rides the listing beside the file id.
+registerDavProperty('nc:metadata-penpot_team_id')
+// The mode rides the listing but does NOT gate the opener: `sync` and `link`
+// point at the same live design (§6.22), and the one mode that would have
+// justified hiding it is neither written by anything nor reachable (§C6.7).
+// Registered for the mode-pill and download-guard slices that follow.
 registerDavProperty('nc:metadata-penpot_mode')
 
 // Base URL of the Penpot instance, server-rendered into Initial State by
@@ -74,17 +79,21 @@ const penpotUrl = (() => {
  * @param {object} node
  * @return {Promise<string>}
  */
-async function propfindPenpotId(node) {
-  if (!node?.path) return ''
+async function propfindIds(node) {
+  if (!node?.path) return { id: '', teamId: '' }
   try {
     const res = await getClient().stat(getRootPath() + node.path, {
       details: true,
       data: getDefaultPropfind(),
     })
-    return res?.data?.props?.['metadata-penpot_id'] || ''
+    const props = res?.data?.props ?? {}
+    return {
+      id: props['metadata-penpot_id'] || '',
+      teamId: props['metadata-penpot_team_id'] || '',
+    }
   } catch (e) {
     console.warn('[penpot_sync] metadata PROPFIND failed', e)
-    return ''
+    return { id: '', teamId: '' }
   }
 }
 
@@ -92,11 +101,20 @@ async function propfindPenpotId(node) {
  * Node → Penpot deep link: node attributes first (free), else a one-shot
  * PROPFIND.
  *
+ * BOTH ids are refetched together when either is missing. They are written by
+ * the same pull and ride the same PROPFIND, so a node lacking one almost always
+ * lacks the other — and a link is worthless without both, so there is nothing to
+ * gain by fetching them separately.
+ *
  * @param {object} node
  * @return {Promise<string>}
  */
 async function resolveUrl(node) {
-  return buildUrl(penpotUrl, getPenpotId(node)) || buildUrl(penpotUrl, await propfindPenpotId(node))
+  const direct = buildUrl(penpotUrl, getPenpotTeamId(node), getPenpotId(node))
+  if (direct) return direct
+
+  const { id, teamId } = await propfindIds(node)
+  return buildUrl(penpotUrl, teamId, id)
 }
 
 // @nextcloud/files v4: registerFileAction takes a plain IFileAction object;
@@ -106,17 +124,19 @@ registerFileAction({
   displayName: () => t(APP_ID, 'Open in Penpot'),
   iconSvgInline: () => penpotMarkIcon,
 
-  // Three gates, cheapest first: an instance to open, a file of ours, and a
-  // design still living behind the id. Notably NOT gated on sync-vs-link —
-  // both modes point at the same design (saga §6.22).
-  enabled: (context) => !!penpotUrl
-    && isPenpotFile(context)
-    && canOpenInPenpot(getPenpotMode(context?.nodes?.[0])),
+  // Two gates, cheapest first: an instance to open, and a file of ours. NOT
+  // gated on mode — both modes point at the same live design (§6.22) — and not
+  // gated on carrying an id either, because on the first folder after a page
+  // load the listing can arrive before our DAV property is registered. Hiding on
+  // a missing id would make the action flicker on exactly one folder per session;
+  // resolveUrl() re-reads it and exec() no-ops if it truly is not ours.
+  enabled: (context) => !!penpotUrl && isPenpotFile(context),
 
   async exec(context) {
     const url = await resolveUrl(context?.nodes?.[0])
-    // null = silent no-op rather than an error toast: reaching here with no id
-    // means the file is ours but untracked, which is a state, not a failure.
+    // null = silent no-op rather than an error toast: reaching here without both
+    // ids means the file is a `.penpot` we do not track (or has not been pulled
+    // since the team id was introduced), which is a state, not a failure.
     if (!url) return null
     window.open(url, '_blank', 'noopener,noreferrer')
     return true

@@ -6,24 +6,26 @@
  * The JS analog of the PHP service tests: dependency-free logic, fast, and the
  * regression net that makes a Vite major bump safe to land.
  *
- * The deep-link assertions are the load-bearing ones. `buildUrl` encodes a route
- * shape read off a live Penpot's own route table (saga §C6.1); if someone
- * "tidies" it into the legacy `/workspace/<project>/<file>` path form, every
- * unmapped mirror silently loses its link. These tests are what that person
- * trips over.
+ * The deep-link assertions are the load-bearing ones, and they exist because the
+ * first cut of buildUrl SHIPPED BROKEN (§C6.7): it emitted `?file-id=` alone and
+ * Penpot answered with an internal error. The route table had been read
+ * correctly; the required PARAMS were inferred from in-app call sites that
+ * already had a team-id in the URL. Every assertion below that looks
+ * over-specified is holding that door shut.
  */
 import { describe, it, expect } from 'vitest'
 import {
   PENPOT_MIME,
   readMetadata,
   getPenpotId,
+  getPenpotTeamId,
   getPenpotMode,
   buildUrl,
   isPenpotFile,
-  canOpenInPenpot,
 } from '../../src/files-helpers.js'
 
 const ID = '61d8ecb9-c430-8120-8008-6225c5b12134'
+const TEAM = '4eda2e11-843e-8045-8008-51824bda07a1'
 
 describe('readMetadata', () => {
   it('reads the plain metadata-<key> attribute', () => {
@@ -92,39 +94,65 @@ describe('getPenpotMode', () => {
 })
 
 describe('buildUrl', () => {
-  // The route confirmed live against Penpot 2.17.0's own route table: the
-  // current :workspace route is the bare path `/workspace`, so every param
-  // reitit is handed rides the query string.
-  it('builds the workspace deep link from base url + file id', () => {
-    expect(buildUrl('https://penpot.example.com', ID))
-      .toBe(`https://penpot.example.com/#/workspace?file-id=${ID}`)
+  // THE REGRESSION THIS FILE EXISTS FOR. The first cut emitted
+  // `?file-id=<id>` alone, having read Penpot's in-app `go-to-workspace` call
+  // sites — which pass file-id alone because team-id is ALREADY in the URL and
+  // gets carried. A cold load from outside carries nothing, and Penpot answered
+  // with an internal error. Penpot's own legacy-route redirect settles it: it
+  // calls `get-project` purely to look the team up before navigating.
+  it('includes BOTH team-id and file-id', () => {
+    expect(buildUrl('https://penpot.example.com', TEAM, ID))
+      .toBe(`https://penpot.example.com/#/workspace?team-id=${TEAM}&file-id=${ID}`)
   })
 
-  it('keys on file-id alone — no project id, which an unmapped mirror lacks', () => {
-    const url = buildUrl('https://penpot.example.com', ID)
-    expect(url).toContain('?file-id=')
-    expect(url).not.toContain('project-id')
+  it('never emits a file-id without a team-id — the shape that errored', () => {
+    const url = buildUrl('https://penpot.example.com', TEAM, ID)
+    expect(url).toContain('team-id=')
+    expect(url.indexOf('team-id=')).toBeLessThan(url.indexOf('file-id='))
   })
 
-  it('uses the query form, not the legacy /workspace/<project>/<file> path', () => {
-    expect(buildUrl('https://penpot.example.com', ID)).not.toMatch(/\/workspace\/[^?]/)
+  it('returns empty string when the team id is missing, rather than a broken link', () => {
+    expect(buildUrl('https://penpot.example.com', '', ID)).toBe('')
   })
 
   it('keeps the hash, because Penpot routes client-side', () => {
-    expect(buildUrl('https://penpot.example.com', ID)).toContain('/#/workspace')
+    expect(buildUrl('https://penpot.example.com', TEAM, ID)).toContain('/#/workspace?')
   })
 
-  it('url-encodes the id', () => {
-    expect(buildUrl('https://penpot.example.com', 'a b/c'))
-      .toBe('https://penpot.example.com/#/workspace?file-id=a%20b%2Fc')
+  it('uses the query form, not the legacy /workspace/<project>/<file> path', () => {
+    expect(buildUrl('https://penpot.example.com', TEAM, ID)).not.toMatch(/\/workspace\/[^?]/)
+  })
+
+  it('url-encodes both ids', () => {
+    expect(buildUrl('https://penpot.example.com', 'a b', 'c/d'))
+      .toBe('https://penpot.example.com/#/workspace?team-id=a%20b&file-id=c%2Fd')
   })
 
   it('returns empty string when the base url is missing (unconfigured instance)', () => {
-    expect(buildUrl('', ID)).toBe('')
+    expect(buildUrl('', TEAM, ID)).toBe('')
   })
 
-  it('returns empty string when the id is missing (untracked file)', () => {
-    expect(buildUrl('https://penpot.example.com', '')).toBe('')
+  it('returns empty string when the file id is missing (untracked file)', () => {
+    expect(buildUrl('https://penpot.example.com', TEAM, '')).toBe('')
+  })
+})
+
+describe('getPenpotTeamId', () => {
+  it('reads the team id off the listing attributes', () => {
+    expect(getPenpotTeamId({ attributes: { 'metadata-penpot_team_id': TEAM } })).toBe(TEAM)
+  })
+
+  it('does not confuse the team id with the file id', () => {
+    const node = { attributes: { 'metadata-penpot_id': ID, 'metadata-penpot_team_id': TEAM } }
+    expect(getPenpotTeamId(node)).toBe(TEAM)
+    expect(getPenpotId(node)).toBe(ID)
+  })
+
+  // A mirror pulled before the team id was stamped. The link cannot be built, so
+  // the click must no-op rather than open a workspace with a missing team.
+  it('returns empty string for a file stamped before the team id existed', () => {
+    expect(getPenpotTeamId({ attributes: { 'metadata-penpot_id': ID } })).toBe('')
+    expect(buildUrl('https://penpot.example.com', getPenpotTeamId({ attributes: {} }), ID)).toBe('')
   })
 })
 
@@ -155,32 +183,5 @@ describe('isPenpotFile', () => {
     expect(isPenpotFile()).toBe(false)
     expect(isPenpotFile({})).toBe(false)
     expect(isPenpotFile({ nodes: [] })).toBe(false)
-  })
-})
-
-describe('canOpenInPenpot', () => {
-  // THE break from both siblings: mode governs whether the archive is stored
-  // locally, never whether the design can be opened (open-with.feature).
-  it('offers the opener in sync mode', () => {
-    expect(canOpenInPenpot('sync')).toBe(true)
-  })
-
-  it('offers the opener in link mode — identically', () => {
-    expect(canOpenInPenpot('link')).toBe(true)
-  })
-
-  it('treats both modes the same, because both point at the same live design', () => {
-    expect(canOpenInPenpot('sync')).toBe(canOpenInPenpot('link'))
-  })
-
-  // The one state with an id but no live design behind it: its Penpot original
-  // was deleted, and a deleted design never comes back at its old id (§6.20),
-  // so the link is permanently dead.
-  it('hides the opener for unmapped, rather than following a dead link', () => {
-    expect(canOpenInPenpot('unmapped')).toBe(false)
-  })
-
-  it('stays permissive when the mode is absent (the first-load race)', () => {
-    expect(canOpenInPenpot('')).toBe(true)
   })
 })

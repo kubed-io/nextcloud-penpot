@@ -30,14 +30,33 @@ namespace OCA\PenpotSync\Service;
  *   penpot_revision — Penpot's `revn` + `modifiedAt` pair (saga §5.5), the drift
  *                     signal a pull diffs against to skip unchanged files.
  *   penpot_mode     — "sync" or "link" or "unmapped".
+ *   penpot_team_id  — the Penpot TEAM the design belongs to. Added in §C6.7.
  *
  * **There is no `syncedHash` and no `mapping` key.** Both siblings carry a
  * body-hash to guard a *writeback loop*; this app never pushes content (§6.1),
  * so `penpot_revision` is a read-side "is my copy stale" check, not a loop
- * guard. And membership is DERIVED by walking up the folder tree
+ * guard. And POSITION is DERIVED by walking up the folder tree
  * ({@see MembershipResolver}), never stored on the file — a stored copy would
  * have to be rewritten on every move, which is exactly the drift a stored
  * mapping key caused in an earlier design.
+ *
+ * ## WHY `penpot_team_id` IS NOT A RELAPSE INTO THAT (saga §C6.7)
+ *
+ * The retired `penpot_mapping` key cached the file's **position** — project AND
+ * team as resolved from the folder tree — and position is exactly what a move
+ * changes, so every move had to rewrite it or it lied.
+ *
+ * A team id is not position. It is a property of the DESIGN, in Penpot, in the
+ * same category as `penpot_id` and `penpot_revision`: dragging a mirror around
+ * Nextcloud does not move the design between Penpot teams, and the one operation
+ * that does (`move-project`) is re-read by the next pull like any other upstream
+ * change. The project id is still **not** stored, precisely because that one is
+ * position and does change locally.
+ *
+ * It is stored because the workspace deep link requires it and nothing else can
+ * supply it: the browser has the file's own metadata from the directory
+ * PROPFIND, but reaching an ancestor Team Folder's marker would cost an
+ * unbounded walk up a freely-nested tree (§6.29) on every render.
  *
  * The mode is in the **canonical** vocabulary (`sync` / `link` / `unmapped`) —
  * the stored `reference` wire value is already translated back to `link` by
@@ -48,6 +67,7 @@ final class PenpotFileMetadata {
 		public readonly string $penpotId,
 		public readonly string $revision,
 		public readonly string $mode,
+		public readonly string $teamId = '',
 	) {
 	}
 

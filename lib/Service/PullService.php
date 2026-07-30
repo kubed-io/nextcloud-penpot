@@ -427,6 +427,12 @@ final class PullService {
 		$values = [
 			PenpotMetadata::KEY_ID => $fileId,
 			PenpotMetadata::KEY_MODE => $mode,
+			// The design's TEAM, stamped on the file itself (§C6.7). Penpot's
+			// workspace route will not open a file without it, and the browser
+			// cannot reach an ancestor Team Folder's marker without walking a
+			// freely-nested tree on every render. Re-stamped every pull, so a
+			// design that changes team upstream corrects itself.
+			PenpotMetadata::KEY_TEAM_ID => $mapping->teamId,
 		];
 		if ($current) {
 			$values[PenpotMetadata::KEY_REVISION] = $signal;
