@@ -183,6 +183,17 @@ Feature: Admin configures team mappings
     # A user should not be able to tell which backend answered (§14.1).
 
   @todo
+  Scenario: A pull re-asserts the folder's group rights
+    Given a folder mapped to the Penpot team "Northwind"
+    And its group rights have been changed by hand
+    When the pull runs
+    Then the mapping's groups hold read, update, create and delete again
+    # This is what lets a permissions correction reach folders that already
+    # exist: neither backend needs a migration, because both re-assert on every
+    # pass. It also means hand-editing the share is not a supported way to
+    # restrict a mapped folder — remove the group from the mapping instead.
+
+  @todo
   Scenario: Creating a file in a mapped folder never writes to Penpot by itself
     Given a folder mapped to the Penpot team "Northwind"
     When a user creates an ordinary file there

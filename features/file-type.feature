@@ -107,6 +107,20 @@ Feature: A mirrored Penpot file is a first-class file type
     Then its mimetype is a custom Penpot mimetype, not generic "application/zip"
     And the Files app shows the Penpot icon instead of a generic archive icon
 
+  # TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
+  # glyph are the same drawing with opposite colour treatments, and collapsing
+  # them fails in both directions — this is not a style preference.
+  Scenario: The row icon and the menu glyph are separate files
+    Given a mirrored ".penpot" file
+    Then the Files-row icon comes from the app's colour mark, with a fixed fill
+    And the "Open in Penpot" menu glyph is themed to the menu's own colour
+    And the menu glyph is drawn as filled shapes, never as strokes
+    # Nextcloud renders mimetype icons out of core/img/filetypes/ WITHOUT
+    # recolouring them, so that file must carry its own fill or it is invisible.
+    # Menu glyphs are the opposite: NC applies its own fill, which overrides
+    # fill="none" and floods a stroked outline into a solid tile. A filled shape
+    # cannot fail that way — recolouring it just recolours it.
+
   Scenario: WebDAV PROPFIND exposes the Penpot metadata in the XML
     Given a mirrored ".penpot" file
     When a WebDAV client requests the file's properties (PROPFIND)
