@@ -39,6 +39,15 @@
 # Penpot has purged the design outright — the case where the mirror is the last
 # copy in existence and the temptation to mirror Penpot's purge is strongest.
 #
+# ## AND THE RECONCILER ONLY EVER SEES VISIBLE FILES
+#
+# The other half of the same idea, and the one that keeps it simple: the pull
+# walks the mapped folder's listing, which does not contain trashed files. So a
+# mirror in the Nextcloud trash is not spared by a check — it is never looked at.
+# Once a file is in the trash the reconciler is done with it, for good, whatever
+# happens in Penpot afterwards. There is no cross-trash comparison anywhere in
+# this app, and that is a design decision, not an omission.
+#
 # ## WHOSE TRASH, AND WHY IT MAY NOT BE YOURS (saga §C6.16)
 #
 # The pull runs as the account that owns the mapped folder — the service account
@@ -128,6 +137,41 @@ Feature: Pruning mirrors of designs Penpot no longer has
     #
     # This is the case where the local file is genuinely the last copy of that
     # design, which is precisely why it must land somewhere recoverable.
+
+  # ── the reconciler's field of view: VISIBLE FILES, and nothing else ───────
+  #
+  # THE RULE THAT MAKES THE ONE ABOVE SIMPLE. The reconciler walks the mapped
+  # folder's directory listing, so a mirror already in the Nextcloud trash is not
+  # merely spared — it is **not seen at all**. Once a file reaches the trash the
+  # pull is finished with it, permanently, whatever Penpot does next.
+  #
+  # State this as a rule and a whole class of question stops existing. "Both
+  # trashes hold it and then Penpot purges — now what?" has no answer to design,
+  # because the reconciler was never looking. There is no third state to
+  # reconcile, no cross-trash comparison, and no schedule on which the app can
+  # take a user's last copy away.
+  #
+  # THE PRICE, NAMED: a design that comes back in Penpot while its old mirror
+  # sits in the Nextcloud trash gets a NEW mirror, beside the trashed one — the
+  # pull cannot re-adopt what it cannot see. reconcile.feature specifies that
+  # adoption and it is not built; this rule is why it is a deliberate open
+  # question rather than an oversight.
+
+  Scenario: A mirror already in the Nextcloud trash is invisible to the pull
+    Given a Penpot project named "Left Alone" exists in that team
+    And a Penpot file named "Twice Dead" exists in the project "Left Alone"
+    When the admin runs a pull
+    And I delete "Penpot/Left Alone/Twice Dead.penpot"
+    And the design "Twice Dead" is purged from Penpot's trash
+    And the admin runs a pull
+    Then the pull succeeds
+    And the pull pruned nothing
+    And the file "Penpot/Left Alone/Twice Dead.penpot" is in the Nextcloud trash
+    # THE SEQUENCE THE RULE EXISTS FOR, end to end: the user deletes the mirror
+    # (which puts the design in Penpot's trash), then the design is destroyed in
+    # Penpot for good. Both sides are now gone in their own way — and the pull
+    # does nothing at all, because a trashed mirror was never in its field of
+    # view. "Pruned nothing" is the whole assertion: not "pruned it gently".
 
   Scenario: A design that already had its archive needs no second export
     Given a Penpot project named "Kept" exists in that team

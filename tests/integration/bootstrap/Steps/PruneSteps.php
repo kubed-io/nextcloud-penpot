@@ -69,6 +69,37 @@ trait PruneSteps {
 		]);
 	}
 
+	/**
+	 * Destroy a design that is ALREADY in Penpot's trash — the state a mirror
+	 * reaches by being deleted in Nextcloud, since that delete passes through to
+	 * `delete-file`.
+	 *
+	 * Its id has to come off the TRASH listing, not the project listing: the
+	 * design is not in a project any more, and `get-team-deleted-files` is the
+	 * only sanctioned source of ids for the destroy command anyway (§C6.11 — it
+	 * has no safety of its own, and this suite holds itself to the rule it holds
+	 * the app to).
+	 *
+	 * @When /^the design "([^"]*)" is purged from Penpot's trash$/
+	 */
+	public function theDesignIsPurgedFromPenpotsTrash(string $name): void {
+		$fileId = null;
+		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $this->teamId()]) as $file) {
+			if (($file['name'] ?? null) === $name && is_string($file['id'] ?? null)) {
+				$fileId = $file['id'];
+				break;
+			}
+		}
+		if ($fileId === null) {
+			throw new \RuntimeException("no design named '{$name}' in Penpot's trash — was it actually deleted?");
+		}
+
+		$this->penpotRpc('permanently-delete-team-files', [
+			'team-id' => $this->teamId(),
+			'ids' => [$fileId],
+		]);
+	}
+
 	/** @Then /^the pull pruned (\d+) mirrors?$/ */
 	public function thePullPrunedMirrors(int $count): void {
 		$this->mustReport(sprintf('%d design(s) no longer exist in Penpot', $count));

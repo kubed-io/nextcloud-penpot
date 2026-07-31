@@ -1989,3 +1989,48 @@ not — reading `files_trashbin` during a pull is still unbuilt, so a design
 restored in Penpot's own UI today gets a second mirror beside the trashed one.
 Both corrected. The lesson is not new but it keeps arriving in new clothes: **a
 feature file's prose ages exactly like a code comment, and neither is tested.**
+
+#### 6. The reconciler's field of view, stated at last
+
+The sharpest framing came from the user, and it retires a question rather than
+answering it:
+
+> we only spoke of the reconcile seeing a penpot file went to penpot trash or
+> it's gone and the state in nextcloud was the file is visible and active in a
+> folder. the other state is when nextcloud put it in the trash, both penpot and
+> nextcloud have it in the trash, so if penpot purges, the reconciler maybe
+> shouldn't care about the nextcloud trash and only focus on visible files which
+> need pruning.
+
+That is exactly what `collectMirrors()` has always done — it walks the mapped
+folder's directory listing, which does not contain trashed files. A trashed
+mirror is not *spared* by a check; it is **never seen**. But nothing said so, and
+the difference between "we decided not to" and "we happen not to" is the
+difference between a rule and an accident waiting to be refactored.
+
+Written down, a whole class of question stops existing:
+
+| Question | Answer once the rule is stated |
+|---|---|
+| Both trashes hold it, then Penpot purges — now what? | Nothing. The pull was never looking. |
+| Do the two trashes need reconciling against each other? | There is no such comparison anywhere in this app. |
+| Can a Penpot-side expiry take a user's last copy? | No. Nothing reaches into the Nextcloud trash. |
+
+**The price, named rather than hidden:** a design that comes back in Penpot while
+its old mirror sits in the Nextcloud trash gets a *new* mirror beside the trashed
+one, because the pull cannot re-adopt what it cannot see. §6.37 wanted the
+opposite — read the trash, match by `penpot_id`, adopt.
+
+What makes that a fork rather than a bug is that the restore slice removed the
+ordinary route into the state. Deleting a mirror deletes the design in Penpot, so
+the pull stops naming it and creates nothing; restoring the mirror restores the
+design with it (§C6.15). What remains are odd cases — the delete never reached
+Penpot, or a human restored the design in Penpot's own UI — where *"the design
+exists, so a visible mirror should exist"* is a defensible answer. `reconcile.feature`
+now carries both readings and claims neither, which is the honest state.
+
+The general lesson is the one this chapter keeps circling from new directions:
+**the strongest simplification available is usually a scope boundary, not a
+smarter algorithm.** Two trashes with independent retention policies is a genuinely
+hard reconciliation problem. Deciding that one of them is simply not ours to look
+at makes it disappear.
