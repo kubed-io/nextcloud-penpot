@@ -40,19 +40,34 @@
 # user session to exercise the personal-token attribution branch. They flip on
 # the day that channel lands, not when the code does.
 
-@todo
 Feature: Renaming a mirrored Penpot file
   As a Nextcloud user
   I want file names to reflect Penpot, and I want honesty about which direction is settled
   So that I never assume a rename propagates a direction this app hasn't committed to
 
   Background:
-    Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Northwind"
-    And the Penpot project "My Stuff" is mirrored as a folder inside it
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    And no Penpot teams are mapped
+    And the first visible team is mapped as a plain folder "Penpot"
+
+  # ══ RENAMED IN NEXTCLOUD ═══════════════════════════════════════════════════
+
+  @in-nextcloud @gesture
+  Scenario: Renaming a mirrored file renames its design in Penpot
+    Given a Penpot project named "Rename Live" exists in that team
+    And a Penpot file named "Old Name" exists in the project "Rename Live"
+    When the admin runs a pull
+    And I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
+    Then Penpot project "Rename Live" holds a design named "New Name"
+    And Penpot project "Rename Live" holds no design named "Old Name"
+    # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
+    # is on "New Name", not "New Name.penpot", and that is the whole rule.
 
   # ── Penpot → Nextcloud: confirmed, this is how renames normally happen ───────
 
+  @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull
     Given a mirrored ".penpot" file for a Penpot file named "Old Name"
     When the file is renamed to "New Name" in Penpot
@@ -60,6 +75,7 @@ Feature: Renaming a mirrored Penpot file
     Then the mirrored file is renamed to "New Name.penpot"
     And its "penpot_id" metadata is unchanged
 
+  @todo
   Scenario: A rename is picked up in both modes, without an export
     Given a mirrored ".penpot" file in "link" mode
     When the file is renamed in Penpot and a pull runs
@@ -71,6 +87,7 @@ Feature: Renaming a mirrored Penpot file
   # via "rename-file". §6.1's read-only stance was always about CONTENT — shape
   # data we cannot meaningfully round-trip — not about a one-field name.
 
+  @todo
   Scenario: Renaming a mirrored file in Nextcloud renames the Penpot file
     Given a mirrored ".penpot" file for a Penpot file named "Old Name"
     When I rename the file to "New Name.penpot" in the Files app
@@ -82,6 +99,7 @@ Feature: Renaming a mirrored Penpot file
     # name never carries it. This is the one thing file rename does that project
     # rename does not (project folder names are bare).
 
+  @todo
   Scenario: The rename call sends the file id under the plain "id" parameter
     When a mirrored file is renamed and the rename propagates
     Then "rename-file" is called with the id under the key "id"
@@ -90,6 +108,7 @@ Feature: Renaming a mirrored Penpot file
     # :params-validation with missing-key [:id]. There is no inferable casing
     # rule across this API — only a per-command table. See saga open question #21.
 
+  @todo
   Scenario: A propagated rename is attributed to the acting user
     Given the user has a valid personal Penpot token
     When the user renames a mirrored file in the Files app
@@ -99,12 +118,14 @@ Feature: Renaming a mirrored Penpot file
     # of the app's few write paths (saga §6.19), all of which attribute the same
     # way.
 
+  @todo
   Scenario: A propagated rename with no personal token uses the service account
     Given the user has no personal Penpot token configured
     When the user renames a mirrored file in the Files app
     Then "rename-file" is called using the service-account token
     And the user is told the change was attributed to the service account
 
+  @todo
   Scenario: A failed propagation never reverts the user's local rename
     When the user renames a mirrored file and the Penpot call fails
     Then the Nextcloud file keeps its new name
@@ -115,6 +136,7 @@ Feature: Renaming a mirrored Penpot file
 
   # ── the name guard, same shape as the project one ───────────────────────────
 
+  @todo
   Scenario: An empty file name is refused before it is sent
     When I try to rename a mirrored file to a name that is empty once the extension is stripped
     Then the rename is refused with an explanation
@@ -123,6 +145,7 @@ Feature: Renaming a mirrored Penpot file
     # return HTTP 400 on "" (saga §6.54). Our guard is a better message and a
     # saved round trip, not the only defence.
 
+  @todo
   Scenario: A file name longer than Penpot allows is refused before it is sent
     When I try to rename a mirrored file to a name longer than 250 characters
     Then the rename is refused with an explanation naming the limit
@@ -144,6 +167,7 @@ Feature: Renaming a mirrored Penpot file
 
   # ── the invariant, true under either branch ─────────────────────────────────
 
+  @todo
   Scenario: Renaming never breaks the Penpot link, regardless of direction
     Given a mirrored ".penpot" file with a known "penpot_id"
     When the file is renamed by any means

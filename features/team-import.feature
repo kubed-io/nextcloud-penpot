@@ -62,7 +62,6 @@
 # explicitly rejects it in favour of the plainer "map only what already exists
 # in Penpot" shape (admin-mapping.feature).
 
-@todo
 Feature: Importing an existing Penpot team as a Team Folder, and the open question of Nextcloud-originated projects
   As a Nextcloud user with a configured Penpot token
   I want to see which of my Penpot teams are already mapped and import the ones that aren't
@@ -81,6 +80,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
   # groups" automatically once granted — there's no separate pending state to
   # build. So detecting "is this already imported" is a read-only match, not a
   # grant action.
+  @todo
   Scenario: A Penpot team already mapped to a Team Folder is detected, not re-imported
     Given the Penpot team "Northwind" is already mapped to a Team Folder
     And the user's Nextcloud group has access to that Team Folder
@@ -89,6 +89,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     And no new folder or mapping is created
 
   # ── importing a NOT-yet-mapped team — the permission gate is the open point ──
+  @todo
   Scenario: Importing an unmapped team as a Team Folder requires Team Folder rights
     Given the Penpot team "New Team" is visible to the user's token but not yet mapped
     And the acting user does not hold Team Folder admin or delegated rights
@@ -104,6 +105,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
   # A user seeing a team through their personal token is NOT sufficient. The
   # service account does all mirroring, so it must be able to see the team too,
   # or the resulting mapping would pull nothing forever.
+  @todo
   Scenario: A team the service account cannot see is shown as not importable
     Given the Penpot team "Solo Team" is visible to the user's personal token
     But the service account has not been invited to "Solo Team"

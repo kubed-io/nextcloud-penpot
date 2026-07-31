@@ -33,7 +33,6 @@
 # @todo — no lib/Settings/PersonalSettings.php exists yet; this is a brand-new
 # settings surface, not a port from either sibling.
 
-@todo
 Feature: Personal Penpot access token settings
   As an individual Nextcloud user
   I want to store my own Penpot personal access token
@@ -46,6 +45,7 @@ Feature: Personal Penpot access token settings
 
   # ── the page, and what it honestly claims to do ──────────────────────────────
 
+  @todo
   Scenario: A user finds a personal Penpot settings section
     When the user opens their personal settings
     Then a "Penpot" personal settings section is present
@@ -53,17 +53,20 @@ Feature: Personal Penpot access token settings
     And it explains the token is used to attribute their changes in Penpot
     And it explains the app works without it
 
+  @todo
   Scenario: A user sets their own personal access token
     When the user enters their Penpot personal access token and saves
     Then the token is stored for that user only
     And the field renders blank on reload, the same "never echoed back" pattern both sibling apps use
 
+  @todo
   Scenario: A user's token never leaks to another Nextcloud user
     Given user "dana" has set a personal Penpot token
     When user "alex" opens their own personal Penpot settings
     Then "alex" sees no token configured
     And "alex" setting their own token never overwrites "dana"'s
 
+  @todo
   Scenario: Testing the personal connection distinguishes unset from rejected
     Given the user has not set a personal Penpot token
     When the user tests their personal connection
@@ -73,6 +76,7 @@ Feature: Personal Penpot access token settings
 
   # ── what happens without one: degraded attribution, never blocked work ───────
 
+  @todo
   Scenario: Clearing a personal token degrades attribution but breaks nothing
     Given the user has a personal Penpot token stored
     When the user clears the token field and saves
@@ -84,6 +88,7 @@ Feature: Personal Penpot access token settings
     # per-user-pull model (saga §6.9) — the pull never used personal tokens in
     # the final design, so clearing one cannot affect it.
 
+  @todo
   Scenario: An expired personal token falls back rather than failing the action
     Given the user's personal Penpot token has expired
     When the user renames a mirrored file
@@ -94,12 +99,14 @@ Feature: Personal Penpot access token settings
 
   # ── the boundary: this token reads nothing on the app's behalf ───────────────
 
+  @todo
   Scenario: A personal token is never used to mirror content
     Given the user has a valid personal Penpot token
     When the scheduled pull runs
     Then the user's personal token is not used
     And all mirroring is performed with the service-account token
 
+  @todo
   Scenario: A personal token does not grant the user new teams to map
     Given the user's personal token can see a Penpot team the service account cannot
     Then that team is not offered for mapping
@@ -108,6 +115,7 @@ Feature: Personal Penpot access token settings
 
   # ── the documented assumption ────────────────────────────────────────────────
 
+  @todo
   Scenario: The app assumes one Nextcloud user maps to one Penpot account
     Given the personal-settings page description
     Then it documents the 1:1 (one Nextcloud user, one Penpot account) assumption

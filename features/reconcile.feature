@@ -77,16 +77,68 @@
 # into Penpot's trash to match. The gap here is the reverse direction — noticing,
 # during a pull, that a design came back on its own.
 
-@todo
 Feature: Scheduled or manual pull from Penpot
   As a Nextcloud admin
   I want mapped folders to reflect Penpot on a schedule or on demand
   So that the mirror stays current without ever needing a push counterpart
 
   Background:
-    Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Northwind"
-    And the Penpot project "My Stuff" is mirrored as a folder inside it
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    And no Penpot teams are mapped
+
+  # ══ WHAT A RUN PRODUCES ════════════════════════════════════════════════════
+  #
+  # The structural claims, driven live: a mapped team becomes a folder tree
+  # stamped with Penpot's own ids, and running twice changes nothing.
+
+  @admin @occ
+  Scenario: A pull mirrors a mapped team's root folder and stamps its team id
+    Given the first visible team is mapped into the folder "Penpot"
+    When the admin runs a pull
+    Then the pull succeeds
+    And the folder "Penpot" carries the team's Penpot id
+
+  @admin @occ
+  Scenario: A pull mirrors a project as a folder carrying its project id
+    Given the first visible team is mapped into the folder "Penpot"
+    And a Penpot project named "Widgets" exists in that team
+    When the admin runs a pull
+    Then the pull succeeds
+    And the folder "Penpot/Widgets" carries a Penpot project id
+
+  @admin @occ
+  Scenario: A second pull reconciles in place and does not duplicate the folder
+    Given the first visible team is mapped into the folder "Penpot"
+    And a Penpot project named "Widgets" exists in that team
+    When the admin runs a pull
+    And the admin runs a pull
+    Then the pull succeeds
+    And there is no node at "Penpot/Widgets (2)"
+    # IDEMPOTENCE IS THE WHOLE POINT of a reconciler: the second run must find
+    # what the first one made, by id, and leave it alone.
+
+  # ══ WHAT A RUN MUST REFUSE TO DO ═══════════════════════════════════════════
+  #
+  # Pruning is driven by "Penpot did not name this file", and every way of
+  # failing to ask — a 502, a project skipped for an illegal name, a half-read
+  # listing — is indistinguishable from a deletion. A regression here does not
+  # throw; it quietly moves a team's mirrors to the trash on the next scheduled
+  # run. So "prunes nothing" is asserted as a step rather than assumed.
+
+  @admin @occ
+  Scenario: A pull that changed nothing prunes nothing
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Untouched" exists in that team
+    And a Penpot file named "Poster" exists in the project "Untouched"
+    When the admin runs a pull
+    And the admin runs a pull
+    Then the pull succeeds
+    And the pull pruned nothing
+    # The safety property, asserted first because it is the one a regression
+    # breaks silently. Pruning on a listing that simply did not mention a file is
+    # the single most destructive thing this app could do.
 
   # ── what a pull produces ─────────────────────────────────────────────────────
 
@@ -124,6 +176,7 @@ Feature: Scheduled or manual pull from Penpot
     Then the card asks the admin to save the mapping first
     # There is nothing to sync until the mapping is persisted.
 
+  @todo
   Scenario: Pulling mirrors Penpot's projects as folders and its files inside them
     Given the "Northwind" team has a Penpot project "My Stuff" containing a file "My firsty"
     When the pull runs
@@ -136,6 +189,7 @@ Feature: Scheduled or manual pull from Penpot
     # The pull CREATES them one level under the Team Folder; the user may then
     # move them anywhere within it (saga §6.29/§6.30).
 
+  @todo
   Scenario: A pull never relocates folders or files the user has moved
     Given the "My Stuff" project folder has been moved into a plain folder "Clients"
     And a mirrored ".penpot" file inside a plain subfolder of "My Stuff"
@@ -147,12 +201,14 @@ Feature: Scheduled or manual pull from Penpot
     # The pull only ensures each file sits under SOME folder mapping to its real
     # project — not that it sits at a particular path.
 
+  @todo
   Scenario: A newly created Penpot project appears as a folder on the next pull
     Given the "Northwind" team gains a new Penpot project "Brand"
     When the pull runs
     Then a folder named "Brand" appears one level inside the Team Folder
     And it carries the new project's id as metadata and the app's project tag
 
+  @todo
   Scenario: A project renamed in Penpot renames its folder, wherever the user put it
     Given the "My Stuff" project folder has been moved into a plain folder "Clients"
     When the project is renamed to "Acme" in Penpot
@@ -167,6 +223,7 @@ Feature: Scheduled or manual pull from Penpot
   # different node type, different RPC, 204 with no body, and no extension to
   # handle.
 
+  @todo
   Scenario: A second pull with nothing changed creates no duplicates
     Given a mirrored ".penpot" file for the Penpot file "My firsty"
     When the pull runs again with nothing changed in Penpot
@@ -200,12 +257,14 @@ Feature: Scheduled or manual pull from Penpot
   # adopting behaviour, and stay unclaimed until someone decides that reading
   # `files_trashbin` on every pull is worth what it buys.
 
+  @todo
   Scenario: A design whose mirror sits in the Nextcloud trash is not duplicated
     Given a mirrored ".penpot" file that has been moved to the Nextcloud trash
     When the pull runs and finds the design still exists in Penpot
     Then no second mirror is created for that design
     And the trashed file is left in the trash, still carrying its "penpot_id"
 
+  @todo
   Scenario: Restoring a mirror from the Nextcloud trash re-adopts it
     Given a mirrored ".penpot" file in the Nextcloud trash
     When the user restores it from the trash
@@ -218,6 +277,7 @@ Feature: Scheduled or manual pull from Penpot
     # `penpot_id` like any other mirror. Only the "exactly one" clause depends on
     # the fork above, and only in the odd cases it names.
 
+  @todo
   Scenario: A design already in Penpot's Drafts surfaces at the Team Folder root
     Given the "Northwind" team has a design in its "Drafts" project
     When the pull runs
@@ -228,6 +288,7 @@ Feature: Scheduled or manual pull from Penpot
 
   # ── the mode axis: what actually costs anything ──────────────────────────────
 
+  @todo
   Scenario: A new mapping defaults its files to "link" mode
     When the admin maps the Penpot team "Northwind" without choosing a mode
     And the pull runs
@@ -235,6 +296,7 @@ Feature: Scheduled or manual pull from Penpot
     And no ".penpot" archive content is stored for any of them
     And "export-binfile" was never called during the pull
 
+  @todo
   Scenario: A "link" file is refreshed from the listing alone, never exported
     Given a mirrored ".penpot" file in "link" mode
     When the Penpot file's "revn" increases
@@ -243,6 +305,7 @@ Feature: Scheduled or manual pull from Penpot
     And the file still holds no archive content
     But its recorded revision metadata is updated from the listing
 
+  @todo
   Scenario: A "sync" file is exported only when its Penpot revision has moved
     Given a mirrored ".penpot" file in "sync" mode whose last-pulled "revn" is recorded
     And the Penpot file's "revn" and "modifiedAt" have not changed since
@@ -253,6 +316,7 @@ Feature: Scheduled or manual pull from Penpot
     And the pull runs
     Then the file is re-exported and its archive content replaced
 
+  @todo
   Scenario: A pull over an unchanged instance costs no exports at all
     Given the "Northwind" team has 3 mirrored projects holding 50 files in "link" mode
     And nothing has changed in Penpot since the last pull
@@ -264,6 +328,7 @@ Feature: Scheduled or manual pull from Penpot
 
   # ── name and placement reconcile for free, in both modes ─────────────────────
 
+  @todo
   Scenario: A rename in Penpot renames the mirrored file, whatever its mode
     Given a mirrored ".penpot" file for a Penpot file named "Old Name"
     When the file is renamed to "New Name" in Penpot
@@ -272,6 +337,7 @@ Feature: Scheduled or manual pull from Penpot
     And its "penpot_id" metadata is unchanged
     And no export was needed to detect or apply the rename
 
+  @todo
   Scenario: A file moved between projects in Penpot moves folder in Nextcloud
     Given a mirrored ".penpot" file in the "My Stuff" folder
     And the Penpot project "Design System" is mirrored as a folder
@@ -284,6 +350,7 @@ Feature: Scheduled or manual pull from Penpot
     # file — into whichever folder maps to "Design System", wherever the user
     # has put that folder (saga §6.29).
 
+  @todo
   Scenario: A file whose project folder was moved follows it, not a fixed path
     Given a mirrored ".penpot" file in the "My Stuff" folder
     And the user has moved the "My Stuff" folder inside a plain folder "Clients"
@@ -293,6 +360,7 @@ Feature: Scheduled or manual pull from Penpot
 
   # ── pruning: the most dangerous thing this app does ──────────────────────────
 
+  @todo
   Scenario: A pull prunes a mirrored file whose Penpot file no longer exists
     Given a mirrored ".penpot" file in the "My Stuff" folder
     When the underlying Penpot file is deleted in Penpot
@@ -307,6 +375,7 @@ Feature: Scheduled or manual pull from Penpot
   # longer exists, with nothing to rebuild from. But "export-binfile" still
   # exports a soft-deleted file for ~7 days (saga §6.42, confirmed live), and a
   # trashed Nextcloud file's content is writable (saga §6.44, confirmed live).
+  @todo
   Scenario: A link file gets a final snapshot before being pruned
     Given a mirrored ".penpot" file in "link" mode in the "My Stuff" folder
     When its design is deleted in Penpot
@@ -316,6 +385,7 @@ Feature: Scheduled or manual pull from Penpot
     And only then is it moved to the Nextcloud trash
     And the user is left with a real, openable ".penpot" archive
 
+  @todo
   Scenario: A snapshot that cannot be taken is reported, not faked
     Given a mirrored ".penpot" file in "link" mode
     When its design was deleted in Penpot longer ago than the grace window
@@ -325,6 +395,7 @@ Feature: Scheduled or manual pull from Penpot
     And the app reports that no archive could be recovered for it
     # Best-effort by design — we never pretend a snapshot succeeded.
 
+  @todo
   Scenario: A sync file needs no snapshot, it already has one
     Given a mirrored ".penpot" file in "sync" mode
     When its design is deleted in Penpot and the pull runs
@@ -343,6 +414,7 @@ Feature: Scheduled or manual pull from Penpot
   # human restored it in Penpot's UI, or another Nextcloud did. The design
   # reappears under its ORIGINAL id, so the reconciler could match the trashed
   # mirror by `penpot_id` and put it back.
+  @todo
   Scenario: A design restored in Penpot's own UI is re-adopted from the trash
     Given a mirrored ".penpot" file that the pull trashed when its design vanished
     When a human restores that design in Penpot's own UI
@@ -355,6 +427,7 @@ Feature: Scheduled or manual pull from Penpot
     # mirror beside the trashed one. The claim that "the trash-aware reconciler
     # already does this" was aspirational when written and is corrected here.
 
+  @todo
   Scenario: A pull never prunes on a failed or incomplete listing
     Given a mirrored ".penpot" file in the "My Stuff" subfolder
     When the pull runs but "get-project-files" fails for that project
@@ -365,6 +438,7 @@ Feature: Scheduled or manual pull from Penpot
     # is THE most dangerous operation in the app (saga §6.25) — an auth blip or a
     # network error must never be read as evidence that a user's files are gone.
 
+  @todo
   Scenario: An ignored file is skipped by the pull, not pruned
     Given a mirrored ".penpot" file tagged with the app's ignore marker
     When the pull runs
@@ -374,10 +448,12 @@ Feature: Scheduled or manual pull from Penpot
 
   # ── there is no push, and there is no user-attributed pull ───────────────────
 
+  @todo
   Scenario: There is no push counterpart to this feature
     Given the "Northwind" mapping exists
     Then no "Sync to Penpot" action exists anywhere in the admin panel or CLI
 
+  @todo
   Scenario: The pull always runs as the service account, never as a user
     Given two Nextcloud users both have personal Penpot tokens configured
     And both are members of the mapped "Northwind" team

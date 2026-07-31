@@ -31,7 +31,6 @@
 #
 # @todo — no lib/Service/MappingTeardownService exists yet.
 
-@todo
 Feature: Removing a mapping tears down the connection without ever touching Penpot
   As a Nextcloud admin
   I want removing a mapping to clean up only what it connected, via the trash
@@ -42,6 +41,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
+  @todo
   Scenario: Removing the team mapping trashes its mirrored files and leaves standalone files alone
     Given a mirrored ".penpot" file in the "My Stuff" folder
     And an untracked standalone ".penpot" file also sitting in the "My Stuff" folder
@@ -53,12 +53,14 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And Penpot is never contacted by this action
     And the design still exists, unchanged, in Penpot
 
+  @todo
   Scenario: There is no project mapping to remove
     Given the "Northwind" mapping exists with several mirrored project folders
     Then no individual project folder can be unmapped
     And the only teardown available is removing the team mapping itself
     # Project folders exist because the pull created them (saga §6.24).
 
+  @todo
   Scenario: Removing a mapping warns about what is actually being trashed
     Given 3 mirrored files in "sync" mode and 10 in "link" mode under the mapping
     When the admin removes the "Northwind" mapping
@@ -66,12 +68,14 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And it explains that link files hold no content to lose
     # Don't-lose-data starts with telling the user what's at stake.
 
+  @todo
   Scenario: Trashed mirrored files keep their identity so they can reconnect
     Given a mirrored ".penpot" file in the "My Stuff" folder
     When the admin removes the "Northwind" mapping
     Then the trashed file keeps its "penpot_id" metadata
     And it keeps its archive content if it was in "sync" mode
 
+  @todo
   Scenario: Re-mapping the same team and restoring from trash reconnects the file
     Given the admin removed the "Northwind" mapping and the file is trashed
     When the admin maps the Penpot team "Northwind" again
@@ -82,6 +86,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # Reconnecting is matched on penpot_id, so a restored file is adopted rather
     # than duplicated — the same id-matching guarantee uninstall.feature relies on.
 
+  @todo
   Scenario: An ignored file under a removed mapping is still trashed, not destroyed
     Given a mirrored ".penpot" file tagged as ignored in the "My Stuff" folder
     When the admin removes the "Northwind" mapping
@@ -90,6 +95,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # Ignore protects a file from the PULL (ignore.feature). It doesn't exempt it
     # from an explicit admin teardown — but trash, never destroy, still holds.
 
+  @todo
   Scenario: Removing a mapping never contacts Penpot, even for cleanup
     Given the "Northwind" mapping with mirrored files
     When the admin removes the mapping

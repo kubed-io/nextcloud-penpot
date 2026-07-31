@@ -45,7 +45,6 @@
 #
 # @todo — no lib/Service/MappingService exists yet.
 
-@todo
 Feature: Membership is the nearest ancestor folder carrying a Penpot id
   As a Nextcloud admin
   I want membership derived by walking up the folder tree
@@ -58,12 +57,14 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   # ── the core lookup ──────────────────────────────────────────────────────────
 
+  @todo
   Scenario: A file's project is the nearest ancestor folder carrying a project id
     When a mirrored ".penpot" file lives directly in the "My Stuff" folder
     Then the file belongs to the "My Stuff" project, read from that folder's metadata
     And that folder belongs to the "Northwind" team, read from the Team Folder's metadata
     And the file itself stores no copy of its mapping
 
+  @todo
   Scenario: A file nested deeper inside a project folder still belongs to that project
     Given a plain subfolder "wip" created inside the "My Stuff" folder
     When a mirrored ".penpot" file lives inside "wip"
@@ -72,6 +73,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # The old cap called this "too deep" and orphaned the file. It's just a
     # subfolder — Penpot has no opinion about it, so neither do we.
 
+  @todo
   Scenario: The nearest project id wins when project folders are nested
     Given the Penpot project "Design System" is mirrored as a folder
     And the "Design System" folder has been moved inside the "My Stuff" folder
@@ -80,6 +82,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And nothing about this nesting is reflected in Penpot, where both are flat
     # Nearest ancestor, not outermost — this is what makes nesting unambiguous.
 
+  @todo
   Scenario: Project folders can be grouped under ordinary Nextcloud folders
     Given a plain folder "Clients" created inside the Team Folder
     When the "My Stuff" project folder is moved inside "Clients"
@@ -87,6 +90,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And "My Stuff" still belongs to the "Northwind" team, found further up
     And "Clients" is never sent to Penpot, which has no concept of it
 
+  @todo
   Scenario: A file with no project-id ancestor belongs to no mapping
     Given a folder that carries no Penpot metadata, outside every Team Folder
     When a ".penpot" file lives in that folder
@@ -98,12 +102,14 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
   # to a team, sits in no project" — which is exactly what the nearest-ancestor
   # rule produces when it finds a team id but no project id on the way up.
 
+  @todo
   Scenario: A file at a Team Folder's root is in that team's Drafts
     When a mirrored ".penpot" file lives directly at the Team Folder's root
     Then it belongs to the "Northwind" team
     And it belongs to no project
     And in Penpot it lives in that team's "Drafts" project
 
+  @todo
   Scenario: A file in any plain folder under a team is also in Drafts
     Given a plain folder "Inbox" inside the Team Folder, with no Penpot metadata
     And a deeper plain folder "Inbox/2026" also with no Penpot metadata
@@ -116,6 +122,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # a single Drafts because a flat system has nowhere else to put an unfiled
     # design; we can express the same state as a whole folder tree, for free.
 
+  @todo
   Scenario: No folder is ever created to represent Drafts
     Given the "Northwind" team has a "Drafts" project in Penpot
     When the pull runs
@@ -126,6 +133,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   # ── the visible marker ───────────────────────────────────────────────────────
 
+  @todo
   Scenario: A project folder carries a visible tag as well as its metadata
     Given the Penpot project "My Stuff" is mirrored as a folder
     Then the folder carries the Penpot project id as metadata
@@ -134,6 +142,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   # The tag only earns its keep if a tagged folder means exactly one thing —
   # hence the naming invariant below (saga §6.36).
+  @todo
   Scenario: A tagged folder's name always equals its Penpot project's name
     Given the Penpot project "My Stuff" is mirrored as a folder
     Then the folder is named "My Stuff", exactly as Penpot names the project
@@ -142,6 +151,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # ordinary folder someone named the same thing. Tag + matching name means a
     # tagged folder called "Acme" IS the Penpot project "Acme" — no ambiguity.
 
+  @todo
   Scenario: A plain folder inside a Team Folder is tolerated, not adopted
     When a plain, untagged folder with no Penpot metadata is created inside the Team Folder
     Then the pull does not touch that folder
@@ -150,6 +160,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # This is the whole point of the tag: ordinary folders can live among project
     # folders without becoming projects.
 
+  @todo
   Scenario: Applying the project tag by hand does not create a Penpot project
     Given a plain folder inside the Team Folder
     When a user applies the app's project tag to it by hand
@@ -160,11 +171,13 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   # ── team resolution, and the one exception ───────────────────────────────────
 
+  @todo
   Scenario: A project folder's team is the nearest ancestor carrying a team id
     Given the "My Stuff" project folder is nested two levels deep inside the Team Folder
     Then it still resolves to the "Northwind" team
     And the depth between them is irrelevant to the lookup
 
+  @todo
   Scenario: A personal project folder has no team ancestor, and that is valid
     Given the user has a personal Penpot token configured
     And a personal project folder mounted at the root of the user's home
@@ -178,6 +191,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
   # ── tolerated content ────────────────────────────────────────────────────────
 
+  @todo
   Scenario: Non-Penpot content inside a project folder is left alone
     Given a mirrored ".penpot" file in the "My Stuff" folder
     And an unrelated file "notes.txt" in the same folder

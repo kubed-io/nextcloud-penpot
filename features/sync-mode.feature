@@ -43,7 +43,6 @@
 # with demotion, and re-deriving files from a changed mapping default. The
 # scenarios below remain the specification those will be built against.
 
-@todo
 Feature: Choosing whether a mirrored file stores its archive
   As a Nextcloud user
   I want to pick which designs are backed up and which are just links
@@ -56,6 +55,7 @@ Feature: Choosing whether a mirrored file stores its archive
 
   # ── defaults ─────────────────────────────────────────────────────────────────
 
+  @todo
   Scenario: Files inherit their mapping's default mode
     Given the "Northwind" mapping has default mode "link"
     When the pull runs
@@ -69,6 +69,7 @@ Feature: Choosing whether a mirrored file stores its archive
 
   # ── what each mode actually is ───────────────────────────────────────────────
 
+  @todo
   Scenario: A link file is a pointer with no stored content
     Given a mirrored ".penpot" file in "link" mode
     Then the file stores no ".penpot" archive content
@@ -78,6 +79,7 @@ Feature: Choosing whether a mirrored file stores its archive
 
   # A pointer can't survive the gestures a real archive can, so links are
   # confined (saga §6.43). Every refusal offers the same escape: promote first.
+  @todo
   Scenario: A link file is confined to its own project
     Given a mirrored ".penpot" file in "link" mode in a project folder
     Then it can be moved freely within that project, including into plain subfolders
@@ -89,6 +91,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # Detail lives in move.feature and ignore.feature; this is the summary of
     # what the mode actually costs you.
 
+  @todo
   Scenario: Promotion lifts every link restriction at once
     Given a mirrored ".penpot" file in "link" mode
     When I promote it to "sync" mode and the archive is fetched
@@ -96,6 +99,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # The restrictions are a property of holding no bytes, not a policy about
     # links — so acquiring bytes removes all of them together.
 
+  @todo
   Scenario: A sync file holds the real archive
     Given a mirrored ".penpot" file in "sync" mode
     Then the file holds the real ".penpot" archive downloaded from Penpot
@@ -105,6 +109,7 @@ Feature: Choosing whether a mirrored file stores its archive
 
   # ── promotion: safe, additive ────────────────────────────────────────────────
 
+  @todo
   Scenario: Promoting a link file to sync fetches the archive
     Given a mirrored ".penpot" file in "link" mode
     When I promote the file to "sync" mode
@@ -114,6 +119,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And its "penpot_id" is unchanged
     And nothing was written to Penpot
 
+  @todo
   Scenario: Promotion survives future pulls
     Given a mirrored ".penpot" file promoted to "sync" mode
     When the pull runs several times
@@ -123,6 +129,7 @@ Feature: Choosing whether a mirrored file stores its archive
 
   # ── demotion: the one lossy operation here ───────────────────────────────────
 
+  @todo
   Scenario: Demoting a sync file to link warns before deleting the archive
     Given a mirrored ".penpot" file in "sync" mode
     When I demote the file to "link" mode
@@ -130,6 +137,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And it warns that this is a local backup, not recoverable from Penpot without a new export
     And nothing is deleted until I confirm
 
+  @todo
   Scenario: Confirming a demotion deletes the archive and keeps the pointer
     Given a mirrored ".penpot" file in "sync" mode
     When I demote the file to "link" mode and confirm
@@ -139,6 +147,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And Penpot is never contacted
     And the design in Penpot is completely unaffected
 
+  @todo
   Scenario: Demoting an ignored file is refused
     Given a mirrored ".penpot" file in "sync" mode tagged as ignored
     When I demote the file to "link" mode
@@ -149,6 +158,7 @@ Feature: Choosing whether a mirrored file stores its archive
 
   # ── cost ─────────────────────────────────────────────────────────────────────
 
+  @todo
   Scenario: A team of link files costs no exports at all
     Given the "Northwind" team has 100 files, all in "link" mode
     When the pull runs

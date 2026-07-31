@@ -29,7 +29,6 @@
 #
 # @todo — no lib/Listener/ exists yet.
 
-@todo
 Feature: Project folders — renaming, tagging, and what is not allowed
   As a Nextcloud user
   I want a project folder to behave like the Penpot project it represents
@@ -42,6 +41,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   # ── renaming: propagates, unlike file rename ────────────────────────────────
 
+  @todo
   Scenario: Renaming a project folder renames the Penpot project
     When I rename the "My Stuff" folder to "Acme"
     Then "rename-project" is called with the project's id and the new name
@@ -49,12 +49,14 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     And the folder keeps its project id and its project tag
     And its position in the folder tree is unchanged
 
+  @todo
   Scenario: Renaming a project in Penpot renames the folder on the next pull
     When the project is renamed to "Acme" in Penpot
     And a pull runs
     Then the folder is renamed to "Acme"
     And the folder stays exactly where the user had put it
 
+  @todo
   Scenario: A project folder rename does not touch the files inside it
     Given mirrored ".penpot" files inside the "My Stuff" folder
     When I rename the folder to "Acme"
@@ -62,6 +64,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     And no file's "penpot_id" changes
     And "rename-file" is never called
 
+  @todo
   Scenario: A failed project rename leaves the local rename standing
     When I rename the folder and the Penpot call fails
     Then the folder keeps its new name locally
@@ -70,6 +73,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     And the next pull reconciles the name
     # Saga §6.18 rule 3 — a remote failure never destroys local state.
 
+  @todo
   Scenario: A project rename is attributed to the acting user
     Given the user has a valid personal Penpot token
     When the user renames a project folder
@@ -77,17 +81,20 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   # ── the name guard ──────────────────────────────────────────────────────────
 
+  @todo
   Scenario: An empty or whitespace-only folder name is refused
     When I try to rename a project folder to a name that is empty once trimmed
     Then the rename is refused with an explanation
     And Penpot is never contacted
     # The one rule Penpot actually enforces: [:string {:max 250, :min 1}].
 
+  @todo
   Scenario: A name longer than Penpot allows is refused before it is sent
     When I try to rename a project folder to a name longer than 250 characters
     Then the rename is refused with an explanation naming the limit
     And Penpot is never contacted
 
+  @todo
   Scenario: In nested mode the app never sends a slash to Penpot
     Given the mapping's folder mode is "nested"
     When a project is created or renamed through this app
@@ -96,6 +103,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     # renames — but it must also hold for the create path (§6.39's guard), which
     # is where a name could otherwise be composed rather than typed.
 
+  @todo
   Scenario: A folder tagged as a project must have a usable name first
     Given a plain folder inside the Team Folder whose name is unusable as a project name
     When a user applies the app's project tag to it
@@ -167,6 +175,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   # ── copying: deliberately disabled ──────────────────────────────────────────
 
+  @todo
   Scenario: Copying a project folder is refused
     When I try to copy the "My Stuff" project folder
     Then the copy is refused with an explanation
@@ -182,6 +191,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     #      mappings, so a folder copy asks three independent apps to agree on
     #      what a duplicate means, with no coordination between them.
 
+  @todo
   Scenario: Copying an ordinary folder inside a Team Folder is unaffected
     Given a plain folder "Clients" inside the Team Folder with no Penpot metadata
     When I copy it
@@ -189,6 +199,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     And Penpot is never contacted
     # Only folders carrying a project id are refused. Everything else is ordinary.
 
+  @todo
   Scenario: Copying a single ".penpot" file is unaffected
     Given a mirrored ".penpot" file in the "My Stuff" folder
     When I copy the file
@@ -197,12 +208,14 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   # ── moving: free inside the team, refused outside (saga §6.30) ──────────────
 
+  @todo
   Scenario: A project folder moves freely inside its team folder
     Given a plain folder "Clients" inside the Team Folder
     When I move the "My Stuff" project folder into "Clients"
     Then the move succeeds and Penpot is never contacted
     And files inside still resolve to the "My Stuff" project
 
+  @todo
   Scenario: A project folder cannot be moved out of its team folder
     When I try to move the "My Stuff" project folder outside the Team Folder
     Then the move is refused
@@ -211,6 +224,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
 
   # ── deleting a project folder ───────────────────────────────────────────────
 
+  @todo
   Scenario: Deleting a project folder in Nextcloud never deletes the Penpot project
     When I delete the "My Stuff" project folder
     Then Penpot is never contacted

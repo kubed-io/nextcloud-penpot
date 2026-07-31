@@ -48,7 +48,6 @@
 # what Penpot's own server calls the format (§6.4, confirmed live), so it is the
 # honest answer for the archive the user is left holding.
 
-@todo
 Feature: Uninstall reverts the system and reinstall reconnects the data
   As a Nextcloud admin
   I want removing the app to leave Nextcloud clean and reinstalling to just resync
@@ -68,6 +67,7 @@ Feature: Uninstall reverts the system and reinstall reconnects the data
     And a ".penpot" file resolves to a generic archive mimetype again
 
   # ── data is orphaned, never deleted ───────────────────────────────────────────
+  @todo
   Scenario: Disabling the app leaves the mirrored design files (and their identity) in place
     Given the mapped folder has mirrored ".penpot" files
     When the admin disables the app
@@ -75,6 +75,7 @@ Feature: Uninstall reverts the system and reinstall reconnects the data
     And each file still carries its "penpot_id" metadata
 
   # ── reinstall reconnects with no duplicates (the headline) ────────────────────
+  @todo
   Scenario: Re-enabling and pulling reconciles the existing files without duplicates
     Given the mapped folder has mirrored ".penpot" files
     And the admin disables and then re-enables the app

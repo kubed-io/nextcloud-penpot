@@ -56,19 +56,57 @@
 #
 # @todo — no lib/ exists yet.
 
-@todo
 Feature: Creating a new Penpot design from Nextcloud
   As a Nextcloud user
   I want to start a new design from the Files app
   So that creating work is as easy as it is for workflows and dashboards
 
   Background:
-    Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Northwind"
-    And the Penpot project "My Stuff" is mirrored as a folder inside it
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    And no Penpot teams are mapped
+    And the first visible team is mapped as a plain folder "Penpot"
+
+  # ══ CREATED IN NEXTCLOUD ═══════════════════════════════════════════════════
+  #
+  # "+ New → Penpot design" writes an EMPTY file and stops; the server notices it
+  # and creates the design. Asserted in Penpot, because a file appearing in
+  # Nextcloud is exactly what a broken create looks like.
+
+  @in-nextcloud @gesture
+  Scenario: A new design file in a project folder becomes a design in that project
+    Given a Penpot project named "Make Here" exists in that team
+    When the admin runs a pull
+    And I create a new design file at "Penpot/Make Here/Fresh Idea.penpot"
+    Then the file "Penpot/Make Here/Fresh Idea.penpot" carries a Penpot id
+    And Penpot project "Make Here" holds a design named "Fresh Idea"
+    # The Penpot name never carries the extension (§6.4).
+
+  @in-nextcloud @gesture
+  Scenario: A new design file at the team root is created in Drafts
+    Given a Penpot project named "Anchor" exists in that team
+    When the admin runs a pull
+    And I create a new design file at "Penpot/Loose Idea.penpot"
+    Then the file "Penpot/Loose Idea.penpot" carries a Penpot id
+    And Penpot project "Anchor" holds no design named "Loose Idea"
+    # Drafts is a state, not a folder (§6.35) — the file stays where it was made.
+
+  # THE GUARD NEITHER SIBLING NEEDS. An uploaded .penpot already holds a whole
+  # design; creating an empty one for it would set the file and Penpot against
+  # each other, and the next sync pull would overwrite the real archive with the
+  # empty export.
+  @in-nextcloud @gesture
+  Scenario: Uploading a ".penpot" archive does not create an empty design
+    Given a Penpot project named "No Invent" exists in that team
+    When the admin runs a pull
+    And I upload a ".penpot" archive at "Penpot/No Invent/Dragged In.penpot"
+    Then the file "Penpot/No Invent/Dragged In.penpot" carries no Penpot id
+    And Penpot project "No Invent" holds no design named "Dragged In"
 
   # ── where the action appears ─────────────────────────────────────────────────
 
+  @todo
   Scenario: Creating inside a project folder creates the design in that project
     When I choose "New → Penpot design" inside the "My Stuff" folder
     And I give it a name
@@ -77,12 +115,14 @@ Feature: Creating a new Penpot design from Nextcloud
     And the file carries the new design's "penpot_id"
     And "Open in Penpot" opens the new design
 
+  @todo
   Scenario: Creating at a team folder's root puts the design in that team's Drafts
     When I choose "New → Penpot design" at the root of the "Northwind" Team Folder
     Then the design is created in the "Northwind" team's "Drafts" project
     And the mirrored file appears where I created it, at the team folder root
     And the app explains the design lives in Penpot's Drafts
 
+  @todo
   Scenario: Creating in a plain folder under a team also lands in Drafts
     Given a plain folder "scratch" inside the Team Folder, with no Penpot metadata
     When I choose "New → Penpot design" inside "scratch"
@@ -92,6 +132,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # No project-id ancestor, but a team-id ancestor exists — so the team is
     # known and Drafts is unambiguous.
 
+  @todo
   Scenario: Filing a newly created draft is just a drag
     Given I created a design at the Team Folder's root, so it lives in Drafts
     When I move the file into the "My Stuff" folder
@@ -100,6 +141,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # The create/file split costs the user nothing: make it anywhere sensible,
     # file it later with an ordinary drag (move.feature, saga §6.35).
 
+  @todo
   Scenario: The action is not offered where no team can be determined
     Given a folder with no Penpot team or project ancestor
     When I open the New menu there
@@ -107,6 +149,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # Penpot's create-file requires a projectId; there is no rootless design. An
     # action that could only fail is better not shown.
 
+  @todo
   Scenario: Creating inside a personal project folder uses the user's own token
     Given the user has a personal Penpot token and a personal project folder
     When I choose "New → Penpot design" inside that folder
@@ -116,6 +159,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
   # ── attribution ──────────────────────────────────────────────────────────────
 
+  @todo
   Scenario: A created design is attributed to the acting user when possible
     Given the user has a valid personal Penpot token
     When the user creates a new design
@@ -124,6 +168,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # This matters more for creation than for any other write: authorship is a
     # durable property of a design, not just a history line.
 
+  @todo
   Scenario: Creation falls back to the service account, and says so
     Given the user has no personal Penpot token configured
     When the user creates a new design in a team project
@@ -133,6 +178,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
   # ── failure behaviour ────────────────────────────────────────────────────────
 
+  @todo
   Scenario: A failed creation leaves no orphaned local file
     When I create a new design and the Penpot call fails
     Then no mirrored ".penpot" file is left behind in the folder
@@ -140,6 +186,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # The inverse of the rename rule: here there is no local state worth keeping,
     # so a half-created file would only be confusing.
 
+  @todo
   Scenario: A created design appears exactly once after the next pull
     When I create a new design in the "My Stuff" folder
     And a pull runs
@@ -150,6 +197,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
   # ── mode ─────────────────────────────────────────────────────────────────────
 
+  @todo
   Scenario: A newly created design follows its mapping's default mode
     Given the "Northwind" mapping has default mode "link"
     When I create a new design in the "My Stuff" folder

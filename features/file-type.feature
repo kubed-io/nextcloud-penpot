@@ -93,7 +93,6 @@
 # CI right now: a repair step that silently failed to merge the config would look
 # exactly like one that worked. Named here so it is not assumed to be covered.
 
-@todo
 Feature: A mirrored Penpot file is a first-class file type
   As a Nextcloud user
   I want .penpot files to be a real, purpose-built file type
@@ -102,6 +101,7 @@ Feature: A mirrored Penpot file is a first-class file type
   Background:
     Given the app is connected to Penpot
 
+  @todo
   Scenario: Mirrored files get the custom mimetype and Penpot icon
     Given a mirrored ".penpot" file
     Then its mimetype is a custom Penpot mimetype, not generic "application/zip"
@@ -110,6 +110,7 @@ Feature: A mirrored Penpot file is a first-class file type
   # TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
   # glyph are the same drawing with opposite colour treatments, and collapsing
   # them fails in both directions — this is not a style preference.
+  @todo
   Scenario: The row icon and the menu glyph are separate files
     Given a mirrored ".penpot" file
     Then the Files-row icon comes from the app's colour mark, with a fixed fill
@@ -121,6 +122,7 @@ Feature: A mirrored Penpot file is a first-class file type
     # fill="none" and floods a stroked outline into a solid tile. A filled shape
     # cannot fail that way — recolouring it just recolours it.
 
+  @todo
   Scenario: WebDAV PROPFIND exposes the Penpot metadata in the XML
     Given a mirrored ".penpot" file
     When a WebDAV client requests the file's properties (PROPFIND)
@@ -131,6 +133,7 @@ Feature: A mirrored Penpot file is a first-class file type
       | nc:metadata-penpot_mode     |
       | nc:metadata-penpot_team_id  |
 
+  @todo
   Scenario: A file carries the team its design belongs to
     Given a mirrored ".penpot" file
     Then its "nc:metadata-penpot_team_id" property names the Penpot team
@@ -138,6 +141,7 @@ Feature: A mirrored Penpot file is a first-class file type
     And moving the file between two mapped team folders re-stamps the team
     And "occ penpot_sync:status" reports a stamp that disagrees with the folders
 
+  @todo
   Scenario: A file's project is derived from its folders, not stored on the file
     Given a mirrored ".penpot" file inside a project folder
     Then the file carries no mapping key of its own
@@ -146,18 +150,21 @@ Feature: A mirrored Penpot file is a first-class file type
     # Confirmed available and working on Team Folders specifically (saga §6.21).
     # Nearest-ancestor at any depth (saga §6.29) — see mapping-membership.feature.
 
+  @todo
   Scenario: A project folder is identifiable by both metadata and a visible tag
     Given a folder mirroring the Penpot project "My Stuff"
     Then the folder carries "penpot_project_id" as folder metadata
     And the folder carries the app's project tag, visible in the Files app
     And a Team Folder carries "penpot_team_id" the same way
 
+  @todo
   Scenario: A file moved out of its mapped folder is unmapped, not untracked
     Given a mirrored ".penpot" file that has been moved out of its mapped folder
     Then its "nc:metadata-penpot_id" property is still present
     And the file resolves to no mapping, because no enclosing folder carries Penpot metadata
     And this combination is what marks the file "unmapped" rather than "untracked"
 
+  @todo
   Scenario: The mode is visible and reflects whether content is stored
     Given a mirrored ".penpot" file in "link" mode
     Then its "nc:metadata-penpot_mode" property is "link"
@@ -166,6 +173,7 @@ Feature: A mirrored Penpot file is a first-class file type
     Then its "nc:metadata-penpot_mode" property is "sync"
     And the file holds the real ".penpot" archive
 
+  @todo
   Scenario: The metadata is read-only over DAV
     Given a mirrored ".penpot" file
     When a client tries to change "nc:metadata-penpot_id" via PROPPATCH
