@@ -1870,3 +1870,122 @@ non-reproduction is not a disproof.** §C6.11 tried §6.49's race once, did not 
 it, and wrote "the re-read rule stays anyway" — which was right — but the code
 that followed weakened the rule to a cheaper read on the strength of the same
 non-reproduction. The rule survived; the reason for it did not.
+
+### C6.16 — The prune's promise was never asserted, and the trash it fills is not yours
+
+A report, in the user's own words: *"I delete `My Ultra Kicker` in Penpot. I
+expect Nextcloud to prune it. Confirmed I do not see it in the Nextcloud folder.
+**Fail** — I do not see it in the Nextcloud trash."*
+
+Two findings came out of it, and only one is a bug.
+
+#### 1. It WAS in a trash. Just not theirs.
+
+The prune log — added one course earlier, and the reason this took minutes rather
+than a day — named it exactly:
+
+```
+"message":"penpot_sync pull: trashed a mirror whose design Penpot no longer lists"
+"scriptName":"/var/www/html/cron.php","user":"--"
+"file":"/nextcloud/files/Design Files/My Stuff/My Ultra Kicker.penpot"
+"penpot_id":"86f123cb-…-68bf65e62ba7","final_archive":"true","ids_listed":"4"
+```
+
+The trash row and the blob were both there, on **storage 1**:
+
+```
+oc_files_trash    My Ultra Kicker.penpot | nextcloud | 1785513504 | /Design Files/My Stuff
+oc_filecache      files_trashbin/files/My Ultra Kicker.penpot.d1785513504 | storage 1 | 2558 bytes
+oc_storages       1 = object::user:nextcloud       3 = object::user:kelly
+```
+
+The mapped folder is owned by the service account, and **the pull runs as its
+owner**, so the mirror went to the owner's trash. The human looking at their own
+Files app is a *member* of that share and sees nothing.
+
+This is not something the app invents — it is how Nextcloud handles every shared
+file: the owner's delete fills the owner's trash. Which makes it a documentation
+problem rather than a bug to engineer around, because working around it means
+second-guessing Nextcloud's sharing model on the most destructive path in the
+app. The README now says whose trash to look in, and offers the reliable escape:
+**move a file out of the mapped folder** and no prune can ever reach it.
+
+Also visible in that dump, and worth keeping: the 2558 bytes are the final
+snapshot. The rescue worked. The user's design was never at risk — only findable
+in the wrong place.
+
+#### 2. "Trash, never destroy" was a comment for three courses
+
+`prune.feature`'s header said it. `reconcile.feature` said it. Neither asserted
+it. Every scenario checked **"there is no node at that path"** — which a hard
+delete satisfies exactly as well as a trash does.
+
+So the app's single most destructive operation had its central safety property
+verified by prose. It happened to be true; nothing would have caught it becoming
+false. The scenarios now assert the file is *in* the trash, including a new one
+where Penpot has **permanently** deleted the design — reached in CI by calling
+`permanently-delete-team-files`, which puts Penpot in the same state a seven-day-
+old deletion does without waiting a week.
+
+Same shape as §C6.14 and §C6.15, at a different layer: a green suite that was
+green about the wrong thing.
+
+#### 3. The rule that has no exception, and why the tidy symmetry is wrong
+
+The user asked the right question directly: should a design *purged* in Penpot be
+purged in Nextcloud too, mirroring the trash flow one-to-one? And answered it —
+
+> we could have a rule that states nextcloud never auto purges a file from trash
+> because it's no longer in penpot
+
+That is the rule, it is now written down, and the argument for it is stronger
+than symmetry. **The two trashes expire on schedules neither side controls.**
+Penpot's is ~7 days and not configurable; a Nextcloud instance may keep 30. Mirror
+the purge and every design that ages out of Penpot's trash silently takes the
+user's last copy with it — precisely when the mirror has become the only copy
+that exists. The gesture that empties the Nextcloud trash is the user's, and the
+pull has no business reaching into it.
+
+It also collapses a branch out of restore, which is the second reason to like it:
+a mirror in the Nextcloud trash is always restorable *locally*, whatever Penpot
+did. Whether Penpot can match the restore is then a separate question with three
+honest answers (§C6.15's layers) rather than a precondition.
+
+The code already behaved this way — `prune()` has only ever called `$node->delete()`,
+which trashes. What was missing was any statement that this is a **rule** rather
+than an implementation detail someone could later "fix" into symmetry.
+
+#### 4. A latent trap in the test harness, found by the new scenario
+
+The purge scenario needed `permanently-delete-team-files`, whose payload is a
+**set of ids** — the first list-valued param the seed channel had ever sent. Both
+RPC helpers encoded with `JSON_FORCE_OBJECT` unconditionally:
+
+```php
+json_encode($params, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT)
+```
+
+That flag is there for §R1.3 — Penpot 500s on `[]` where it wants `{}` — but it
+rewrites **every nested list too**, so `ids: ["<uuid>"]` would have gone out as
+`{"0":"<uuid>"}` and failed validation. A non-empty PHP map already encodes as a
+JSON object with no help at all, so the flag was only ever needed for the empty
+case. Fixed to apply only there.
+
+Worth noting how it was found: not by reading, but by asking what the wire would
+actually carry before sending it — the same habit §C6.7 records failing to apply
+to route parameters, which shipped broken instead.
+
+#### 5. A stale claim, retired
+
+`reconcile.feature` had been asserting, in a comment, that *"we cannot DRIVE
+Penpot's trash — no API command restores a file"*. `restore-deleted-team-files`
+exists, was confirmed live in §6.52, was called in §C6.11, and is the backbone of
+§C6.15's slice. The sentence predates the discovery of Penpot's trash and
+survived every rewrite around it, because comments are not executable and nothing
+was checking.
+
+Its neighbour claimed the trash-aware reconciler "already does this". It does
+not — reading `files_trashbin` during a pull is still unbuilt, so a design
+restored in Penpot's own UI today gets a second mirror beside the trashed one.
+Both corrected. The lesson is not new but it keeps arriving in new clothes: **a
+feature file's prose ages exactly like a code comment, and neither is tested.**

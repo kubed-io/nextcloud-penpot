@@ -545,8 +545,33 @@ choice that Penpot never hears about, with the trashed file itself acting as the
 mirror, or a dismissed link would simply reappear on the next run — so the two
 land together, in a later release, and until then the delete is uniform.
 
-When the pull finds a design deleted in Penpot by someone else, it moves the
-local mirror to the **Nextcloud trash** — never a hard delete.
+### When someone deletes a design in Penpot
+
+The sync notices on its next run and moves your mirror to the **Nextcloud
+trash** — never a hard delete, and never anything else. Three things are worth
+knowing about that, in order of how likely they are to surprise you.
+
+**Nextcloud never empties its own trash because Penpot did.** Even a design
+*permanently* deleted in Penpot leaves your mirror sitting in the trash, with
+whatever archive it had. The tidy-looking alternative — mirror Penpot's purge too
+— is a trap: the two trashes expire on their own schedules (Penpot's is about 7
+days and not configurable, yours might be 30), so every design that quietly ages
+out of Penpot's trash would take your last copy with it, on a schedule nobody
+chose. Emptying your trash stays your decision.
+
+**It goes to the trash of whoever owns the folder.** The sync runs as the account
+that owns the mapped folder — the service account, for a shared Team Folder — so
+that is whose trash the mirror lands in. This is ordinary Nextcloud behaviour for
+shared files rather than anything this app invents: the owner's delete fills the
+owner's trash. If you are a *member* of a shared design folder, you will see the
+file disappear and find nothing in your own trash. Ask whoever owns the folder,
+or check the account the mapping was created under.
+
+**Want a copy that no Penpot deletion can ever touch?** Move the file **out of
+the mapped folder** first. The sync only ever prunes inside folders it manages,
+so a design parked anywhere else is yours permanently — and if it is in `sync`
+mode it is a real archive, not a pointer. That is the honest way to keep
+something before deleting it in Penpot.
 
 ### Failures never cost you data
 

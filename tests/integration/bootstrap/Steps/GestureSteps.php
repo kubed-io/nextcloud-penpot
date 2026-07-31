@@ -148,6 +148,34 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
+	// ── Nextcloud's trash ───────────────────────────────────────────────────
+
+	/**
+	 * THE HALF THE PRUNE SCENARIOS WERE MISSING. They asserted the mirror was gone
+	 * from its folder and stopped there — which is equally true of a hard delete,
+	 * the one outcome the prune must never produce. "Trash, never destroy" was a
+	 * comment in a feature header for three courses and an assertion in none of
+	 * them, and the gap surfaced as a user report: *the file left the folder and I
+	 * cannot find it in the trash.*
+	 *
+	 * @Then /^the file "([^"]*)" is in the Nextcloud trash$/
+	 */
+	public function theFileIsInTheNextcloudTrash(string $path): void {
+		if ($this->trashbinPathFor($path) === null) {
+			throw new \RuntimeException(
+				"expected '{$path}' in the Nextcloud trash; it is not there — a prune that "
+				. 'hard-deletes looks exactly like this from the folder side',
+			);
+		}
+	}
+
+	/** @Then /^the file "([^"]*)" is not in the Nextcloud trash$/ */
+	public function theFileIsNotInTheNextcloudTrash(string $path): void {
+		if ($this->trashbinPathFor($path) !== null) {
+			throw new \RuntimeException("expected no trashbin entry for '{$path}', but one is there");
+		}
+	}
+
 	// ── Penpot's trash ──────────────────────────────────────────────────────
 
 	/** @Then /^the design "([^"]*)" is in Penpot's trash$/ */

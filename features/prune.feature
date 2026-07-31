@@ -28,11 +28,27 @@
 # pull that changed nothing pruned nothing" is asserted as a step rather than
 # assumed from the happy path.
 #
-# ## TRASH, NEVER DESTROY
+# ## TRASH, NEVER DESTROY — AND IT IS ASSERTED NOW, NOT PROMISED
 #
 # Nothing below hard-deletes. A pruned mirror is moved to the Nextcloud trash and
-# stays recoverable for as long as the instance's retention allows — which is why
-# the assertion is "no node at that path", not "the file no longer exists".
+# stays recoverable for as long as the instance's retention allows.
+#
+# That used to be stated here and checked nowhere: the scenarios asserted "no
+# node at that path", which a hard delete satisfies just as well. Every scenario
+# that prunes now also asserts the file is IN the trash, including the one where
+# Penpot has purged the design outright — the case where the mirror is the last
+# copy in existence and the temptation to mirror Penpot's purge is strongest.
+#
+# ## WHOSE TRASH, AND WHY IT MAY NOT BE YOURS (saga §C6.16)
+#
+# The pull runs as the account that owns the mapped folder — the service account
+# on a shared Team Folder — so a pruned mirror lands in THAT account's trash.
+# Nextcloud does this for every shared file, not just ours: the owner's delete
+# fills the owner's trash. A member of the share looking in their own Files app
+# sees the file vanish and finds nothing in their trash, which is what the
+# promise above looks like from the other side of a share. It is documented in
+# the README rather than worked around, because working around it means
+# second-guessing Nextcloud's own sharing model.
 
 @prune
 Feature: Pruning mirrors of designs Penpot no longer has
@@ -68,10 +84,50 @@ Feature: Pruning mirrors of designs Penpot no longer has
     And the pull pruned 1 mirror
     And the pull saved 1 final archive
     And there is no node at "Penpot/Doomed/Farewell.penpot"
+    And the file "Penpot/Doomed/Farewell.penpot" is in the Nextcloud trash
     # THE CLAIM THIS SUITE EXISTS FOR. The mirror was a `link` — a pointer with no
     # bytes — and the design it pointed at is gone. Penpot's grace window is what
     # turns an unrecoverable deletion into a recoverable one, so the pointer
     # becomes a real archive on its way to the trash.
+    #
+    # THE LAST LINE IS NOT DECORATION. "No node at that path" is equally true of a
+    # hard delete — the one outcome this must never produce — so for three courses
+    # "trash, never destroy" was a promise in this file's header and an assertion
+    # in none of its scenarios. It reached a user as *"the file left my folder and
+    # I cannot find it in the trash"* before it reached a test.
+
+  # ── the rule that has no exception ────────────────────────────────────────
+  #
+  # NEXTCLOUD NEVER PURGES A FILE BECAUSE PENPOT NO LONGER HAS IT. Emptying the
+  # Nextcloud trash is the user's gesture and the user's alone — the pull has no
+  # business reaching into it, whatever Penpot did.
+  #
+  # The tempting symmetry is to mirror Penpot's trash exactly: soft-deleted there
+  # → trashed here, purged there → purged here. It is wrong, and the reason is
+  # that the two trashes expire on their own schedules. Penpot's is ~7 days and
+  # not configurable; a Nextcloud instance may keep its trash for thirty. Mirror
+  # the purge and every design that ages out of Penpot's trash takes the user's
+  # last copy with it — silently, on a schedule nobody chose, exactly when the
+  # mirror has become the only copy that exists.
+
+  Scenario: A design purged in Penpot still only reaches the Nextcloud trash
+    Given a Penpot project named "Erased" exists in that team
+    And a Penpot file named "No Way Back" exists in the project "Erased"
+    When the admin runs a pull
+    And the design "No Way Back" is permanently deleted in Penpot
+    And the admin runs a pull
+    Then the pull succeeds
+    And the pull pruned 1 mirror
+    And the pull saved 0 final archives
+    And there is no node at "Penpot/Erased/No Way Back.penpot"
+    And the file "Penpot/Erased/No Way Back.penpot" is in the Nextcloud trash
+    # PAST THE GRACE WINDOW WITHOUT WAITING A WEEK: a permanent delete puts Penpot
+    # in the same state a seven-day-old deletion does — not listed, not in its
+    # trash, and no longer exportable. So the snapshot fails and is reported as 0
+    # rather than faked, and the mirror is trashed anyway.
+    #
+    # This is the case where the local file is genuinely the last copy of that
+    # design, which is precisely why it must land somewhere recoverable.
 
   Scenario: A design that already had its archive needs no second export
     Given a Penpot project named "Kept" exists in that team
