@@ -1,3 +1,6 @@
+# THE LIVE HALF IS gestures.feature — a rename driven over WebDAV, asserted
+# against Penpot's own listing.
+#
 # Rename — the ONE place saga §6.1's read-only stance is genuinely narrower than
 # it sounds. BOTH DIRECTIONS ARE NOW SETTLED (saga §6.54 closed the §6.2 fork).
 #

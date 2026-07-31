@@ -1,3 +1,6 @@
+# THE LIVE HALF IS gestures.feature — copy in place, copy up to the team root,
+# and the copy-then-rename chain, driven over WebDAV against a real Penpot.
+#
 # Copying a mirrored ".penpot" file. A copy in Nextcloud becomes a REAL new
 # design in Penpot — full parity with both siblings, which register a copy as a
 # new n8n workflow / Grafana dashboard for the same reason: a copy is a new
