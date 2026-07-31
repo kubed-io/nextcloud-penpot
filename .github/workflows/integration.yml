@@ -360,6 +360,16 @@ jobs:
     # Behat runs from the integration dir; OCC points back at the server root so
     # `occ` resolves. Formatters (pretty → stdout, junit → junit/) are configured
     # in behat.dist.yml, so no --format flags are needed here.
+    #
+    # --strict: an UNDEFINED step must fail the job. Behat's default is to exit 0
+    # on undefined steps, so a scenario whose step definitions do not exist is
+    # reported as "undefined" and the run still succeeds — the job goes green and
+    # only the JUnit reporter's check goes red, pointing at no scenario in
+    # particular. That happened here: a stray `@todo` tag bound to the following
+    # scenario instead of the comment block it appeared to head, silently
+    # excluding one scenario and leaving four running undefined. With ~@todo
+    # filtering, an undefined step means a scenario was left untagged, which is
+    # always a mistake worth failing on.
     - name: Run Behat
       working-directory: apps/${{ env.APP_ID }}/tests/integration
       env:
@@ -369,7 +379,7 @@ jobs:
         NC_ADMIN_PASS: ${{ env.NC_ADMIN_PASS }}
         PENPOT_URL: http://localhost:9001
         PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
-      run: vendor/bin/behat --config behat.dist.yml
+      run: vendor/bin/behat --config behat.dist.yml --strict
 
     # ── Diagnostics: what did the SERVER think? ──────────────────────────────
     # A failing Behat scenario reports what the ASSERTION saw and nothing about

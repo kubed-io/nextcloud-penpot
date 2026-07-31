@@ -111,8 +111,14 @@ Feature: The admin section's shape and actions
     # live scenario would just execute it twice. It is restated here so this
     # file reads as the complete inventory of the section's actions.
 
-  @todo
   # ── the three ways a pull is triggered ────────────────────────────────────
+  #
+  # These five are @todo — the documented spec, not yet driven from Behat.
+  # Driving them needs the harness to be able to RUN A QUEUED JOB (and to fake
+  # a cron tick for the timed one), which the suite cannot do yet. Each tag sits
+  # on its own scenario deliberately: a tag floating above this comment block
+  # binds to whichever scenario happens to come next, which is exactly how the
+  # first of these was silently excluded while the other four ran undefined.
   #
   # Until now there was exactly ONE: `occ penpot_sync:sync pull`. The button was
   # rendered disabled with a "later release" tooltip, and the interval in Sync
@@ -136,6 +142,7 @@ Feature: The admin section's shape and actions
   # handful of files, and the admin is looking at that card waiting for an
   # answer. Queuing it would replace a two-second wait with a spinner and a poll.
 
+  @todo
   Scenario: "Sync from Penpot" queues a background job and says so
     When the admin opens the Penpot settings section
     And the admin clicks "Sync from Penpot"
@@ -144,6 +151,7 @@ Feature: The admin section's shape and actions
     And the panel shows the run as queued, then running, then finished
     # The admin can navigate away and come back to a finished run.
 
+  @todo
   Scenario: The panel reports the outcome of the last run
     Given a bulk sync has finished
     When the admin opens the Penpot settings section
@@ -153,12 +161,14 @@ Feature: The admin section's shape and actions
     # otherwise the schedule is a setting with no observable effect, which is
     # exactly what it was.
 
+  @todo
   Scenario: A second click while a sync is running does not start another
     Given a bulk sync is already running
     When the admin clicks "Sync from Penpot" again
     Then no second job is queued
     # Two concurrent pulls over one folder tree would race on the same files.
 
+  @todo
   Scenario: The scheduled pull uses the interval from Sync Settings
     Given the scheduled pull is enabled with an interval
     When the interval elapses and Nextcloud's cron runs
@@ -168,6 +178,7 @@ Feature: The admin section's shape and actions
     # This is the scenario the whole slice exists for: a rename in Penpot should
     # reach Nextcloud eventually, with nobody watching.
 
+  @todo
   Scenario: Turning the schedule off stops the runs
     Given the scheduled pull is disabled
     When Nextcloud's cron runs
