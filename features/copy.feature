@@ -87,7 +87,22 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # Different ids is the load-bearing one: two files claiming a single design
     # is the ambiguity that made the old inert-copy rule necessary at all.
 
-    # THE ONE THAT FAILED BY HAND. The team root has no project FOLDER above it, so
+    # OUTSIDE EVERY MAPPING, NOTHING HAPPENS — the boundary that makes the rest of
+  # this file safe. A `.penpot` file the app never mirrored is ordinary content,
+  # and copying ordinary content is Nextcloud's business alone.
+  @in-nextcloud @gesture
+  Scenario: Copying a ".penpot" file outside every mapping never contacts Penpot
+    Given a mirrored project "Bystanders"
+    And I upload a ".penpot" archive at "Loose Design.penpot"
+    When I copy "Loose Design.penpot" to "Loose Design copy.penpot"
+    Then the file "Loose Design copy.penpot" carries no Penpot id
+    And Penpot project "Bystanders" holds no design named "Loose Design copy"
+    # No penpot_id on the source means there is nothing to duplicate, and no
+    # mapped ancestor means there is nowhere to put it. Both checks matter: a
+    # file can carry an id and still be outside every mapping (drag one out and
+    # it keeps its stamp), which is move.feature's "unmapped" state.
+
+  # THE ONE THAT FAILED BY HAND. The team root has no project FOLDER above it, so
     # membership resolves to "no project" — which reads exactly like "outside every
     # mapping" and is nothing of the kind (§6.35). The copy appeared in Nextcloud
     # and nothing whatsoever happened in Penpot, with nothing logged.

@@ -2087,3 +2087,70 @@ apart: the prune reported a count and not its subjects (§C6.16.2); the restore
 confirmed against a listing that could not answer the question (§C6.15); and the
 harness turned a failure into an absence. **Every one of them was a system
 answering a question that had not been asked.**
+
+### C6.17 — Who performs a copy, and why the answer was never really ours
+
+A copy in Nextcloud could reach Penpot two ways, and they are not equivalent:
+
+1. **Nextcloud copies, then creates.** Duplicate the local file, then push its
+   bytes up as a new design — `import-binfile` with the archive we hold.
+2. **Penpot duplicates, then we mirror.** Call `duplicate-file` and let the new
+   design come down on the next pull.
+
+The app does **(2)**, and `CopyService` has always done (2). What is worth
+recording is that this was never a free choice — three separate facts force it,
+and each one alone would be enough.
+
+#### A `link` has no bytes to copy
+
+This is the decisive one. A `link` mirror is **zero bytes** (C6.6): its whole
+identity is metadata, and the design lives only in Penpot. Under strategy (1) a
+`link` is simply uncopyable — there is nothing to upload. The app would have to
+either refuse to copy the majority mode (`link` is the default), or silently
+promote it to `sync`, downloading an entire archive as a side effect of a
+drag.
+
+Under (2) the mode does not enter into it. Penpot duplicates server-side and
+**no bytes travel at all** — a `link` copies exactly as completely as a `sync`,
+which is why `copy.feature` can state that without qualification.
+
+#### Import cannot preserve what a duplicate keeps
+
+§6.41 measured a real export→import round trip. What comes back: name, pages,
+shapes, assets, even the revision number. What does not: **the file id and the
+edit history** (0 `file_change` rows against the original's 5). §6.20 is
+harder still — a chosen id is not accepted at all.
+
+So strategy (1) does not produce a copy of the design; it produces a
+*reconstruction* of the artwork, missing the history, at an id we cannot
+choose. `duplicate-file` is a server-side operation on Penpot's own storage and
+keeps what its own duplication keeps. We could not match it from outside if we
+tried.
+
+#### The archive is a snapshot, not the design
+
+Worth stating separately because it is easy to forget once `sync` mode exists:
+a `.penpot` archive is what the design looked like **at export time**. Copying
+from it copies a moment. `duplicate-file` copies the design as it is now,
+including anything changed since the mirror was last refreshed.
+
+#### What (2) costs, and the one wrinkle
+
+`duplicate-file` has **no project parameter** (proven live, §C6.8) — the
+duplicate lands beside its source. So a copy into a different folder is two
+calls: `duplicate-file`, then `move-files` to re-file it. That is the entire
+price, and it is the same `move-files` the drag path already uses.
+
+The boundary is the other half: a file with no `penpot_id` has nothing to
+duplicate, and a destination with no mapped ancestor has nowhere to put one.
+Both are checked, and a copy that fails either is ordinary Nextcloud content
+being copied — which is now a live scenario rather than an assumption.
+
+#### The shape
+
+This chapter keeps finding that the strongest design constraints come from the
+other system's facts rather than our preferences (§C6.16's scope boundary,
+§C6.15's oracle). Here it is at its clearest: the copy strategy looks like an
+architectural choice, and there was never a version of this app where (1) was
+viable. **The design that survives contact is usually the one the other
+system's limits already picked.**
