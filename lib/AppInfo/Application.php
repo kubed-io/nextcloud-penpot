@@ -139,7 +139,6 @@ final class Application extends App implements IBootstrap {
 		// legacy hook in boot(), see TrashPurgeHook.
 		$context->registerEventListener(BeforeNodeDeletedEvent::class, DeleteListener::class);
 
-
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to
 		// build `<base>/#/workspace?file-id=<penpot_id>` — the id itself already

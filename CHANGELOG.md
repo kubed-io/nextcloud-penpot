@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **"Sync from Penpot" works.** It was a disabled button; now it starts a background sync, shows it running, and reports what it did — including runs the schedule did on its own.
+- **The scheduled pull actually runs.** The interval in Sync Settings was previously read by nothing at all, so a design renamed in Penpot stayed renamed only in Penpot. It now reaches Nextcloud on its own.
+- **Sync one team from its mapping card** with the button between Save and Delete, when you don't want to sweep everything.
+
 - **Create a design from the Files app.** "+ New → Penpot design" makes a real design in the folder's project — or in that team's Drafts if you make it at the team root. It does not open anything; the file appears and you click it.
 - Dragging a `.penpot` archive into a mapped folder does **not** create an empty design for it. That file already holds a design, and inventing a blank one beside it would let the next sync overwrite what you uploaded.
 - **Deleting a mirrored design now reaches Penpot**, and the two trashes mirror each other: deleting puts the design in Penpot's trash (recoverable for about a week, with its id, revision and history), and emptying your Nextcloud trash deletes it there for good.
