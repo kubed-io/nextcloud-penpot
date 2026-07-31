@@ -15,8 +15,8 @@ use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
-use OCP\Files\File;
 use OCP\Files\Events\Node\NodeCopiedEvent;
+use OCP\Files\File;
 use Psr\Log\LoggerInterface;
 
 /**

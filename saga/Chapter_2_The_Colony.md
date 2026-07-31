@@ -1311,3 +1311,74 @@ conclusion about another.* A uuid scraped from a response is not the file id. A
 method's parameter names are not the wire's. Both readings were plausible, both
 were confident, and both were wrong in the direction of "the remote system is
 broken" rather than "I am holding it wrong." That direction is the tell.
+
+### C6.9 — The decoder bug Course 1 predicted, found two courses late
+
+Course 1 named the Transit write cache *"the single most under-appreciated
+risk"*, and said exactly how it would fail: *"a naive parse appears to work on
+small payloads and silently mangles large ones."* That is precisely what
+happened, and it took a user copying a file to surface it.
+
+The copy created the design in Penpot and then reported failure:
+
+```
+penpot_sync copy: could not duplicate the design; the copy is untracked
+Penpot response referenced Transit cache entry "^23" (index 91)
+but only 91 entries were seen.
+```
+
+**Two bugs, both in the cache, both invisible until a big record arrived.**
+
+#### 1. The ceiling was 94. It is 1936.
+
+`CACHE_MAX` was set to 94 with a comment asserting Transit "holds at most 94
+entries before it resets". It does not. An index is one or two base-44 digits,
+so `MAX_CACHE_ENTRIES = 44 * 44 = 1936`.
+
+The damage is worse than the number suggests, because **a capped cache does not
+fail at the cap.** It keeps decoding against a cache that has stopped growing,
+so every later reference resolves against the wrong slot or misses.
+
+#### 2. Keys and values are not cached by the same rule
+
+`isCacheable()` demanded a `~:` or `~#` prefix in **both** positions. Transit
+caches **every map key** over three characters — plain strings included — and in
+value position only the tagged forms (`~:`, `~#`, `~$`).
+
+Every plain-string key was therefore skipped, shifting every subsequent index.
+
+**Why it survived two courses:** the payload the decoder was originally verified
+against — `get-teams` — has only keyword keys and fewer than 94 entries. It
+cannot exercise either bug. Both faults were latent in every response too small
+to reach them, which is the exact failure profile Course 1 wrote down.
+
+#### The proof, measured rather than argued
+
+A real 65 KB `get-file` body was captured off the running instance and replayed
+through both rule sets:
+
+| Rule | Cache built | Bad references |
+|---|---|---|
+| As shipped (prefix required in both positions, cap 94) | 161 | **109** |
+| Corrected (any map key; tagged values only; cap 1936) | 206 | **0** |
+
+Not "looks right" — 109 versus 0 on a payload the app fetches in normal use.
+
+#### What this cost, and the shape of it
+
+A copy created a real design in Penpot and then told the user nothing had
+happened, leaving an untracked file beside an orphaned design. A retry would
+have made a second one. The write succeeded; only our reading of the reply
+failed — which is the worst division of labour available, because it is the one
+where retrying makes things worse.
+
+**And the silent case is the one to fear.** A missing reference throws in key
+position, which is how this was caught at all. A *shifted* reference does not:
+it resolves to a real, plausible field name for the wrong field. `created-at`
+reads back as `modified-at`, and the pull's drift check quietly compares the
+wrong number. There is no telling how many small responses were decoded slightly
+wrong before a big one finally threw.
+
+The guard that saved us is the one the decoder already had: refusing to guess on
+a key-position miss instead of falling back to the raw token. It converted a
+silent corruption into a loud failure two courses later — late, but not never.
