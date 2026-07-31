@@ -96,20 +96,31 @@ Feature: Scheduled or manual pull from Penpot
   # EACH MAPS ITS OWN FOLDER, and that is load-bearing rather than tidy. These
   # four are the only scenarios in the suite that assert about a mapped folder AS
   # A WHOLE, so they must not share one with scenarios that leave designs in it —
-  # and "mapped into the folder" (a Team Folder) is not interchangeable with
-  # "mapped as a plain folder" if both land on the same name. The first version
-  # of this section reused "Penpot" and the project folder simply never appeared.
+  # they must not share one with scenarios that leave designs in it.
+  #
+  # THEY ALSO MAP PLAIN FOLDERS, NOT TEAM FOLDERS, and that is a correction
+  # rather than a preference. They used to map a Team Folder — a groupfolder,
+  # which mounts only for the groups on the mapping — and passed anyway because
+  # they ran before anything else had touched the storage. Moved later in the
+  # run, the folder resolved to nothing at all: "No such node: Team Root".
+  #
+  # So Team Folder provisioning is NOT covered live, and was not before either;
+  # it passed by accident of alphabetical position. What these three actually
+  # assert — the team id on the root, the project id on a project folder, and no
+  # duplicate on a second run — is true of both backends, and the plain one is
+  # the one the acting user can see. Covering the groupfolders backend properly
+  # needs a mapping with a group the test user is in, and is its own slice.
 
   @admin @occ
   Scenario: A pull mirrors a mapped team's root folder and stamps its team id
-    Given the first visible team is mapped into the folder "Team Root"
+    Given the first visible team is mapped as a plain folder "Team Root"
     When the admin runs a pull
     Then the pull succeeds
     And the folder "Team Root" carries the team's Penpot id
 
   @admin @occ
   Scenario: A pull mirrors a project as a folder carrying its project id
-    Given the first visible team is mapped into the folder "Project Folders"
+    Given the first visible team is mapped as a plain folder "Project Folders"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     Then the pull succeeds
@@ -117,7 +128,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: A second pull reconciles in place and does not duplicate the folder
-    Given the first visible team is mapped into the folder "Twice Pulled"
+    Given the first visible team is mapped as a plain folder "Twice Pulled"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     And the admin runs a pull
