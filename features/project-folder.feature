@@ -234,3 +234,77 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     Then the project folder is recreated, because the project still exists in Penpot
     # Deleting the folder is a local act. The pull restores the mirror, which is
     # the correct outcome — the project never went anywhere.
+
+  # ══ A FOLDER BECOMES A PROJECT — BY OPT-IN, NEVER BY ACCIDENT ══════════════
+  #
+  # NOT BUILT. Specified here because the asymmetry it creates is the whole
+  # point, and because the alternative — inferring intent from a folder's
+  # existence — is the kind of automatic behaviour this app has refused
+  # everywhere else (§6.33 on creation, move.feature on drag-in).
+  #
+  #     every Penpot project      →  a folder in Nextcloud     (automatic)
+  #     SOME Nextcloud folders    →  a project in Penpot       (opt-in only)
+  #
+  # A folder created inside a mapped folder is an ORDINARY FOLDER. Nothing is
+  # sent, nothing is inferred, and it can hold anything the user likes — notes,
+  # exports, a subfolder of references. Mapped folders are real folders, and
+  # §C6.? already established they must behave like ordinary ones.
+  #
+  # The opt-in is the `penpot` TAG. Assigning it says "make this a project",
+  # which is a deliberate act with a name, exactly as "+ New → Penpot design" is
+  # for files. The tag is also how the app MARKS the folders it mirrors, so the
+  # two directions share one visible marker: if it carries the tag, it is a
+  # Penpot project, whoever made it one.
+  #
+  # WHY A TAG AND NOT A BUTTON: Nextcloud already has tag assignment as a
+  # first-class gesture with an event (`TagAssignedEvent`), the sibling apps use
+  # it for exactly this kind of opt-in, and it survives a rename or a move in a
+  # way a name convention could not.
+
+  @in-nextcloud @gesture @todo
+  Scenario: A new folder inside a mapped folder is just a folder
+    Given the first visible team is mapped as a plain folder "Penpot"
+    When I create a folder at "Penpot/Just My Notes"
+    Then Penpot is never contacted
+    And no project named "Just My Notes" is created in Penpot
+    And the folder carries no Penpot project id
+    # The permissive half, and it has to come first: a mapped folder that
+    # silently turned every subfolder into a Penpot project would make the
+    # folder unusable for anything else.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Tagging a folder "penpot" creates the project in Penpot
+    Given a plain folder "Client Work" inside a mapped folder
+    When I assign the "penpot" tag to it
+    Then "create-project" is called for that team
+    And the folder is stamped with the new project's id
+    And designs already inside it are filed into that project
+    # The last line is the interesting one: a folder someone has been filling
+    # with designs becomes a project WITH its contents, which is the reason to
+    # opt in late rather than having to decide up front.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Removing the "penpot" tag does not delete the project
+    Given a mirrored project folder carrying the "penpot" tag
+    When I remove the tag
+    Then Penpot is never contacted
+    And the project still exists in Penpot
+    # Untagging is unmapping, not deleting — the same rule as moving a design
+    # out of a mapping (§6.23). Destroying a project because someone removed a
+    # label would be the worst kind of surprise.
+
+  @in-penpot @todo
+  Scenario: A project created in Penpot arrives as a tagged folder
+    Given a mirrored team
+    And a new project "Bubbles" is created in Penpot
+    When the team is mirrored again
+    Then a folder "Bubbles" appears in the mapped folder
+    And it carries the new project's Penpot id
+    And it carries the "penpot" tag
+    # THE TAG IS THE SHARED MARKER. A user cannot tell — and should not have to —
+    # whether a project folder started life in Penpot or was opted in from
+    # Nextcloud. Both carry the tag; both are projects.
+    #
+    # The folder itself is already built and live (see reconcile.feature); only
+    # the TAG is missing, which is what makes this the smallest slice of the
+    # feature above.
