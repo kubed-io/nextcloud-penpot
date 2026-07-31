@@ -308,3 +308,53 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # id for a whole tree, Nextcloud's "(2)" suffix breaks the names-match rule,
     # and on this cluster the folder may also carry n8n and Grafana mappings
     # (§6.40).
+
+  # ══ COPIED IN PENPOT ═══════════════════════════════════════════════════════
+  #
+  # THE ASYMMETRY IS THE FINDING, and it is why both directions belong in one
+  # file even though only one of them is really "copying".
+  #
+  # A duplicate made in Penpot's own UI is, from Nextcloud's side, INDISTIN-
+  # GUISHABLE FROM ANY OTHER NEW DESIGN. Penpot does not tell us a file was
+  # duplicated — `get-project-files` returns a design with a fresh id and a name
+  # like "Original (copy)", and nothing marks it as derived. So there is no
+  # copy behaviour to implement on this side at all: the reconciler mirrors it
+  # the way it mirrors anything new.
+  #
+  # That asymmetry is worth stating rather than discovering:
+  #
+  #   copied in Nextcloud  →  we CALL duplicate-file (+ move-files if it landed
+  #                           in another project), because the gesture has to be
+  #                           translated into something Penpot understands
+  #   copied in Penpot     →  we call NOTHING. A new design appears and is
+  #                           mirrored. The "copy" is invisible to us.
+  #
+  # Which means the two directions cannot be one scenario with a direction
+  # column: one exercises a write path, the other exercises the reconciler doing
+  # its ordinary job. Same word, two different rules — the exact case
+  # features/README.md says must stay separate.
+
+  @in-penpot @todo
+  Scenario: A design duplicated in Penpot is mirrored like any other new design
+    Given a mirrored design "Original" in the project "Shared Work"
+    And the design "Original" is duplicated in Penpot
+    When the team is mirrored again
+    Then the file "Penpot/Shared Work/Original (copy).penpot" carries a Penpot id
+    And the files "Penpot/Shared Work/Original.penpot" and "Penpot/Shared Work/Original (copy).penpot" carry different Penpot ids
+    # No `duplicate-file` call of ours is involved. Needs a seed step that calls
+    # duplicate-file directly on the Penpot side — the one thing missing to make
+    # this live.
+
+  @in-penpot @todo
+  Scenario: A duplicate made in Penpot inherits the mapping's mode, not the original's
+    Given a mirrored design "Original" in the project "Shared Work"
+    And "Penpot/Shared Work/Original.penpot" is a "sync" design
+    And the design "Original" is duplicated in Penpot
+    When the team is mirrored again
+    Then the file "Penpot/Shared Work/Original (copy).penpot" is in "link" mode
+    # THE DIFFERENCE THAT MATTERS, and the reason this pair earns its place: a
+    # Nextcloud-side copy inherits nothing because the app creates the mirror
+    # knowing where it came from, while a Penpot-side duplicate arrives as a
+    # stranger and takes the mapping's default like any other new design. Two
+    # designs that look identical in Penpot can therefore mirror in different
+    # modes, purely because of where the duplicate was made.
