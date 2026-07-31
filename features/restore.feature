@@ -96,9 +96,9 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
   Scenario: Restoring a mirror brings its design back out of Penpot's trash
     Given a Penpot project named "Bring Back" exists in that team
     And a Penpot file named "Second Thoughts" exists in the project "Bring Back"
-    When the admin runs a pull
+    And the admin runs a pull
     And I delete "Penpot/Bring Back/Second Thoughts.penpot"
-    And I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
+    When I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
     Then the design "Second Thoughts" is not in Penpot's trash
     And Penpot project "Bring Back" holds a design named "Second Thoughts"
     # Lossless: the SAME design comes back, with its id, revision and history —
@@ -108,9 +108,9 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
   Scenario: A pull after a restore neither prunes the mirror nor duplicates it
     Given a Penpot project named "Stay Put" exists in that team
     And a Penpot file named "Round Trip" exists in the project "Stay Put"
-    When the admin runs a pull
+    And the admin runs a pull
     And I delete "Penpot/Stay Put/Round Trip.penpot"
-    And I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
+    When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
     And the admin runs a pull
     Then the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
     And Penpot project "Stay Put" holds a design named "Round Trip"
@@ -128,9 +128,9 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
   Scenario: A pull after a restore does not trash the mirror a second time
     Given a Penpot project named "Stay Put" exists in that team
     And a Penpot file named "Round Trip" exists in the project "Stay Put"
-    When the admin runs a pull
+    And the admin runs a pull
     And I delete "Penpot/Stay Put/Round Trip.penpot"
-    And I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
+    When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
     And the admin runs a pull
     Then the file "Penpot/Stay Put/Round Trip.penpot" is not in the Nextcloud trash
     # @todo BECAUSE IT FAILS, NOT BECAUSE IT IS UNWRITTEN — the one @todo in this
@@ -153,10 +153,10 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
   Scenario: Restoring an untracked ".penpot" file never contacts Penpot
     Given a Penpot project named "Bystander" exists in that team
     And a Penpot file named "Not Involved" exists in the project "Bystander"
-    When the admin runs a pull
+    And the admin runs a pull
     And I upload a ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
     And I delete "Penpot/Bystander/Strays In.penpot"
-    And I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
+    When I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
     Then the file "Penpot/Bystander/Strays In.penpot" carries no Penpot id
     And Penpot project "Bystander" holds a design named "Not Involved"
     And Penpot project "Bystander" holds no design named "Strays In"

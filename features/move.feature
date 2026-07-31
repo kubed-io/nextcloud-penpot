@@ -83,8 +83,8 @@ Feature: Moving a design
   Scenario: Moving a file into a plain subfolder of its project keeps its project
     Given a Penpot project named "Stays Put" exists in that team
     And a Penpot file named "Wanderer" exists in the project "Stays Put"
-    When the admin runs a pull
-    And I move "Penpot/Stays Put/Wanderer.penpot" to "Penpot/Stays Put/wip/Wanderer.penpot"
+    And the admin runs a pull
+    When I move "Penpot/Stays Put/Wanderer.penpot" to "Penpot/Stays Put/wip/Wanderer.penpot"
     Then Penpot project "Stays Put" holds a design named "Wanderer"
     And the file "Penpot/Stays Put/wip/Wanderer.penpot" still carries its Penpot id
     # No project change, so no `move-files`. "wip" is never created in Penpot,
@@ -94,8 +94,8 @@ Feature: Moving a design
   Scenario: A pull never relocates a file the user filed into a subfolder
     Given a Penpot project named "Left Where I Put It" exists in that team
     And a Penpot file named "Nested" exists in the project "Left Where I Put It"
-    When the admin runs a pull
-    And I move "Penpot/Left Where I Put It/Nested.penpot" to "Penpot/Left Where I Put It/wip/Nested.penpot"
+    And the admin runs a pull
+    When I move "Penpot/Left Where I Put It/Nested.penpot" to "Penpot/Left Where I Put It/wip/Nested.penpot"
     And the admin runs a pull
     Then the file "Penpot/Left Where I Put It/wip/Nested.penpot" still carries its Penpot id
     And there is no node at "Penpot/Left Where I Put It/Nested.penpot"
@@ -109,9 +109,9 @@ Feature: Moving a design
     Given a Penpot project named "Move From" exists in that team
     And a Penpot project named "Move To" exists in that team
     And a Penpot file named "Travelling" exists in the project "Move From"
-    When the admin runs a pull
+    And the admin runs a pull
     And the admin promotes "Penpot/Move From/Travelling.penpot" to "sync" mode
-    And I move "Penpot/Move From/Travelling.penpot" to "Penpot/Move To/Travelling.penpot"
+    When I move "Penpot/Move From/Travelling.penpot" to "Penpot/Move To/Travelling.penpot"
     Then Penpot project "Move To" holds a design named "Travelling"
     And Penpot project "Move From" holds no design named "Travelling"
     # Promoted to sync first because a `link` is confined to its project (§6.43)
@@ -144,10 +144,10 @@ Feature: Moving a design
   @in-nextcloud @gesture
   Scenario: Filing a draft — dragging from the team root into a project
     Given a Penpot project named "File Me" exists in that team
-    When the admin runs a pull
+    And the admin runs a pull
     And I create a new design file at "Penpot/Loose Draft.penpot"
     And the admin promotes "Penpot/Loose Draft.penpot" to "sync" mode
-    And I move "Penpot/Loose Draft.penpot" to "Penpot/File Me/Loose Draft.penpot"
+    When I move "Penpot/Loose Draft.penpot" to "Penpot/File Me/Loose Draft.penpot"
     Then Penpot project "File Me" holds a design named "Loose Draft"
     # Created at the root, so it starts life in Drafts; the drag files it.
 
@@ -155,9 +155,9 @@ Feature: Moving a design
   Scenario: Un-filing — dragging from a project out to the team root
     Given a Penpot project named "Unfile Me" exists in that team
     And a Penpot file named "Going Loose" exists in the project "Unfile Me"
-    When the admin runs a pull
+    And the admin runs a pull
     And the admin promotes "Penpot/Unfile Me/Going Loose.penpot" to "sync" mode
-    And I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
+    When I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
     Then Penpot project "Unfile Me" holds no design named "Going Loose"
     # The design is in Drafts now. The file simply sits at the team root, because
     # Drafts is a state and never a folder — Nextcloud stays more expressive than
@@ -243,7 +243,7 @@ Feature: Moving a design
     Given a mirrored ".penpot" file in "link" mode in a project folder
     When I promote the file to "sync" mode
     And a pull runs so the archive is fetched
-    And I move the file to a folder with no Penpot ancestor
+    When I move the file to a folder with no Penpot ancestor
     Then the move succeeds
     And the file keeps its full ".penpot" archive content and its "penpot_id"
 

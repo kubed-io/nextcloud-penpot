@@ -111,8 +111,8 @@ Feature: Deleting designs, locally and in Penpot
   Scenario: Deleting a mirror moves the design into Penpot's trash
     Given a Penpot project named "Bin Me" exists in that team
     And a Penpot file named "Doomed" exists in the project "Bin Me"
-    When the admin runs a pull
-    And I delete "Penpot/Bin Me/Doomed.penpot"
+    And the admin runs a pull
+    When I delete "Penpot/Bin Me/Doomed.penpot"
     Then the design "Doomed" is in Penpot's trash
     And Penpot project "Bin Me" holds no design named "Doomed"
     # Soft on both sides. Nothing here is irreversible, which is what makes it
@@ -122,9 +122,9 @@ Feature: Deleting designs, locally and in Penpot
   Scenario: Emptying the Nextcloud trash destroys the design in Penpot
     Given a Penpot project named "Purge Me" exists in that team
     And a Penpot file named "Gone For Good" exists in the project "Purge Me"
-    When the admin runs a pull
+    And the admin runs a pull
     And I delete "Penpot/Purge Me/Gone For Good.penpot"
-    And I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
+    When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
     Then the design "Gone For Good" is not in Penpot's trash
     # The one irreversible thing this app can cause, reached only by the one
     # irreversible gesture Nextcloud offers. permanently-delete-team-files does
@@ -135,9 +135,9 @@ Feature: Deleting designs, locally and in Penpot
   Scenario: Deleting an untracked ".penpot" file leaves Penpot alone
     Given a Penpot project named "Untouched" exists in that team
     And a Penpot file named "Keep Me" exists in the project "Untouched"
-    When the admin runs a pull
+    And the admin runs a pull
     And I upload a ".penpot" archive at "Penpot/Untouched/Not Ours.penpot"
-    And I delete "Penpot/Untouched/Not Ours.penpot"
+    When I delete "Penpot/Untouched/Not Ours.penpot"
     Then Penpot project "Untouched" holds a design named "Keep Me"
     And the design "Keep Me" is not in Penpot's trash
 
@@ -238,8 +238,8 @@ Feature: Deleting designs, locally and in Penpot
   Scenario: A mirror already in the Nextcloud trash is invisible to the pull
     Given a Penpot project named "Left Alone" exists in that team
     And a Penpot file named "Twice Dead" exists in the project "Left Alone"
-    When the admin runs a pull
-    And I delete "Penpot/Left Alone/Twice Dead.penpot"
+    And the admin runs a pull
+    When I delete "Penpot/Left Alone/Twice Dead.penpot"
     And the design "Twice Dead" is purged from Penpot's trash
     And the admin runs a pull
     Then the pull succeeds

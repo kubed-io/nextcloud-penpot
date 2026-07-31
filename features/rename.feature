@@ -58,8 +58,8 @@ Feature: Renaming a mirrored Penpot file
   Scenario: Renaming a mirrored file renames its design in Penpot
     Given a Penpot project named "Rename Live" exists in that team
     And a Penpot file named "Old Name" exists in the project "Rename Live"
-    When the admin runs a pull
-    And I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
+    And the admin runs a pull
+    When I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
     Then Penpot project "Rename Live" holds a design named "New Name"
     And Penpot project "Rename Live" holds no design named "Old Name"
     # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
