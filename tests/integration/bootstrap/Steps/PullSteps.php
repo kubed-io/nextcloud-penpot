@@ -68,7 +68,29 @@ trait PullSteps {
 		$this->penpotRpc('create-project', ['team-id' => $teamId, 'name' => $name]);
 	}
 
-	/** @When /^the admin runs a pull$/ */
+	/**
+	 * The sync run, as an ACTION — an admin clicking the button or running the
+	 * command, which is what `reconcile.feature` is about.
+	 *
+	 * ## TWO PHRASINGS, ONE FUNCTION — AND THAT IS THE POINT
+	 *
+	 * Cucumber and Behat ignore the KEYWORD when matching a step, so the same
+	 * text can be a Given in one scenario and a When in another. What they do not
+	 * ignore is the text, and the text is what a reader believes.
+	 *
+	 * "The admin runs a pull" as setup made it read as though an admin were
+	 * permanently on call, standing by to run a sync before every gesture a user
+	 * makes. That is not the system being described — it is scaffolding wearing a
+	 * behaviour's clothes. Setup says what IS TRUE ("the team has been mirrored"),
+	 * not who did what to make it true.
+	 *
+	 * So: use the ACTION phrasing where the run is the behaviour under test
+	 * (reconcile.feature), and the STATE phrasing everywhere the mirror merely has
+	 * to exist first. One implementation, because it is one operation.
+	 *
+	 * @When /^the admin runs a pull$/
+	 * @Given /^the team has been mirrored into Nextcloud$/
+	 */
 	public function theAdminRunsAPull(): void {
 		$this->occ('penpot_sync:sync pull');
 	}

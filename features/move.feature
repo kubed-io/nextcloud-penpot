@@ -77,7 +77,10 @@ Feature: Moving a design
 
   # ══ MOVED IN NEXTCLOUD ═════════════════════════════════════════════════════
 
-  # ── within one project: free, local, and it sticks ────────────────────────
+  Rule: A move within one project is local — Penpot is never told
+
+    Nextcloud owns folder layout (§6.29). Sub-foldering a design changes nothing
+    Penpot can even represent, so nothing is sent and nothing is undone.
 
   @in-nextcloud @gesture @todo
   Scenario: Moving a file into a plain subfolder of its project keeps its project
@@ -196,56 +199,51 @@ Feature: Moving a design
     # Creating a design is a deliberate action (create-design.feature), never a
     # side effect of dragging a file somewhere.
 
-  # ── link files are confined to their project (§6.43) ──────────────────────
-  # A "sync" file is a real archive, so moving it anywhere leaves the user holding
-  # something valuable. A "link" file is a POINTER — move it out and they hold an
-  # empty husk that looks like a design and isn't. So links are strictly confined,
-  # and every refusal offers the same escape: promote to "sync" first. That isn't
-  # a fob-off — it is exactly the action that makes the move safe.
+  Rule: A link may not leave the project it points into
 
-  @in-nextcloud @gesture @todo
-  Scenario: A link file moves freely inside its own project
-    Given a mirrored ".penpot" file in "link" mode in a project folder
-    When I move the file into a plain subfolder of that project
-    Then the move succeeds
-    And Penpot is never contacted
-    And the file still belongs to the same project
+    A "sync" file is a real archive, so moving it anywhere leaves the user
+    holding something valuable. A "link" is a POINTER — move it out and they
+    hold an empty husk that looks like a design and isn't. So links are
+    confined, and every refusal offers the same escape: promote to "sync"
+    first. That is not a fob-off; it is exactly the action that makes the
+    move safe.
 
-  @in-nextcloud @gesture @todo
-  Scenario: A link file cannot be moved into a different project
-    Given a mirrored ".penpot" file in "link" mode in a project folder
-    When I try to move the file into a different project folder
-    Then the move is refused
-    And the refusal offers to promote the file to "sync" mode first
-    And Penpot is never contacted
+    ONE RULE, THREE DESTINATIONS — which is why these are Examples rather than
+    three scenarios. The destination is an INPUT; the outcome is identical for
+    every row. Contrast the Drafts pair further down, which look equally
+    symmetrical and are two different rules read from opposite ends.
 
-  @in-nextcloud @gesture @todo
-  Scenario: A link file cannot be moved to the team root
-    Given a mirrored ".penpot" file in "link" mode in a project folder
-    When I try to move the file to the team folder's root
-    Then the move is refused
-    And the refusal offers to promote the file to "sync" mode first
-    # The team root means Drafts (§6.35) — a real project change, which a pointer
-    # is not allowed to make.
+    @in-nextcloud @gesture @todo
+    Scenario Outline: A link cannot be moved out of its project
+      Given a "link" design at "Penpot/Confined/Pointer.penpot"
+      When I try to move it to <destination>
+      Then the move is refused
+      And the refusal offers to promote the file to "sync" mode first
+      And Penpot is never contacted
 
-  @in-nextcloud @gesture @todo
-  Scenario: A link file cannot be moved out of every mapping
-    Given a mirrored ".penpot" file in "link" mode in a project folder
-    When I try to move the file to a folder with no Penpot ancestor
-    Then the move is refused
-    And the refusal explains a link file holds no archive — only a pointer
-    And the app offers to promote it to "sync" mode so it can be kept
-    And Penpot is never contacted
-    # Allowing this would hand someone an empty husk that looks like a backup.
+      Examples: destinations that would change what the pointer points at
+        | destination                     |
+        | another project folder          |
+        | the team root, which means Drafts |
+        | a folder outside every mapping  |
 
-  @in-nextcloud @gesture @todo
-  Scenario: Promoting a link first makes the move work normally
-    Given a mirrored ".penpot" file in "link" mode in a project folder
-    When I promote the file to "sync" mode
-    And a pull runs so the archive is fetched
-    When I move the file to a folder with no Penpot ancestor
-    Then the move succeeds
-    And the file keeps its full ".penpot" archive content and its "penpot_id"
+    @in-nextcloud @gesture @todo
+    Scenario: A link moves freely inside its own project
+      Given a "link" design at "Penpot/Confined/Pointer.penpot"
+      When I move it into a plain subfolder of that project
+      Then the move succeeds
+      And Penpot is never contacted
+      # The negative case that gives the rule its edge: confinement is to the
+      # PROJECT, not to a folder.
+
+    @in-nextcloud @gesture @todo
+    Scenario: Promoting a link first makes the move work normally
+      Given a "link" design at "Penpot/Confined/Pointer.penpot"
+      And the admin has promoted it to "sync" mode
+      When I move it to a folder outside every mapping
+      Then the move succeeds
+      And the file keeps its full ".penpot" archive content and its "penpot_id"
+      # The escape hatch every refusal above offers, exercised.
 
   # ── moving PROJECT FOLDERS: free inside the team, refused outside ─────────
 
