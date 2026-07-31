@@ -101,14 +101,20 @@ organised, and it does not work here: **Behat's parser rejects the keyword.**
     In Parser.php line 339:
       Expected Step, but got text: "  Rule: A move within one project is local"
 
-That is Behat 3.32 — a version well past the 3.10 where the support was assumed
-to have landed. The version number was inferred from and believed; the parser
-disagreed on the first run. Business rules are therefore written as **comment
-banners** (`# ── RULE: … ──`), which cost nothing and read the same.
+That is Behat 3.32, and **there is no newer version to upgrade to.**
+[Behat#1451](https://github.com/Behat/Behat/issues/1451) is still open; it
+depends on [Behat/Gherkin#140](https://github.com/Behat/Gherkin/issues/140),
+open since 2019. A maintainer in February 2026: *"I'd still like to look at
+this but will come back to it once we have Behat 4.0 out (or at least the
+alpha)."* So this is post-4.0 work with no shipped implementation anywhere.
 
-Re-test before adopting it: the day Behat's Gherkin catches up, these banners
-become real `Rule:` blocks and the Backgrounds they would carry are already
-implicit in how the sections are grouped.
+The version number was inferred from and believed rather than tested; the
+parser disagreed on the first run, which is the cheapest possible way to be
+wrong and still the wrong way to find out.
+
+Business rules are therefore **comment banners** (`# ── RULE: … ──`). They cost
+nothing, read the same, and become real `Rule:` blocks the day Behat ships it —
+the groupings and the Backgrounds they would carry are already in place.
 
 ## Data tables: an input, or a different rule?
 
