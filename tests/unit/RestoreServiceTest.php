@@ -216,6 +216,28 @@ final class RestoreServiceTest extends TestCase {
 		$this->restores->onRestored($this->file());
 	}
 
+	/**
+	 * AND A DRAFTS DESIGN IS NOT "GONE FOREVER". A mirror at the team root has no
+	 * project folder above it, so membership resolves the project to null — which
+	 * an earlier version read as "nowhere to look" and reported as the permanent
+	 * loss below. §6.35: the team root IS a project, it just has no folder.
+	 */
+	public function testADraftsDesignThatStillExistsIsRecognisedAsIntact(): void {
+		$this->givenStamped();
+		$this->client->method('deletedFiles')->willReturn([]);
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => self::DRAFTS, 'team-id' => self::TEAM, 'is-default' => true],
+		]);
+
+		$this->client->expects($this->once())->method('getProjectFiles')
+			->with(self::DRAFTS)
+			->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->expects($this->never())->method('restoreDeletedFiles');
+
+		$this->restores->onRestored($this->file());
+	}
+
 	// ── layer 3: it is gone, and that is not built ──────────────────────────
 
 	/**

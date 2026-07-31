@@ -128,7 +128,7 @@ final class RestoreService {
 			if (!$this->isInPenpotTrash($teamId, $penpotId)) {
 				// Layer 1 or layer 3 — either way there is nothing for the restore
 				// command to do, and which one it is decides what the user is told.
-				$this->reportUnrestorable($node, $penpotId);
+				$this->reportUnrestorable($node, $teamId, $penpotId);
 
 				return;
 			}
@@ -243,8 +243,8 @@ final class RestoreService {
 	 * own (§6.35) — so its id is read off the team's default project.
 	 */
 	private function isListedAgain(File $node, string $teamId, string $penpotId): bool {
-		$projectId = $this->resolver->resolve($node)->projectId ?? $this->draftsProjectFor($teamId);
-		if ($projectId === null || $projectId === '') {
+		$projectId = $this->projectFor($node, $teamId);
+		if ($projectId === null) {
 			// Nothing to ask. Fall back to the weaker oracle rather than reporting a
 			// failure we have no evidence for — the restore may well have worked.
 			return !$this->isInPenpotTrash($teamId, $penpotId);
@@ -254,9 +254,25 @@ final class RestoreService {
 	}
 
 	/**
-	 * The team's default project — Drafts, where a design with no project folder
-	 * above it lives (§6.35). `get-all-projects`, never `get-projects`, which
-	 * does not filter soft-deleted projects (§6.42).
+	 * Which Penpot project this mirror's design should be listed in.
+	 *
+	 * The folder it was restored into names it, exactly as membership is resolved
+	 * everywhere else (§6.29). A mirror at the team ROOT is in that team's
+	 * **Drafts** — a real project with no folder of its own (§6.35) — so the
+	 * fallback is the team's default project, not "no project".
+	 */
+	private function projectFor(File $node, string $teamId): ?string {
+		$projectId = $this->resolver->resolve($node)->projectId;
+		if ($projectId !== null && $projectId !== '') {
+			return $projectId;
+		}
+
+		return $this->draftsProjectFor($teamId);
+	}
+
+	/**
+	 * The team's default project — Drafts. `get-all-projects`, never
+	 * `get-projects`, which does not filter soft-deleted projects (§6.42).
 	 */
 	private function draftsProjectFor(string $teamId): ?string {
 		foreach ($this->client->getAllProjects() as $project) {
@@ -278,8 +294,13 @@ final class RestoreService {
 	 * design is gone and this file is now the only copy", which are not remotely
 	 * the same message.
 	 */
-	private function reportUnrestorable(File $node, string $penpotId): void {
-		$projectId = $this->resolver->resolve($node)->projectId;
+	private function reportUnrestorable(File $node, string $teamId, string $penpotId): void {
+		// The SAME resolution layer 2 confirms with, Drafts fallback and all. An
+		// earlier version asked the resolver alone, which reads `null` for a mirror
+		// at the team root — and then told the user their perfectly healthy Drafts
+		// design was gone forever (§6.35: the team root IS a project, it just has
+		// no folder).
+		$projectId = $this->projectFor($node, $teamId);
 
 		if ($projectId !== null && $this->isInProject($projectId, $penpotId)) {
 			// Layer 1. The mirror was trashed while Penpot was unreachable, or
