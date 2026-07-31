@@ -2034,3 +2034,56 @@ The general lesson is the one this chapter keeps circling from new directions:
 smarter algorithm.** Two trashes with independent retention policies is a genuinely
 hard reconciliation problem. Deciding that one of them is simply not ours to look
 at makes it disappear.
+
+#### 7. `permanently-delete-team-files` returns before the data is gone
+
+The new purge scenario asserted that no final archive could be saved for a
+permanently-deleted design — the obvious consequence of §6.42's grace window
+closing. Penpot disagreed, live:
+
+```
+And the design "No Way Back" is permanently deleted in Penpot
+And the admin runs a pull
+  → 1 design(s) no longer exist in Penpot. Their mirrors were moved to the
+    Nextcloud trash: 1 saved as a final archive first, 0 could not be recovered.
+```
+
+`export-binfile` **still exported it**, seconds after the destroy command
+returned 200 with an `end` event. Chapter 1 §2229 had the explanation waiting:
+Penpot's deletion is *"soft — and scheduled"*, rows marked and removed later by a
+worker. The permanent delete is no different in kind from the soft one; it just
+schedules the removal instead of the expiry.
+
+Two consequences worth keeping:
+
+- **A destroy command that returns is not a destroy that happened.** This is the
+  fourth Penpot command where the reply describes an intention rather than an
+  outcome, after export, restore and the trash listing. The pattern is now
+  reliable enough to assume: *ask again if it matters.*
+- **The scenario stopped asserting it.** Whether the snapshot lands is Penpot's
+  worker timing, not this app's behaviour, and a test that asserts the other
+  side's scheduling is a test that fails on a busy afternoon. It asserts where
+  the mirror ends up, which is the thing the feature is actually about.
+
+#### 8. An error is not an empty result
+
+The same run failed a second scenario with `expected a design named 'Round Trip'
+in Penpot project 'Stay Put'; found: (none)` — which reads exactly like a restore
+that silently did not work, and sent this investigation straight back to §C6.15's
+territory.
+
+It was not. The restore had logged success, the pull had listed the design and
+pruned nothing. What failed was the **probe**, for one project, transiently:
+`occ penpot_sync:probe --files` catches a per-project listing error, prints
+`<error>…</error>` where the files would be, and exits 0. The step's parser
+looked for lines containing `revn=`, found none, and reported an empty project.
+
+A listing failure and an empty listing are not the same fact, and a test that
+collapses them will send its reader to the wrong place every time. The step now
+raises the error line as itself.
+
+That makes three findings in this section that are all the same shape one level
+apart: the prune reported a count and not its subjects (§C6.16.2); the restore
+confirmed against a listing that could not answer the question (§C6.15); and the
+harness turned a failure into an absence. **Every one of them was a system
+answering a question that had not been asked.**

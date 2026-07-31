@@ -313,6 +313,17 @@ trait GestureSteps {
 	 *
 	 * A project line ends in `[<team>]`; a file line under it carries `revn=`.
 	 *
+	 * ## AN ERROR IS NOT AN EMPTY PROJECT, AND THIS USED TO REPORT IT AS ONE
+	 *
+	 * `probe --files` catches a per-project listing failure and prints
+	 * `<error>…</error>` where the files would be, exiting 0 — so a transient
+	 * Penpot 502 for ONE project used to reach the assertion as the flat, wrong
+	 * `found: (none)`, indistinguishable from "the design really is gone". That
+	 * sent an hour after a restore bug that had not happened: the restore had
+	 * logged success, the pull had listed the design, and only the probe failed.
+	 *
+	 * The error line is now raised as itself.
+	 *
 	 * @return list<string>
 	 */
 	private function penpotFileNamesIn(string $projectName): array {
@@ -327,6 +338,12 @@ trait GestureSteps {
 			if (preg_match('/^  (\S.*?)\s{2,}[0-9a-f-]{36}\s+\[/', $line, $m) === 1) {
 				$inProject = trim($m[1]) === $projectName;
 				continue;
+			}
+			if ($inProject && str_contains($line, '<error>')) {
+				throw new \RuntimeException(
+					"Penpot could not list project '{$projectName}' — this is a LISTING failure, "
+					. "not an empty project:\n" . trim(strip_tags($line)),
+				);
 			}
 			if ($inProject && preg_match('/^\s+(.*?)\s+revn=/', $line, $m) === 1) {
 				$names[] = trim($m[1]);

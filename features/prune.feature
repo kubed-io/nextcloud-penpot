@@ -127,16 +127,22 @@ Feature: Pruning mirrors of designs Penpot no longer has
     And the admin runs a pull
     Then the pull succeeds
     And the pull pruned 1 mirror
-    And the pull saved 0 final archives
     And there is no node at "Penpot/Erased/No Way Back.penpot"
     And the file "Penpot/Erased/No Way Back.penpot" is in the Nextcloud trash
-    # PAST THE GRACE WINDOW WITHOUT WAITING A WEEK: a permanent delete puts Penpot
-    # in the same state a seven-day-old deletion does — not listed, not in its
-    # trash, and no longer exportable. So the snapshot fails and is reported as 0
-    # rather than faked, and the mirror is trashed anyway.
+    # The design is gone from every Penpot listing AND from its trash, so nothing
+    # about it can ever come back — and the mirror is still only trashed. This is
+    # the case where the local file is genuinely the last copy of that design,
+    # which is precisely why it must land somewhere recoverable.
     #
-    # This is the case where the local file is genuinely the last copy of that
-    # design, which is precisely why it must land somewhere recoverable.
+    # NOTHING IS ASSERTED ABOUT THE FINAL ARCHIVE HERE, and the reason is a live
+    # finding (saga §C6.16): `permanently-delete-team-files` returns before the
+    # data is actually gone. Penpot marks the rows and a worker removes them
+    # later — so `export-binfile` can still succeed for seconds afterwards, and
+    # this scenario really did save an archive for a design that had been
+    # permanently deleted. Whether the snapshot lands is Penpot's timing, not our
+    # behaviour; the assertion this file cares about is where the mirror ends up.
+    # The truly-past-the-window case is the "cannot be recovered" scenario in
+    # reconcile.feature, which does not depend on winning a race.
 
   # ── the reconciler's field of view: VISIBLE FILES, and nothing else ───────
   #
