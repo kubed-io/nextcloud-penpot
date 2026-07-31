@@ -11,11 +11,12 @@
  *   • Purge — remove the design files this app created (Nextcloud side only)
  *   • Connection test — "Test connection"
  *
- * NB (honest UI, saga Ch2): **Test connection works today.** "Sync from Penpot"
- * is disabled until Course 3's pull lands, and "Purge" until Course 5's delete
- * machine. Present-but-disabled rather than absent, so the finished shape of the
- * section is visible from the first release and enabling one later is deleting
- * an attribute.
+ * NB (honest UI, saga Ch2): **Test connection and "Sync from Penpot" both work
+ * today** — the latter since the triggers slice. Only "Purge" is still disabled,
+ * awaiting Course 5's delete machine. Present-but-disabled rather than absent,
+ * so the finished shape of the section is visible from the first release and
+ * enabling one later is deleting an attribute — which is literally what enabling
+ * the sync button was.
  *
  * THERE IS NO "Sync to Penpot", and there never will be: this app is read-only
  * for file content (§6.1). That is the spine of the design, not a phase-ordering
@@ -27,7 +28,7 @@
  */
 
 // Tooltip on every not-yet-live button — one string, so the promise is consistent.
-$soon = $l->t('Available once design sync lands (a later release). Test connection works now.');
+$soon = $l->t('Available once the purge machine lands (a later release). Everything else in this panel works now.');
 ?>
 <div class="section">
 <div id="penpot-sync-manual" class="penpot-sync-manual">

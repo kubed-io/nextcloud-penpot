@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The admin panel no longer claims the schedule does nothing. Sync Settings and the mapping cards carried "not built yet" notes written before the background job existed, so a working setting read as an inert one.
+- `occ penpot_sync:show-config` reports the last run — its outcome, when it finished, and how much it did — instead of asserting the pull job is not built.
+
 - Large Penpot responses are decoded correctly. The Transit cache was capped at 94 entries (the real limit is 1936) and skipped plain-string keys, so any big record decoded against a shifted cache — which could silently return the wrong field for the wrong key.
 
 - Penpot's export response could not be read at all: the archive URL arrives as a Transit *tagged map*, which the decoder mistook for plain JSON and rejected with advice that did not apply.
