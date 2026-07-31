@@ -584,10 +584,10 @@ final class PenpotClient {
 		foreach ($this->events($stream) as [$name, $data]) {
 			if ($name === 'error') {
 				throw new PenpotApiException(
-					sprintf('Penpot reported an error during %s: %s', $command, $data),
+					sprintf('Penpot reported an error during %s: %s', $command, $this->errorHint($data)),
 					0,
 					null,
-					PenpotApiException::KIND_REMOTE,
+					PenpotApiException::KIND_PROTOCOL,
 				);
 			}
 			if ($name === 'end') {
