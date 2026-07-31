@@ -27,17 +27,24 @@ use Psr\Log\NullLogger;
  *
  * ## THE TESTS THAT MATTER HERE ARE THE TWO LIES
  *
- * `restore-deleted-team-files` has been seen to report success twice without
- * doing the work, in two different ways, and both are cheap to regress:
+ * `restore-deleted-team-files` has been seen to report success without doing the
+ * work in two different ways, and both are cheap to regress:
  *
  *   - §C6.11 — an id that is not in the trash gets 200 and an `end` event
  *     carrying an EMPTY SET. No error.
- *   - §6.49 — the `end` event arrived while `deleted_at` was still set.
+ *   - §6.49 — the SSE returns before the transaction settles, so the event can
+ *     arrive while `deleted_at` is still set. A second call clears it.
  *
  * A caller that believes either one tells the user their design is back when it
- * is not, and they stop looking for it. So "reported success but restored
- * nothing" and "reported success but is still in the trash" are both pinned
- * below, and both assert the same thing: the outcome is not treated as success.
+ * is not, and they stop looking for it.
+ *
+ * The sharpest test here is neither of those, though: it is
+ * {@see testSuccessIsMeasuredAgainstTheProjectListingNotTheTrash()}. This
+ * class's first draft confirmed the restore by asking whether the design had
+ * left the TRASH, which sounds equivalent to "it is back" and is not — inside
+ * §6.49's window the two listings disagree, and the integration suite failed on
+ * the slice's headline scenario about half the time as a result. Getting the
+ * check right mattered less than asking the right thing.
  *
  * The other axis is layer selection — the app must never spend a write on a
  * design that never left, and must never quietly do nothing for one that is
@@ -47,6 +54,7 @@ final class RestoreServiceTest extends TestCase {
 	private const PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
 	private const TEAM = '4eda2e11-843e-8045-8008-51824bda07a1';
 	private const PROJECT = 'df59d46b-a997-80d9-8008-6452575b0a69';
+	private const DRAFTS = '4eda2e11-843e-8045-8008-51824bdafd88';
 
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
@@ -76,11 +84,57 @@ final class RestoreServiceTest extends TestCase {
 	/** The ordinary round trip: trash it, restore it, and the design comes back too. */
 	public function testRestoringAMirrorBringsTheDesignBackOutOfPenpotsTrash(): void {
 		$this->givenStamped();
-		$this->givenInPenpotTrashThenNot();
+		$this->givenInPenpotTrash();
+		$this->givenResolvesToProject();
+		$this->givenProjectHolds([self::PENPOT_ID]);
 
 		$this->client->expects($this->once())->method('restoreDeletedFiles')
 			->with(self::TEAM, [self::PENPOT_ID], null)
 			->willReturn([self::PENPOT_ID]);
+
+		$this->restores->onRestored($this->file());
+	}
+
+	/**
+	 * THE ORACLE, PINNED. Success is "the design is back in the listing the PULL
+	 * reads", not "the design is out of the trash".
+	 *
+	 * Those two disagree inside the window where Penpot's restore has returned but
+	 * its transaction has not settled (§6.49) — and that disagreement is not
+	 * theoretical: it failed the integration suite's headline scenario about half
+	 * the time. A version that asks the trash listing passes this test's setup
+	 * while the design is still unlisted and the next pull trashes the mirror.
+	 */
+	public function testSuccessIsMeasuredAgainstTheProjectListingNotTheTrash(): void {
+		$this->givenStamped();
+		$this->givenResolvesToProject();
+		$this->givenInPenpotTrash();
+		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
+		// …but not yet in the project, then there after the second call.
+		$this->client->method('getProjectFiles')->willReturnOnConsecutiveCalls([], [['id' => self::PENPOT_ID]]);
+
+		// §6.49's remedy, and the whole reason this test exists.
+		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles');
+
+		$this->restores->onRestored($this->file());
+	}
+
+	/** A design at the team root is in Drafts — a real project, resolved by id (§6.35). */
+	public function testAMirrorAtTheTeamRootIsConfirmedAgainstDrafts(): void {
+		$this->givenStamped();
+		$this->givenInPenpotTrash();
+		// No project folder above it: membership resolves to the team, not a project.
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'other-team-drafts', 'team-id' => 'not-our-team', 'is-default' => true],
+			['id' => self::DRAFTS, 'team-id' => self::TEAM, 'is-default' => true],
+			['id' => self::PROJECT, 'team-id' => self::TEAM, 'is-default' => false],
+		]);
+		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
+
+		$this->client->expects($this->once())->method('getProjectFiles')
+			->with(self::DRAFTS)
+			->willReturn([['id' => self::PENPOT_ID]]);
 
 		$this->restores->onRestored($this->file());
 	}
@@ -107,19 +161,21 @@ final class RestoreServiceTest extends TestCase {
 	}
 
 	/**
-	 * §6.49's lie: Penpot named our id, and the design is still in the trash.
+	 * §6.49's lie, all the way through: Penpot named our id twice and the design
+	 * is still not listed. Two restores is where it stops — the second call is the
+	 * documented remedy, not the start of a retry loop, and a third would just be
+	 * hope.
 	 *
-	 * This did not reproduce on 2.17.0. The check stays because one
-	 * non-reproduction does not disprove a race, and the confirming read costs one
-	 * cheap listing against the alternative of a false "your design is back".
+	 * Nothing is thrown. The user's file is already back where they put it.
 	 */
-	public function testARestoreStillInTheTrashAfterwardsIsNotTreatedAsSuccess(): void {
+	public function testADesignStillUnlistedAfterASecondCallIsReportedAsAFailure(): void {
 		$this->givenStamped();
+		$this->givenInPenpotTrash();
+		$this->givenResolvesToProject();
+		$this->givenProjectHolds([]);
 
-		$this->client->expects($this->exactly(2))->method('deletedFiles')
-			->with(self::TEAM)
-			->willReturn([['id' => self::PENPOT_ID]]);
-		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
+		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles')
+			->willReturn([self::PENPOT_ID]);
 
 		$this->restores->onRestored($this->file());
 	}
@@ -210,12 +266,20 @@ final class RestoreServiceTest extends TestCase {
 			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@t1', Mapping::MODE_SYNC, self::TEAM));
 	}
 
-	/** In the trash when asked, out of it when asked again — a restore that worked. */
-	private function givenInPenpotTrashThenNot(): void {
-		$this->client->method('deletedFiles')->willReturnOnConsecutiveCalls(
-			[['id' => self::PENPOT_ID]],
-			[],
-		);
+	/** The design is in the team's trash — which is what selects layer 2. */
+	private function givenInPenpotTrash(): void {
+		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+	}
+
+	/** The mirror sits in a project folder, so membership names that project. */
+	private function givenResolvesToProject(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
+	}
+
+	/** @param list<string> $ids what `get-project-files` reports for that project */
+	private function givenProjectHolds(array $ids): void {
+		$this->client->method('getProjectFiles')->with(self::PROJECT)
+			->willReturn(array_map(static fn (string $id): array => ['id' => $id], $ids));
 	}
 
 	private function file(): File {

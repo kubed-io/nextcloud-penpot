@@ -510,9 +510,14 @@ protected, they've been ignored.
 
 **Restoring inside the window costs nothing.** The app calls Penpot's own restore
 and the design comes back exactly as it was — verified against a live instance:
-same id, same revision, deep links working again. It confirms by re-reading
-Penpot's trash rather than trusting the reply, because that command answers
-"success" for ids it did not restore.
+same id, same revision, deep links working again.
+
+It does not trust the reply. Penpot's restore answers "success" for ids it did
+not restore, and it answers *before its own transaction settles*, so the app
+re-reads the design's project listing — the same listing the sync reads — and
+calls the restore a second time if the design is not in it yet. That is the
+difference between your file coming back and your file coming back for ninety
+seconds until the next sync tidies it away again.
 
 **There is no trash-bin setting to configure.** An earlier design built a
 parallel "trash project" inside a service account's team, on the same mistaken

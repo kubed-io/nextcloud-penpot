@@ -198,14 +198,18 @@ Feature: Deleting designs, locally and in Penpot
     # event carrying an EMPTY SET. The ids in that set — not the status, not the
     # existence of the event — are the answer.
 
-  Scenario: A restore is confirmed by re-reading the trash, not by the reply
+  Scenario: A restore is confirmed against the listing the pull reads
     Given a trashed ".penpot" file whose design is in Penpot's trash
     When the restore reports the design's id as restored
-    Then the app reads the team's trash again before reporting success
-    And a design still listed there is reported as a failure
-    # §6.49 saw exactly that: `end` arrived while `deleted_at` was still set. It
-    # did not reproduce on 2.17.0 — the read stays, because one non-reproduction
-    # does not disprove a race and it costs one cheap listing.
+    Then the app checks the design is back in its project's listing
+    And a design that is not there yet is restored a second time
+    And a design still missing after that is reported as a failure
+    # NOT "is it out of the trash?", which sounds equivalent and is not. Penpot's
+    # restore returns BEFORE its transaction settles (§6.49), and in that window
+    # the trash listing can stop naming a design while the project listing still
+    # omits it. The pull decides what to prune from the project listing, so that
+    # is the only answer worth having — asking the other one failed this file's
+    # own scenario about half the time (§C6.15).
 
   Scenario: A pull after a restore neither prunes the mirror nor duplicates it
     Given a mirrored ".penpot" file that I moved to the trash

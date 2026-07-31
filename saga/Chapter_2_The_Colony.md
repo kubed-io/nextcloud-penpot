@@ -1742,16 +1742,66 @@ ways, and both were already in the record:
    second call cleared it. This did not reproduce on 2.17.0.
 
 So the client returns **the ids the `end` event actually carries**, and the
-service compares them against what it asked for; then it re-reads the trash
-listing anyway. One non-reproduction does not disprove a race — it is exactly the
-shape of thing that comes back under load — and the confirming read costs one
-cheap listing against the alternative of telling someone their design is back
-when it is not. A false success is worse than an error, because they stop
-looking.
+service compares them against what it asked for. A false success is worse than an
+error, because the user stops looking.
 
 That makes three commands in this app where **HTTP 200 settles nothing**: the
 export (§5.1), the permanent delete, and now the restore. It is no longer a
 gotcha about one endpoint; it is how Penpot's streaming commands work.
+
+#### …and the second lie came back, exactly where §6.49 left it
+
+The first draft of this slice handled lie 2 by re-reading the **trash listing**:
+restore, then ask `get-team-deleted-files` whether the design had left. That
+sounds equivalent to "it is back" and it is not, and the reasoning that produced
+it is worth naming because it was comfortable and wrong:
+
+> §6.49 saw this once, §C6.11 could not reproduce it, so the check is a
+> formality — any cheap read will do.
+
+The integration suite then failed on **the one scenario the whole slice exists
+for** — *"a pull after a restore neither prunes the mirror nor duplicates it"* —
+about half the time. Passing, failing, failing, passing across four runs of the
+same code.
+
+What the log said, once it was made to say anything (see below): the pull trashed
+`Second Thoughts.penpot` and `Round Trip.penpot`, the two files those scenarios
+had just restored. Each survived the pull immediately after its own restore and
+was trashed by the next scenario's pull, seconds later. And the scenario's own
+assertions had passed first — the design was out of the trash and, at that
+moment, listed.
+
+The mechanism is §6.49's, stated in Chapter 1 in one sentence that this slice had
+read and discounted:
+
+> **the SSE returns before the transaction settles.** A second call cleared it.
+
+Inside that window the two listings disagree. `get-team-deleted-files` can have
+stopped naming the design while `get-project-files` still omits it, because
+`deleted_at` is what the second one filters on and the transaction has not
+committed. So the trash listing answers "yes, it left the trash" for a design
+that is, as far as every other query is concerned, still deleted.
+
+**The oracle mattered more than the check.** Every decision in this app is made
+from the project listing: the pull builds its seen-set from it and trashes any
+mirror missing from it. Confirming a restore against anything else confirms
+nothing that matters. The service now asks the same question the pull will ask —
+*is the design back in its project's listing?* — and, when it is not, issues the
+second call §6.49 prescribed and asks again. A mirror at the team root is
+confirmed against that team's **Drafts** project, because Drafts is a real
+project with no folder (§6.35).
+
+Two live details that made this hard to see, both worth keeping:
+
+- **The live instance never reproduced it.** Delete/restore/poll for 40 seconds
+  on `drive.kellyferrone.com` showed the design listed continuously from 600 ms
+  after the restore returned. A near-idle Penpot with five designs settles inside
+  the gap; CI's, mid-suite with seventeen projects, does not. *"It works on the
+  real instance"* was true and meant nothing.
+- **The failing pull reported 14 files** — which is exactly the number of designs
+  those scenarios leave alive, including the restored one. That count is what
+  ruled out "the listing came back short" and pointed at a specific id being
+  absent from a specific project.
 
 #### Three layers, and the honest report for the one that is not built
 
@@ -1776,3 +1826,47 @@ restore that changes a design's identity, so it cannot be a listener that fires
 on a gesture. It needs a human to be told what they are trading and to say yes.
 `restore.feature` is that specification, and what it is waiting for is the
 confirmation surface, not the detection.
+
+#### The prune could not say what it had done
+
+None of the above was visible for two CI runs, and the reason is its own finding:
+**the prune logged nothing on its success path.** It moves a user's files to the
+trash, driven entirely by an absence — "Penpot did not name this id" — and it
+reported a count to the CLI and left no record anywhere of *which* files. The
+first failing run could only be described as "one mirror was pruned that should
+not have been". The second, after one log line was added, named both files
+immediately and turned a mystery into a mechanism.
+
+Two things follow, and neither is about this bug:
+
+1. **An operation that deletes on inference must name its subjects.** "Why did my
+   file disappear?" is the only question anyone asks afterwards, and until now
+   this app could not answer it for its most dangerous operation. The line now
+   carries the path (which project folder it was in), the id, whether a final
+   archive was rescued, and **how many ids Penpot named that run** — a prune
+   against a plausible count is a real deletion; a prune against a suspiciously
+   small one is a short listing, which is the failure `$complete` exists to catch
+   and cannot always see.
+2. **The integration suite ran at the default WARN level**, so info-level lines
+   were dropped before the failure-path log dump could show them. Every listener
+   in this app logs its outcome and swallows its failures by design (§6.18 rule
+   3) — which means at WARN, a run that did the wrong thing *successfully* leaves
+   no trace at all. The suite now runs at INFO. A log dump is only as useful as
+   the level allows, and this one had been quietly useless since it was added.
+
+#### The shape, one more time
+
+§C6.14 said: the unit tests, the integration tests and the files on disk were all
+correct simultaneously, and the feature was still dead in the browser. This is
+its sibling and the sharper version, because here the tests *did* catch it:
+
+**a flaky test is a finding, not a nuisance.** The instinct on a 50%-failing
+scenario is to re-run it, and the first re-run passed — which is precisely the
+evidence that would have shipped the bug. What made it a bug rather than a flake
+was refusing to accept the green and going after what the red had named.
+
+And underneath that, the reason the wrong check was written at all: **a
+non-reproduction is not a disproof.** §C6.11 tried §6.49's race once, did not see
+it, and wrote "the re-read rule stays anyway" — which was right — but the code
+that followed weakened the rule to a cheaper read on the strength of the same
+non-reproduction. The rule survived; the reason for it did not.

@@ -49,18 +49,23 @@ use Psr\Log\LoggerInterface;
  *      BUILT YET** — so this class says so, in the log, naming what it would
  *      cost. It never quietly does nothing.
  *
- * ## `end` IS NOT SUCCESS. THE IDS ARE, AND THEN WE RE-READ ANYWAY.
+ * ## `end` IS NOT SUCCESS. THE IDS ARE. AND THE IDS ARE NOT SUCCESS EITHER.
  *
- * Two separate confirmations, because there are two separate ways this call has
- * been seen to lie:
+ * This command has been caught reporting work it did not do in two unrelated
+ * ways, so it takes two confirmations to believe it:
  *
  *   - §C6.11: an id that is not in the trash gets **200 with an empty `end` set**
  *     — no error. So {@see PenpotClient::restoreDeletedFiles()} returns the ids
  *     Penpot claims, and a claim that omits ours is a failure.
- *   - §6.49: the `end` event once arrived while `deleted_at` was still set. That
- *     did not reproduce on 2.17.0, but one non-reproduction does not disprove a
- *     race — it is exactly the shape of thing that comes back under load. So the
- *     trash listing is read again afterwards, at the cost of one cheap call.
+ *   - §6.49: **the SSE returns before the transaction settles**, so the `end`
+ *     event can arrive while `deleted_at` is still set. A second call cleared it.
+ *
+ * §C6.11 failed to reproduce the second one and this class's first draft took
+ * that as licence to check something cheaper — "is it out of the trash?" — which
+ * sounds equivalent and is not. See {@see isListedAgain()}: the two listings
+ * disagree inside that window, and the integration suite duly failed on the one
+ * scenario the whole slice exists for, about half the time. §6.49's remedy was
+ * always a second call; it is now what this class does.
  *
  * Telling someone their work is back when it is not is worse than an error,
  * because they stop looking for it.
@@ -149,7 +154,8 @@ final class RestoreService {
 	 * @throws PenpotApiException
 	 */
 	private function restoreInPenpot(File $node, string $teamId, string $penpotId): void {
-		$restored = $this->client->restoreDeletedFiles($teamId, [$penpotId], $this->personalTokens->tokenForActor());
+		$actor = $this->personalTokens->tokenForActor();
+		$restored = $this->client->restoreDeletedFiles($teamId, [$penpotId], $actor);
 
 		if (!in_array($penpotId, $restored, true)) {
 			// §C6.11: 200, an `end` event, and an empty set. The stream succeeded
@@ -168,30 +174,99 @@ final class RestoreService {
 			return;
 		}
 
-		if ($this->isInPenpotTrash($teamId, $penpotId)) {
-			// §6.49's lying restore. Did not reproduce on 2.17.0; the check stays.
-			$this->logger->warning(
-				'penpot_sync restore: the design is still in Penpot\'s trash after a restore that '
-				. 'reported success; re-read confirms it did not take effect',
-				[
-					'app' => Application::APP_ID,
-					'penpot_id' => $penpotId,
-					'file' => $node->getName(),
-				],
-			);
+		if ($this->isListedAgain($node, $teamId, $penpotId)) {
+			$this->logger->info('penpot_sync restore: brought a design back out of Penpot\'s trash, losslessly', [
+				'app' => Application::APP_ID,
+				'penpot_id' => $penpotId,
+				'team_id' => $teamId,
+				'file' => $node->getName(),
+				// Its containing project comes back with it — Penpot clears `deleted_at`
+				// on the project as well as the file, so the project folder reappears on
+				// the next pull without a second call.
+			]);
 
 			return;
 		}
 
-		$this->logger->info('penpot_sync restore: brought a design back out of Penpot\'s trash, losslessly', [
-			'app' => Application::APP_ID,
-			'penpot_id' => $penpotId,
-			'team_id' => $teamId,
-			'file' => $node->getName(),
-			// Its containing project comes back with it — Penpot clears `deleted_at`
-			// on the project as well as the file, so the project folder reappears on
-			// the next pull without a second call.
-		]);
+		// §6.49, REPRODUCED — AND ITS REMEDY IS A SECOND CALL, NOT A COMPLAINT.
+		//
+		// "The SSE returns before the transaction settles. A second call cleared
+		// it." That is the saga's own live transcript, and §C6.11's later
+		// non-reproduction persuaded this method's first draft to keep only a
+		// token check. The integration suite then failed on the one scenario the
+		// whole slice exists for, about half the time: the restore reported the
+		// id, the design stayed unlisted, and the next pull pruned the mirror all
+		// over again — the exact bug this slice was built to close.
+		$this->client->restoreDeletedFiles($teamId, [$penpotId], $actor);
+
+		if ($this->isListedAgain($node, $teamId, $penpotId)) {
+			$this->logger->info('penpot_sync restore: the design came back on a second call (saga §6.49)', [
+				'app' => Application::APP_ID,
+				'penpot_id' => $penpotId,
+				'team_id' => $teamId,
+				'file' => $node->getName(),
+			]);
+
+			return;
+		}
+
+		$this->logger->warning(
+			'penpot_sync restore: Penpot reported the design restored twice and it is still not listed; '
+			. 'the mirror is back in Nextcloud but a pull may trash it again',
+			[
+				'app' => Application::APP_ID,
+				'penpot_id' => $penpotId,
+				'file' => $node->getName(),
+			],
+		);
+	}
+
+	/**
+	 * Is the design back in the listing **the pull reads**?
+	 *
+	 * ## THE ORACLE MATTERS MORE THAN THE CHECK, AND THIS IS THE SECOND ORACLE
+	 *
+	 * The first draft asked `get-team-deleted-files` — "is it out of the trash?"
+	 * — which sounds equivalent and is not. Penpot's restore returns before its
+	 * transaction settles (§6.49), and in that window the trash listing can
+	 * already have stopped naming the design while `get-project-files` still
+	 * omits it. Every other decision in this app is made from the project
+	 * listing: {@see PullService} builds its seen-set from it and trashes any
+	 * mirror missing from it. Confirming against anything else confirms nothing
+	 * that matters.
+	 *
+	 * So this asks the same question the pull will ask, a few seconds earlier.
+	 *
+	 * The project id comes from the folder the mirror was restored into, exactly
+	 * as membership is resolved everywhere else (§6.29). A mirror at the team
+	 * root is in that team's **Drafts** — a real project with no folder of its
+	 * own (§6.35) — so its id is read off the team's default project.
+	 */
+	private function isListedAgain(File $node, string $teamId, string $penpotId): bool {
+		$projectId = $this->resolver->resolve($node)->projectId ?? $this->draftsProjectFor($teamId);
+		if ($projectId === null || $projectId === '') {
+			// Nothing to ask. Fall back to the weaker oracle rather than reporting a
+			// failure we have no evidence for — the restore may well have worked.
+			return !$this->isInPenpotTrash($teamId, $penpotId);
+		}
+
+		return $this->isInProject($projectId, $penpotId);
+	}
+
+	/**
+	 * The team's default project — Drafts, where a design with no project folder
+	 * above it lives (§6.35). `get-all-projects`, never `get-projects`, which
+	 * does not filter soft-deleted projects (§6.42).
+	 */
+	private function draftsProjectFor(string $teamId): ?string {
+		foreach ($this->client->getAllProjects() as $project) {
+			$isDefault = filter_var($project['is-default'] ?? false, FILTER_VALIDATE_BOOLEAN);
+			if ($isDefault && ($project['team-id'] ?? null) === $teamId && is_string($project['id'] ?? null)) {
+				return $project['id'];
+			}
+		}
+
+		return null;
 	}
 
 	/**
