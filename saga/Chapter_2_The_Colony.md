@@ -1382,3 +1382,216 @@ wrong before a big one finally threw.
 The guard that saved us is the one the decoder already had: refusing to guess on
 a key-position miss instead of falling back to the raw token. It converted a
 silent corruption into a loud failure two courses later — late, but not never.
+
+### C6.11 — The trash commands, called before designing around them
+
+Course 5 built the prune on Penpot's trash but never called the trash commands
+themselves; §6.52 recorded their names and one behaviour, and §6.49 recorded a
+gotcha. Before building delete/restore, all four were called against the running
+instance. Three of the four answers were not what the survey implied.
+
+#### The schemas
+
+| Command | Schema (Penpot 2.17.0) | Shape |
+|---|---|---|
+| `create-file` | `{name: ≤250, project-id: uuid, id?: uuid, is-shared?: bool, features?}` | plain 200 |
+| `get-team-deleted-files` | `{team-id: uuid}` | plain 200, a list |
+| `restore-deleted-team-files` | `{team-id: uuid, ids: set<uuid>}` | **SSE** |
+| `permanently-delete-team-files` | `{team-id: uuid, ids: set<uuid>}` | **SSE** |
+
+`create-file` takes **kebab `project-id`** and has an optional `id` — you may
+supply the uuid yourself, which is a door worth knowing about and not one this
+app opens.
+
+#### 1. `permanently-delete-team-files` DOES NOT REQUIRE THE FILE TO BE IN THE TRASH
+
+The single most important finding here, and the opposite of what its name
+implies. The probe design had been **restored** — live, listed in its project,
+not deleted at all. Passing its id to `permanently-delete-team-files` destroyed
+it: HTTP 200, a progress event, and gone from the project.
+
+So this is not "empty the trash". It is **"destroy these designs"**, and it will
+do that to a perfectly live file if you hand it one.
+
+The rule that follows is narrow and absolute: **the ids passed to it may only
+ever come from `get-team-deleted-files`.** Never from a mirror's metadata, never
+from a user's selection, never from anything the app resolved itself. §6.52
+already called this "the one irreversible call"; what it did not know is that
+the command has no safety of its own, so ours is the only one there is.
+
+#### 2. Restore reports success for ids it did not restore
+
+`restore-deleted-team-files` with an id that is not in the trash answers **200
+with an `end` event carrying an EMPTY SET**. No error, no warning.
+
+So the `end` event is not a boolean. It carries **the set of ids actually
+restored**, and that set is the only honest answer to "did this work". A caller
+that treats 200 as success will happily report a restore that restored nothing —
+which for a user is worse than an error, because they go looking for the file.
+
+#### 3. §6.49's lying restore did not reproduce
+
+§6.49 recorded `restore-deleted-team-files` reporting success while `deleted_at`
+was still set, needing a second call. On 2.17.0 it did not: immediately after the
+`end` event the file was out of the trash and back in its project, checked in the
+same breath.
+
+**The re-read rule stays anyway.** One non-reproduction does not disprove a race
+— it is exactly the shape of thing that reappears under load — and confirming
+costs one cheap listing call against the alternative of telling someone their
+work is back when it is not. §6.49 was right about the discipline even if this
+instance no longer needs it.
+
+#### 4. Both are SSE, like `export-binfile`
+
+`restore` and `permanently-delete` stream `event: progress` (one per file, with
+`index`/`total`) then `event: end`. So they need the SSE reader, not `call()` —
+and, exactly as §5.1 warned for export, **HTTP 200 says nothing about whether the
+work happened**. The client's existing event-stream path applies to all three.
+
+### C6.12 — The rename that only a real gesture could show
+
+The delete listener shipped with a green unit suite and failed on the first run
+of its integration scenario. The purge never reached Penpot, and the reason is
+one line:
+
+```php
+if (!str_ends_with($node->getName(), '.penpot')) { return; }
+```
+
+**Nextcloud renames a node on its way into the trash**, stamping it with the
+deletion time: `Gone For Good.penpot.d1785457295`. By the time the purge event
+fires, the extension is no longer last — so the guard meant to identify our files
+rejected the very file it existed to catch, and the design stayed in Penpot's
+trash forever.
+
+**No unit test could have caught it, and that is the point.** A mocked node has
+whatever name the test gives it, and the test gives it a sensible one. The
+rename is *Nextcloud's*, not ours: it happens in the gap between our two events,
+in code we do not call, to a node we did not create. Mocks reproduce our
+assumptions faithfully — which is exactly why they cannot contradict them.
+
+n8n's WebDAV helper had the fact written down (*"NC trashbin renames entries with
+a `.dNNNN` deletion-time suffix"*), in a comment about finding trash entries. It
+was read, ported, and not connected to the listener being written twenty minutes
+later — the fact was in the repository and still not in the code.
+
+The listener now recognises both spellings and has its own test for the routing
+decision, which is worth having on its own terms: getting it backwards is the
+worst bug available here, because it would permanently destroy a design on an
+ordinary delete.
+
+**The general shape, which has now recurred three times in this course** (§C6.8's
+param table, §C6.10's membership shape, this): *a test that mocks the boundary
+cannot fail in the way the boundary actually behaves.* Every one was found by a
+real gesture — twice by a person, once by the integration suite that exists
+because of the first two.
+
+### C6.13 — The purge is not an event, and two siblings disagreed about it
+
+The delete listener was built to handle both steps of a delete, telling them
+apart by the node's path — `<uid>/files/…` for the first delete,
+`<uid>/files_trashbin/files/…` for the purge. The soft step worked. The purge
+never ran at all, and the design sat in Penpot's trash forever.
+
+**Nextcloud does not fire a typed event when a file is purged from the trash.**
+The trashbin's `removeItem` emits the legacy `\OCP\Trashbin` `preDelete` hook,
+wired with `\OCP\Util::connectHook`, and that is the only entry point there is.
+
+#### Both siblings had already been here, and they disagree in writing
+
+`nextcloud-n8n`'s delete listener says, in its docblock:
+
+> *"The same event fires for BOTH lifecycle steps … Discriminated by path prefix."*
+
+`nextcloud-grafana` has a whole separate class for the purge, whose docblock
+says:
+
+> *"unlike the move-to-trash step — Nextcloud does NOT fire a typed
+> `BeforeNodeDeletedEvent` when a file is purged from the trash (**proven live**:
+> the trashbin's `removeItem` fires nothing typed)."*
+
+Two apps in the same family, against the same Nextcloud version, documenting
+opposite behaviour. This app read n8n's — the older and more confident of the
+two — and inherited the bug. Grafana's is the one that says *proven live*, and it
+is the one that is right.
+
+**The lesson is not "read both siblings", which was already the rule.** It is
+that when they disagree, the tie-break is which claim carries evidence. One
+docblock asserts a mechanism; the other reports an experiment. Those are not the
+same kind of sentence and should never have been weighed equally.
+
+#### What actually found it
+
+Not review, and not a unit test — the integration scenario, on its first run.
+The purge step ran, returned clean, and the assertion against Penpot's trash
+failed. Every mock in the unit suite was faithfully reproducing an event that
+does not occur.
+
+That is the third time this course a mocked boundary certified a wrong
+assumption (§C6.8, §C6.10, §C6.12), and the second time the fix was already
+sitting in a sibling repository.
+
+#### Two details the port carries, both learned by grafana the hard way
+
+- The retention background job (`Files_Trashbin`'s `ExpireTrash`) runs with **no
+  session user**, so the uid falls back to `\OC_User::getUser()` — the FS context
+  it sets up for the user it is processing. Without that, a mirror Nextcloud
+  expired on its own schedule would leak the design silently, which is the case
+  nobody is watching.
+- `connectHook` **appends with no de-duplication**, so a second `boot()` in one
+  process stacks the handler and purges twice per file. Guarded with a static
+  flag.
+
+#### And then it still did not fire — the second half of the bug
+
+Porting the hook did not fix the failing scenario. Three more rounds went into
+that, two of them wasted on evidence about the wrong thing (a pod running code
+from before the port; a `Trashbin::delete()` call missing its timestamp, which
+made the method early-return *before* the emit). Both silences were the test's,
+not the app's.
+
+What finally settled it was instrumenting rather than theorising: CI integration
+failures were throwing away `nextcloud.log`, and **every listener in this app
+logs its failure and swallows it by design** — a remote problem must never break
+a file operation — so the reason was always in a file nobody kept. Dumping it on
+failure is now part of the workflow.
+
+With the log in hand the answer was immediate: **no purge line at all**, while
+the same code logged one locally. The difference is which entry point serves the
+request:
+
+```php
+// remote.php — the WebDAV door
+$appManager->loadApps(['authentication']);
+$appManager->loadApps(['extended_authentication']);
+$appManager->loadApps(['filesystem', 'logging']);
+```
+
+`register()` runs for every enabled app during bootstrap. **`boot()` runs only
+when an app is LOADED**, and a DAV request loads only those types. This app
+declared none, so on every DAV request `boot()` never ran.
+
+That is why the gap was invisible for so long: everything else this course built
+is wired in `register()` — copy, move, rename, create, soft delete — and all of
+it works over DAV. Exactly one thing lived in `boot()`, and it was the one thing
+that never fired.
+
+`<types><filesystem/></types>` in `appinfo/info.xml` is the fix, and it is the
+right one on its own terms: `filesystem` is the type for apps that must be
+present when the filesystem is in play, which is what a file-event-driven mirror
+is.
+
+#### Filed against BOTH siblings
+
+n8n has no `connectHook` anywhere in `lib/`, so its hard step has only ever had
+the trigger that does not fire.
+
+**And grafana declares no `<types>` either.** It has the hook, correctly wired in
+`boot()` — and on a DAV request `boot()` does not run. Its purge almost certainly
+never fires either, which would mean a dashboard parked in Grafana's bin outlives
+the Nextcloud file that owned it, silently, forever. Grafana got the mechanism
+right and the loading wrong; this app copied the mechanism and inherited the
+second half of the bug without ever seeing the first.
+
+Both notes are **unverified against those apps** and say so.

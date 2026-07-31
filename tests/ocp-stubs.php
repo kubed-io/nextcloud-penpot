@@ -393,4 +393,36 @@ namespace OCP\Files\Events\Node {
 			}
 		}
 	}
+	// The delete event, fired for BOTH steps of a delete — the first one on the
+	// way to the trash, and the purge out of it. It carries a single node, and
+	// which step it is has to be read off that node's PATH, which is why the
+	// listener's test mocks this rather than trusting the service tests.
+	if (!class_exists(BeforeNodeDeletedEvent::class, false)) {
+		class BeforeNodeDeletedEvent extends \OCP\EventDispatcher\Event {
+			public function getNode(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+		}
+	}
+	// A file being written — a create, an upload, or a mirror the pull just
+	// refreshed. Same shape.
+	if (!class_exists(NodeWrittenEvent::class, false)) {
+		class NodeWrittenEvent extends \OCP\EventDispatcher\Event {
+			public function getNode(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+		}
+	}
+	// A copy. Source and target, like the rename events.
+	if (!class_exists(NodeCopiedEvent::class, false)) {
+		class NodeCopiedEvent extends \OCP\EventDispatcher\Event {
+			public function getSource(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+
+			public function getTarget(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+		}
+	}
 }

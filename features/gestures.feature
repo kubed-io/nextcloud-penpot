@@ -25,6 +25,12 @@
 #           test passed — the mock had been handed a membership shape the
 #           resolver never actually produces.
 #
+# THE TEAM-ROOT BOUNDARY IS WHY THIS FILE EXISTS AT ALL. Three of the bugs above
+# were the same mistake: reading "no project ancestor" as "outside every
+# mapping", when it means that team's DRAFTS — a real project (§6.35). Every
+# scenario that crosses that boundary in either direction is here deliberately,
+# because project-to-project moves never touch it and pass regardless.
+#
 # The transport is WebDAV, which is the verb a browser sends, ported from
 # nextcloud-n8n where it has long carried CopySteps/MoveSteps/RenameSteps. PHP's
 # built-in server is enough for DAV; the workflow starts one alongside `occ`.
@@ -117,3 +123,108 @@ Feature: Copy, move and rename, driven as real gestures
     # Promoted to sync first because a `link` is confined to its project (§6.43)
     # and MoveGuardListener refuses this drag before it happens — that refusal is
     # its own scenario in move.feature, and needs a different assertion.
+
+  # ── move: the two directions across the Drafts boundary ──────────────────
+  #
+  # Both walked by hand on a live instance before being written here. They are
+  # the same rule in mirror image (§6.35): the team root has no project ancestor,
+  # so it IS that team's Drafts — a real project, not an absence of one. Every
+  # other move scenario goes project-to-project and never crosses that boundary,
+  # which is exactly where the copy path was silently broken (§C6.10).
+
+  Scenario: Filing a draft — dragging from the team root into a project
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "File Me" exists in that team
+    When the admin runs a pull
+    And I create a new design file at "Penpot/Loose Draft.penpot"
+    And the admin promotes "Penpot/Loose Draft.penpot" to "sync" mode
+    And I move "Penpot/Loose Draft.penpot" to "Penpot/File Me/Loose Draft.penpot"
+    Then Penpot project "File Me" holds a design named "Loose Draft"
+    # Created at the root, so it starts life in Drafts; the drag files it.
+    # Promoted first because a `link` is confined to its project (§6.43) and the
+    # move guard refuses this drag before it happens.
+
+  Scenario: Un-filing — dragging from a project out to the team root
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Unfile Me" exists in that team
+    And a Penpot file named "Going Loose" exists in the project "Unfile Me"
+    When the admin runs a pull
+    And the admin promotes "Penpot/Unfile Me/Going Loose.penpot" to "sync" mode
+    And I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
+    Then Penpot project "Unfile Me" holds no design named "Going Loose"
+    # The design is in Drafts now. The file simply sits at the team root, because
+    # Drafts is a state and never a folder — Nextcloud stays more expressive than
+    # Penpot here, and that is the point of the rule.
+
+  # ── create ────────────────────────────────────────────────────────────────
+  #
+  # "+ New → Penpot design" writes an empty file and stops; the server notices it
+  # and creates the design. Asserted in Penpot, because a file appearing in
+  # Nextcloud is exactly what a broken create looks like.
+
+  Scenario: A new design file in a project folder becomes a design in that project
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Make Here" exists in that team
+    When the admin runs a pull
+    And I create a new design file at "Penpot/Make Here/Fresh Idea.penpot"
+    Then the file "Penpot/Make Here/Fresh Idea.penpot" carries a Penpot id
+    And Penpot project "Make Here" holds a design named "Fresh Idea"
+    # The Penpot name never carries the extension (§6.4).
+
+  Scenario: A new design file at the team root is created in Drafts
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Anchor" exists in that team
+    When the admin runs a pull
+    And I create a new design file at "Penpot/Loose Idea.penpot"
+    Then the file "Penpot/Loose Idea.penpot" carries a Penpot id
+    And Penpot project "Anchor" holds no design named "Loose Idea"
+    # Drafts is a state, not a folder (§6.35) — the file stays where it was made.
+
+  # THE GUARD NEITHER SIBLING NEEDS. An uploaded .penpot already holds a whole
+  # design; creating an empty one for it would set the file and Penpot against
+  # each other, and the next sync pull would overwrite the real archive with the
+  # empty export.
+  Scenario: Uploading a ".penpot" archive does not create an empty design
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "No Invent" exists in that team
+    When the admin runs a pull
+    And I upload a ".penpot" archive at "Penpot/No Invent/Dragged In.penpot"
+    Then the file "Penpot/No Invent/Dragged In.penpot" carries no Penpot id
+    And Penpot project "No Invent" holds no design named "Dragged In"
+
+  # ── delete: the two trashes ───────────────────────────────────────────────
+
+  Scenario: Deleting a mirror moves the design into Penpot's trash
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Bin Me" exists in that team
+    And a Penpot file named "Doomed" exists in the project "Bin Me"
+    When the admin runs a pull
+    And I delete "Penpot/Bin Me/Doomed.penpot"
+    Then the design "Doomed" is in Penpot's trash
+    And Penpot project "Bin Me" holds no design named "Doomed"
+    # Soft on both sides. Nothing here is irreversible, which is what makes it
+    # safe to do without asking.
+
+  Scenario: Emptying the Nextcloud trash destroys the design in Penpot
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Purge Me" exists in that team
+    And a Penpot file named "Gone For Good" exists in the project "Purge Me"
+    When the admin runs a pull
+    And I delete "Penpot/Purge Me/Gone For Good.penpot"
+    And I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
+    Then the design "Gone For Good" is not in Penpot's trash
+    # The one irreversible thing this app can cause, reached only by the one
+    # irreversible gesture Nextcloud offers. permanently-delete-team-files does
+    # NOT check the trash itself (§C6.11) — the app reads the listing first, and
+    # that guard is the only safety there is.
+
+  Scenario: Deleting an untracked ".penpot" file leaves Penpot alone
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Untouched" exists in that team
+    And a Penpot file named "Keep Me" exists in the project "Untouched"
+    When the admin runs a pull
+    And I upload a ".penpot" archive at "Penpot/Untouched/Not Ours.penpot"
+    And I delete "Penpot/Untouched/Not Ours.penpot"
+    Then Penpot project "Untouched" holds a design named "Keep Me"
+    And the design "Keep Me" is not in Penpot's trash
+

@@ -11,9 +11,12 @@ namespace OCA\PenpotSync\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\PenpotSync\Listener\CopyListener;
+use OCA\PenpotSync\Listener\CreateListener;
+use OCA\PenpotSync\Listener\DeleteListener;
 use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
+use OCA\PenpotSync\Listener\TrashPurgeHook;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
@@ -22,9 +25,11 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Events\Node\NodeWrittenEvent;
 
 /**
  * App bootstrap.
@@ -76,6 +81,9 @@ use OCP\Files\Events\Node\NodeRenamedEvent;
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
 
+	/** Guards against connectHook stacking the purge handler on a repeat boot(). */
+	private static bool $purgeHookRegistered = false;
+
 	public function __construct(array $params = []) {
 		parent::__construct(self::APP_ID, $params);
 	}
@@ -118,6 +126,17 @@ final class Application extends App implements IBootstrap {
 		// a `move-files` when it lands anywhere else.
 		$context->registerEventListener(NodeCopiedEvent::class, CopyListener::class);
 
+		// A NEW .penpot FILE BECOMES A DESIGN (§6.33, create-design.feature). The
+		// "+ New" menu writes a file and nothing more — that is the whole
+		// Nextcloud-sanctioned pattern — so the server notices it here. The
+		// SyncGuard is load-bearing: the pull writes .penpot files constantly.
+		$context->registerEventListener(NodeWrittenEvent::class, CreateListener::class);
+
+		// DELETING REACHES PENPOT'S TRASH (delete.feature). This covers the SOFT
+		// step only — the purge fires no typed event at all and is wired as a
+		// legacy hook in boot(), see TrashPurgeHook.
+		$context->registerEventListener(BeforeNodeDeletedEvent::class, DeleteListener::class);
+
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to
 		// build `<base>/#/workspace?file-id=<penpot_id>` — the id itself already
@@ -139,7 +158,21 @@ final class Application extends App implements IBootstrap {
 		// accessor both siblings use to register their metadata keys.
 		$context->getAppContainer()->get(PenpotMetadata::class)->register();
 
-		// The trash purge hook and the background job still belong to later
-		// courses — not scaffolded here ahead of the code that uses them.
+		// EMPTYING THE TRASH IS NOT AN EVENT. Nextcloud fires no typed event when
+		// a file is purged from the trash — the trashbin emits the legacy
+		// `\OCP\Trashbin` `preDelete` hook just before it unlinks the node, and
+		// that is the only entry point there is, so the deprecation is
+		// unavoidable. Connecting the handler INSTANCE because the legacy hook
+		// calls object+method.
+		//
+		// connectHook APPENDS with no de-duplication, so a second boot() in the
+		// same process (tests, repeated loadApp) would stack the handler and purge
+		// twice per file. Guarded.
+		if (!self::$purgeHookRegistered) {
+			self::$purgeHookRegistered = true;
+			$purgeHook = $context->getAppContainer()->get(TrashPurgeHook::class);
+			/** @psalm-suppress DeprecatedMethod */
+			\OCP\Util::connectHook('\OCP\Trashbin', 'preDelete', $purgeHook, 'preDelete');
+		}
 	}
 }

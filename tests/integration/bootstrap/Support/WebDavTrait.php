@@ -132,6 +132,41 @@ trait WebDavTrait {
 	}
 
 	/**
+	 * Find the trashbin entry for a file we deleted, by basename. NC trashbin DAV
+	 * lives at /remote.php/dav/trashbin/<user>/trash and renames entries with a
+	 * `.dNNNN` deletion-time suffix, so we match on the original basename prefix.
+	 * Returns the trashbin entry filename (e.g. "Old Name.penpot.d171...") or null.
+	 */
+	private function trashbinPathFor(string $originalPath): ?string {
+		$base = basename($originalPath);
+		$href = $this->ncBaseUrl . '/remote.php/dav/trashbin/' . rawurlencode($this->ncUser) . '/trash';
+		$res = $this->davClient()->request('PROPFIND', $href, [
+			'headers' => ['Depth' => '1', 'Content-Type' => 'application/xml'],
+			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns">'
+				. '<d:prop><nc:trashbin-filename/></d:prop></d:propfind>',
+		]);
+		Assert::assertSame(207, $res->getStatusCode(), 'trashbin PROPFIND failed: ' . (string)$res->getBody());
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		$doc->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
+		foreach ($doc->xpath('//d:response') ?: [] as $resp) {
+			$resp->registerXPathNamespace('d', 'DAV:');
+			$resp->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
+			$origName = trim((string)($resp->xpath('.//nc:trashbin-filename')[0] ?? ''));
+			$rawHref = rawurldecode(trim((string)($resp->xpath('d:href')[0] ?? '')));
+			if ($origName === $base && $rawHref !== '') {
+				return basename(rtrim($rawHref, '/'));
+			}
+		}
+		return null;
+	}
+
+	/** Full trashbin href for a trash entry filename. */
+	private function trashHref(string $entry): string {
+		return $this->ncBaseUrl . '/remote.php/dav/trashbin/' . rawurlencode($this->ncUser) . '/trash/' . rawurlencode($entry);
+	}
+
+	/**
 	 * PROPFIND a single nc:metadata-<key> on a file. Returns the property value,
 	 * or null if the property is absent (404 inside the multistatus). This is the
 	 * exact DAV surface the README documents for the file-type feature.

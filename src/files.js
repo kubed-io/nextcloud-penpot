@@ -33,11 +33,12 @@
  *      through the built-in @nextcloud/files WebDAV client. No bespoke
  *      controller and no bespoke route — the same authenticated DAV core uses.
  */
-import { registerFileAction, DefaultType } from '@nextcloud/files'
-import { registerDavProperty, getDefaultPropfind, getClient, getRootPath } from '@nextcloud/files/dav'
+import { registerFileAction, addNewFileMenuEntry, getUniqueName, DefaultType, NewMenuEntryCategory } from '@nextcloud/files'
+import { registerDavProperty, getDefaultPropfind, getClient, getRootPath, resultToNode } from '@nextcloud/files/dav'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
-import { getPenpotId, getPenpotTeamId, buildUrl, isPenpotFile } from './files-helpers.js'
+import { emit } from '@nextcloud/event-bus'
+import { getPenpotId, getPenpotTeamId, buildUrl, isPenpotFile, PENPOT_EXT } from './files-helpers.js'
 // The MENU mark — `fill="currentColor"`, so Nextcloud themes it white in the
 // context menu like every other action glyph. Vite inlines it at build time via
 // ?raw, so nothing is hand-pasted here.
@@ -154,4 +155,50 @@ registerFileAction({
   order: -50,
 })
 
-console.info('[penpot_sync] files integration loaded — one action: Open in Penpot (no text editor, by design)')
+// ── "+ New → Penpot design" ───────────────────────────────────────────────
+//
+// Writes an EMPTY file and stops. The server notices it and creates the design
+// (CreationService); the empty body is deliberate — a `.penpot` that already
+// holds an archive is an upload to be imported, not a design to be created, and
+// the server tells them apart by exactly that.
+//
+// NOTHING IS OPENED AFTERWARDS, and that is researched rather than assumed.
+// Nextcloud's New-menu API does nothing on its own — per its maintainer, "Any
+// Entry is responsible for nothing but themselves" — and the sanctioned pattern
+// is: write the file, then emit `files:node:created` so the view picks it up.
+// Both sibling apps do exactly this. Text and Office auto-open because they ARE
+// the editor; we are not. There is also a concrete reason not to: `window.open`
+// after an await chain has lost its user-gesture status and is blocked
+// inconsistently across browsers, so "create then open" would work for some
+// people and silently not for others.
+//
+// Offered in EVERY folder, deliberately. Whether a design can actually be
+// created depends on the destination resolving to a Penpot project, and only
+// the server can answer that (a team root means Drafts, §6.35). Hiding the entry
+// client-side would need the folder's mapping in the browser; landing an
+// untracked file in an unmapped folder is a smaller cost than a menu that
+// flickers.
+addNewFileMenuEntry({
+  id: 'penpot_sync.new-design',
+  displayName: t(APP_ID, 'Penpot design'),
+  category: NewMenuEntryCategory.CreateNew,
+  order: 20,
+  iconSvgInline: penpotMarkIcon,
+  async handler(context, content) {
+    const names = (content || []).map((n) => n.basename)
+    const name = getUniqueName(t(APP_ID, 'New design') + PENPOT_EXT, names)
+    const dir = context.path === '/' ? '' : context.path
+    const davPath = `${getRootPath()}${dir}/${name}`
+    try {
+      // Empty on purpose — see above.
+      await getClient().putFileContents(davPath, '', { overwrite: false })
+      const res = await getClient().stat(davPath, { details: true, data: getDefaultPropfind() })
+      emit('files:node:created', resultToNode(res.data))
+    } catch (e) {
+      console.error('[penpot_sync] could not create the design file', e)
+      window.OC?.Notification?.showTemporary?.(t(APP_ID, 'Could not create the design'))
+    }
+  },
+})
+
+console.info('[penpot_sync] files integration loaded — Open in Penpot (no text editor, by design) + New: Penpot design')

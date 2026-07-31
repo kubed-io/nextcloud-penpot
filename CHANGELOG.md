@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Create a design from the Files app.** "+ New → Penpot design" makes a real design in the folder's project — or in that team's Drafts if you make it at the team root. It does not open anything; the file appears and you click it.
+- Dragging a `.penpot` archive into a mapped folder does **not** create an empty design for it. That file already holds a design, and inventing a blank one beside it would let the next sync overwrite what you uploaded.
+- **Deleting a mirrored design now reaches Penpot**, and the two trashes mirror each other: deleting puts the design in Penpot's trash (recoverable for about a week, with its id, revision and history), and emptying your Nextcloud trash deletes it there for good.
+- A purge only ever destroys designs that are actually in Penpot's trash. If someone restored one in Penpot in the meantime, emptying your trash leaves it alone.
 - **Copying a design file makes a real copy in Penpot** — in the same project when you copy in place, or into that team's Drafts when you copy to the team root. A `link` copies as completely as a `sync`, because Penpot duplicates the design server-side and no bytes need to travel.
 - Mapped folders now behave like ordinary Nextcloud folders: the **+ New button**, subfolders, and paste all work. They never granted a way to write design content to Penpot, and still don't.
 
