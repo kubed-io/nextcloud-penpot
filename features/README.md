@@ -92,6 +92,39 @@ excluded while four others ran undefined (§C6.14). CI runs `--strict` so
 undefined steps fail the job; nothing protects against a tag landing on the
 wrong scenario except keeping them adjacent.
 
+## `Rule:` is NOT available — verified, not assumed
+
+Gherkin 6 added `Rule:`, which groups scenarios under one business rule and can
+carry its own `Background`. It maps almost exactly onto how this suite is
+organised, and it does not work here: **Behat's parser rejects the keyword.**
+
+    In Parser.php line 339:
+      Expected Step, but got text: "  Rule: A move within one project is local"
+
+That is Behat 3.32 — a version well past the 3.10 where the support was assumed
+to have landed. The version number was inferred from and believed; the parser
+disagreed on the first run. Business rules are therefore written as **comment
+banners** (`# ── RULE: … ──`), which cost nothing and read the same.
+
+Re-test before adopting it: the day Behat's Gherkin catches up, these banners
+become real `Rule:` blocks and the Backgrounds they would carry are already
+implicit in how the sections are grouped.
+
+## Data tables: an input, or a different rule?
+
+`Scenario Outline` + `Examples` is right when the rows are **one rule applied to
+different inputs** and the outcome is identical for every row. The four link
+refusals differed only in destination, so they are one outline over three rows.
+
+It is wrong when the rows are **different rules that happen to share a shape**.
+Filing a draft and un-filing look like one outline over a direction column;
+they are the same rule read from opposite ends, and three separate bugs
+(§C6.8/§C6.9/§C6.10) lived in that asymmetry. Collapsing them would bury the
+thing that made them worth writing.
+
+The test: can you write the rows as a list of *values*, or only as a list of
+*sentences*? Values → `Examples`. Sentences → separate scenarios.
+
 ## Wording is an API
 
 Every step line is a function signature. Two phrasings of one idea are two
