@@ -112,6 +112,7 @@ Feature: Moving files and folders never destroys anything
     And the file keeps its "penpot_id"
     # Nearest project ancestor changed from none to "My Stuff" ⇒ move-files. The
     # gesture Nextcloud users already know IS the Penpot operation.
+    # LIVE: "Filing a draft" in gestures.feature. Walked by hand first.
 
   Scenario: Dragging a file out of a project but still under the team un-files it
     Given a mirrored ".penpot" file in the "My Stuff" folder
@@ -119,6 +120,7 @@ Feature: Moving files and folders never destroys anything
     Then the design is moved into that team's Drafts project in Penpot
     And the file keeps its "penpot_id" and its content
     # Same rule in reverse — no project ancestor means Drafts (saga §6.35).
+    # LIVE: "Un-filing" in gestures.feature.
 
   Scenario: A failed move leaves the local move standing and reports it
     Given a mirrored ".penpot" file in the "My Stuff" folder
