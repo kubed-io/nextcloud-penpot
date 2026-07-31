@@ -43,7 +43,7 @@ Feature: Personal Penpot projects in the user's home folder
     Given the app is installed and enabled
     And the admin has set the instance-wide Penpot base URL
 
-  # ── what appears, and what doesn't ───────────────────────────────────────────
+    # ── what appears, and what doesn't ───────────────────────────────────────────
 
   @todo
   Scenario: A user's personal projects mount at their home root
@@ -84,7 +84,7 @@ Feature: Personal Penpot projects in the user's home folder
     # Same free-nesting rule as team projects (saga §6.29). There is no team
     # folder to stay inside, so the §6.30 restriction has nothing to bite on.
 
-  # ── the credential boundary ──────────────────────────────────────────────────
+    # ── the credential boundary ──────────────────────────────────────────────────
 
   @todo
   Scenario: Personal projects are pulled with the user's own token, never the service account
@@ -120,7 +120,7 @@ Feature: Personal Penpot projects in the user's home folder
     # Don't-lose-data: losing a credential is never evidence that content is gone
     # (the same rule errors.feature applies to the service account).
 
-  # ── modes and behaviour are identical to team projects ──────────────────────
+    # ── modes and behaviour are identical to team projects ──────────────────────
 
   @todo
   Scenario: Personal projects support the same link and sync modes

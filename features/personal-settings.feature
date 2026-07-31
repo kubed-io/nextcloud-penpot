@@ -43,7 +43,7 @@ Feature: Personal Penpot access token settings
     And the admin has set the instance-wide Penpot base URL
     And the admin has configured the service-account token
 
-  # ── the page, and what it honestly claims to do ──────────────────────────────
+    # ── the page, and what it honestly claims to do ──────────────────────────────
 
   @todo
   Scenario: A user finds a personal Penpot settings section
@@ -74,7 +74,7 @@ Feature: Personal Penpot access token settings
     When the user sets an invalid personal Penpot token and tests again
     Then the test reports a failure and says the token was rejected
 
-  # ── what happens without one: degraded attribution, never blocked work ───────
+    # ── what happens without one: degraded attribution, never blocked work ───────
 
   @todo
   Scenario: Clearing a personal token degrades attribution but breaks nothing
@@ -97,7 +97,7 @@ Feature: Personal Penpot access token settings
     # Penpot tokens expire (never / 30 / 60 / 90 / 180 days) with no auto-rotation
     # — so expiry is a routine event to handle gracefully, not an error state.
 
-  # ── the boundary: this token reads nothing on the app's behalf ───────────────
+    # ── the boundary: this token reads nothing on the app's behalf ───────────────
 
   @todo
   Scenario: A personal token is never used to mirror content
@@ -113,7 +113,7 @@ Feature: Personal Penpot access token settings
     And the app explains the service account must be invited to it first
     # Saga §6.18 — the personal token's reach never widens the mirror.
 
-  # ── the documented assumption ────────────────────────────────────────────────
+    # ── the documented assumption ────────────────────────────────────────────────
 
   @todo
   Scenario: The app assumes one Nextcloud user maps to one Penpot account

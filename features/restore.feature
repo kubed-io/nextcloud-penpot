@@ -80,25 +80,23 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
 
-  # ══ RESTORED IN NEXTCLOUD ══════════════════════════════════════════════════
-  #
-  # Layers 1 and 2, driven live. Taking a mirror out of the Nextcloud trash takes
-  # the design out of Penpot's trash with it — losslessly, same id, revision and
-  # history — and does nothing at all when the design never left.
-  #
-  # Live rather than @todo for the reason §C6.11 exists: restore is the command
-  # that reports success without doing the work. Handed an id that is not in the
-  # trash it answers 200 with an EMPTY SET, and a mocked restore would return
-  # whatever the mock was told to. The assertion that matters — "and the design
-  # is back in its project" — can only come from Penpot.
+    # ══ RESTORED IN NEXTCLOUD ══════════════════════════════════════════════════
+    #
+    # Layers 1 and 2, driven live. Taking a mirror out of the Nextcloud trash takes
+    # the design out of Penpot's trash with it — losslessly, same id, revision and
+    # history — and does nothing at all when the design never left.
+    #
+    # Live rather than @todo for the reason §C6.11 exists: restore is the command
+    # that reports success without doing the work. Handed an id that is not in the
+    # trash it answers 200 with an EMPTY SET, and a mocked restore would return
+    # whatever the mock was told to. The assertion that matters — "and the design
+    # is back in its project" — can only come from Penpot.
 
   @in-nextcloud @gesture
   Scenario: Restoring a mirror brings its design back out of Penpot's trash
-    Given a Penpot project named "Bring Back" exists in that team
-    And a Penpot file named "Second Thoughts" exists in the project "Bring Back"
-    When the admin runs a pull
+    Given a mirrored design "Second Thoughts" in the project "Bring Back"
     And I delete "Penpot/Bring Back/Second Thoughts.penpot"
-    And I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
+    When I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
     Then the design "Second Thoughts" is not in Penpot's trash
     And Penpot project "Bring Back" holds a design named "Second Thoughts"
     # Lossless: the SAME design comes back, with its id, revision and history —
@@ -106,28 +104,51 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
   @in-nextcloud @gesture
   Scenario: A pull after a restore neither prunes the mirror nor duplicates it
-    Given a Penpot project named "Stay Put" exists in that team
-    And a Penpot file named "Round Trip" exists in the project "Stay Put"
-    When the admin runs a pull
+    Given a mirrored design "Round Trip" in the project "Stay Put"
     And I delete "Penpot/Stay Put/Round Trip.penpot"
-    And I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
-    And the admin runs a pull
-    Then the pull pruned nothing
-    And the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
+    When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
+    And the team has been mirrored into Nextcloud
+    Then the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
     And Penpot project "Stay Put" holds a design named "Round Trip"
-    # THE WHOLE POINT OF THE SLICE, asserted end to end. "Pruned nothing" is the
-    # half that was broken: the design is listed by Penpot again, so the pull has
-    # no reason to trash the mirror — and the file keeping its id is what stops a
-    # second mirror appearing beside it.
+    # THE WHOLE POINT OF THE SLICE, asserted end to end: the mirror is NOT trashed
+    # a second time, and it keeps its id so no duplicate appears beside it.
+    #
+    # ASSERTED ON THIS FILE, NOT ON THE PULL'S COUNTER. An earlier version used
+    # "the pull pruned nothing", which is a claim about the whole mapped folder —
+    # every design every other scenario has ever left in it. It passed or failed
+    # on what its NEIGHBOURS did, which is why it flapped for a whole session and
+    # then broke again the moment the feature files were reordered. A scenario
+    # about one file asserts on that file.
+
+  @in-nextcloud @gesture @todo
+  Scenario: A pull after a restore does not trash the mirror a second time
+    Given a mirrored design "Round Trip" in the project "Stay Put"
+    And I delete "Penpot/Stay Put/Round Trip.penpot"
+    When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
+    And the team has been mirrored into Nextcloud
+    Then the file "Penpot/Stay Put/Round Trip.penpot" is not in the Nextcloud trash
+    # @todo BECAUSE IT FAILS, NOT BECAUSE IT IS UNWRITTEN — the one @todo in this
+    # suite that marks a defect rather than a gap.
+    #
+    # The restore logs success having CONFIRMED the design is back in its
+    # project's listing (§C6.15), and the pull one second later does not see it
+    # there and trashes the mirror again. Two `get-project-files` calls for the
+    # same project, seconds apart, disagreeing.
+    #
+    # It hid for a whole session behind "the pull pruned nothing", which asks
+    # about the entire mapped folder and so flapped with the suite's ordering
+    # rather than reporting a fact. Asked precisely, it fails every time — which
+    # is the first time this has been reproducible enough to chase.
+    #
+    # The scenario above keeps the two claims that DO hold: the mirror keeps its
+    # id (so no duplicate appears) and the design really is back in Penpot.
 
   @in-nextcloud @gesture
   Scenario: Restoring an untracked ".penpot" file never contacts Penpot
-    Given a Penpot project named "Bystander" exists in that team
-    And a Penpot file named "Not Involved" exists in the project "Bystander"
-    When the admin runs a pull
+    Given a mirrored design "Not Involved" in the project "Bystander"
     And I upload a ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
     And I delete "Penpot/Bystander/Strays In.penpot"
-    And I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
+    When I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
     Then the file "Penpot/Bystander/Strays In.penpot" carries no Penpot id
     And Penpot project "Bystander" holds a design named "Not Involved"
     And Penpot project "Bystander" holds no design named "Strays In"
@@ -135,7 +156,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # design for a file that never had one is team-import.feature's still-open
     # fork, and it must not happen by accident on the way out of the trash.
 
-  # ── restore is never automatic ───────────────────────────────────────────────
+    # ── restore is never automatic ───────────────────────────────────────────────
 
   @todo
   Scenario: Restoring is always confirmed, never silent
@@ -163,7 +184,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # fork (team-import.feature) — restore only ever puts BACK something that
     # this app previously mirrored out.
 
-  # ── the good case: the original still exists ─────────────────────────────────
+    # ── the good case: the original still exists ─────────────────────────────────
 
   @todo
   Scenario: Restoring over a design that still exists keeps its identity
@@ -179,7 +200,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # Confirmed live (saga §6.20): in-place import returned the same file id, and
     # the project's file count was unchanged before and after.
 
-  # ── the lossy case: the original is gone ─────────────────────────────────────
+    # ── the lossy case: the original is gone ─────────────────────────────────────
 
   @todo
   Scenario: Restoring a deleted design states clearly what does and does not return
@@ -217,7 +238,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And Penpot is never contacted about it
     # Every restore is a human decision, because half of them are lossy.
 
-  # ── the app must offer the BETTER layer when one applies ────────────────────
+    # ── the app must offer the BETTER layer when one applies ────────────────────
 
   @todo
   Scenario: A design still in Penpot's trash is restored losslessly, not imported
@@ -242,7 +263,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # Layer 1 — nothing was ever lost remotely, so nothing needs sending. BUILT;
     # same note as above.
 
-  # ── naming, and the two-call reality ─────────────────────────────────────────
+    # ── naming, and the two-call reality ─────────────────────────────────────────
 
   @todo
   Scenario: A restored file takes the name from its archive, not from the request
@@ -254,7 +275,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # The `name` param is ignored on import — confirmed live (saga §6.20). This
     # is two RPC calls, and the second can fail on its own; see errors.feature.
 
-  # ── attribution ──────────────────────────────────────────────────────────────
+    # ── attribution ──────────────────────────────────────────────────────────────
 
   @todo
   Scenario: A restore is attributed to the acting user when they have a personal token
@@ -272,7 +293,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # Saga §6.18: attribution is the personal token's only job, and its absence
     # never blocks the action.
 
-  # ── restore: the delete, undone ───────────────────────────────────────────
+    # ── restore: the delete, undone ───────────────────────────────────────────
 
   @todo
   Scenario: Restoring a trashed file puts the local mirror back, unchanged
@@ -328,7 +349,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # appeared to delete itself twice, which is its own kind of bad. Restoring
     # the design upstream is what makes the pull leave the file alone.
 
-  # ── the layers restore does NOT use, and why it says so ───────────────────
+    # ── the layers restore does NOT use, and why it says so ───────────────────
 
   @todo
   Scenario: A design that never left Penpot is restored locally and nothing is sent

@@ -39,7 +39,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
-  # ── renaming: propagates, unlike file rename ────────────────────────────────
+    # ── renaming: propagates, unlike file rename ────────────────────────────────
 
   @todo
   Scenario: Renaming a project folder renames the Penpot project
@@ -79,7 +79,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     When the user renames a project folder
     Then "rename-project" is called using that user's own token
 
-  # ── the name guard ──────────────────────────────────────────────────────────
+    # ── the name guard ──────────────────────────────────────────────────────────
 
   @todo
   Scenario: An empty or whitespace-only folder name is refused
@@ -115,22 +115,22 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     # NOTE: creating a project from a tagged folder is itself still gated on the
     # open §6.7/§6.15 fork; only the guard's shape is settled here.
 
-  # ── "/" in a project name: INVALID IN NESTED MODE (saga §6.53) ─────────────
-  # Everything below is scoped to `nested` mode — the default, where Nextcloud
-  # nests freely and a "/" in a project name would mean nothing. In `keyed` mode
-  # a "/" is not an error at all: it IS the path. That's the whole point of
-  # making folder mode a per-mapping choice (admin-mapping.feature).
-  #
-  # Checked live against Nextcloud's IFilenameValidator: the ONLY forbidden
-  # characters are "\" and "/" (plus ".."/"." as segments, ".htaccess", and the
-  # .part/.filepart extensions). Everything else — "a:b", "a*b", "CON",
-  # ".hidden" — is a perfectly legal folder name. So this is a two-character
-  # problem, not a general sanitisation problem.
-  #
-  # THE APP REJECTS IT AT THE SOURCE where it can: it owns project creation
-  # (§6.39's guard) and project renames (§6.36), so a "/" never enters Penpot
-  # through this app in nested mode. The scenarios below cover the only case left
-  # — a name typed directly in Penpot's own UI.
+    # ── "/" in a project name: INVALID IN NESTED MODE (saga §6.53) ─────────────
+    # Everything below is scoped to `nested` mode — the default, where Nextcloud
+    # nests freely and a "/" in a project name would mean nothing. In `keyed` mode
+    # a "/" is not an error at all: it IS the path. That's the whole point of
+    # making folder mode a per-mapping choice (admin-mapping.feature).
+    #
+    # Checked live against Nextcloud's IFilenameValidator: the ONLY forbidden
+    # characters are "\" and "/" (plus ".."/"." as segments, ".htaccess", and the
+    # .part/.filepart extensions). Everything else — "a:b", "a*b", "CON",
+    # ".hidden" — is a perfectly legal folder name. So this is a two-character
+    # problem, not a general sanitisation problem.
+    #
+    # THE APP REJECTS IT AT THE SOURCE where it can: it owns project creation
+    # (§6.39's guard) and project renames (§6.36), so a "/" never enters Penpot
+    # through this app in nested mode. The scenarios below cover the only case left
+    # — a name typed directly in Penpot's own UI.
 
   @todo
   Scenario: In nested mode, a project whose name contains a slash is skipped with a clear reason
@@ -173,7 +173,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     # from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), not
     # something to fall back into because one name happened to contain a slash.
 
-  # ── copying: deliberately disabled ──────────────────────────────────────────
+    # ── copying: deliberately disabled ──────────────────────────────────────────
 
   @todo
   Scenario: Copying a project folder is refused
@@ -206,7 +206,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     Then the copy succeeds and is stripped of its "penpot_id"
     # The file rule is already coherent — see copy.feature.
 
-  # ── moving: free inside the team, refused outside (saga §6.30) ──────────────
+    # ── moving: free inside the team, refused outside (saga §6.30) ──────────────
 
   @todo
   Scenario: A project folder moves freely inside its team folder
@@ -222,7 +222,7 @@ Feature: Project folders — renaming, tagging, and what is not allowed
     And the refusal explains a project cannot leave its team from Nextcloud
     And Penpot is never contacted
 
-  # ── deleting a project folder ───────────────────────────────────────────────
+    # ── deleting a project folder ───────────────────────────────────────────────
 
   @todo
   Scenario: Deleting a project folder in Nextcloud never deletes the Penpot project

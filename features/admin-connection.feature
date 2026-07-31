@@ -44,7 +44,7 @@ Feature: Admin and per-user Penpot connection setup
   Background:
     Given the app is enabled
 
-  # ── the URL card: admin, locked, credential-free — IMPLEMENTED ───────────────
+    # ── the URL card: admin, locked, credential-free — IMPLEMENTED ───────────────
 
   Scenario: Admin sets the instance-wide Penpot base URL
     When the admin sets the Penpot base URL
@@ -55,23 +55,28 @@ Feature: Admin and per-user Penpot connection setup
     Then the stored URL has no trailing slash
     And the Penpot base URL is "https://penpot.example.com"
 
-  Scenario: A URL with no scheme is rejected
-    When the admin sets the Penpot base URL to "penpot.example.com"
+  # ONE RULE, SEVERAL BAD INPUTS — so the rows are Examples, not scenarios. Every
+  # row asserts the identical outcome; only the input varies. That is the test
+  # for a table: if the rows are a list of VALUES it is an outline, and if they
+  # can only be written as a list of SENTENCES they are separate scenarios.
+  Scenario Outline: A URL the app cannot build requests from is rejected
+    When the admin sets the Penpot base URL to "<url>"
     Then setting the URL is rejected
 
-  Scenario: A non-http scheme is rejected
-    When the admin sets the Penpot base URL to "ftp://penpot.example.com"
-    Then setting the URL is rejected
+    Examples: inputs that cannot be a base for an RPC path
+      | url                     |
+      | penpot.example.com      |
+      | ftp://penpot.example.com |
 
   @todo
   Scenario: The URL card carries no credential field
     Then no credential field exists on this card — tokens are configured elsewhere
 
-  # ── the live connection: the client, against a real Penpot — IMPLEMENTED ────
-  # These run against a real Penpot container in CI, with a token minted per run
-  # (saga §6.47). They are the ONLY place the wire format is asserted: the unit
-  # suite deliberately does not mock the transport, because a mock of a protocol
-  # we have repeatedly misread would only encode the misreading.
+    # ── the live connection: the client, against a real Penpot — IMPLEMENTED ────
+    # These run against a real Penpot container in CI, with a token minted per run
+    # (saga §6.47). They are the ONLY place the wire format is asserted: the unit
+    # suite deliberately does not mock the transport, because a mock of a protocol
+    # we have repeatedly misread would only encode the misreading.
 
   Scenario: A configured connection reports the teams the token can see
     Given the Penpot base URL points at the test instance
@@ -100,7 +105,7 @@ Feature: Admin and per-user Penpot connection setup
     Then the connection fails
     And the failure explains that no token is configured
 
-  # ── the service-account token: required, admin-configured, does all reading ──
+    # ── the service-account token: required, admin-configured, does all reading ──
 
   @todo
   Scenario: The admin configures the service-account token
@@ -172,7 +177,7 @@ Feature: Admin and per-user Penpot connection setup
     # observed working (saga §6.17, open question #19), so nothing in the current
     # design depends on it. Adding it back is a saga decision, not a settings tweak.
 
-  # ── the personal token: optional, per-user, attribution only ─────────────────
+    # ── the personal token: optional, per-user, attribution only ─────────────────
 
   @todo
   Scenario: The app works fully with no personal tokens configured anywhere

@@ -49,12 +49,29 @@ trait ModeSteps {
 		]);
 	}
 
-	/** @When /^the admin promotes "([^"]*)" to "sync" mode$/ */
+	/**
+	 * ## THE ACTION PHRASING AND THE STATE PHRASING, ONE FUNCTION
+	 *
+	 * A mode change is the behaviour under test in `sync-mode.feature`, and mere
+	 * setup everywhere else — a `link` is confined to its project (§6.43), so any
+	 * scenario about MOVING a design has to start from a `sync` one.
+	 *
+	 * Written as "the admin promotes X" in a Given, it reads as though an admin
+	 * were standing by to prepare each file before a user touches it. The state
+	 * phrasing says what is true instead of who made it true, which is what a
+	 * precondition is for.
+	 *
+	 * @When /^the admin promotes "([^"]*)" to "sync" mode$/
+	 * @Given /^"([^"]*)" is a "sync" design$/
+	 */
 	public function theAdminPromotesTo(string $path): void {
 		$this->occ('penpot_sync:set-mode ' . escapeshellarg($path) . ' sync');
 	}
 
-	/** @When /^the admin demotes "([^"]*)" to "link" mode$/ */
+	/**
+	 * @When /^the admin demotes "([^"]*)" to "link" mode$/
+	 * @Given /^"([^"]*)" is a "link" design$/
+	 */
 	public function theAdminDemotesTo(string $path): void {
 		// --force because Behat has no tty to answer the confirmation. The prompt
 		// itself is covered in the unit suite, where the answer can be scripted.

@@ -56,7 +56,7 @@ Feature: The admin section's shape and actions
   Background:
     Given the app is enabled
 
-  # ── the layout ───────────────────────────────────────────────────────────────
+    # ── the layout ───────────────────────────────────────────────────────────────
 
   @todo
   Scenario: The section presents four panels in the family's order
@@ -93,7 +93,7 @@ Feature: The admin section's shape and actions
     Then all of the section's action buttons are in the "Sync Actions" panel
     And the "Sync Actions" panel is the last panel in the section
 
-  # ── the actions themselves ───────────────────────────────────────────────────
+    # ── the actions themselves ───────────────────────────────────────────────────
 
   @todo
   Scenario: Test connection works today and reports what the account can see
@@ -111,36 +111,36 @@ Feature: The admin section's shape and actions
     # live scenario would just execute it twice. It is restated here so this
     # file reads as the complete inventory of the section's actions.
 
-  # ── the three ways a pull is triggered ────────────────────────────────────
-  #
-  # These five are @todo — the documented spec, not yet driven from Behat.
-  # Driving them needs the harness to be able to RUN A QUEUED JOB (and to fake
-  # a cron tick for the timed one), which the suite cannot do yet. Each tag sits
-  # on its own scenario deliberately: a tag floating above this comment block
-  # binds to whichever scenario happens to come next, which is exactly how the
-  # first of these was silently excluded while the other four ran undefined.
-  #
-  # Until now there was exactly ONE: `occ penpot_sync:sync pull`. The button was
-  # rendered disabled with a "later release" tooltip, and the interval in Sync
-  # Settings was read by nothing at all — so a design renamed in Penpot stayed
-  # renamed only in Penpot until someone ran occ by hand. The pull itself was
-  # never the problem; it has followed renames since Course 3.
-  #
-  # Both siblings have all three, and the split between them is deliberate:
-  #
-  #   per-mapping "Sync now"  SYNCHRONOUS — one mapping, bounded, instant answer
-  #   "Sync from Penpot"      ASYNC       — every mapping, a queued job, polled
-  #   the schedule            a TimedJob  — the same work, unattended
-  #
-  # WHY THE BULK ONE CANNOT BE SYNCHRONOUS: it walks every mapped team and, for
-  # `sync` files whose revision moved, exports each archive. On a real instance
-  # that outlives a PHP request, and a request that dies half way leaves no
-  # record of how far it got. A queued job survives the admin navigating away,
-  # which is the actual user behaviour being designed for.
-  #
-  # WHY THE PER-MAPPING ONE SHOULD NOT BE ASYNC: it is one team, usually a
-  # handful of files, and the admin is looking at that card waiting for an
-  # answer. Queuing it would replace a two-second wait with a spinner and a poll.
+    # ── the three ways a pull is triggered ────────────────────────────────────
+    #
+    # These five are @todo — the documented spec, not yet driven from Behat.
+    # Driving them needs the harness to be able to RUN A QUEUED JOB (and to fake
+    # a cron tick for the timed one), which the suite cannot do yet. Each tag sits
+    # on its own scenario deliberately: a tag floating above this comment block
+    # binds to whichever scenario happens to come next, which is exactly how the
+    # first of these was silently excluded while the other four ran undefined.
+    #
+    # Until now there was exactly ONE: `occ penpot_sync:sync pull`. The button was
+    # rendered disabled with a "later release" tooltip, and the interval in Sync
+    # Settings was read by nothing at all — so a design renamed in Penpot stayed
+    # renamed only in Penpot until someone ran occ by hand. The pull itself was
+    # never the problem; it has followed renames since Course 3.
+    #
+    # Both siblings have all three, and the split between them is deliberate:
+    #
+    #   per-mapping "Sync now"  SYNCHRONOUS — one mapping, bounded, instant answer
+    #   "Sync from Penpot"      ASYNC       — every mapping, a queued job, polled
+    #   the schedule            a TimedJob  — the same work, unattended
+    #
+    # WHY THE BULK ONE CANNOT BE SYNCHRONOUS: it walks every mapped team and, for
+    # `sync` files whose revision moved, exports each archive. On a real instance
+    # that outlives a PHP request, and a request that dies half way leaves no
+    # record of how far it got. A queued job survives the admin navigating away,
+    # which is the actual user behaviour being designed for.
+    #
+    # WHY THE PER-MAPPING ONE SHOULD NOT BE ASYNC: it is one team, usually a
+    # handful of files, and the admin is looking at that card waiting for an
+    # answer. Queuing it would replace a two-second wait with a spinner and a poll.
 
   @todo
   Scenario: "Sync from Penpot" queues a background job and says so

@@ -69,46 +69,55 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
 
-  # ══ COPIED IN NEXTCLOUD ════════════════════════════════════════════════════
-  #
-  # Driven as real WebDAV COPYs against a real Penpot. Three bugs came out of the
-  # gap where these had no live test (§C6.8/§C6.9/§C6.10) — a param bug believed
-  # for an hour, a copy that silently failed to record its id and presented as a
-  # broken RENAME one gesture later, and a copy to the team root that did nothing
-  # at all in Penpot while its unit test passed against a mock.
+    # ══ COPIED IN NEXTCLOUD ════════════════════════════════════════════════════
+    #
+    # Driven as real WebDAV COPYs against a real Penpot. Three bugs came out of the
+    # gap where these had no live test (§C6.8/§C6.9/§C6.10) — a param bug believed
+    # for an hour, a copy that silently failed to record its id and presented as a
+    # broken RENAME one gesture later, and a copy to the team root that did nothing
+    # at all in Penpot while its unit test passed against a mock.
 
   @in-nextcloud @gesture
   Scenario: Copying in place creates a second design in the same project
-    Given a Penpot project named "Copy Here" exists in that team
-    And a Penpot file named "Original" exists in the project "Copy Here"
-    When the admin runs a pull
-    And I copy "Penpot/Copy Here/Original.penpot" to "Penpot/Copy Here/Original copy.penpot"
+    Given a mirrored design "Original" in the project "Copy Here"
+    When I copy "Penpot/Copy Here/Original.penpot" to "Penpot/Copy Here/Original copy.penpot"
     Then the file "Penpot/Copy Here/Original copy.penpot" carries a Penpot id
     And the files "Penpot/Copy Here/Original.penpot" and "Penpot/Copy Here/Original copy.penpot" carry different Penpot ids
     And Penpot project "Copy Here" holds a design named "Original copy"
     # Different ids is the load-bearing one: two files claiming a single design
     # is the ambiguity that made the old inert-copy rule necessary at all.
 
+    # OUTSIDE EVERY MAPPING, NOTHING HAPPENS — the boundary that makes the rest of
+  # this file safe. A `.penpot` file the app never mirrored is ordinary content,
+  # and copying ordinary content is Nextcloud's business alone.
+  @in-nextcloud @gesture
+  Scenario: Copying a ".penpot" file outside every mapping never contacts Penpot
+    Given a mirrored project "Bystanders"
+    And I upload a ".penpot" archive at "Loose Design.penpot"
+    When I copy "Loose Design.penpot" to "Loose Design copy.penpot"
+    Then the file "Loose Design copy.penpot" carries no Penpot id
+    And Penpot project "Bystanders" holds no design named "Loose Design copy"
+    # No penpot_id on the source means there is nothing to duplicate, and no
+    # mapped ancestor means there is nowhere to put it. Both checks matter: a
+    # file can carry an id and still be outside every mapping (drag one out and
+    # it keeps its stamp), which is move.feature's "unmapped" state.
+
   # THE ONE THAT FAILED BY HAND. The team root has no project FOLDER above it, so
-  # membership resolves to "no project" — which reads exactly like "outside every
-  # mapping" and is nothing of the kind (§6.35). The copy appeared in Nextcloud
-  # and nothing whatsoever happened in Penpot, with nothing logged.
+    # membership resolves to "no project" — which reads exactly like "outside every
+    # mapping" and is nothing of the kind (§6.35). The copy appeared in Nextcloud
+    # and nothing whatsoever happened in Penpot, with nothing logged.
   @in-nextcloud @gesture
   Scenario: Copying up to the team root creates the design in Drafts
-    Given a Penpot project named "Copy Up" exists in that team
-    And a Penpot file named "Promote Me" exists in the project "Copy Up"
-    When the admin runs a pull
-    And I copy "Penpot/Copy Up/Promote Me.penpot" to "Penpot/Promote Me copy.penpot"
+    Given a mirrored design "Promote Me" in the project "Copy Up"
+    When I copy "Penpot/Copy Up/Promote Me.penpot" to "Penpot/Promote Me copy.penpot"
     Then the file "Penpot/Promote Me copy.penpot" carries a Penpot id
     And Penpot project "Copy Up" holds no design named "Promote Me copy"
 
   @in-nextcloud @gesture
   Scenario: A copy can be renamed immediately, because it was tracked
-    Given a Penpot project named "Chain" exists in that team
-    And a Penpot file named "Before" exists in the project "Chain"
-    When the admin runs a pull
+    Given a mirrored design "Before" in the project "Chain"
     And I copy "Penpot/Chain/Before.penpot" to "Penpot/Chain/Before copy.penpot"
-    And I rename "Penpot/Chain/Before copy.penpot" to "After.penpot"
+    When I rename "Penpot/Chain/Before copy.penpot" to "After.penpot"
     Then Penpot project "Chain" holds a design named "After"
     And Penpot project "Chain" holds no design named "Before copy"
     And Penpot project "Chain" holds a design named "Before"
@@ -116,7 +125,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # A copy that failed to record its id presents as a broken rename, one
     # gesture later — which is how §C6.9 reached a human before a test.
 
-  # ── the two gestures, which are the same feature ──────────────────────────
+    # ── the two gestures, which are the same feature ──────────────────────────
 
   @todo
   Scenario: Copying inside the same folder duplicates the design in place
@@ -155,12 +164,12 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # Nearest-ancestor at any depth (§6.29): a plain subfolder carries no project
     # id, so the walk keeps going up and finds "My Stuff".
 
-  # ── walked by hand, and each one caught a real bug ────────────────────────
-  #
-  # These three came from a manual walkthrough rather than from design, and every
-  # one of them failed the first time. They are kept in the order they were done,
-  # because the ORDER is what exposed the bugs: each step was only reachable once
-  # the previous one worked.
+    # ── walked by hand, and each one caught a real bug ────────────────────────
+    #
+    # These three came from a manual walkthrough rather than from design, and every
+    # one of them failed the first time. They are kept in the order they were done,
+    # because the ORDER is what exposed the bugs: each step was only reachable once
+    # the previous one worked.
 
   @todo
   Scenario: A copy is tracked the moment it exists, so the next action works
@@ -196,7 +205,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # appeared, and nothing said otherwise. Whatever else a failed copy does, it
     # must not look like a completed one.
 
-  # ── the name ──────────────────────────────────────────────────────────────
+    # ── the name ──────────────────────────────────────────────────────────────
 
   @todo
   Scenario: The new design is named after the copy, not the original
@@ -214,7 +223,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # Penpot's limit is a schema max (§C6.8). Losing the tail of a name is a
     # smaller harm than refusing to copy the file at all.
 
-  # ── mode is not a special case ────────────────────────────────────────────
+    # ── mode is not a special case ────────────────────────────────────────────
 
   @todo
   Scenario: A link file copies exactly like a sync file
@@ -236,7 +245,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # design's bytes until the next pull re-exports it for the new id, which is
     # correct: at the instant of copying the two designs are identical.
 
-  # ── where nothing is created ──────────────────────────────────────────────
+    # ── where nothing is created ──────────────────────────────────────────────
 
   @todo
   Scenario: Copying outside every mapping creates nothing in Penpot
@@ -264,7 +273,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # The SyncGuard fences the pull out of the write-back listeners, exactly as
     # it does for rename and move.
 
-  # ── failure ───────────────────────────────────────────────────────────────
+    # ── failure ───────────────────────────────────────────────────────────────
 
   @todo
   Scenario: A failed duplicate leaves the Nextcloud copy standing
@@ -287,7 +296,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # candidates for "update in place"; giving the copy its own real id solves
     # the same problem without leaving a dead file behind.
 
-  # ── folders are still refused ─────────────────────────────────────────────
+    # ── folders are still refused ─────────────────────────────────────────────
 
   @todo
   Scenario: Copying a project folder is refused, unlike copying a file
@@ -299,3 +308,53 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # id for a whole tree, Nextcloud's "(2)" suffix breaks the names-match rule,
     # and on this cluster the folder may also carry n8n and Grafana mappings
     # (§6.40).
+
+  # ══ COPIED IN PENPOT ═══════════════════════════════════════════════════════
+  #
+  # THE ASYMMETRY IS THE FINDING, and it is why both directions belong in one
+  # file even though only one of them is really "copying".
+  #
+  # A duplicate made in Penpot's own UI is, from Nextcloud's side, INDISTIN-
+  # GUISHABLE FROM ANY OTHER NEW DESIGN. Penpot does not tell us a file was
+  # duplicated — `get-project-files` returns a design with a fresh id and a name
+  # like "Original (copy)", and nothing marks it as derived. So there is no
+  # copy behaviour to implement on this side at all: the reconciler mirrors it
+  # the way it mirrors anything new.
+  #
+  # That asymmetry is worth stating rather than discovering:
+  #
+  #   copied in Nextcloud  →  we CALL duplicate-file (+ move-files if it landed
+  #                           in another project), because the gesture has to be
+  #                           translated into something Penpot understands
+  #   copied in Penpot     →  we call NOTHING. A new design appears and is
+  #                           mirrored. The "copy" is invisible to us.
+  #
+  # Which means the two directions cannot be one scenario with a direction
+  # column: one exercises a write path, the other exercises the reconciler doing
+  # its ordinary job. Same word, two different rules — the exact case
+  # features/README.md says must stay separate.
+
+  @in-penpot @todo
+  Scenario: A design duplicated in Penpot is mirrored like any other new design
+    Given a mirrored design "Original" in the project "Shared Work"
+    And the design "Original" is duplicated in Penpot
+    When the team is mirrored again
+    Then the file "Penpot/Shared Work/Original (copy).penpot" carries a Penpot id
+    And the files "Penpot/Shared Work/Original.penpot" and "Penpot/Shared Work/Original (copy).penpot" carry different Penpot ids
+    # No `duplicate-file` call of ours is involved. Needs a seed step that calls
+    # duplicate-file directly on the Penpot side — the one thing missing to make
+    # this live.
+
+  @in-penpot @todo
+  Scenario: A duplicate made in Penpot inherits the mapping's mode, not the original's
+    Given a mirrored design "Original" in the project "Shared Work"
+    And "Penpot/Shared Work/Original.penpot" is a "sync" design
+    And the design "Original" is duplicated in Penpot
+    When the team is mirrored again
+    Then the file "Penpot/Shared Work/Original (copy).penpot" is in "link" mode
+    # THE DIFFERENCE THAT MATTERS, and the reason this pair earns its place: a
+    # Nextcloud-side copy inherits nothing because the app creates the mirror
+    # knowing where it came from, while a Penpot-side duplicate arrives as a
+    # stranger and takes the mapping's default like any other new design. Two
+    # designs that look identical in Penpot can therefore mirror in different
+    # modes, purely because of where the duplicate was made.

@@ -52,20 +52,43 @@ Feature: Renaming a mirrored Penpot file
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
 
-  # ══ RENAMED IN NEXTCLOUD ═══════════════════════════════════════════════════
+    # ══ RENAMED IN NEXTCLOUD ═══════════════════════════════════════════════════
+
+  # A PROJECT FOLDER IS ITS OWN FLOW, not a variant of the file rename (§6.36 /
+  # §6.39): a different event, a different id, a different RPC, and a 204 with no
+  # body instead of a record. It had no live coverage at all, which meant the two
+  # rename paths were one green test and one assumption.
+  #
+  # The assertion works because `penpot_sync:probe` lists PENPOT's own project
+  # names — so finding a design under the new name proves Penpot renamed the
+  # project, not merely that Nextcloud renamed a folder.
+  @in-nextcloud @gesture
+  Scenario: Renaming a project folder renames the project in Penpot
+    Given a mirrored design "Inside" in the project "Old Project Name"
+    When I rename "Penpot/Old Project Name" to "New Project Name"
+    Then Penpot project "New Project Name" holds a design named "Inside"
+    And the folder "Penpot/New Project Name" carries a Penpot project id
+
+  @in-nextcloud @gesture
+  Scenario: Renaming a project folder does not touch the designs inside it
+    Given a mirrored design "Untouched Design" in the project "Renamed Around It"
+    When I rename "Penpot/Renamed Around It" to "Renamed Around It v2"
+    Then Penpot project "Renamed Around It v2" holds a design named "Untouched Design"
+    And the file "Penpot/Renamed Around It v2/Untouched Design.penpot" carries a Penpot id
+    # `rename-project` takes the PROJECT id; nothing about the files changes, and
+    # a regression that sent file ids here would rename a design instead — which
+    # this catches, because the design would no longer be found by its own name.
 
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot
-    Given a Penpot project named "Rename Live" exists in that team
-    And a Penpot file named "Old Name" exists in the project "Rename Live"
-    When the admin runs a pull
-    And I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
+    Given a mirrored design "Old Name" in the project "Rename Live"
+    When I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
     Then Penpot project "Rename Live" holds a design named "New Name"
     And Penpot project "Rename Live" holds no design named "Old Name"
     # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
     # is on "New Name", not "New Name.penpot", and that is the whole rule.
 
-  # ── Penpot → Nextcloud: confirmed, this is how renames normally happen ───────
+    # ── Penpot → Nextcloud: confirmed, this is how renames normally happen ───────
 
   @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull
@@ -82,10 +105,10 @@ Feature: Renaming a mirrored Penpot file
     Then the mirrored file is renamed
     And "export-binfile" was never called to detect or apply the rename
 
-  # ── Nextcloud → Penpot: RATIFIED (saga §6.54) ───────────────────────────────
-  # The fork is closed: renaming a mirrored file in the Files app DOES propagate,
-  # via "rename-file". §6.1's read-only stance was always about CONTENT — shape
-  # data we cannot meaningfully round-trip — not about a one-field name.
+    # ── Nextcloud → Penpot: RATIFIED (saga §6.54) ───────────────────────────────
+    # The fork is closed: renaming a mirrored file in the Files app DOES propagate,
+    # via "rename-file". §6.1's read-only stance was always about CONTENT — shape
+    # data we cannot meaningfully round-trip — not about a one-field name.
 
   @todo
   Scenario: Renaming a mirrored file in Nextcloud renames the Penpot file
@@ -134,7 +157,7 @@ Feature: Renaming a mirrored Penpot file
     And the next pull reconciles the name
     # Saga §6.18 rule 3 — a remote failure must never destroy local state.
 
-  # ── the name guard, same shape as the project one ───────────────────────────
+    # ── the name guard, same shape as the project one ───────────────────────────
 
   @todo
   Scenario: An empty file name is refused before it is sent
@@ -165,7 +188,7 @@ Feature: Renaming a mirrored Penpot file
     # levels, with the same refuse-and-report rule and a narrower blast radius:
     # one file skipped, not a whole subtree.
 
-  # ── the invariant, true under either branch ─────────────────────────────────
+    # ── the invariant, true under either branch ─────────────────────────────────
 
   @todo
   Scenario: Renaming never breaks the Penpot link, regardless of direction
@@ -173,7 +196,7 @@ Feature: Renaming a mirrored Penpot file
     When the file is renamed by any means
     Then the "penpot_id" metadata is unchanged
 
-  # ── renaming something that was just created by another gesture ───────────
+    # ── renaming something that was just created by another gesture ───────────
 
   @todo
   Scenario: Renaming a design that was just copied propagates to Penpot

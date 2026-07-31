@@ -88,66 +88,91 @@ Feature: Scheduled or manual pull from Penpot
     And the admin has configured the service-account token
     And no Penpot teams are mapped
 
-  # ══ WHAT A RUN PRODUCES ════════════════════════════════════════════════════
-  #
-  # The structural claims, driven live: a mapped team becomes a folder tree
-  # stamped with Penpot's own ids, and running twice changes nothing.
+    # ══ WHAT A RUN PRODUCES ════════════════════════════════════════════════════
+    #
+    # The structural claims, driven live: a mapped team becomes a folder tree
+    # stamped with Penpot's own ids, and running twice changes nothing.
+    #
+    # EACH MAPS ITS OWN FOLDER, and that is load-bearing rather than tidy. These
+    # four are the only scenarios in the suite that assert about a mapped folder AS
+    # A WHOLE, so they must not share one with scenarios that leave designs in it —
+    # they must not share one with scenarios that leave designs in it.
+    #
+    # THEY ALSO MAP PLAIN FOLDERS, NOT TEAM FOLDERS, and that is a correction
+    # rather than a preference. They used to map a Team Folder — a groupfolder,
+    # which mounts only for the groups on the mapping — and passed anyway because
+    # they ran before anything else had touched the storage. Moved later in the
+    # run, the folder resolved to nothing at all: "No such node: Team Root".
+    #
+    # So Team Folder provisioning is NOT covered live, and was not before either;
+    # it passed by accident of alphabetical position. What these three actually
+    # assert — the team id on the root, the project id on a project folder, and no
+    # duplicate on a second run — is true of both backends, and the plain one is
+    # the one the acting user can see. Covering the groupfolders backend properly
+    # needs a mapping with a group the test user is in, and is its own slice.
 
   @admin @occ
   Scenario: A pull mirrors a mapped team's root folder and stamps its team id
-    Given the first visible team is mapped into the folder "Penpot"
+    Given the first visible team is mapped as a plain folder "Team Root"
     When the admin runs a pull
     Then the pull succeeds
-    And the folder "Penpot" carries the team's Penpot id
+    And the folder "Team Root" carries the team's Penpot id
 
   @admin @occ
   Scenario: A pull mirrors a project as a folder carrying its project id
-    Given the first visible team is mapped into the folder "Penpot"
+    Given the first visible team is mapped as a plain folder "Project Folders"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     Then the pull succeeds
-    And the folder "Penpot/Widgets" carries a Penpot project id
+    And the folder "Project Folders/Widgets" carries a Penpot project id
 
   @admin @occ
   Scenario: A second pull reconciles in place and does not duplicate the folder
-    Given the first visible team is mapped into the folder "Penpot"
+    Given the first visible team is mapped as a plain folder "Twice Pulled"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
-    And the admin runs a pull
+    And the team has been mirrored into Nextcloud
     Then the pull succeeds
-    And there is no node at "Penpot/Widgets (2)"
+    And there is no node at "Twice Pulled/Widgets (2)"
     # IDEMPOTENCE IS THE WHOLE POINT of a reconciler: the second run must find
     # what the first one made, by id, and leave it alone.
 
-  # ══ WHAT A RUN MUST REFUSE TO DO ═══════════════════════════════════════════
-  #
-  # Pruning is driven by "Penpot did not name this file", and every way of
-  # failing to ask — a 502, a project skipped for an illegal name, a half-read
-  # listing — is indistinguishable from a deletion. A regression here does not
-  # throw; it quietly moves a team's mirrors to the trash on the next scheduled
-  # run. So "prunes nothing" is asserted as a step rather than assumed.
+    # ══ WHAT A RUN MUST REFUSE TO DO ═══════════════════════════════════════════
+    #
+    # Pruning is driven by "Penpot did not name this file", and every way of
+    # failing to ask — a 502, a project skipped for an illegal name, a half-read
+    # listing — is indistinguishable from a deletion. A regression here does not
+    # throw; it quietly moves a team's mirrors to the trash on the next scheduled
+    # run. So "prunes nothing" is asserted as a step rather than assumed.
 
   @admin @occ
   Scenario: A pull that changed nothing prunes nothing
-    Given the first visible team is mapped as a plain folder "Penpot"
+    Given the first visible team is mapped as a plain folder "Quiet Pull"
     And a Penpot project named "Untouched" exists in that team
     And a Penpot file named "Poster" exists in the project "Untouched"
     When the admin runs a pull
-    And the admin runs a pull
+    And the team has been mirrored into Nextcloud
     Then the pull succeeds
     And the pull pruned nothing
     # The safety property, asserted first because it is the one a regression
     # breaks silently. Pruning on a listing that simply did not mention a file is
     # the single most destructive thing this app could do.
+    #
+    # ITS OWN FOLDER, deliberately. This is the one assertion in the suite that
+    # IS about the whole mapped folder, so it must not share one: every other
+    # scenario's leftovers land in "Penpot", and a design any of them deleted in
+    # Penpot is a mirror this pull would correctly prune. A fresh folder is
+    # mirrored from the current listing and therefore has nothing to prune —
+    # which is exactly the state this scenario means to describe.
 
-  # ── what a pull produces ─────────────────────────────────────────────────────
+    # ── what a pull produces ─────────────────────────────────────────────────────
 
-  # ── the manual controls in admin settings ────────────────────────────────────
-  # Both siblings expose a per-mapping "Sync now" button on each mapping card,
-  # plus a section-wide bulk sync in the Sync Actions panel. This app has the
-  # same two controls in the same two places — but only ONE direction, because
-  # there is no content push (saga §6.1). See admin-section.feature for where
-  # they sit; this is what they do.
+    # ── the manual controls in admin settings ────────────────────────────────────
+    # Both siblings expose a per-mapping "Sync now" button on each mapping card,
+    # plus a section-wide bulk sync in the Sync Actions panel. This app has the
+    # same two controls in the same two places — but only ONE direction, because
+    # there is no content push (saga §6.1). See admin-section.feature for where
+    # they sit; this is what they do.
 
   @todo
   Scenario: Sync now on a mapping card pulls just that team
@@ -217,11 +242,11 @@ Feature: Scheduled or manual pull from Penpot
     And it stays inside "Clients" — only the name changes, not the location
     # Names are pinned to Penpot; positions are the user's (saga §6.29/§6.36).
 
-  # The Nextcloud→Penpot direction of project renaming, its name guard, and the
-  # sanitisation case for Penpot names Nextcloud can't represent all live in
-  # project-folder.feature — it's a distinct flow from file rename (saga §6.39):
-  # different node type, different RPC, 204 with no body, and no extension to
-  # handle.
+    # The Nextcloud→Penpot direction of project renaming, its name guard, and the
+    # sanitisation case for Penpot names Nextcloud can't represent all live in
+    # project-folder.feature — it's a distinct flow from file rename (saga §6.39):
+    # different node type, different RPC, 204 with no body, and no extension to
+    # handle.
 
   @todo
   Scenario: A second pull with nothing changed creates no duplicates
@@ -230,32 +255,32 @@ Feature: Scheduled or manual pull from Penpot
     Then the "My Stuff" folder still holds exactly 1 mirrored file
     And no file gains a " (2)" collision-suffixed duplicate
 
-  # ── THE OPEN FORK: does the reconciler read the Nextcloud trash at all? ────
-  #
-  # SETTLED, for PRUNING (prune.feature): it does not, ever. The pull walks the
-  # mapped folder's listing, so a trashed mirror is not spared by a check — it is
-  # never seen. That is what makes "Nextcloud never purges because Penpot did" a
-  # rule with no edge cases rather than a policy with a cross-trash comparison
-  # behind it.
-  #
-  # STILL OPEN, for CREATING, which is what the two scenarios below describe. If
-  # a design is alive in Penpot and its only mirror is in the Nextcloud trash, the
-  # pull today creates a second, fresh mirror beside it — because it cannot see
-  # what it is not looking at. §6.37 wanted the opposite: read the trash first,
-  # match by `penpot_id`, and adopt.
-  #
-  # WHAT CHANGED THE CALCULUS, and why this is now a fork rather than a bug: that
-  # state is no longer reachable by the ordinary route. A user deleting a mirror
-  # also deletes the design in Penpot, so the pull stops naming it and creates
-  # nothing; and restoring the mirror now restores the design with it (§C6.15).
-  # What is left are genuinely odd cases — the delete never reached Penpot, or a
-  # human restored the design in Penpot's own UI — where "the design exists, so a
-  # visible mirror should exist" is a defensible answer rather than an obvious
-  # bug.
-  #
-  # NEITHER IS BUILT. Both scenarios stay here as the specification of the
-  # adopting behaviour, and stay unclaimed until someone decides that reading
-  # `files_trashbin` on every pull is worth what it buys.
+    # ── THE OPEN FORK: does the reconciler read the Nextcloud trash at all? ────
+    #
+    # SETTLED, for PRUNING (prune.feature): it does not, ever. The pull walks the
+    # mapped folder's listing, so a trashed mirror is not spared by a check — it is
+    # never seen. That is what makes "Nextcloud never purges because Penpot did" a
+    # rule with no edge cases rather than a policy with a cross-trash comparison
+    # behind it.
+    #
+    # STILL OPEN, for CREATING, which is what the two scenarios below describe. If
+    # a design is alive in Penpot and its only mirror is in the Nextcloud trash, the
+    # pull today creates a second, fresh mirror beside it — because it cannot see
+    # what it is not looking at. §6.37 wanted the opposite: read the trash first,
+    # match by `penpot_id`, and adopt.
+    #
+    # WHAT CHANGED THE CALCULUS, and why this is now a fork rather than a bug: that
+    # state is no longer reachable by the ordinary route. A user deleting a mirror
+    # also deletes the design in Penpot, so the pull stops naming it and creates
+    # nothing; and restoring the mirror now restores the design with it (§C6.15).
+    # What is left are genuinely odd cases — the delete never reached Penpot, or a
+    # human restored the design in Penpot's own UI — where "the design exists, so a
+    # visible mirror should exist" is a defensible answer rather than an obvious
+    # bug.
+    #
+    # NEITHER IS BUILT. Both scenarios stay here as the specification of the
+    # adopting behaviour, and stay unclaimed until someone decides that reading
+    # `files_trashbin` on every pull is worth what it buys.
 
   @todo
   Scenario: A design whose mirror sits in the Nextcloud trash is not duplicated
@@ -286,7 +311,7 @@ Feature: Scheduled or manual pull from Penpot
     # Drafts is a state, not a folder (saga §6.35) — mirroring it as a folder
     # would make the design appear to be in two places.
 
-  # ── the mode axis: what actually costs anything ──────────────────────────────
+    # ── the mode axis: what actually costs anything ──────────────────────────────
 
   @todo
   Scenario: A new mapping defaults its files to "link" mode
@@ -326,7 +351,7 @@ Feature: Scheduled or manual pull from Penpot
     # 1 get-projects + 3 get-project-files = 4 calls for 50 files. This is the
     # property that makes the design scale (saga §6.22).
 
-  # ── name and placement reconcile for free, in both modes ─────────────────────
+    # ── name and placement reconcile for free, in both modes ─────────────────────
 
   @todo
   Scenario: A rename in Penpot renames the mirrored file, whatever its mode
@@ -358,7 +383,7 @@ Feature: Scheduled or manual pull from Penpot
     Then the file is refreshed inside "Clients/My Stuff"
     And no folder is recreated at the old location
 
-  # ── pruning: the most dangerous thing this app does ──────────────────────────
+    # ── pruning: the most dangerous thing this app does ──────────────────────────
 
   @todo
   Scenario: A pull prunes a mirrored file whose Penpot file no longer exists
@@ -370,11 +395,11 @@ Feature: Scheduled or manual pull from Penpot
     # Trash, never destroy — don't-lose-data. A pruned file is recoverable for as
     # long as the user's trash retention allows.
 
-  # THE FINAL SNAPSHOT (saga §6.46) — the app's one genuinely lossy moment,
-  # fixed. A pruned "link" file would otherwise be a pointer to a design that no
-  # longer exists, with nothing to rebuild from. But "export-binfile" still
-  # exports a soft-deleted file for ~7 days (saga §6.42, confirmed live), and a
-  # trashed Nextcloud file's content is writable (saga §6.44, confirmed live).
+    # THE FINAL SNAPSHOT (saga §6.46) — the app's one genuinely lossy moment,
+    # fixed. A pruned "link" file would otherwise be a pointer to a design that no
+    # longer exists, with nothing to rebuild from. But "export-binfile" still
+    # exports a soft-deleted file for ~7 days (saga §6.42, confirmed live), and a
+    # trashed Nextcloud file's content is writable (saga §6.44, confirmed live).
   @todo
   Scenario: A link file gets a final snapshot before being pruned
     Given a mirrored ".penpot" file in "link" mode in the "My Stuff" folder
@@ -402,18 +427,18 @@ Feature: Scheduled or manual pull from Penpot
     Then no extra export is performed
     And the file is moved to the Nextcloud trash with its existing archive intact
 
-  # DETECTING A PENPOT-SIDE RESTORE (saga §6.46). This section used to open "we
-  # cannot DRIVE Penpot's trash — no API command restores a file", which was
-  # simply wrong: `restore-deleted-team-files` exists, was confirmed live in
-  # §6.52/§6.49, and the restore slice (§C6.15) calls it. That sentence predates
-  # the discovery of Penpot's trash and survived several rewrites of the file
-  # around it.
-  #
-  # What is described below is still the OTHER direction, and it is still not
-  # built: noticing during a pull that a design came back on its own — because a
-  # human restored it in Penpot's UI, or another Nextcloud did. The design
-  # reappears under its ORIGINAL id, so the reconciler could match the trashed
-  # mirror by `penpot_id` and put it back.
+    # DETECTING A PENPOT-SIDE RESTORE (saga §6.46). This section used to open "we
+    # cannot DRIVE Penpot's trash — no API command restores a file", which was
+    # simply wrong: `restore-deleted-team-files` exists, was confirmed live in
+    # §6.52/§6.49, and the restore slice (§C6.15) calls it. That sentence predates
+    # the discovery of Penpot's trash and survived several rewrites of the file
+    # around it.
+    #
+    # What is described below is still the OTHER direction, and it is still not
+    # built: noticing during a pull that a design came back on its own — because a
+    # human restored it in Penpot's UI, or another Nextcloud did. The design
+    # reappears under its ORIGINAL id, so the reconciler could match the trashed
+    # mirror by `penpot_id` and put it back.
   @todo
   Scenario: A design restored in Penpot's own UI is re-adopted from the trash
     Given a mirrored ".penpot" file that the pull trashed when its design vanished
@@ -446,7 +471,7 @@ Feature: Scheduled or manual pull from Penpot
     And its archive content is left intact
     # See ignore.feature — ignore means "stop mirroring", never "delete".
 
-  # ── there is no push, and there is no user-attributed pull ───────────────────
+    # ── there is no push, and there is no user-attributed pull ───────────────────
 
   @todo
   Scenario: There is no push counterpart to this feature

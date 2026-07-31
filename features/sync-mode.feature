@@ -53,9 +53,9 @@ Feature: Choosing whether a mirrored file stores its archive
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a subfolder
 
-  # ── defaults ─────────────────────────────────────────────────────────────────
+    # ── defaults ─────────────────────────────────────────────────────────────────
 
-  @todo
+  @todo @admin @occ
   Scenario: Files inherit their mapping's default mode
     Given the "Northwind" mapping has default mode "link"
     When the pull runs
@@ -67,9 +67,9 @@ Feature: Choosing whether a mirrored file stores its archive
     # Changing a default never retroactively rewrites existing files — that would
     # silently trigger a bulk download, or silently delete a pile of archives.
 
-  # ── what each mode actually is ───────────────────────────────────────────────
+    # ── what each mode actually is ───────────────────────────────────────────────
 
-  @todo
+  @todo @admin @occ
   Scenario: A link file is a pointer with no stored content
     Given a mirrored ".penpot" file in "link" mode
     Then the file stores no ".penpot" archive content
@@ -77,9 +77,9 @@ Feature: Choosing whether a mirrored file stores its archive
     And "Open in Penpot" opens the live design
     And no export was ever performed for it
 
-  # A pointer can't survive the gestures a real archive can, so links are
-  # confined (saga §6.43). Every refusal offers the same escape: promote first.
-  @todo
+    # A pointer can't survive the gestures a real archive can, so links are
+    # confined (saga §6.43). Every refusal offers the same escape: promote first.
+  @todo @admin @occ
   Scenario: A link file is confined to its own project
     Given a mirrored ".penpot" file in "link" mode in a project folder
     Then it can be moved freely within that project, including into plain subfolders
@@ -91,7 +91,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # Detail lives in move.feature and ignore.feature; this is the summary of
     # what the mode actually costs you.
 
-  @todo
+  @todo @admin @occ
   Scenario: Promotion lifts every link restriction at once
     Given a mirrored ".penpot" file in "link" mode
     When I promote it to "sync" mode and the archive is fetched
@@ -99,7 +99,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # The restrictions are a property of holding no bytes, not a policy about
     # links — so acquiring bytes removes all of them together.
 
-  @todo
+  @todo @admin @occ
   Scenario: A sync file holds the real archive
     Given a mirrored ".penpot" file in "sync" mode
     Then the file holds the real ".penpot" archive downloaded from Penpot
@@ -107,9 +107,9 @@ Feature: Choosing whether a mirrored file stores its archive
     And "Open in Penpot" still opens the live design
     # A sync file is a backup AND a link — never one at the expense of the other.
 
-  # ── promotion: safe, additive ────────────────────────────────────────────────
+    # ── promotion: safe, additive ────────────────────────────────────────────────
 
-  @todo
+  @todo @admin @occ
   Scenario: Promoting a link file to sync fetches the archive
     Given a mirrored ".penpot" file in "link" mode
     When I promote the file to "sync" mode
@@ -119,7 +119,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And its "penpot_id" is unchanged
     And nothing was written to Penpot
 
-  @todo
+  @todo @admin @occ
   Scenario: Promotion survives future pulls
     Given a mirrored ".penpot" file promoted to "sync" mode
     When the pull runs several times
@@ -127,9 +127,9 @@ Feature: Choosing whether a mirrored file stores its archive
     And it is re-exported whenever its Penpot revision moves
     # Mode is stored per-file in metadata, not re-derived from the mapping.
 
-  # ── demotion: the one lossy operation here ───────────────────────────────────
+    # ── demotion: the one lossy operation here ───────────────────────────────────
 
-  @todo
+  @todo @admin @occ
   Scenario: Demoting a sync file to link warns before deleting the archive
     Given a mirrored ".penpot" file in "sync" mode
     When I demote the file to "link" mode
@@ -137,7 +137,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And it warns that this is a local backup, not recoverable from Penpot without a new export
     And nothing is deleted until I confirm
 
-  @todo
+  @todo @admin @occ
   Scenario: Confirming a demotion deletes the archive and keeps the pointer
     Given a mirrored ".penpot" file in "sync" mode
     When I demote the file to "link" mode and confirm
@@ -147,7 +147,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And Penpot is never contacted
     And the design in Penpot is completely unaffected
 
-  @todo
+  @todo @admin @occ
   Scenario: Demoting an ignored file is refused
     Given a mirrored ".penpot" file in "sync" mode tagged as ignored
     When I demote the file to "link" mode
@@ -156,9 +156,9 @@ Feature: Choosing whether a mirrored file stores its archive
     # Ignore exists precisely to preserve an archive (ignore.feature). Demoting an
     # ignored file would delete the thing the ignore tag was protecting.
 
-  # ── cost ─────────────────────────────────────────────────────────────────────
+    # ── cost ─────────────────────────────────────────────────────────────────────
 
-  @todo
+  @todo @admin @occ
   Scenario: A team of link files costs no exports at all
     Given the "Northwind" team has 100 files, all in "link" mode
     When the pull runs
@@ -168,9 +168,9 @@ Feature: Choosing whether a mirrored file stores its archive
     # The listing carries name, projectId, revn and modifiedAt for every file in
     # one response (saga §5.5) — which is what makes link mode nearly free.
 
-  # ── what a "link" actually holds (saga §C6.6) ─────────────────────────────
+    # ── what a "link" actually holds (saga §C6.6) ─────────────────────────────
 
-  @todo
+  @todo @admin @occ
   Scenario: A link file holds nothing at all
     Given a mirrored ".penpot" file in "link" mode
     Then the file is zero bytes
@@ -179,7 +179,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # A body would be a second copy of the same facts, free to drift from the
     # first, which is exactly what the drift signal's two halves once did.
 
-  @todo
+  @todo @admin @occ
   Scenario: A link is never a small placeholder archive
     Given a mirrored ".penpot" file in "link" mode
     Then it is not a ZIP, empty or otherwise
@@ -188,7 +188,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # silently disable the prune's final snapshot, make a demotion ask to delete
     # an archive that does not exist, and report "archive" in status.
 
-  @todo
+  @todo @admin @occ
   Scenario: A leftover body from an older version is truncated by the next pull
     Given a "link" file still holding a JSON pointer body from an earlier version
     When the pull runs
@@ -198,7 +198,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # calls the same code path on every link. "pointer" is a real third state
     # meaning "an old body, not yet truncated".
 
-  @todo
+  @todo @admin @occ
   Scenario: An already-empty link is left strictly alone
     Given a mirrored ".penpot" file in "link" mode that is already empty
     When the pull runs

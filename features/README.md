@@ -79,6 +79,45 @@ every gesture scenario lived away from the behaviour it demonstrated; as a tag,
 `behat --tags @gesture` gives the same collection back without splitting any
 feature. Nothing is lost and the scenarios sit next to their own kind.
 
+### Storage backend — a dimension to RUN, not to write twice
+
+| Tag | Meaning |
+|---|---|
+| `@team-folder` | Exercised against a groupfolders-backed mapping. |
+| `@plain-folder` | Exercised against a plain shared folder. |
+
+Every behaviour is valid on both backends, so duplicating scenarios per backend
+would produce two identical blocks and prove nothing. The backend is a
+**dimension the suite is run across**, which is what a tag is for.
+
+That is not theoretical: the structural scenarios in `reconcile.feature` mapped
+a Team Folder and passed only because of where they sat in the run. Moved, the
+folder resolved to nothing — Team Folder provisioning had never actually been
+covered. More scenarios would not have caught that; running the existing ones
+against both backends would.
+
+Where a backend genuinely changes an OUTCOME it earns its own scenario. There is
+one confirmed case (§C6.16): on a shared mapping a pruned mirror goes to the
+**owner's** trash, not the acting user's.
+
+### `sync` vs `link` — a restriction in one direction, not an axis
+
+The tempting move is to write every behaviour twice, once per mode. Don't: the
+modes only diverge in one direction.
+
+* **`@in-penpot` scenarios are mode-agnostic.** A design renamed, moved or
+  deleted in Penpot reaches Nextcloud the same way whichever mode the mirror is
+  in — a `link` simply has no bytes to update. These scenarios should not
+  mention mode at all, and writing them twice duplicates a rule that never
+  forks.
+* **`@in-nextcloud` scenarios branch.** A `link` is a read-only projection, so
+  it is confined to its project: moves out are refused, and there is nothing to
+  copy. That is a business rule, and it is stated as one.
+
+The test: can you write the restriction as a sentence beginning *"A link…"*? If
+yes it is a rule worth its own section. If mode makes no difference to the
+outcome, leave it out.
+
 ### Status
 
 | Tag | Meaning |
@@ -91,6 +130,45 @@ intervening comment lines — which is exactly how one scenario was silently
 excluded while four others ran undefined (§C6.14). CI runs `--strict` so
 undefined steps fail the job; nothing protects against a tag landing on the
 wrong scenario except keeping them adjacent.
+
+## `Rule:` is NOT available — verified, not assumed
+
+Gherkin 6 added `Rule:`, which groups scenarios under one business rule and can
+carry its own `Background`. It maps almost exactly onto how this suite is
+organised, and it does not work here: **Behat's parser rejects the keyword.**
+
+    In Parser.php line 339:
+      Expected Step, but got text: "  Rule: A move within one project is local"
+
+That is Behat 3.32, and **there is no newer version to upgrade to.**
+[Behat#1451](https://github.com/Behat/Behat/issues/1451) is still open; it
+depends on [Behat/Gherkin#140](https://github.com/Behat/Gherkin/issues/140),
+open since 2019. A maintainer in February 2026: *"I'd still like to look at
+this but will come back to it once we have Behat 4.0 out (or at least the
+alpha)."* So this is post-4.0 work with no shipped implementation anywhere.
+
+The version number was inferred from and believed rather than tested; the
+parser disagreed on the first run, which is the cheapest possible way to be
+wrong and still the wrong way to find out.
+
+Business rules are therefore **comment banners** (`# ── RULE: … ──`). They cost
+nothing, read the same, and become real `Rule:` blocks the day Behat ships it —
+the groupings and the Backgrounds they would carry are already in place.
+
+## Data tables: an input, or a different rule?
+
+`Scenario Outline` + `Examples` is right when the rows are **one rule applied to
+different inputs** and the outcome is identical for every row. The four link
+refusals differed only in destination, so they are one outline over three rows.
+
+It is wrong when the rows are **different rules that happen to share a shape**.
+Filing a draft and un-filing look like one outline over a direction column;
+they are the same rule read from opposite ends, and three separate bugs
+(§C6.8/§C6.9/§C6.10) lived in that asymmetry. Collapsing them would bury the
+thing that made them worth writing.
+
+The test: can you write the rows as a list of *values*, or only as a list of
+*sentences*? Values → `Examples`. Sentences → separate scenarios.
 
 ## Wording is an API
 
