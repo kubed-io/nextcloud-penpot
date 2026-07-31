@@ -22,26 +22,17 @@ use Psr\Log\LoggerInterface;
 /**
  * Routes a deleted `.penpot` file to {@see DeletionService} (`delete.feature`).
  *
- * ## ONE EVENT, TWO STEPS, TOLD APART BY PATH
+ * ## THIS IS THE SOFT STEP ONLY. THE PURGE IS NOT AN EVENT.
  *
- * Nextcloud fires `BeforeNodeDeletedEvent` for BOTH halves of a delete, and the
- * only thing that distinguishes them is where the node lives when it fires:
+ * The first version of this class handled both halves, discriminating by path
+ * (`<uid>/files/…` vs `<uid>/files_trashbin/files/…`) on the strength of a
+ * comment in nextcloud-n8n. The second half never ran: Nextcloud fires **no
+ * typed event at all** when a file is purged from the trash — the trashbin's
+ * `removeItem` emits the legacy `\OCP\Trashbin` `preDelete` hook instead.
  *
- *     <uid>/files/…                 → the first delete, on its way to the trash
- *     <uid>/files_trashbin/files/…  → the purge, the irreversible one
- *
- * That discrimination is ported from nextcloud-n8n, which learned it the same
- * way. Getting it backwards would be the worst bug available here: it would
- * permanently destroy a design on an ordinary delete.
- *
- * ## A TRASH-BYPASSED DELETE COUNTS AS THE PURGE
- *
- * If the instance has the trash disabled, or the client sends
- * `X-NC-Skip-Trashbin`, or another app disabled the bin for this delete, there
- * IS no soft step — the file never reaches a trash. Treating that as the soft
- * step would mean turning the Nextcloud trash off quietly stops deletes reaching
- * Penpot at all, so it is treated as the hard step instead. Detected the same
- * way: a node outside the trashbin path that is being deleted outright.
+ * nextcloud-grafana already knew, and says so in {@see TrashPurgeHook}'s own
+ * docblock ("proven live"). Two siblings disagreed and the wrong one was
+ * followed. The purge now lives in that hook; this class does one thing.
  *
  * ## WHY THIS ONE NEVER ABORTS
  *
@@ -56,39 +47,21 @@ use Psr\Log\LoggerInterface;
  * @implements IEventListener<BeforeNodeDeletedEvent>
  */
 final class DeleteListener implements IEventListener {
-	/** Where Nextcloud parks a trashed node — the marker for the second step. */
-	private const TRASHBIN_SEGMENT = '/files_trashbin/';
-
 	/**
-	 * A trashed entry's name, which is NOT `<name>.penpot`.
+	 * Nodes already in the trash are not ours to act on here.
 	 *
-	 * Nextcloud renames a node on its way into the trash, appending the deletion
-	 * time: `Gone For Good.penpot.d1785457295`. So by the time the PURGE fires,
-	 * the extension is no longer last and a plain `str_ends_with` rejects the
-	 * very file it is meant to catch.
-	 *
-	 * This cost a green unit suite and a red integration one: nothing that mocks
-	 * a node ever sees the rename, because the rename is Nextcloud's, not ours.
+	 * A purge does not reach this class at all (see the docblock), but a node
+	 * under the trashbin can still arrive here by other routes, and a second
+	 * `delete-file` for a design already in Penpot's trash is a wasted call at
+	 * best. {@see TrashPurgeHook} owns everything on that side of the line.
 	 */
-	private const TRASHED_SUFFIX = '/\.penpot\.d\d+$/';
+	private const TRASHBIN_SEGMENT = '/files_trashbin/';
 
 	public function __construct(
 		private DeletionService $deletions,
 		private SyncGuard $guard,
 		private LoggerInterface $logger,
 	) {
-	}
-
-	/**
-	 * Is this one of ours, at EITHER step?
-	 *
-	 * The soft step sees `Login.penpot`; the purge sees
-	 * `Login.penpot.d1785457295`, because Nextcloud stamps the deletion time onto
-	 * the name on the way into the trash. Both are the same file.
-	 */
-	private function isOurs(string $name): bool {
-		return str_ends_with($name, PullService::EXTENSION)
-			|| preg_match(self::TRASHED_SUFFIX, $name) === 1;
 	}
 
 	#[\Override]
@@ -107,16 +80,15 @@ final class DeleteListener implements IEventListener {
 		if (!$node instanceof File) {
 			return;
 		}
-		if (!$this->isOurs($node->getName())) {
+		if (!str_ends_with($node->getName(), PullService::EXTENSION)) {
+			return;
+		}
+		if (str_contains($node->getPath(), self::TRASHBIN_SEGMENT)) {
 			return;
 		}
 
 		try {
-			if (str_contains($node->getPath(), self::TRASHBIN_SEGMENT)) {
-				$this->deletions->onPurged($node);
-			} else {
-				$this->deletions->onTrashed($node);
-			}
+			$this->deletions->onTrashed($node);
 		} catch (\Throwable $e) {
 			// Never abort the delete. See the class docblock: the user's file is
 			// theirs, and a remote failure is the next pull's problem.

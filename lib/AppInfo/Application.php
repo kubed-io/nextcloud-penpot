@@ -16,6 +16,7 @@ use OCA\PenpotSync\Listener\DeleteListener;
 use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
+use OCA\PenpotSync\Listener\TrashPurgeHook;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
@@ -80,6 +81,9 @@ use OCP\Files\Events\Node\NodeWrittenEvent;
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
 
+	/** Guards against connectHook stacking the purge handler on a repeat boot(). */
+	private static bool $purgeHookRegistered = false;
+
 	public function __construct(array $params = []) {
 		parent::__construct(self::APP_ID, $params);
 	}
@@ -128,11 +132,9 @@ final class Application extends App implements IBootstrap {
 		// SyncGuard is load-bearing: the pull writes .penpot files constantly.
 		$context->registerEventListener(NodeWrittenEvent::class, CreateListener::class);
 
-		// DELETING REACHES PENPOT'S TRASH, and emptying the Nextcloud trash
-		// destroys the design (delete.feature). One event covers both steps,
-		// told apart by whether the node already sits under files_trashbin —
-		// getting that backwards would permanently destroy a design on an
-		// ordinary delete, which is why it lives in one clearly-named place.
+		// DELETING REACHES PENPOT'S TRASH (delete.feature). This covers the SOFT
+		// step only — the purge fires no typed event at all and is wired as a
+		// legacy hook in boot(), see TrashPurgeHook.
 		$context->registerEventListener(BeforeNodeDeletedEvent::class, DeleteListener::class);
 
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
@@ -156,7 +158,21 @@ final class Application extends App implements IBootstrap {
 		// accessor both siblings use to register their metadata keys.
 		$context->getAppContainer()->get(PenpotMetadata::class)->register();
 
-		// The trash purge hook and the background job still belong to later
-		// courses — not scaffolded here ahead of the code that uses them.
+		// EMPTYING THE TRASH IS NOT AN EVENT. Nextcloud fires no typed event when
+		// a file is purged from the trash — the trashbin emits the legacy
+		// `\OCP\Trashbin` `preDelete` hook just before it unlinks the node, and
+		// that is the only entry point there is, so the deprecation is
+		// unavoidable. Connecting the handler INSTANCE because the legacy hook
+		// calls object+method.
+		//
+		// connectHook APPENDS with no de-duplication, so a second boot() in the
+		// same process (tests, repeated loadApp) would stack the handler and purge
+		// twice per file. Guarded.
+		if (!self::$purgeHookRegistered) {
+			self::$purgeHookRegistered = true;
+			$purgeHook = $context->getAppContainer()->get(TrashPurgeHook::class);
+			/** @psalm-suppress DeprecatedMethod */
+			\OCP\Util::connectHook('\OCP\Trashbin', 'preDelete', $purgeHook, 'preDelete');
+		}
 	}
 }

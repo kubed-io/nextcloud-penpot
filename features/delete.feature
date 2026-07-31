@@ -34,9 +34,17 @@
 #   <uid>/files/…                  → the first delete, on its way to the trash
 #   <uid>/files_trashbin/files/…   → the purge, the irreversible one
 #
+# ...EXCEPT THE SECOND ONE IS NOT AN EVENT AT ALL (saga §C6.13). Nextcloud fires
+# `BeforeNodeDeletedEvent` for the first delete and NOTHING TYPED for the purge —
+# the trashbin emits a legacy `\OCP\Trashbin` `preDelete` hook instead. The path
+# discrimination above is how the two are told apart in principle; in practice
+# they arrive through two different doors. Nothing a user sees changes, but a
+# reader looking for the purge in the delete listener will not find it there.
+#
 # A trash-BYPASSED delete (admin disabled the trash, or `X-NC-Skip-Trashbin`)
-# never produces the soft step, so it is treated as the hard step — otherwise
-# turning the trash off would quietly stop deletes reaching Penpot at all.
+# never produces the soft step. It is a known gap rather than a handled case:
+# there is no trash for the purge hook to fire from, so the design is left in
+# Penpot's trash and expires on Penpot's own schedule.
 #
 # ## THE PURGE GUARD, AND WHY IT IS NOT OPTIONAL (saga §C6.11)
 #

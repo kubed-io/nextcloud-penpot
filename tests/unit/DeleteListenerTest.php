@@ -24,19 +24,21 @@ use Psr\Log\NullLogger;
  *
  * ## WHY THIS TEST EXISTS AT ALL
  *
- * The service tests cover what each step DOES. This covers whether the right one
- * is chosen — and it exists because the first version got it wrong in a way no
- * service test could see: **Nextcloud renames a node on its way into the trash**,
- * appending the deletion time (`Login.penpot.d1785457295`). The listener checked
- * `str_ends_with($name, '.penpot')`, which is false by the time the purge fires,
- * so it returned early and the design was never destroyed in Penpot.
+ * The service tests cover what each step DOES. This covers whether this listener
+ * is the right home for it — and it exists because the first version was not.
  *
- * The unit suite was green throughout, because a mocked node never gets renamed
- * — the rename belongs to Nextcloud. Only a real gesture against a real server
- * showed it, which it did on the first run of the integration scenario.
+ * That version handled BOTH steps, discriminating by path, on the strength of a
+ * comment in nextcloud-n8n. Nextcloud fires **no typed event at all** for a trash
+ * purge; the trashbin emits a legacy `\OCP\Trashbin` `preDelete` hook instead
+ * (nextcloud-grafana had this documented as "proven live", and penpot's
+ * integration suite confirmed it by failing). The purge now lives in
+ * {@see \OCA\PenpotSync\Listener\TrashPurgeHook}, and this class does the soft
+ * step only.
  *
- * Getting this routing backwards is the worst bug available in this app: it
- * would permanently destroy a design on an ordinary delete.
+ * So the assertions below are mostly about what this listener must NOT touch. A
+ * node already in the trash arriving here is either a route we do not know about
+ * or a second delete of something already in Penpot's trash — and in both cases
+ * acting on it is wrong.
  */
 final class DeleteListenerTest extends TestCase {
 	private DeletionService $deletions;
@@ -56,12 +58,15 @@ final class DeleteListenerTest extends TestCase {
 	}
 
 	/**
-	 * THE REGRESSION. A purge sees the deletion-stamped name, and it must still
-	 * be recognised as ours.
+	 * A NODE ALREADY IN THE TRASH IS NOT THIS CLASS'S BUSINESS.
+	 *
+	 * The purge arrives at TrashPurgeHook, not here. If one reaches this listener
+	 * anyway it is a second delete of a design Penpot has already trashed, and
+	 * calling `delete-file` again is a wasted round trip at best.
 	 */
-	public function testAPurgeIsTheHardStepDespiteTheTrashbinRename(): void {
-		$this->deletions->expects($this->once())->method('onPurged');
+	public function testANodeAlreadyInTheTrashIsIgnored(): void {
 		$this->deletions->expects($this->never())->method('onTrashed');
+		$this->deletions->expects($this->never())->method('onPurged');
 
 		$this->listener->handle($this->deleteOf(
 			'Login.penpot.d1785457295',
@@ -69,27 +74,12 @@ final class DeleteListenerTest extends TestCase {
 		));
 	}
 
-	/** A trashed file of some other type is not ours, stamped name or not. */
-	public function testATrashedNonPenpotFileIsIgnored(): void {
-		$this->deletions->expects($this->never())->method('onPurged');
+	/** Not a `.penpot` at all — never ours, wherever it lives. */
+	public function testANonPenpotFileIsIgnored(): void {
 		$this->deletions->expects($this->never())->method('onTrashed');
+		$this->deletions->expects($this->never())->method('onPurged');
 
-		$this->listener->handle($this->deleteOf(
-			'notes.txt.d1785457295',
-			'/admin/files_trashbin/files/notes.txt.d1785457295',
-		));
-	}
-
-	/**
-	 * A trash-BYPASSED delete has no soft step at all, so it counts as the purge.
-	 * Otherwise turning the Nextcloud trash off would quietly stop deletes
-	 * reaching Penpot — except this one arrives at its normal path, so it routes
-	 * soft. Pinned as the KNOWN limitation it is, not as correct behaviour.
-	 */
-	public function testATrashBypassedDeleteCurrentlyRoutesSoft(): void {
-		$this->deletions->expects($this->once())->method('onTrashed');
-
-		$this->listener->handle($this->deleteOf('Login.penpot', '/admin/files/Penpot/Login.penpot'));
+		$this->listener->handle($this->deleteOf('notes.txt', '/admin/files/Penpot/notes.txt'));
 	}
 
 	public function testAFolderIsNeverRouted(): void {

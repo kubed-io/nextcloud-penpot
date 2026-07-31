@@ -1486,3 +1486,66 @@ param table, §C6.10's membership shape, this): *a test that mocks the boundary
 cannot fail in the way the boundary actually behaves.* Every one was found by a
 real gesture — twice by a person, once by the integration suite that exists
 because of the first two.
+
+### C6.13 — The purge is not an event, and two siblings disagreed about it
+
+The delete listener was built to handle both steps of a delete, telling them
+apart by the node's path — `<uid>/files/…` for the first delete,
+`<uid>/files_trashbin/files/…` for the purge. The soft step worked. The purge
+never ran at all, and the design sat in Penpot's trash forever.
+
+**Nextcloud does not fire a typed event when a file is purged from the trash.**
+The trashbin's `removeItem` emits the legacy `\OCP\Trashbin` `preDelete` hook,
+wired with `\OCP\Util::connectHook`, and that is the only entry point there is.
+
+#### Both siblings had already been here, and they disagree in writing
+
+`nextcloud-n8n`'s delete listener says, in its docblock:
+
+> *"The same event fires for BOTH lifecycle steps … Discriminated by path prefix."*
+
+`nextcloud-grafana` has a whole separate class for the purge, whose docblock
+says:
+
+> *"unlike the move-to-trash step — Nextcloud does NOT fire a typed
+> `BeforeNodeDeletedEvent` when a file is purged from the trash (**proven live**:
+> the trashbin's `removeItem` fires nothing typed)."*
+
+Two apps in the same family, against the same Nextcloud version, documenting
+opposite behaviour. This app read n8n's — the older and more confident of the
+two — and inherited the bug. Grafana's is the one that says *proven live*, and it
+is the one that is right.
+
+**The lesson is not "read both siblings", which was already the rule.** It is
+that when they disagree, the tie-break is which claim carries evidence. One
+docblock asserts a mechanism; the other reports an experiment. Those are not the
+same kind of sentence and should never have been weighed equally.
+
+#### What actually found it
+
+Not review, and not a unit test — the integration scenario, on its first run.
+The purge step ran, returned clean, and the assertion against Penpot's trash
+failed. Every mock in the unit suite was faithfully reproducing an event that
+does not occur.
+
+That is the third time this course a mocked boundary certified a wrong
+assumption (§C6.8, §C6.10, §C6.12), and the second time the fix was already
+sitting in a sibling repository.
+
+#### Two details the port carries, both learned by grafana the hard way
+
+- The retention background job (`Files_Trashbin`'s `ExpireTrash`) runs with **no
+  session user**, so the uid falls back to `\OC_User::getUser()` — the FS context
+  it sets up for the user it is processing. Without that, a mirror Nextcloud
+  expired on its own schedule would leak the design silently, which is the case
+  nobody is watching.
+- `connectHook` **appends with no de-duplication**, so a second `boot()` in one
+  process stacks the handler and purges twice per file. Guarded with a static
+  flag.
+
+#### Filed against n8n
+
+n8n has no `connectHook` anywhere in `lib/`, so its hard step has only ever had
+the trigger that does not fire — meaning a `sync+two-way` workflow is likely left
+alive in n8n forever when its Nextcloud file is purged. A note was dropped into
+that repo's saga; it is **unverified there**, and says so.
