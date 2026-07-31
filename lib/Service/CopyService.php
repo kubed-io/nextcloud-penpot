@@ -65,6 +65,7 @@ final class CopyService {
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
+		private readonly DestinationResolver $destinations,
 		private readonly PersonalTokenService $personalTokens,
 		private readonly LoggerInterface $logger,
 	) {
@@ -88,7 +89,12 @@ final class CopyService {
 		}
 
 		$membership = $this->resolver->resolve($target);
-		$project = $membership->projectId;
+		// NOT `$membership->projectId`. A copy landing at a TEAM ROOT resolves to
+		// no project folder but is squarely inside the mapping — those files are
+		// the team's Drafts, a real project (§6.35). Reading the raw projectId
+		// here is what made "copy up a directory" produce a Nextcloud file and no
+		// design at all, silently (§C6.10).
+		$project = $this->destinations->projectFor($membership);
 		if ($project === null) {
 			// OUTSIDE EVERY MAPPING. There is no project to create in, and
 			// inventing one would be the surprise write §6.1 refuses. The source's

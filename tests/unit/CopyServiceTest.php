@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\CopyService;
+use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
@@ -59,6 +60,9 @@ final class CopyServiceTest extends TestCase {
 			$this->client,
 			$this->metadata,
 			$this->resolver,
+			// The REAL resolver over the mocked client. Stubbing this out is
+			// exactly how the team-root bug shipped green (§C6.10).
+			new DestinationResolver($this->client, new NullLogger()),
 			$tokens,
 			new NullLogger(),
 		);
@@ -89,18 +93,41 @@ final class CopyServiceTest extends TestCase {
 	}
 
 	/**
-	 * THE ONE THE USER HIT: copy a design up a directory, to the team root. That
-	 * root is Drafts — a real project (§6.35) — and a different one, so the
-	 * duplicate has to be moved after it is made.
+	 * THE ONE THE USER HIT, and the one the first fixture got wrong.
+	 *
+	 * A copy landing at the TEAM ROOT resolves to `projectId = null` with a real
+	 * team — because there is no project FOLDER above it. That is not "outside
+	 * every mapping": those files are the team's Drafts, a real project (§6.35).
+	 *
+	 * The original version of this test handed the service `Membership(DRAFTS,
+	 * TEAM)` — a shape the resolver never produces for a team root — so it passed
+	 * against code that skipped Penpot entirely. The fixture below is the one
+	 * that reproduces reality: null project, team set, Drafts found by lookup.
 	 */
 	public function testCopyingUpToTheTeamRootDuplicatesThenMovesIntoDrafts(): void {
 		$this->givenSource(Mapping::MODE_LINK);
-		$this->givenDestination(self::DRAFTS);
+		$this->givenTeamRootDestination();
 		$this->givenDuplicateLandsIn(self::PROJECT_A);
 
 		$this->client->expects($this->once())
 			->method('moveFiles')
 			->with(self::DRAFTS, [self::NEW_ID], null);
+
+		$this->copies->onCopy($this->source(), $this->target());
+	}
+
+	/**
+	 * And it must still create the design even when Drafts happens to BE the
+	 * source's project — the duplicate is already in the right place, so only the
+	 * move is skipped, never the duplicate.
+	 */
+	public function testATeamRootCopyOfADraftsFileStillDuplicates(): void {
+		$this->givenSource(Mapping::MODE_LINK);
+		$this->givenTeamRootDestination();
+		$this->givenDuplicateLandsIn(self::DRAFTS);
+
+		$this->client->expects($this->once())->method('duplicateFile');
+		$this->client->expects($this->never())->method('moveFiles');
 
 		$this->copies->onCopy($this->source(), $this->target());
 	}
@@ -161,6 +188,8 @@ final class CopyServiceTest extends TestCase {
 	 */
 	public function testCopyingOutsideEveryMappingCreatesNothingAndKeepsTheIdAsARecord(): void {
 		$this->givenSource(Mapping::MODE_SYNC);
+		// NO project AND no team — the genuine "outside everything" shape, which
+		// is what distinguishes it from a team root (null project, team set).
 		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
 
 		$this->client->expects($this->never())->method('duplicateFile');
@@ -225,6 +254,18 @@ final class CopyServiceTest extends TestCase {
 
 	private function givenDestination(string $projectId): void {
 		$this->resolver->method('resolve')->willReturn(new Membership($projectId, self::TEAM));
+	}
+
+	/**
+	 * The team root: NO project ancestor, but a real team. `get-all-projects`
+	 * then supplies the team's default project, which is Drafts.
+	 */
+	private function givenTeamRootDestination(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => self::PROJECT_A, 'team-id' => self::TEAM, 'is-default' => false],
+			['id' => self::DRAFTS, 'team-id' => self::TEAM, 'is-default' => true],
+		]);
 	}
 
 	private function givenDuplicateLandsIn(string $projectId): void {

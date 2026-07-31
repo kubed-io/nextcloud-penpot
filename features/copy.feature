@@ -100,6 +100,44 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # Nearest-ancestor at any depth (§6.29): a plain subfolder carries no project
     # id, so the walk keeps going up and finds "My Stuff".
 
+  # ── walked by hand, and each one caught a real bug ────────────────────────
+  #
+  # These three came from a manual walkthrough rather than from design, and every
+  # one of them failed the first time. They are kept in the order they were done,
+  # because the ORDER is what exposed the bugs: each step was only reachable once
+  # the previous one worked.
+
+  Scenario: A copy is tracked the moment it exists, so the next action works
+    Given a mirrored ".penpot" file in the "My Stuff" folder
+    When I copy the file within that folder
+    Then the copy carries a "penpot_id" immediately
+    And renaming the copy straight away renames its design in Penpot
+    # THE FIRST WALKTHROUGH FAILED HERE, and blamed the wrong feature. The copy
+    # silently failed to record its id, so the rename that followed had nothing
+    # to push and did nothing — which presents as "rename is broken" (saga
+    # §C6.9). A copy that does not track is not a copy problem the user can see;
+    # it is a rename problem, a move problem, and a delete problem, later.
+
+  Scenario: Copying to the team root creates the design in Drafts
+    Given a mirrored ".penpot" file in the "My Stuff" folder
+    When I copy the file up one level, to the mapped team folder itself
+    Then a new design appears in that team's Drafts in Penpot
+    And the copy in Nextcloud carries that new design's id
+    # THE SECOND WALKTHROUGH FAILED HERE. The team root has no project FOLDER
+    # above it, so membership resolves to "no project" — which reads exactly like
+    # "outside every mapping" and is nothing of the kind (§6.35). The copy was
+    # created in Nextcloud and nothing at all happened in Penpot, silently
+    # (§C6.10).
+
+  Scenario: A copy that cannot be tracked says so rather than looking finished
+    Given a mirrored ".penpot" file
+    When I copy it and Penpot cannot be reached
+    Then the failure is logged with the file and the design it came from
+    And the copy carries no "penpot_id"
+    # The two failures above were both invisible from the Files app: a file
+    # appeared, and nothing said otherwise. Whatever else a failed copy does, it
+    # must not look like a completed one.
+
   # ── the name ──────────────────────────────────────────────────────────────
 
   Scenario: The new design is named after the copy, not the original
