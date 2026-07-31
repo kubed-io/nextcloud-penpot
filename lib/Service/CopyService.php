@@ -78,15 +78,18 @@ final class CopyService {
 	 * @param File $target the freshly created copy
 	 */
 	public function onCopy(Node $source, File $target): void {
+		// Guarded on $stamped ITSELF, not on a value derived from it: the early
+		// return has to narrow the type for everything below, or `$stamped->mode`
+		// stays nullable all the way down to the write.
 		$stamped = $this->metadata->readFile($source->getId());
-		$sourceId = $stamped?->penpotId ?? '';
-		if ($sourceId === '') {
+		if ($stamped === null || $stamped->penpotId === '') {
 			// Copying an untracked `.penpot` is copying a file. Penpot is never
 			// contacted, and the copy inherits nothing because there was nothing.
 			$this->metadata->clear($target->getId());
 
 			return;
 		}
+		$sourceId = $stamped->penpotId;
 
 		$membership = $this->resolver->resolve($target);
 		// NOT `$membership->projectId`. A copy landing at a TEAM ROOT resolves to
