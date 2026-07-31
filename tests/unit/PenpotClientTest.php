@@ -394,7 +394,7 @@ final class PenpotClientTest extends TestCase {
 	public function testTheRestoredIdsAreReadFromTheEndPayload(): void {
 		self::assertSame(
 			['61d8ecb9-c430-8120-8008-6225c5b12134'],
-			$this->idsFrom($this->transit->decode('["~#set",[["~u61d8ecb9-c430-8120-8008-6225c5b12134"]]]')),
+			$this->idsFrom($this->transit->decode('["~#set",["~u61d8ecb9-c430-8120-8008-6225c5b12134"]]')),
 		);
 	}
 
