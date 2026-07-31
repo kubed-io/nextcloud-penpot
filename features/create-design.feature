@@ -68,16 +68,16 @@ Feature: Creating a new Penpot design from Nextcloud
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
 
-  # ══ CREATED IN NEXTCLOUD ═══════════════════════════════════════════════════
-  #
-  # "+ New → Penpot design" writes an EMPTY file and stops; the server notices it
-  # and creates the design. Asserted in Penpot, because a file appearing in
-  # Nextcloud is exactly what a broken create looks like.
+    # ══ CREATED IN NEXTCLOUD ═══════════════════════════════════════════════════
+    #
+    # "+ New → Penpot design" writes an EMPTY file and stops; the server notices it
+    # and creates the design. Asserted in Penpot, because a file appearing in
+    # Nextcloud is exactly what a broken create looks like.
 
   @in-nextcloud @gesture
   Scenario: A new design file in a project folder becomes a design in that project
     Given a Penpot project named "Make Here" exists in that team
-    And the admin runs a pull
+    And the team has been mirrored into Nextcloud
     When I create a new design file at "Penpot/Make Here/Fresh Idea.penpot"
     Then the file "Penpot/Make Here/Fresh Idea.penpot" carries a Penpot id
     And Penpot project "Make Here" holds a design named "Fresh Idea"
@@ -86,25 +86,25 @@ Feature: Creating a new Penpot design from Nextcloud
   @in-nextcloud @gesture
   Scenario: A new design file at the team root is created in Drafts
     Given a Penpot project named "Anchor" exists in that team
-    And the admin runs a pull
+    And the team has been mirrored into Nextcloud
     When I create a new design file at "Penpot/Loose Idea.penpot"
     Then the file "Penpot/Loose Idea.penpot" carries a Penpot id
     And Penpot project "Anchor" holds no design named "Loose Idea"
     # Drafts is a state, not a folder (§6.35) — the file stays where it was made.
 
-  # THE GUARD NEITHER SIBLING NEEDS. An uploaded .penpot already holds a whole
-  # design; creating an empty one for it would set the file and Penpot against
-  # each other, and the next sync pull would overwrite the real archive with the
-  # empty export.
+    # THE GUARD NEITHER SIBLING NEEDS. An uploaded .penpot already holds a whole
+    # design; creating an empty one for it would set the file and Penpot against
+    # each other, and the next sync pull would overwrite the real archive with the
+    # empty export.
   @in-nextcloud @gesture
   Scenario: Uploading a ".penpot" archive does not create an empty design
     Given a Penpot project named "No Invent" exists in that team
-    And the admin runs a pull
+    And the team has been mirrored into Nextcloud
     When I upload a ".penpot" archive at "Penpot/No Invent/Dragged In.penpot"
     Then the file "Penpot/No Invent/Dragged In.penpot" carries no Penpot id
     And Penpot project "No Invent" holds no design named "Dragged In"
 
-  # ── where the action appears ─────────────────────────────────────────────────
+    # ── where the action appears ─────────────────────────────────────────────────
 
   @todo
   Scenario: Creating inside a project folder creates the design in that project
@@ -157,7 +157,7 @@ Feature: Creating a new Penpot design from Nextcloud
     And the creation uses the user's personal token
     # The service account cannot see a personal team at all (personal-projects.feature).
 
-  # ── attribution ──────────────────────────────────────────────────────────────
+    # ── attribution ──────────────────────────────────────────────────────────────
 
   @todo
   Scenario: A created design is attributed to the acting user when possible
@@ -176,7 +176,7 @@ Feature: Creating a new Penpot design from Nextcloud
     And the app tells the user the design will be authored by the service account
     And it suggests configuring a personal token for correct authorship
 
-  # ── failure behaviour ────────────────────────────────────────────────────────
+    # ── failure behaviour ────────────────────────────────────────────────────────
 
   @todo
   Scenario: A failed creation leaves no orphaned local file
@@ -195,7 +195,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # The local file is stamped with the real penpot_id at creation, so the pull
     # adopts it rather than treating it as a new remote file.
 
-  # ── mode ─────────────────────────────────────────────────────────────────────
+    # ── mode ─────────────────────────────────────────────────────────────────────
 
   @todo
   Scenario: A newly created design follows its mapping's default mode

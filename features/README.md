@@ -79,6 +79,45 @@ every gesture scenario lived away from the behaviour it demonstrated; as a tag,
 `behat --tags @gesture` gives the same collection back without splitting any
 feature. Nothing is lost and the scenarios sit next to their own kind.
 
+### Storage backend — a dimension to RUN, not to write twice
+
+| Tag | Meaning |
+|---|---|
+| `@team-folder` | Exercised against a groupfolders-backed mapping. |
+| `@plain-folder` | Exercised against a plain shared folder. |
+
+Every behaviour is valid on both backends, so duplicating scenarios per backend
+would produce two identical blocks and prove nothing. The backend is a
+**dimension the suite is run across**, which is what a tag is for.
+
+That is not theoretical: the structural scenarios in `reconcile.feature` mapped
+a Team Folder and passed only because of where they sat in the run. Moved, the
+folder resolved to nothing — Team Folder provisioning had never actually been
+covered. More scenarios would not have caught that; running the existing ones
+against both backends would.
+
+Where a backend genuinely changes an OUTCOME it earns its own scenario. There is
+one confirmed case (§C6.16): on a shared mapping a pruned mirror goes to the
+**owner's** trash, not the acting user's.
+
+### `sync` vs `link` — a restriction in one direction, not an axis
+
+The tempting move is to write every behaviour twice, once per mode. Don't: the
+modes only diverge in one direction.
+
+* **`@in-penpot` scenarios are mode-agnostic.** A design renamed, moved or
+  deleted in Penpot reaches Nextcloud the same way whichever mode the mirror is
+  in — a `link` simply has no bytes to update. These scenarios should not
+  mention mode at all, and writing them twice duplicates a rule that never
+  forks.
+* **`@in-nextcloud` scenarios branch.** A `link` is a read-only projection, so
+  it is confined to its project: moves out are refused, and there is nothing to
+  copy. That is a business rule, and it is stated as one.
+
+The test: can you write the restriction as a sentence beginning *"A link…"*? If
+yes it is a rule worth its own section. If mode makes no difference to the
+outcome, leave it out.
+
 ### Status
 
 | Tag | Meaning |

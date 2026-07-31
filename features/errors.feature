@@ -35,7 +35,7 @@ Feature: Failures never cost the user data
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
-  # ── the transport lies: parse the stream, not the status ─────────────────────
+    # ── the transport lies: parse the stream, not the status ─────────────────────
 
   @todo
   Scenario: An error inside a 200 response is treated as a failure
@@ -69,7 +69,7 @@ Feature: Failures never cost the user data
     # penpot#7649 — an opaque 500. Normalize on our side regardless of whether
     # upstream ships the cleaner validation error first.
 
-  # ── downloads ────────────────────────────────────────────────────────────────
+    # ── downloads ────────────────────────────────────────────────────────────────
 
   @todo
   Scenario: A failed asset download never truncates the existing mirror
@@ -101,7 +101,7 @@ Feature: Failures never cost the user data
     # The inner GCS URL carries a ~24h signature (X-Amz-Expires=87300). The asset
     # id is the durable handle; the signed URL is regenerated per request.
 
-  # ── partial writes ───────────────────────────────────────────────────────────
+    # ── partial writes ───────────────────────────────────────────────────────────
 
   @todo
   Scenario: A pull interrupted halfway leaves every written file valid
@@ -118,7 +118,7 @@ Feature: Failures never cost the user data
     Then the first and third files are still reconciled
     And the failure is reported for the second file only
 
-  # ── pruning: never on incomplete information ─────────────────────────────────
+    # ── pruning: never on incomplete information ─────────────────────────────────
 
   @todo
   Scenario: A failed project listing prunes nothing
@@ -160,7 +160,7 @@ Feature: Failures never cost the user data
     Then the mirrored file is moved to the Nextcloud trash
     And it is recoverable from the trash
 
-  # ── a real upstream bug the pull must not trust (saga §6.42) ────────────────
+    # ── a real upstream bug the pull must not trust (saga §6.42) ────────────────
 
   @todo
   Scenario: The pull does not trust "get-projects" alone about which projects exist
@@ -188,7 +188,7 @@ Feature: Failures never cost the user data
     # best-effort-restorable one. Whether this runs automatically or is offered
     # is undecided — saga open question #38.
 
-  # ── write failures ───────────────────────────────────────────────────────────
+    # ── write failures ───────────────────────────────────────────────────────────
 
   @todo
   Scenario: A failed rename leaves the local rename standing
@@ -211,7 +211,7 @@ Feature: Failures never cost the user data
     # Rolling back would delete a design we just successfully restored — exactly
     # the data loss this whole file exists to prevent.
 
-  # ── credential failures ──────────────────────────────────────────────────────
+    # ── credential failures ──────────────────────────────────────────────────────
 
   @todo
   Scenario: A missing service token blocks mapping with a clear reason

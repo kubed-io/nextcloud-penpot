@@ -54,8 +54,8 @@ Feature: Admin configures team mappings
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
 
-  # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
-  # These drive the same MappingService the settings panel calls, over occ.
+    # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
+    # These drive the same MappingService the settings panel calls, over occ.
 
   Scenario: A team the service account can see can be mapped
     Given no Penpot teams are mapped
@@ -70,20 +70,20 @@ Feature: Admin configures team mappings
     Then the mapping's default mode is "link"
     And the mapping's folder mode is "nested"
 
-  # ── naming: the FOLDER is the admin's, the PROJECTS are Penpot's ────────────
-  # The one place the two levels deliberately differ, and the same shape both
-  # sibling apps use: a mapping names its DESTINATION, and the source object's
-  # name is merely the default.
-  #
-  #   nextcloud-n8n:     tag        → Team Folder (named by the admin)
-  #   nextcloud-grafana: folder     → nc_folder, blank ⇒ the Grafana folder title
-  #   here:              Penpot team → nc_folder, blank ⇒ the Penpot team name
-  #
-  # Project folders INSIDE the mapped folder are the exception: they always match
-  # their Penpot project's name exactly, in both directions (saga §6.36). A team
-  # folder is a mount point the admin chose to create, so naming it is theirs; a
-  # project folder is a mirror of a Penpot object, and letting its name drift
-  # would break the identity the pull uses to match folders to projects.
+    # ── naming: the FOLDER is the admin's, the PROJECTS are Penpot's ────────────
+    # The one place the two levels deliberately differ, and the same shape both
+    # sibling apps use: a mapping names its DESTINATION, and the source object's
+    # name is merely the default.
+    #
+    #   nextcloud-n8n:     tag        → Team Folder (named by the admin)
+    #   nextcloud-grafana: folder     → nc_folder, blank ⇒ the Grafana folder title
+    #   here:              Penpot team → nc_folder, blank ⇒ the Penpot team name
+    #
+    # Project folders INSIDE the mapped folder are the exception: they always match
+    # their Penpot project's name exactly, in both directions (saga §6.36). A team
+    # folder is a mount point the admin chose to create, so naming it is theirs; a
+    # project folder is a mirror of a Penpot object, and letting its name drift
+    # would break the identity the pull uses to match folders to projects.
 
   Scenario: A mapped folder defaults to the Penpot team's name
     Given no Penpot teams are mapped
@@ -126,27 +126,27 @@ Feature: Admin configures team mappings
     # project names, so an inner "/" would invent an intermediate folder that no
     # Penpot object corresponds to — and that nothing would ever clean up.
 
-  # ── sharing: groups + Team Folder, exactly as the siblings do it ────────────
-  # Same two controls, same meanings, same defaults as nextcloud-n8n and
-  # nextcloud-grafana, so an admin configuring all three does the same thing each
-  # time. They PERSIST today and are honoured when the pull provisions the folder
-  # (Course 3) — the same "saved now, applied later" state Grafana ships them in.
+    # ── sharing: groups + Team Folder, exactly as the siblings do it ────────────
+    # Same two controls, same meanings, same defaults as nextcloud-n8n and
+    # nextcloud-grafana, so an admin configuring all three does the same thing each
+    # time. They PERSIST today and are honoured when the pull provisions the folder
+    # (Course 3) — the same "saved now, applied later" state Grafana ships them in.
 
   Scenario: A mapping records the Nextcloud groups its folder is shared with
     Given no Penpot teams are mapped
     When the admin maps the first visible team shared with the group "admin"
     Then the mapping's groups are "admin"
 
-  # ── syncing ONE mapping, from its own card ────────────────────────────────
-  #
-  # The granular twin of the section-wide "Sync from Penpot" button, and
-  # deliberately the opposite shape: SYNCHRONOUS and scoped to one mapping.
-  #
-  # The admin is looking at that card and waiting for an answer about that team.
-  # One team is a bounded amount of work — usually a handful of files, and no
-  # exports at all for a `link` mapping (§5.5) — so queuing it would replace a
-  # short wait with a spinner and a poll. The bulk button is async precisely
-  # because it is NOT bounded: it walks every mapping and can export archives.
+    # ── syncing ONE mapping, from its own card ────────────────────────────────
+    #
+    # The granular twin of the section-wide "Sync from Penpot" button, and
+    # deliberately the opposite shape: SYNCHRONOUS and scoped to one mapping.
+    #
+    # The admin is looking at that card and waiting for an answer about that team.
+    # One team is a bounded amount of work — usually a handful of files, and no
+    # exports at all for a `link` mapping (§5.5) — so queuing it would replace a
+    # short wait with a spinner and a poll. The bulk button is async precisely
+    # because it is NOT bounded: it walks every mapping and can export archives.
 
   @todo
   Scenario: A mapping card can sync just its own team
@@ -179,28 +179,28 @@ Feature: Admin configures team mappings
     # One record for every trigger, or "when did this last sync?" has three
     # different answers depending on which button was pressed.
 
-  # ── what a mapped folder LETS YOU DO (saga §C6.8) ─────────────────────────
-  #
-  # A mapped folder is an ORDINARY Nextcloud folder that happens to be mirrored.
-  # Its groups get read, write, create and delete — the same surface any other
-  # folder grants, and the same surface both siblings grant.
-  #
-  # AN EARLIER BUILD WITHHELD CREATE AND DELETE to express "the mirror is
-  # read-only" (§6.1). That was the wrong tool, and the damage was invisible from
-  # the code: Nextcloud hides the "+ New" button entirely on a folder with no
-  # CREATE, so mapped folders silently behaved unlike every other folder in the
-  # instance — no new file, no new subfolder, no paste. It also made three BUILT
-  # features unreachable:
-  #
-  #   - free nesting (§6.29), the app's most load-bearing rule, whose entire
-  #     point is that a user may group mirrors into plain subfolders of their own;
-  #   - the move write-back, since a cross-folder move needs DELETE on the source;
-  #   - "a mapped folder stays usable as an ordinary folder", which the prune
-  #     relies on when it leaves unstamped files alone.
-  #
-  # §6.1 still holds absolutely — it is enforced by there being no content push,
-  # not by a permission bit. Withholding CREATE stopped no write to Penpot; it
-  # only stopped the user from using their own files.
+    # ── what a mapped folder LETS YOU DO (saga §C6.8) ─────────────────────────
+    #
+    # A mapped folder is an ORDINARY Nextcloud folder that happens to be mirrored.
+    # Its groups get read, write, create and delete — the same surface any other
+    # folder grants, and the same surface both siblings grant.
+    #
+    # AN EARLIER BUILD WITHHELD CREATE AND DELETE to express "the mirror is
+    # read-only" (§6.1). That was the wrong tool, and the damage was invisible from
+    # the code: Nextcloud hides the "+ New" button entirely on a folder with no
+    # CREATE, so mapped folders silently behaved unlike every other folder in the
+    # instance — no new file, no new subfolder, no paste. It also made three BUILT
+    # features unreachable:
+    #
+    #   - free nesting (§6.29), the app's most load-bearing rule, whose entire
+    #     point is that a user may group mirrors into plain subfolders of their own;
+    #   - the move write-back, since a cross-folder move needs DELETE on the source;
+    #   - "a mapped folder stays usable as an ordinary folder", which the prune
+    #     relies on when it leaves unstamped files alone.
+    #
+    # §6.1 still holds absolutely — it is enforced by there being no content push,
+    # not by a permission bit. Withholding CREATE stopped no write to Penpot; it
+    # only stopped the user from using their own files.
 
   @todo
   Scenario: A mapped folder behaves like any other Nextcloud folder
@@ -296,7 +296,7 @@ Feature: Admin configures team mappings
     # (remove-mapping.feature) — until then the safe behaviour is to leave them
     # and say so.
 
-  # ── the core mapping action ──────────────────────────────────────────────────
+    # ── the core mapping action ──────────────────────────────────────────────────
 
   @todo
   Scenario: Mapping a Penpot team provisions a Team Folder and mirrors its projects
@@ -312,7 +312,7 @@ Feature: Admin configures team mappings
     # Where the pull PUTS them initially. Users may then move them anywhere
     # within the Team Folder (saga §6.29) — but not out of it (saga §6.30).
 
-  # The precondition that makes the single-puller model work (saga §6.18).
+    # The precondition that makes the single-puller model work (saga §6.18).
   @todo
   Scenario: A team the service account cannot see cannot be mapped
     Given the Penpot team "Private Team" is visible to a user's personal token
@@ -330,10 +330,10 @@ Feature: Admin configures team mappings
     And no per-project mapping can be added, configured, or removed
     And project subfolders exist only because the pull created them
 
-  # ── permissions and fallback ─────────────────────────────────────────────────
+    # ── permissions and fallback ─────────────────────────────────────────────────
 
-  # Team Folders are admin-configured by default (groupfolders' own documentation
-  # and this cluster's live config, checked directly — no delegation configured).
+    # Team Folders are admin-configured by default (groupfolders' own documentation
+    # and this cluster's live config, checked directly — no delegation configured).
   @todo
   Scenario: Mapping a team into a Team Folder requires Team Folder creation rights
     Given the acting Nextcloud user does not hold Team Folder admin or delegated rights
@@ -341,8 +341,8 @@ Feature: Admin configures team mappings
     Then the action is refused or requires an admin-side step
     And the refusal explains that Team Folder creation is admin-configured by default
 
-  # The fallback tier — same "optional dependency" precedent both sibling apps'
-  # TeamFolderService.php already establish, mirrored here for the team level.
+    # The fallback tier — same "optional dependency" precedent both sibling apps'
+    # TeamFolderService.php already establish, mirrored here for the team level.
   @todo
   Scenario: Mapping a team without groupfolders installed falls back to a plain shared folder
     Given the "groupfolders" app is not installed
@@ -354,7 +354,7 @@ Feature: Admin configures team mappings
     # real production Team Folder) — the fallback is a sharing difference, not a
     # mapping-mechanism difference.
 
-  # ── naming, mode, and duplicate prevention ───────────────────────────────────
+    # ── naming, mode, and duplicate prevention ───────────────────────────────────
 
   @todo
   Scenario: A mapped folder defaults to the team's name but may be renamed
@@ -414,19 +414,19 @@ Feature: Admin configures team mappings
     Then the mapping's default mode is "sync"
     # Per-file promotion/demotion is sync-mode.feature's concern, not this one.
 
-  # ── folder mode: how this team's projects map to folders (saga §6.53) ───────
-  # A per-mapping, IMMUTABLE choice between two mutually-exclusive models:
-  #
-  #   nested (default) — Penpot projects are flat names; Nextcloud nests freely
-  #                      under the team folder (§6.29). A "/" in a project name
-  #                      is INVALID, because it would mean nothing.
-  #   keyed            — a project's name IS its path relative to the team folder
-  #                      ("foo/bar" → Team/foo/bar/). Moving a project folder is
-  #                      renaming it. Free nesting does not apply, because
-  #                      position IS the name.
-  #
-  # The two cannot coexist: either "/" carries structure or it doesn't. Making
-  # the choice explicit per team is what removes the awkward middle case.
+    # ── folder mode: how this team's projects map to folders (saga §6.53) ───────
+    # A per-mapping, IMMUTABLE choice between two mutually-exclusive models:
+    #
+    #   nested (default) — Penpot projects are flat names; Nextcloud nests freely
+    #                      under the team folder (§6.29). A "/" in a project name
+    #                      is INVALID, because it would mean nothing.
+    #   keyed            — a project's name IS its path relative to the team folder
+    #                      ("foo/bar" → Team/foo/bar/). Moving a project folder is
+    #                      renaming it. Free nesting does not apply, because
+    #                      position IS the name.
+    #
+    # The two cannot coexist: either "/" carries structure or it doesn't. Making
+    # the choice explicit per team is what removes the awkward middle case.
 
   @todo
   Scenario: A mapping records its folder mode, defaulting to nested
@@ -440,13 +440,13 @@ Feature: Admin configures team mappings
     Then the change is rejected as immutable
     And the rejection explains the mapping must be removed and re-added
 
-  # ── what else is immutable, and why ─────────────────────────────────────────
-  # The same principle nextcloud-grafana settles on: a field is immutable when
-  # changing it would force a LIVE MIGRATION of already-mirrored content. Delete
-  # and re-add makes that cost visible instead of hiding it behind a dropdown.
-  # Grafana locks its Grafana folder, its Nextcloud folder, its Team Folder flag
-  # and its subfolder-sync flag for exactly this reason; the corresponding fields
-  # are locked here.
+    # ── what else is immutable, and why ─────────────────────────────────────────
+    # The same principle nextcloud-grafana settles on: a field is immutable when
+    # changing it would force a LIVE MIGRATION of already-mirrored content. Delete
+    # and re-add makes that cost visible instead of hiding it behind a dropdown.
+    # Grafana locks its Grafana folder, its Nextcloud folder, its Team Folder flag
+    # and its subfolder-sync flag for exactly this reason; the corresponding fields
+    # are locked here.
 
   @todo
   Scenario: The Nextcloud folder cannot be changed after the mapping is created

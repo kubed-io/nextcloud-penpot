@@ -107,9 +107,9 @@ Feature: A mirrored Penpot file is a first-class file type
     Then its mimetype is a custom Penpot mimetype, not generic "application/zip"
     And the Files app shows the Penpot icon instead of a generic archive icon
 
-  # TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
-  # glyph are the same drawing with opposite colour treatments, and collapsing
-  # them fails in both directions — this is not a style preference.
+    # TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
+    # glyph are the same drawing with opposite colour treatments, and collapsing
+    # them fails in both directions — this is not a style preference.
   @todo
   Scenario: The row icon and the menu glyph are separate files
     Given a mirrored ".penpot" file

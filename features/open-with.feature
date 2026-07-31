@@ -119,8 +119,8 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     Then "Open in Penpot" is hidden from its context menu
     And the file falls back to Nextcloud's default handling for its mimetype
 
-  # Both modes deep-link identically — the mode governs whether bytes are stored
-  # locally (saga §6.22), never whether the design can be opened.
+    # Both modes deep-link identically — the mode governs whether bytes are stored
+    # locally (saga §6.22), never whether the design can be opened.
   @todo
   Scenario: Open in Penpot works the same in link and sync mode
     Given a mirrored ".penpot" file in "link" mode

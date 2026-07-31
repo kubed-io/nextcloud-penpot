@@ -53,7 +53,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a subfolder
 
-  # ── defaults ─────────────────────────────────────────────────────────────────
+    # ── defaults ─────────────────────────────────────────────────────────────────
 
   @todo
   Scenario: Files inherit their mapping's default mode
@@ -67,7 +67,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # Changing a default never retroactively rewrites existing files — that would
     # silently trigger a bulk download, or silently delete a pile of archives.
 
-  # ── what each mode actually is ───────────────────────────────────────────────
+    # ── what each mode actually is ───────────────────────────────────────────────
 
   @todo
   Scenario: A link file is a pointer with no stored content
@@ -77,8 +77,8 @@ Feature: Choosing whether a mirrored file stores its archive
     And "Open in Penpot" opens the live design
     And no export was ever performed for it
 
-  # A pointer can't survive the gestures a real archive can, so links are
-  # confined (saga §6.43). Every refusal offers the same escape: promote first.
+    # A pointer can't survive the gestures a real archive can, so links are
+    # confined (saga §6.43). Every refusal offers the same escape: promote first.
   @todo
   Scenario: A link file is confined to its own project
     Given a mirrored ".penpot" file in "link" mode in a project folder
@@ -107,7 +107,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And "Open in Penpot" still opens the live design
     # A sync file is a backup AND a link — never one at the expense of the other.
 
-  # ── promotion: safe, additive ────────────────────────────────────────────────
+    # ── promotion: safe, additive ────────────────────────────────────────────────
 
   @todo
   Scenario: Promoting a link file to sync fetches the archive
@@ -127,7 +127,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And it is re-exported whenever its Penpot revision moves
     # Mode is stored per-file in metadata, not re-derived from the mapping.
 
-  # ── demotion: the one lossy operation here ───────────────────────────────────
+    # ── demotion: the one lossy operation here ───────────────────────────────────
 
   @todo
   Scenario: Demoting a sync file to link warns before deleting the archive
@@ -156,7 +156,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # Ignore exists precisely to preserve an archive (ignore.feature). Demoting an
     # ignored file would delete the thing the ignore tag was protecting.
 
-  # ── cost ─────────────────────────────────────────────────────────────────────
+    # ── cost ─────────────────────────────────────────────────────────────────────
 
   @todo
   Scenario: A team of link files costs no exports at all
@@ -168,7 +168,7 @@ Feature: Choosing whether a mirrored file stores its archive
     # The listing carries name, projectId, revn and modifiedAt for every file in
     # one response (saga §5.5) — which is what makes link mode nearly free.
 
-  # ── what a "link" actually holds (saga §C6.6) ─────────────────────────────
+    # ── what a "link" actually holds (saga §C6.6) ─────────────────────────────
 
   @todo
   Scenario: A link file holds nothing at all

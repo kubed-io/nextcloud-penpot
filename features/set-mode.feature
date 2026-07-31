@@ -40,7 +40,7 @@
 # here pass `--force` and assert the CONSEQUENCE instead — the archive is gone,
 # the file is empty again, and Penpot was never contacted.
 
-@sync-mode
+  @sync-mode
 Feature: Storing and discarding a mirrored design's archive
   As an operator who has mapped a Penpot team
   I want `occ penpot_sync:set-mode` to decide which designs are really backed up
@@ -62,7 +62,7 @@ Feature: Storing and discarding a mirrored design's archive
     Given a Penpot project named "Archive Me" exists in that team
     And a Penpot file named "Cover" exists in the project "Archive Me"
     When the admin runs a pull
-    And the admin promotes "Penpot/Archive Me/Cover.penpot" to "sync" mode
+    And "Penpot/Archive Me/Cover.penpot" is a "sync" design
     Then the mode change succeeds
     And the file "Penpot/Archive Me/Cover.penpot" is in "sync" mode
     And the file "Penpot/Archive Me/Cover.penpot" holds a real ".penpot" archive
@@ -74,8 +74,8 @@ Feature: Storing and discarding a mirrored design's archive
     Given a Penpot project named "Stable" exists in that team
     And a Penpot file named "Logo" exists in the project "Stable"
     When the admin runs a pull
-    And the admin promotes "Penpot/Stable/Logo.penpot" to "sync" mode
-    And the admin runs a pull
+    And "Penpot/Stable/Logo.penpot" is a "sync" design
+    And the team has been mirrored into Nextcloud
     Then the pull succeeds
     And the pull exported 0 archives
     And the file "Penpot/Stable/Logo.penpot" holds a real ".penpot" archive
@@ -86,8 +86,8 @@ Feature: Storing and discarding a mirrored design's archive
     Given a Penpot project named "Demote Me" exists in that team
     And a Penpot file named "Sketch" exists in the project "Demote Me"
     When the admin runs a pull
-    And the admin promotes "Penpot/Demote Me/Sketch.penpot" to "sync" mode
-    And the admin demotes "Penpot/Demote Me/Sketch.penpot" to "link" mode
+    And "Penpot/Demote Me/Sketch.penpot" is a "sync" design
+    And "Penpot/Demote Me/Sketch.penpot" is a "link" design
     Then the mode change succeeds
     And the file "Penpot/Demote Me/Sketch.penpot" is in "link" mode
     And the file "Penpot/Demote Me/Sketch.penpot" holds no content at all

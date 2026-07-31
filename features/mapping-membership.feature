@@ -55,7 +55,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
-  # ── the core lookup ──────────────────────────────────────────────────────────
+    # ── the core lookup ──────────────────────────────────────────────────────────
 
   @todo
   Scenario: A file's project is the nearest ancestor folder carrying a project id
@@ -97,10 +97,10 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     Then the file belongs to no mapping
     And it is "untracked" if it has no "penpot_id", or "unmapped" if it carries one
 
-  # ── the Drafts state: a team ancestor but no project ancestor ───────────────
-  # Drafts is NEVER a folder (saga §6.35). It's the name Penpot gives to "belongs
-  # to a team, sits in no project" — which is exactly what the nearest-ancestor
-  # rule produces when it finds a team id but no project id on the way up.
+    # ── the Drafts state: a team ancestor but no project ancestor ───────────────
+    # Drafts is NEVER a folder (saga §6.35). It's the name Penpot gives to "belongs
+    # to a team, sits in no project" — which is exactly what the nearest-ancestor
+    # rule produces when it finds a team id but no project id on the way up.
 
   @todo
   Scenario: A file at a Team Folder's root is in that team's Drafts
@@ -131,7 +131,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # Mirroring Drafts as a folder would make a design appear to be in two
     # places at once — at the team root AND inside a Drafts folder.
 
-  # ── the visible marker ───────────────────────────────────────────────────────
+    # ── the visible marker ───────────────────────────────────────────────────────
 
   @todo
   Scenario: A project folder carries a visible tag as well as its metadata
@@ -140,8 +140,8 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And the folder carries the app's project tag, visible in the Files app
     And a user can search or filter for that tag to find every project folder
 
-  # The tag only earns its keep if a tagged folder means exactly one thing —
-  # hence the naming invariant below (saga §6.36).
+    # The tag only earns its keep if a tagged folder means exactly one thing —
+    # hence the naming invariant below (saga §6.36).
   @todo
   Scenario: A tagged folder's name always equals its Penpot project's name
     Given the Penpot project "My Stuff" is mirrored as a folder
@@ -169,7 +169,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # The tag is app-owned output, not user input. Whether a tagged folder could
     # ever BECOME a project is the still-open creation fork (team-import.feature).
 
-  # ── team resolution, and the one exception ───────────────────────────────────
+    # ── team resolution, and the one exception ───────────────────────────────────
 
   @todo
   Scenario: A project folder's team is the nearest ancestor carrying a team id
@@ -189,7 +189,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # this rule the natural implementation would treat every personal project as
     # an error. See personal-projects.feature.
 
-  # ── tolerated content ────────────────────────────────────────────────────────
+    # ── tolerated content ────────────────────────────────────────────────────────
 
   @todo
   Scenario: Non-Penpot content inside a project folder is left alone
@@ -200,7 +200,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And only files the app recognizes by their metadata are managed
     # Pruning keys on metadata, never on file extension or folder contents.
 
-  # ── the ambiguity free nesting introduces ────────────────────────────────────
+    # ── the ambiguity free nesting introduces ────────────────────────────────────
 
   @todo
   Scenario: Two folders carrying the same project id is a reported conflict

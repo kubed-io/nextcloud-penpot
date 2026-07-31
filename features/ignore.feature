@@ -36,7 +36,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
-  # ── the core behaviour ───────────────────────────────────────────────────────
+    # ── the core behaviour ───────────────────────────────────────────────────────
 
   @todo
   Scenario: Ignoring a sync file keeps the archive and stops the mirroring
@@ -68,7 +68,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     # This is the strongest form of the promise: ignore protects a file from the
     # one operation that would otherwise remove it (reconcile.feature's prune).
 
-  # ── the mode restriction, and why it exists ──────────────────────────────────
+    # ── the mode restriction, and why it exists ──────────────────────────────────
 
   @todo
   Scenario: Ignoring a link file is refused, with an offer to make it real first
@@ -91,7 +91,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     Then the ignore tag is accepted
     And the file keeps its archive and stops being mirrored
 
-  # ── reversing it ─────────────────────────────────────────────────────────────
+    # ── reversing it ─────────────────────────────────────────────────────────────
 
   @todo
   Scenario: Removing the ignore tag resumes mirroring
@@ -113,7 +113,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     # Restore is never automatic and never silent, because a deleted Penpot file
     # cannot come back at its original id (saga §6.20) — see restore.feature.
 
-  # ── the invariant ────────────────────────────────────────────────────────────
+    # ── the invariant ────────────────────────────────────────────────────────────
 
   @todo
   Scenario: Ignoring never deletes anything in Penpot

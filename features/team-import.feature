@@ -66,20 +66,20 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
   As a Nextcloud user with a configured Penpot token
   I want to see which of my Penpot teams are already mapped and import the ones that aren't
   So that connecting a new team doesn't require the admin to hand-configure every mapping
-  # NOTE: only the IMPORT-AN-EXISTING-TEAM half of this feature is proposed as
-  # buildable-once-ratified; the tag-triggers-project-CREATION half is
-  # additionally gated on the still-open §6.1 read-only-scope question above.
+    # NOTE: only the IMPORT-AN-EXISTING-TEAM half of this feature is proposed as
+    # buildable-once-ratified; the tag-triggers-project-CREATION half is
+    # additionally gated on the still-open §6.1 read-only-scope question above.
 
   Background:
     Given the app is connected to Penpot
     And the user has a personal Penpot token configured
 
-  # ── the "already imported, shows up automatically" half — confirmed workable ──
-  # Confirmed against the groupfolders README + live behaviour (saga §6.15): a
-  # Team Folder "shows up in the home folder for each user in the configured
-  # groups" automatically once granted — there's no separate pending state to
-  # build. So detecting "is this already imported" is a read-only match, not a
-  # grant action.
+    # ── the "already imported, shows up automatically" half — confirmed workable ──
+    # Confirmed against the groupfolders README + live behaviour (saga §6.15): a
+    # Team Folder "shows up in the home folder for each user in the configured
+    # groups" automatically once granted — there's no separate pending state to
+    # build. So detecting "is this already imported" is a read-only match, not a
+    # grant action.
   @todo
   Scenario: A Penpot team already mapped to a Team Folder is detected, not re-imported
     Given the Penpot team "Northwind" is already mapped to a Team Folder
@@ -88,7 +88,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     Then "Northwind" is shown as already imported
     And no new folder or mapping is created
 
-  # ── importing a NOT-yet-mapped team — the permission gate is the open point ──
+    # ── importing a NOT-yet-mapped team — the permission gate is the open point ──
   @todo
   Scenario: Importing an unmapped team as a Team Folder requires Team Folder rights
     Given the Penpot team "New Team" is visible to the user's token but not yet mapped
@@ -101,10 +101,10 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # that the checkbox is NOT allowed to silently no-op or silently succeed
     # for a user who lacks the underlying permission.
 
-  # ── the OTHER gate, new since saga §6.18: service-account visibility ────────
-  # A user seeing a team through their personal token is NOT sufficient. The
-  # service account does all mirroring, so it must be able to see the team too,
-  # or the resulting mapping would pull nothing forever.
+    # ── the OTHER gate, new since saga §6.18: service-account visibility ────────
+    # A user seeing a team through their personal token is NOT sufficient. The
+    # service account does all mirroring, so it must be able to see the team too,
+    # or the resulting mapping would pull nothing forever.
   @todo
   Scenario: A team the service account cannot see is shown as not importable
     Given the Penpot team "Solo Team" is visible to the user's personal token
@@ -117,7 +117,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # visibility. Failing to say WHICH one blocked the import turns a fixable
     # setup step into a mystery.
 
-  # ── the speculative, explicitly-not-decided creation-via-tag mechanism ──────
+    # ── the speculative, explicitly-not-decided creation-via-tag mechanism ──────
   @todo
   Scenario: A tagged plain folder inside a mapped Team Folder is proposed to become a new Penpot project
     Given a Team Folder mapped to the Penpot team "Northwind"
