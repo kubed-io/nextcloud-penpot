@@ -109,12 +109,17 @@ final class RestoreServiceTest extends TestCase {
 		$this->givenStamped();
 		$this->givenResolvesToProject();
 		$this->givenInPenpotTrash();
-		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
-		// …but not yet in the project, then there after the second call.
+		// Not in the project yet, and there after the second call — the window
+		// §6.49 describes, reproduced in miniature.
 		$this->client->method('getProjectFiles')->willReturnOnConsecutiveCalls([], [['id' => self::PENPOT_ID]]);
 
-		// §6.49's remedy, and the whole reason this test exists.
-		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles');
+		// ONE configuration, expectation and return together: stubbing the same
+		// method twice leaves which rule supplies the value up to PHPUnit's
+		// matcher order, and a second rule with no `willReturn` hands back the
+		// return type's default — an empty array here, which this service reads as
+		// "restored nothing" and would make the test pass for the wrong reason.
+		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles')
+			->willReturn([self::PENPOT_ID]);
 
 		$this->restores->onRestored($this->file());
 	}
