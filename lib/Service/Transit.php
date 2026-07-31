@@ -124,7 +124,6 @@ final class Transit {
 
 	private const CACHE_MAX = self::CACHE_RADIX * self::CACHE_RADIX;
 
-
 	/**
 	 * Decode a Transit-JSON document into plain PHP arrays and scalars.
 	 *
