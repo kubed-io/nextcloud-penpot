@@ -54,6 +54,31 @@ Feature: Renaming a mirrored Penpot file
 
     # ══ RENAMED IN NEXTCLOUD ═══════════════════════════════════════════════════
 
+  # A PROJECT FOLDER IS ITS OWN FLOW, not a variant of the file rename (§6.36 /
+  # §6.39): a different event, a different id, a different RPC, and a 204 with no
+  # body instead of a record. It had no live coverage at all, which meant the two
+  # rename paths were one green test and one assumption.
+  #
+  # The assertion works because `penpot_sync:probe` lists PENPOT's own project
+  # names — so finding a design under the new name proves Penpot renamed the
+  # project, not merely that Nextcloud renamed a folder.
+  @in-nextcloud @gesture
+  Scenario: Renaming a project folder renames the project in Penpot
+    Given a mirrored design "Inside" in the project "Old Project Name"
+    When I rename "Penpot/Old Project Name" to "New Project Name"
+    Then Penpot project "New Project Name" holds a design named "Inside"
+    And the folder "Penpot/New Project Name" carries a Penpot project id
+
+  @in-nextcloud @gesture
+  Scenario: Renaming a project folder does not touch the designs inside it
+    Given a mirrored design "Untouched Design" in the project "Renamed Around It"
+    When I rename "Penpot/Renamed Around It" to "Renamed Around It v2"
+    Then Penpot project "Renamed Around It v2" holds a design named "Untouched Design"
+    And the file "Penpot/Renamed Around It v2/Untouched Design.penpot" carries a Penpot id
+    # `rename-project` takes the PROJECT id; nothing about the files changes, and
+    # a regression that sent file ids here would rename a design instead — which
+    # this catches, because the design would no longer be found by its own name.
+
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot
     Given a mirrored design "Old Name" in the project "Rename Live"
