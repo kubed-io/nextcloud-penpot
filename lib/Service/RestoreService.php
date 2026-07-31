@@ -91,14 +91,18 @@ final class RestoreService {
 	 * class docblock — the local restore has already happened.
 	 */
 	public function onRestored(File $node): void {
+		// Both conditions in one guard, so what follows knows `$stamped` is real —
+		// the `?->` form reads more neatly and then costs a possibly-null on every
+		// field below it, which is how DeletionService acquired two static-analysis
+		// findings for a state it had already ruled out.
 		$stamped = $this->metadata->readFile($node->getId());
-		$penpotId = $stamped?->penpotId ?? '';
-		if ($penpotId === '') {
+		if ($stamped === null || $stamped->penpotId === '') {
 			// Untracked, or a mirror whose stamp was cleared. Nothing in Penpot
 			// answers to this file, and inventing something for it to answer to is
 			// team-import.feature's still-open fork, not a restore.
 			return;
 		}
+		$penpotId = $stamped->penpotId;
 
 		// The team comes off the file's own stamp first (§C6.7). Unlike the purge —
 		// which has no mapped ancestor left to walk up to — a restored node IS back
