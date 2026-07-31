@@ -59,11 +59,36 @@ final class DeleteListener implements IEventListener {
 	/** Where Nextcloud parks a trashed node — the marker for the second step. */
 	private const TRASHBIN_SEGMENT = '/files_trashbin/';
 
+	/**
+	 * A trashed entry's name, which is NOT `<name>.penpot`.
+	 *
+	 * Nextcloud renames a node on its way into the trash, appending the deletion
+	 * time: `Gone For Good.penpot.d1785457295`. So by the time the PURGE fires,
+	 * the extension is no longer last and a plain `str_ends_with` rejects the
+	 * very file it is meant to catch.
+	 *
+	 * This cost a green unit suite and a red integration one: nothing that mocks
+	 * a node ever sees the rename, because the rename is Nextcloud's, not ours.
+	 */
+	private const TRASHED_SUFFIX = '/\.penpot\.d\d+$/';
+
 	public function __construct(
 		private DeletionService $deletions,
 		private SyncGuard $guard,
 		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * Is this one of ours, at EITHER step?
+	 *
+	 * The soft step sees `Login.penpot`; the purge sees
+	 * `Login.penpot.d1785457295`, because Nextcloud stamps the deletion time onto
+	 * the name on the way into the trash. Both are the same file.
+	 */
+	private function isOurs(string $name): bool {
+		return str_ends_with($name, PullService::EXTENSION)
+			|| preg_match(self::TRASHED_SUFFIX, $name) === 1;
 	}
 
 	#[\Override]
@@ -82,7 +107,7 @@ final class DeleteListener implements IEventListener {
 		if (!$node instanceof File) {
 			return;
 		}
-		if (!str_ends_with($node->getName(), PullService::EXTENSION)) {
+		if (!$this->isOurs($node->getName())) {
 			return;
 		}
 

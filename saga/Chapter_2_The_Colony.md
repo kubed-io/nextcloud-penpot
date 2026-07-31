@@ -1448,3 +1448,41 @@ instance no longer needs it.
 `index`/`total`) then `event: end`. So they need the SSE reader, not `call()` —
 and, exactly as §5.1 warned for export, **HTTP 200 says nothing about whether the
 work happened**. The client's existing event-stream path applies to all three.
+
+### C6.12 — The rename that only a real gesture could show
+
+The delete listener shipped with a green unit suite and failed on the first run
+of its integration scenario. The purge never reached Penpot, and the reason is
+one line:
+
+```php
+if (!str_ends_with($node->getName(), '.penpot')) { return; }
+```
+
+**Nextcloud renames a node on its way into the trash**, stamping it with the
+deletion time: `Gone For Good.penpot.d1785457295`. By the time the purge event
+fires, the extension is no longer last — so the guard meant to identify our files
+rejected the very file it existed to catch, and the design stayed in Penpot's
+trash forever.
+
+**No unit test could have caught it, and that is the point.** A mocked node has
+whatever name the test gives it, and the test gives it a sensible one. The
+rename is *Nextcloud's*, not ours: it happens in the gap between our two events,
+in code we do not call, to a node we did not create. Mocks reproduce our
+assumptions faithfully — which is exactly why they cannot contradict them.
+
+n8n's WebDAV helper had the fact written down (*"NC trashbin renames entries with
+a `.dNNNN` deletion-time suffix"*), in a comment about finding trash entries. It
+was read, ported, and not connected to the listener being written twenty minutes
+later — the fact was in the repository and still not in the code.
+
+The listener now recognises both spellings and has its own test for the routing
+decision, which is worth having on its own terms: getting it backwards is the
+worst bug available here, because it would permanently destroy a design on an
+ordinary delete.
+
+**The general shape, which has now recurred three times in this course** (§C6.8's
+param table, §C6.10's membership shape, this): *a test that mocks the boundary
+cannot fail in the way the boundary actually behaves.* Every one was found by a
+real gesture — twice by a person, once by the integration suite that exists
+because of the first two.
