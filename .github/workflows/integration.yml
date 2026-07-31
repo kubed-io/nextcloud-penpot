@@ -371,6 +371,20 @@ jobs:
         PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
       run: vendor/bin/behat --config behat.dist.yml
 
+    # ── Diagnostics: what did the SERVER think? ──────────────────────────────
+    # A failing Behat scenario reports what the ASSERTION saw and nothing about
+    # why. Every listener in this app logs its own failures and swallows them by
+    # design (a remote problem must never break a file operation), so the reason
+    # is in nextcloud.log and was, until now, thrown away with the runner.
+    - name: Nextcloud log (on failure)
+      if: failure()
+      run: |
+        echo "── penpot_sync lines ──"
+        grep -a '"app":"penpot_sync"' data/nextcloud.log 2>/dev/null | tail -40 || echo "(none)"
+        echo "── last 30 lines, any app ──"
+        tail -30 data/nextcloud.log 2>/dev/null || echo "(no log)"
+      working-directory: ${{ github.workspace }}
+
     - name: Publish integration results
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v2
