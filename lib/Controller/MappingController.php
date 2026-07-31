@@ -13,6 +13,8 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ConnectionTester;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
+use OCA\PenpotSync\Service\PullService;
+use OCA\PenpotSync\Service\PullStatus;
 use OCA\PenpotSync\Settings\AdminTest;
 use OCA\PenpotSync\Settings\MappingSettings;
 use OCP\AppFramework\Controller;
@@ -52,6 +54,8 @@ final class MappingController extends Controller {
 		IRequest $request,
 		private readonly MappingService $service,
 		private readonly ConnectionTester $tester,
+		private readonly PullService $pull,
+		private readonly PullStatus $status,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -151,6 +155,44 @@ final class MappingController extends Controller {
 	/**
 	 * Remove a mapping. Deletes nothing, in Penpot or in Nextcloud.
 	 */
+	/**
+	 * "Sync now" on one mapping's card — SYNCHRONOUS, and deliberately so.
+	 *
+	 * One team is bounded work: a `link` mapping exports nothing at all (§5.5),
+	 * and a `sync` one only re-exports files whose revision actually moved. The
+	 * admin is looking at that card waiting for an answer about that team, so
+	 * queuing it would replace a short wait with a spinner and a poll.
+	 *
+	 * The section-wide button is the opposite shape for the opposite reason —
+	 * see {@see SyncController::pull()}.
+	 *
+	 * It records into the SAME {@see PullStatus} as every other trigger, so the
+	 * panel's "last run" line does not depend on which button was pressed.
+	 */
+	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
+	public function sync(string $id): JSONResponse {
+		$this->status->markStarted();
+		try {
+			$result = $this->pull->pull($id);
+		} catch (\OutOfBoundsException $e) {
+			$this->status->markFailed($e->getMessage());
+
+			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+		} catch (PenpotApiException $e) {
+			$this->status->markFailed($e->getMessage());
+
+			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_BAD_GATEWAY);
+		} catch (\Throwable $e) {
+			$this->status->markFailed($e->getMessage());
+
+			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$this->status->markFinished($result);
+
+		return new JSONResponse(['status' => 'ok'] + $result);
+	}
+
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function destroy(string $id): JSONResponse {
 		if (!$this->service->remove($id)) {

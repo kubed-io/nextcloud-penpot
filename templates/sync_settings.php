@@ -34,11 +34,11 @@ $soon = $l->t('Available once design sync lands (a later release). Test connecti
 	<h3><?php p($l->t('Sync Actions')); ?></h3>
 
 	<p class="settings-hint">
-		<?php p($l->t('Run a one-shot bulk sync at any time. Sync from Penpot mirrors every mapped team\'s designs into Nextcloud. Nothing is ever written back to Penpot — this app mirrors designs, it does not edit them. Purge and bulk sync arrive with a later release; Test connection works now.')); ?>
+		<?php p($l->t('Run a one-shot bulk sync at any time. Sync from Penpot mirrors every mapped team\'s designs into Nextcloud. Nothing is ever written back to Penpot — this app mirrors designs, it does not edit them. Purge arrives with a later release; Test connection and Sync from Penpot work now.')); ?>
 	</p>
 
 	<div class="penpot-sync-manual__row" data-direction="pull">
-		<button type="button" class="button primary js-run" disabled title="<?php p($soon); ?>"><?php p($l->t('Sync from Penpot')); ?></button>
+		<button type="button" class="button primary js-run"><?php p($l->t('Sync from Penpot')); ?></button>
 	</div>
 
 	<div class="penpot-sync-manual__footer">
