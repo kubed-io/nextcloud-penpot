@@ -1382,3 +1382,69 @@ wrong before a big one finally threw.
 The guard that saved us is the one the decoder already had: refusing to guess on
 a key-position miss instead of falling back to the raw token. It converted a
 silent corruption into a loud failure two courses later — late, but not never.
+
+### C6.11 — The trash commands, called before designing around them
+
+Course 5 built the prune on Penpot's trash but never called the trash commands
+themselves; §6.52 recorded their names and one behaviour, and §6.49 recorded a
+gotcha. Before building delete/restore, all four were called against the running
+instance. Three of the four answers were not what the survey implied.
+
+#### The schemas
+
+| Command | Schema (Penpot 2.17.0) | Shape |
+|---|---|---|
+| `create-file` | `{name: ≤250, project-id: uuid, id?: uuid, is-shared?: bool, features?}` | plain 200 |
+| `get-team-deleted-files` | `{team-id: uuid}` | plain 200, a list |
+| `restore-deleted-team-files` | `{team-id: uuid, ids: set<uuid>}` | **SSE** |
+| `permanently-delete-team-files` | `{team-id: uuid, ids: set<uuid>}` | **SSE** |
+
+`create-file` takes **kebab `project-id`** and has an optional `id` — you may
+supply the uuid yourself, which is a door worth knowing about and not one this
+app opens.
+
+#### 1. `permanently-delete-team-files` DOES NOT REQUIRE THE FILE TO BE IN THE TRASH
+
+The single most important finding here, and the opposite of what its name
+implies. The probe design had been **restored** — live, listed in its project,
+not deleted at all. Passing its id to `permanently-delete-team-files` destroyed
+it: HTTP 200, a progress event, and gone from the project.
+
+So this is not "empty the trash". It is **"destroy these designs"**, and it will
+do that to a perfectly live file if you hand it one.
+
+The rule that follows is narrow and absolute: **the ids passed to it may only
+ever come from `get-team-deleted-files`.** Never from a mirror's metadata, never
+from a user's selection, never from anything the app resolved itself. §6.52
+already called this "the one irreversible call"; what it did not know is that
+the command has no safety of its own, so ours is the only one there is.
+
+#### 2. Restore reports success for ids it did not restore
+
+`restore-deleted-team-files` with an id that is not in the trash answers **200
+with an `end` event carrying an EMPTY SET**. No error, no warning.
+
+So the `end` event is not a boolean. It carries **the set of ids actually
+restored**, and that set is the only honest answer to "did this work". A caller
+that treats 200 as success will happily report a restore that restored nothing —
+which for a user is worse than an error, because they go looking for the file.
+
+#### 3. §6.49's lying restore did not reproduce
+
+§6.49 recorded `restore-deleted-team-files` reporting success while `deleted_at`
+was still set, needing a second call. On 2.17.0 it did not: immediately after the
+`end` event the file was out of the trash and back in its project, checked in the
+same breath.
+
+**The re-read rule stays anyway.** One non-reproduction does not disprove a race
+— it is exactly the shape of thing that reappears under load — and confirming
+costs one cheap listing call against the alternative of telling someone their
+work is back when it is not. §6.49 was right about the discipline even if this
+instance no longer needs it.
+
+#### 4. Both are SSE, like `export-binfile`
+
+`restore` and `permanently-delete` stream `event: progress` (one per file, with
+`index`/`total`) then `event: end`. So they need the SSE reader, not `call()` —
+and, exactly as §5.1 warned for export, **HTTP 200 says nothing about whether the
+work happened**. The client's existing event-stream path applies to all three.

@@ -33,12 +33,28 @@
 # ordinary folders on ours. Filing the design later is just a drag into a project
 # folder (move.feature).
 #
-# NOT YET EXERCISED LIVE. Unlike import-binfile (saga §6.20, now confirmed
-# working), `create-file` has never actually been called against a real instance.
-# Its param casing, and whether a created design needs any content pushed to be
-# valid, are unverified — saga open question #27. Everything below is design.
+# NOW EXERCISED LIVE (saga §C6.11). `create-file` was called against a running
+# instance and its schema read back:
 #
-# @todo — no lib/ exists, and the RPC is unexercised.
+#   {name: string≤250 (required), project-id: uuid (required),
+#    id?: uuid, is-shared?: bool, features?}
+#
+# KEBAB `project-id`, and `name` is REQUIRED — a design cannot be created
+# nameless. There is also an optional `id`: a caller may supply the design's uuid
+# itself. This app deliberately does not, because letting Nextcloud mint Penpot
+# identities would make the id something two systems can disagree about; Penpot
+# assigns it and we record what it says. Open question #27 is closed.
+#
+# NOTHING IS OPENED AFTER CREATING (researched, not assumed). Nextcloud's own
+# New-menu API does nothing on its own — its maintainer's words: "Any Entry is
+# responsible for nothing but themselves... you need to call the creation
+# yourself." The sanctioned pattern is prompt → put the file → emit
+# `files:node:created`, and both sibling apps do exactly that. Text and Office
+# auto-open because they ARE the editor; we are not, and `window.open` after an
+# await chain is unreliable anyway — popup blockers reject it inconsistently. So
+# the file appears, and the user clicks it.
+#
+# @todo — no lib/ exists yet.
 
 @todo
 Feature: Creating a new Penpot design from Nextcloud
