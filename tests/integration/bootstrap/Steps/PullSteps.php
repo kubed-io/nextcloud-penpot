@@ -149,6 +149,53 @@ trait PullSteps {
 	 *
 	 * @param array<string, string> $params the command's own wire params, verbatim
 	 */
+	/**
+	 * The same channel, but returning the DECODED response.
+	 *
+	 * `penpotRpc()` deliberately throws away the body — every existing caller
+	 * only needs "did it work". The trash assertions need to READ, so this is the
+	 * read twin rather than a change to the write one.
+	 *
+	 * `Accept: application/json` is sent here on purpose: the app must never do
+	 * that (it breaks Transit decoding, §R1.4), but a TEST asserting on Penpot's
+	 * state wants plain JSON and is not exercising the decoder.
+	 *
+	 * @param array<string, string> $params
+	 *
+	 * @return list<array<string, mixed>>
+	 */
+	private function penpotRpcRead(string $command, array $params): array {
+		$url = getenv('PENPOT_URL');
+		$token = getenv('PENPOT_TOKEN');
+		if ($url === false || $url === '' || $token === false || $token === '') {
+			throw new \RuntimeException('PENPOT_URL / PENPOT_TOKEN are not set.');
+		}
+
+		$response = (new Client())->post(
+			rtrim($url, '/') . '/api/rpc/command/' . $command,
+			[
+				'headers' => [
+					'Authorization' => 'Token ' . $token,
+					'Accept' => 'application/json',
+					'Content-Type' => 'application/json',
+				],
+				'body' => json_encode($params, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT),
+				'http_errors' => false,
+				'connect_timeout' => 10,
+				'timeout' => 30,
+			],
+		);
+
+		$body = (string)$response->getBody();
+		if ($response->getStatusCode() !== 200) {
+			throw new \RuntimeException("{$command} failed: HTTP {$response->getStatusCode()}\n{$body}");
+		}
+
+		$decoded = json_decode($body, true);
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
 	private function penpotRpc(string $command, array $params): void {
 		$url = getenv('PENPOT_URL');
 		$token = getenv('PENPOT_TOKEN');

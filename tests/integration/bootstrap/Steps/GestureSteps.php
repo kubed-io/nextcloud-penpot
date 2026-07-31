@@ -79,6 +79,105 @@ trait GestureSteps {
 		$this->gestureTarget = $target;
 	}
 
+	// ── create ──────────────────────────────────────────────────────────────
+
+	/**
+	 * What "+ New → Penpot design" does: write an EMPTY file and stop.
+	 *
+	 * Empty is the whole point — the server tells a CREATE from an UPLOAD by
+	 * exactly this, because a `.penpot` that already holds an archive is a design
+	 * someone dragged in, not one to invent.
+	 *
+	 * @When /^I create a new design file at "([^"]*)"$/
+	 */
+	public function iCreateANewDesignFileAt(string $path): void {
+		$this->davPut($path, '');
+		$this->gestureTarget = $path;
+	}
+
+	/** @When /^I upload a ".penpot" archive at "([^"]*)"$/ */
+	public function iUploadAnArchiveAt(string $path): void {
+		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the
+		// only thing the upload-vs-create guard looks at.
+		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+		$this->gestureTarget = $path;
+	}
+
+	// ── delete ──────────────────────────────────────────────────────────────
+
+	/** @When /^I delete "([^"]*)"$/ */
+	public function iDelete(string $path): void {
+		$this->davDelete($path);
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The SECOND step: empty the Nextcloud trash for this file. Fires the same
+	 * event as the first delete, distinguished only by the node already living
+	 * under files_trashbin — which is what makes this the irreversible one.
+	 *
+	 * @When /^I purge "([^"]*)" from the Nextcloud trash$/
+	 */
+	public function iPurgeFromTheNextcloudTrash(string $path): void {
+		$entry = $this->trashbinPathFor($path);
+		if ($entry === null) {
+			throw new \RuntimeException("no trashbin entry found for '{$path}' — was it actually deleted?");
+		}
+		$res = $this->davClient()->request('DELETE', $this->trashHref($entry));
+		$this->assertStatus($res, [204, 200], "purge {$entry}");
+	}
+
+	// ── Penpot's trash ──────────────────────────────────────────────────────
+
+	/** @Then /^the design "([^"]*)" is in Penpot's trash$/ */
+	public function theDesignIsInPenpotsTrash(string $name): void {
+		if (!in_array($name, $this->penpotTrashNames(), true)) {
+			throw new \RuntimeException(
+				sprintf("expected '%s' in Penpot's trash; found: %s", $name, implode(', ', $this->penpotTrashNames()) ?: '(none)'),
+			);
+		}
+	}
+
+	/**
+	 * The assertion that separates a soft delete from a destroyed one — and the
+	 * one the purge guard exists to keep honest.
+	 *
+	 * @Then /^the design "([^"]*)" is not in Penpot's trash$/
+	 */
+	public function theDesignIsNotInPenpotsTrash(string $name): void {
+		if (in_array($name, $this->penpotTrashNames(), true)) {
+			throw new \RuntimeException(sprintf("expected '%s' to be gone from Penpot's trash, but it is still listed", $name));
+		}
+	}
+
+	/** @return list<string> */
+	private function penpotTrashNames(): array {
+		$names = [];
+		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $this->teamId()]) as $file) {
+			if (isset($file['name']) && is_string($file['name'])) {
+				$names[] = $file['name'];
+			}
+		}
+
+		return $names;
+	}
+
+	/**
+	 * The mapped team's Penpot id, read off the mapped ROOT FOLDER's own stamp.
+	 *
+	 * Not from `list-mappings`, which prints the team's NAME and an internal
+	 * mapping hash — no Penpot uuid anywhere. The folder carries the real one
+	 * (`penpot_team_id`, §6.21), and reading it through `status` keeps this
+	 * assertion on the app's own read path like every other one here.
+	 */
+	private function teamId(string $mappedFolder = 'Penpot'): string {
+		if (preg_match('/penpot_team_id: (\S+)/', $this->status($mappedFolder), $m) === 1) {
+			return $m[1];
+		}
+
+		throw new \RuntimeException("no penpot_team_id on '{$mappedFolder}':\n" . $this->status($mappedFolder));
+	}
+
 	// ── what the APP believes ───────────────────────────────────────────────
 
 	/** @Then /^the file "([^"]*)" carries a Penpot id$/ */
