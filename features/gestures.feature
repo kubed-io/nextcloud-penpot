@@ -1,9 +1,11 @@
-# The three file-manager gestures — COPY, MOVE, RENAME — driven for real.
+# The file-manager gestures — COPY, MOVE, RENAME, CREATE, DELETE, PURGE and
+# RESTORE — driven for real.
 #
-# THE DESIGNS LIVE IN copy.feature, move.feature AND rename.feature. Those three
-# are the full, still-@todo specifications: every refusal, every mode, every
-# edge. THIS file is the subset CI can prove today, and it is the live half of
-# all three at once because they share one transport and one setup.
+# THE DESIGNS LIVE IN copy.feature, move.feature, rename.feature,
+# create-design.feature AND delete.feature. Those are the full, still-@todo
+# specifications: every refusal, every mode, every edge. THIS file is the subset
+# CI can prove today, and it is the live half of all of them at once because they
+# share one transport and one setup.
 #
 # ## WHY THESE THREE HAD NO LIVE TEST UNTIL NOW, AND WHAT IT COST
 #
@@ -227,4 +229,60 @@ Feature: Copy, move and rename, driven as real gestures
     And I delete "Penpot/Untouched/Not Ours.penpot"
     Then Penpot project "Untouched" holds a design named "Keep Me"
     And the design "Keep Me" is not in Penpot's trash
+
+  # ── restore: the delete, undone ───────────────────────────────────────────
+  #
+  # THE GESTURE THAT ONLY A REAL TRASH CAN TEST, and the one that closes the gap
+  # delete.feature used to name in its own header: before this, restoring a mirror
+  # put the file back while the design stayed in Penpot's trash, and the next pull
+  # — seeing a design Penpot no longer names — pruned it a second time.
+  #
+  # It is live here rather than @todo for the reason §C6.11 exists: restore is the
+  # command that reports success without doing the work. Handed an id that is not
+  # in the trash it answers 200 with an EMPTY SET, and a mocked restore would
+  # return whatever the mock was told to. The assertion that matters —
+  # "and the design is back in its project" — can only come from Penpot.
+
+  Scenario: Restoring a mirror brings its design back out of Penpot's trash
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Bring Back" exists in that team
+    And a Penpot file named "Second Thoughts" exists in the project "Bring Back"
+    When the admin runs a pull
+    And I delete "Penpot/Bring Back/Second Thoughts.penpot"
+    And I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
+    Then the design "Second Thoughts" is not in Penpot's trash
+    And Penpot project "Bring Back" holds a design named "Second Thoughts"
+    # Lossless: the SAME design comes back, with its id, revision and history —
+    # nothing is imported and nothing is re-created (§6.49/§C6.11).
+
+  Scenario: A pull after a restore neither prunes the mirror nor duplicates it
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Stay Put" exists in that team
+    And a Penpot file named "Round Trip" exists in the project "Stay Put"
+    When the admin runs a pull
+    And I delete "Penpot/Stay Put/Round Trip.penpot"
+    And I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
+    And the admin runs a pull
+    Then the pull pruned nothing
+    And the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
+    And Penpot project "Stay Put" holds a design named "Round Trip"
+    # THE WHOLE POINT OF THE SLICE, asserted end to end. "Pruned nothing" is the
+    # half that was broken: the design is listed by Penpot again, so the pull has
+    # no reason to trash the mirror — and the file keeping its id is what stops a
+    # second mirror appearing beside it.
+
+  Scenario: Restoring an untracked ".penpot" file never contacts Penpot
+    Given the first visible team is mapped as a plain folder "Penpot"
+    And a Penpot project named "Bystander" exists in that team
+    And a Penpot file named "Not Involved" exists in the project "Bystander"
+    When the admin runs a pull
+    And I upload a ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
+    And I delete "Penpot/Bystander/Strays In.penpot"
+    And I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
+    Then the file "Penpot/Bystander/Strays In.penpot" carries no Penpot id
+    And Penpot project "Bystander" holds a design named "Not Involved"
+    And Penpot project "Bystander" holds no design named "Strays In"
+    # Restore only ever puts BACK something this app mirrored out. Inventing a
+    # design for a file that never had one is team-import.feature's still-open
+    # fork, and it must not happen by accident on the way out of the trash.
 

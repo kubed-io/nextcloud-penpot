@@ -127,6 +127,27 @@ trait GestureSteps {
 		$this->assertStatus($res, [204, 200], "purge {$entry}");
 	}
 
+	/**
+	 * The OTHER second step, and the one that undoes the first: take the file back
+	 * out of the Nextcloud trash.
+	 *
+	 * Looked up by the ORIGINAL path even though the trash entry is named
+	 * `<name>.dTIMESTAMP` — {@see trashbinPathFor()} matches on the trashbin's own
+	 * `nc:trashbin-filename` property, so the scenarios stay readable and never
+	 * have to know about the suffix. That suffix is also exactly what makes
+	 * matching trashed files by NAME wrong (#43); the app matches by fileid.
+	 *
+	 * @When /^I restore "([^"]*)" from the Nextcloud trash$/
+	 */
+	public function iRestoreFromTheNextcloudTrash(string $path): void {
+		$entry = $this->trashbinPathFor($path);
+		if ($entry === null) {
+			throw new \RuntimeException("no trashbin entry found for '{$path}' — was it actually deleted?");
+		}
+		$this->davRestoreFromTrash($entry);
+		$this->gestureTarget = $path;
+	}
+
 	// ── Penpot's trash ──────────────────────────────────────────────────────
 
 	/** @Then /^the design "([^"]*)" is in Penpot's trash$/ */

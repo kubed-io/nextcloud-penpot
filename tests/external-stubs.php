@@ -8,17 +8,21 @@
 declare(strict_types=1);
 
 /**
- * Psalm stubs for classes that exist in a real Nextcloud at runtime but ship in
- * neither `nextcloud/ocp` nor any Composer package — Sabre/DAV server classes,
- * other bundled apps' event classes, and so on.
+ * Stubs for classes that exist in a real Nextcloud at runtime but ship in
+ * neither `nextcloud/ocp` nor any Composer package — other bundled apps' event
+ * classes, core internals, Sabre/DAV server classes, and so on.
  *
- * Add entries here one at a time, each with a comment naming the class that
- * needs it — see the sibling apps' versions for the established shape.
+ * Loaded TWICE, by design: Psalm reads it as `<stubs>` (psalm.xml) so our *use*
+ * of these classes stays type-checked instead of `UndefinedClass`-suppressed,
+ * and `tests/bootstrap.php` requires it so the unit suite can construct them.
+ * A listener that takes a foreign event needs the class to exist in both places,
+ * and one declaration serving both is what keeps them from drifting.
  *
- * The first two arrived with the Files-app surface (saga Ch2 Course 6): the
- * bundled Files app's script-load event, and core's mimetype-list generator that
- * the mimetype repair steps drive. Stubbing them — rather than suppressing
- * `UndefinedClass` wholesale — keeps Psalm type-checking our *use* of them.
+ * Its companion, `ocp-stubs.php`, covers the `OCP\*` surface. The split is by
+ * ownership, not by consumer: OCP there, everything else here.
+ *
+ * Add entries one at a time, each with a comment naming the class that needs it
+ * — see the sibling apps' versions for the established shape.
  */
 
 namespace OCA\Files\Event {
@@ -27,6 +31,31 @@ namespace OCA\Files\Event {
 	// `@implements IEventListener<LoadAdditionalScriptsEvent>` type-checks.
 	if (!class_exists(LoadAdditionalScriptsEvent::class, false)) {
 		class LoadAdditionalScriptsEvent extends \OCP\EventDispatcher\Event {
+		}
+	}
+}
+
+namespace OCA\Files_Trashbin\Events {
+	// Dispatched by the bundled Files_Trashbin app once a file is back out of the
+	// trash — the only typed signal on that side of the line, and the opposite
+	// number of the purge, which fires nothing typed at all (§C6.13) and is caught
+	// with a legacy hook instead.
+	//
+	// Its real base is OCP\Files\Events\Node\AbstractNodesEvent. The stub declares
+	// the two accessors directly instead of extending it — same shape ocp-stubs.php
+	// gives NodeRenamedEvent, and for the same reason: nothing autoloads the OCP
+	// base standalone, so extending it would fatal the unit bootstrap.
+	//
+	// TARGET is the node at its restored path; SOURCE is where it sat in the trash.
+	if (!class_exists(NodeRestoredEvent::class, false)) {
+		class NodeRestoredEvent extends \OCP\EventDispatcher\Event {
+			public function getSource(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
+
+			public function getTarget(): \OCP\Files\Node {
+				throw new \LogicException('stub');
+			}
 		}
 	}
 }

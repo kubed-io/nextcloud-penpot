@@ -1672,3 +1672,107 @@ layer out: **the unit tests, the integration tests and the files on disk were al
 correct simultaneously, and the feature was still dead in the browser.** Nothing
 in the repo could have caught it, because the defect lived in the deploy path.
 The verification had to run where the user's click runs.
+
+### C6.15 — The delete grew an undo, and the command it needs lies twice
+
+Course 5's salvage yard shipped its destructive half first — delete, purge, and
+the prune that trashes a mirror whose design vanished. The gesture that undoes
+all of it was written up as "the next slice" and left there, with the gap stated
+in `delete.feature`'s own header:
+
+> restoring a mirror from the NEXTCLOUD trash puts the file back in the folder,
+> but the design stays in Penpot's trash. The next pull will not see it named by
+> Penpot and will prune the mirror again.
+
+Nothing was lost when that happened. The file simply appeared to delete itself a
+second time, a few minutes after the user had rescued it — which is its own kind
+of bad, and the kind that makes someone stop trusting the app rather than file a
+bug.
+
+#### The gesture is a typed event, and its opposite number is not
+
+§C6.13 cost an integration test to establish that a trash **purge** fires nothing
+typed at all — the trashbin's `removeItem` emits a legacy `\OCP\Trashbin`
+`preDelete` hook and that is the only door. The restore is not like that:
+`files_trashbin` dispatches `NodeRestoredEvent` after the rename lands, carrying
+source and target. Both sibling apps already listen to exactly it.
+
+Worth stating together, because the pair is genuinely asymmetric and nothing
+about the API suggests which half is which:
+
+| Gesture | Signal |
+|---|---|
+| delete → trash | `BeforeNodeDeletedEvent` (typed, abortable) |
+| restore ← trash | `NodeRestoredEvent` (typed, after the fact) |
+| purge | **nothing typed** — legacy `\OCP\Trashbin` `preDelete` hook |
+
+The listener reads the event's **target**, not its source. The source is the node
+at its trash path, where the name carries a `.dTIMESTAMP` suffix — so a listener
+that read it would fail its own `.penpot` extension check and never fire, and it
+would fail *silently*, which is the failure mode this app keeps meeting. That is
+pinned by a unit test whose source node is deliberately named
+`Login.penpot.d1785457295`.
+
+#### The DAV protocol for a restore is a MOVE to nowhere
+
+The integration step had to perform a real restore, and the plausible guess —
+MOVE the trash href back to the file's original path — is wrong in a way that
+would have passed a weaker assertion: it copies, and leaves the trash entry
+behind. Read out of the running server instead (§C6.1's rule, again):
+`RestoreFolder` is an `IMoveTarget` whose `moveInto()` ignores the target name
+entirely and calls `$sourceNode->restore()`. So the protocol is
+
+    MOVE /remote.php/dav/trashbin/<user>/trash/<entry>
+    Destination: /remote.php/dav/trashbin/<user>/restore/<entry>
+
+and the destination name is decoration. That door is the one that reaches
+`Trashbin::restore()`, which is what dispatches the event — a test that put the
+file back any other way would never have fired the listener it was testing.
+
+#### The command reports success in two different ways without doing the work
+
+This is why restore was its own slice rather than three lines in the delete's.
+`restore-deleted-team-files` has now been caught lying twice, in two unrelated
+ways, and both were already in the record:
+
+1. **§C6.11 — an id it does not restore gets 200 and an `end` event carrying an
+   EMPTY SET.** No error, no warning. The stream succeeded and the work did not
+   happen.
+2. **§6.49 — the `end` event once arrived while `deleted_at` was still set.** A
+   second call cleared it. This did not reproduce on 2.17.0.
+
+So the client returns **the ids the `end` event actually carries**, and the
+service compares them against what it asked for; then it re-reads the trash
+listing anyway. One non-reproduction does not disprove a race — it is exactly the
+shape of thing that comes back under load — and the confirming read costs one
+cheap listing against the alternative of telling someone their design is back
+when it is not. A false success is worse than an error, because they stop
+looking.
+
+That makes three commands in this app where **HTTP 200 settles nothing**: the
+export (§5.1), the permanent delete, and now the restore. It is no longer a
+gotcha about one endpoint; it is how Penpot's streaming commands work.
+
+#### Three layers, and the honest report for the one that is not built
+
+"Restore" means genuinely different things depending on what survived (§6.52),
+and the app must pick the cheapest, most lossless layer that applies:
+
+1. the design still exists in Penpot → **Penpot is not contacted at all**;
+2. it is in Penpot's trash → `restore-deleted-team-files`, lossless;
+3. it is gone for good → only the local archive is left, and importing it mints a
+   **new id** (§6.20, tested directly: a purged id cannot be resurrected).
+
+Layer 3 is not built, and the interesting decision was what to do when the app
+lands in it. Silence would be indistinguishable from success. Attempting the
+restore command anyway would produce §C6.11's empty set and a misleading log. So
+the app spends one project listing to tell layers 1 and 3 apart — the only
+uncommon path, since the ordinary trash-then-restore round trip never gets there
+— and says plainly that the design is gone and this mirror is now the only copy
+of it.
+
+Layer 3 stays deferred for a reason that is not phase ordering: it is the only
+restore that changes a design's identity, so it cannot be a listener that fires
+on a gesture. It needs a human to be told what they are trading and to say yes.
+`restore.feature` is that specification, and what it is waiting for is the
+confirmation surface, not the detection.

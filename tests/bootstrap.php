@@ -29,4 +29,10 @@ require_once __DIR__ . '/../vendor/autoload.php';
 // slice's classes reference — nothing more (see the file's own header).
 require_once __DIR__ . '/ocp-stubs.php';
 
+// The same for classes owned by OTHER bundled apps (files_trashbin's restore
+// event, the Files app's script-load event): they ship in no package at all.
+// Psalm reads this same file as a stub source, so the declaration a listener is
+// type-checked against and the one its test constructs are literally the same.
+require_once __DIR__ . '/external-stubs.php';
+
 \DG\BypassFinals::enable();

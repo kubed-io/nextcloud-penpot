@@ -167,6 +167,30 @@ trait WebDavTrait {
 	}
 
 	/**
+	 * Restore a trash entry — a MOVE into the trashbin's `restore` collection.
+	 *
+	 * That is the whole protocol, and it is not obvious: there is no RESTORE verb
+	 * and no destination path to compute. `RestoreFolder` is an `IMoveTarget` whose
+	 * `moveInto()` calls `$sourceNode->restore()`, so the target NAME is ignored
+	 * entirely and the file goes back wherever it came from. Read out of the
+	 * running server rather than assumed (§C6.1's rule), because the plausible
+	 * alternative — MOVE the trash href to the original files path — silently
+	 * copies instead of restoring and leaves the trash entry behind.
+	 *
+	 * This is the door that reaches `Trashbin::restore()`, which is what dispatches
+	 * `NodeRestoredEvent`. A test that put the file back any other way would never
+	 * fire the listener it is meant to be testing.
+	 */
+	private function davRestoreFromTrash(string $entry): void {
+		$dest = $this->ncBaseUrl . '/remote.php/dav/trashbin/' . rawurlencode($this->ncUser)
+			. '/restore/' . rawurlencode($entry);
+		$res = $this->davClient()->request('MOVE', $this->trashHref($entry), [
+			'headers' => ['Destination' => $dest],
+		]);
+		$this->assertStatus($res, [201, 204], "restore {$entry}");
+	}
+
+	/**
 	 * PROPFIND a single nc:metadata-<key> on a file. Returns the property value,
 	 * or null if the property is absent (404 inside the multistatus). This is the
 	 * exact DAV surface the README documents for the file-type feature.

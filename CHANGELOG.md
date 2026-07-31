@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Restoring a design from your Nextcloud trash brings it back in Penpot too**, with its id, revision, history and links intact — nothing is re-imported. Restoring one no longer leaves a file that the next sync trashes all over again.
+- A restore that Penpot did not actually perform is reported as a failure rather than as success, so you never go looking for a design that never came back.
+
 - **"Sync from Penpot" works.** It was a disabled button; now it starts a background sync, shows it running, and reports what it did — including runs the schedule did on its own.
 - **The scheduled pull actually runs.** The interval in Sync Settings was previously read by nothing at all, so a design renamed in Penpot stayed renamed only in Penpot. It now reaches Nextcloud on its own.
 - **Sync one team from its mapping card** with the button between Save and Delete, when you don't want to sweep everything.

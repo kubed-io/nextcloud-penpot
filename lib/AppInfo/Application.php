@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 use OCA\PenpotSync\BackgroundJob\ScheduledPullJob;
 use OCA\PenpotSync\Listener\CopyListener;
 use OCA\PenpotSync\Listener\CreateListener;
@@ -17,6 +18,7 @@ use OCA\PenpotSync\Listener\DeleteListener;
 use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
+use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Listener\TrashPurgeHook;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
@@ -43,42 +45,40 @@ use OCP\Files\Events\Node\NodeWrittenEvent;
  * list, and a per-user personal token card. Every one of them persists,
  * round-trips, and has an `occ` twin.
  *
- * There is still **no sync engine**, no file actions, and no listeners. That is
- * the ordering the siblings earned the hard way and this app inherits: *finish
- * the room before lighting the stove.* Configuration that arrives after the
- * feature means every feature ships twice — once wired to nothing, once wired
- * for real — and the second pass is where the settings bugs live.
+ * The ordering that produced it is the one the siblings earned the hard way and
+ * this app inherits: *finish the room before lighting the stove.* Configuration
+ * that arrives after the feature means every feature ships twice — once wired to
+ * nothing, once wired for real — and the second pass is where the settings bugs
+ * live. {@see boot()} follows the same rule one level down: the Penpot metadata
+ * keys are registered ahead of anything that writes them, because DAV must
+ * advertise them and the resolver's reverse lookups must be indexed.
  *
- * The visible consequence is that some controls here configure something that
- * does not exist yet (the pull schedule, most obviously). Each one says so in
- * its own description rather than implying a sync that is not running.
+ * ## THE LISTENERS, AND WHAT EACH GESTURE IS ALLOWED TO REACH
  *
- * The one exception, landing now (saga Ch2 Course 3): the Penpot metadata keys
- * are registered in {@see boot()}, ahead of the pull that writes them. That is
- * the same "register the seam before the engine" move both siblings make — the
- * keys must exist for DAV to advertise them and for the resolver's reverse
- * lookups to be indexed, and registration is idempotent and cheap.
+ * Nextcloud gestures are the app's whole write surface (§6.19) — content is
+ * strictly one-way (§6.1), so nothing here ever pushes shape data:
  *
- * The first write paths also land now (saga Ch2 Course 4): a
- * {@see NodeRenamedListener} on {@see NodeRenamedEvent} propagates a Nextcloud
- * rename of a managed `.penpot` file or project folder up to Penpot, and re-files
- * a moved design into the project it landed in. Those are the only writes Penpot
- * permits us at this stage (§6.19) — content is still strictly one-way (§6.1).
- * A {@see MoveGuardListener} on {@see BeforeNodeRenamedEvent} refuses the two
- * moves that cannot be honoured: a project folder leaving its team folder
- * (§6.30), and a `link` file leaving the project it points into (§6.43).
- * The `SyncGuard` keeps the pull's own follow-renames from looping through either.
+ *   rename / move  → `rename-file`, `rename-project`, `move-files`  (Course 4)
+ *   copy           → `duplicate-file` (+ a `move-files` when it lands elsewhere)
+ *   write (+ New)  → `create-file`                                  (§6.33)
+ *   delete         → `delete-file`            → Penpot's trash, ~7 days
+ *   purge          → `permanently-delete-team-files`  — via boot()'s legacy hook
+ *   restore        → `restore-deleted-team-files`     — the inverse of the delete
  *
- * The Files-app surface opens now (saga Ch2 Course 6): a
- * {@see LoadFilesScriptListener} loads the frontend bundle and hands it the
- * instance base URL, which is the one thing it cannot read off the file listing.
- * That is what turns a mirrored `.penpot` row into a click through to the live
- * design. It is the app's FIRST browser-side code — everything before it was
- * `occ`, settings forms and server-side listeners.
+ * Two refusals sit in front of them ({@see MoveGuardListener}, on the event that
+ * fires BEFORE the move): a project folder may not leave its team folder (§6.30),
+ * and a `link` file may not leave the project it points into (§6.43). The
+ * `SyncGuard` fences out the app's own motion — the pull renames, writes and
+ * trashes mirrors constantly — so none of these loop.
  *
- * The background job, the mode pills, "+ New → design" and the remaining Course
- * 6 surface still land later. Don't scaffold those here ahead of the code that
- * uses them.
+ * The Files-app surface (Course 6) is a single {@see LoadFilesScriptListener}
+ * that loads the frontend bundle and hands it the instance base URL, the one
+ * thing the browser cannot read off the file listing.
+ *
+ * Still to land: restoring a design from its local archive when Penpot's own
+ * trash no longer holds it (`restore.feature`, the lossy layer), the purge of
+ * this app's files, notifications, and personal projects. Don't scaffold those
+ * here ahead of the code that uses them.
  */
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
@@ -138,6 +138,13 @@ final class Application extends App implements IBootstrap {
 		// step only — the purge fires no typed event at all and is wired as a
 		// legacy hook in boot(), see TrashPurgeHook.
 		$context->registerEventListener(BeforeNodeDeletedEvent::class, DeleteListener::class);
+
+		// ...AND RESTORING REACHES BACK INTO IT. The exact inverse gesture, and
+		// unlike the purge this one IS a typed event — files_trashbin dispatches
+		// NodeRestoredEvent once the file is back. Without it a restored mirror sat
+		// in its folder while the design stayed in Penpot's trash, and the next
+		// pull pruned the file a second time (the gap delete.feature used to name).
+		$context->registerEventListener(NodeRestoredEvent::class, RestoreFromTrashListener::class);
 
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to
