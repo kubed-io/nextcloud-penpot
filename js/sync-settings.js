@@ -23,23 +23,36 @@
 		return OC.generateUrl('/apps/penpot_sync' + path);
 	}
 
+	/**
+	 * ONE delegated listener on the panel root, bound once.
+	 *
+	 * The first version bound each button individually, inside an `init()` that
+	 * early-returned if the TEST button was missing or already bound — so the
+	 * Sync button silently never got a handler and clicking it did nothing at
+	 * all. Delegation removes the whole class of bug: there is one listener, it
+	 * cannot half-attach, and a button added later still works.
+	 */
 	function init() {
-		var btn = document.getElementById('penpot-sync-test-btn');
-		if (!btn || btn.dataset.bound === '1') {
+		var root = document.getElementById('penpot-sync-manual');
+		if (!root || root.dataset.bound === '1') {
 			return;
 		}
-		btn.dataset.bound = '1';
-		btn.addEventListener('click', testConnection);
+		root.dataset.bound = '1';
 
-		var run = document.querySelector('.penpot-sync-manual__row[data-direction="pull"] .js-run');
-		if (run && run.dataset.bound !== '1') {
-			run.dataset.bound = '1';
-			run.disabled = false;
-			run.removeAttribute('title');
-			run.addEventListener('click', startPull);
+		root.addEventListener('click', function (e) {
+			if (e.target.closest('.js-run')) {
+				startPull(e.target.closest('.js-run'));
+			}
+		});
+
+		var test = document.getElementById('penpot-sync-test-btn');
+		if (test) {
+			test.addEventListener('click', testConnection);
 		}
+
 		// Show whatever the last run was — including one the SCHEDULE did, which
-		// is otherwise invisible and was the whole complaint that started this.
+		// is otherwise completely invisible and was the complaint that started
+		// this slice.
 		refreshStatus();
 	}
 
@@ -47,76 +60,148 @@
 		return document.getElementById('penpot-sync-manual-status');
 	}
 
-	/** Render one status record, whichever trigger produced it. */
-	function renderStatus(st) {
+	/**
+	 * Paint the status line. `busy` adds Nextcloud's own inline spinner.
+	 *
+	 * THE BUTTON KEEPS ITS LABEL. Swapping it to "Queued…" (which is what the
+	 * sibling does) makes the button change width mid-click and briefly stops it
+	 * saying what it is. The spinner lives on the status line instead, so the
+	 * layout never moves and the control keeps its identity while it works.
+	 */
+	function flash(kind, text, busy) {
 		var out = manualStatus();
-		if (!out || !st || !st.status) {
-			return false;
-		}
-		var busy = st.status === 'queued' || st.status === 'running';
-		if (st.status === 'error') {
-			out.className = 'msg error';
-			out.textContent = t('penpot_sync', 'Last sync failed: {message}', { message: st.message || '' });
-		} else if (busy) {
-			out.className = 'msg';
-			out.textContent = st.status === 'queued'
-				? t('penpot_sync', 'Sync queued…')
-				: t('penpot_sync', 'Syncing…');
-		} else if (st.finished_at) {
-			out.className = 'msg success';
-			out.textContent = t('penpot_sync', 'Last sync: {files} file(s), {exported} archive(s) exported.', {
-				files: st.files == null ? '?' : st.files,
-				exported: st.exported == null ? 0 : st.exported,
-			});
-		}
-		return busy;
+		if (!out) { return; }
+		out.className = 'msg' + (kind ? ' ' + kind : '') + (busy ? ' icon-loading-small penpot-sync-busy' : '');
+		out.textContent = text;
 	}
 
+	/** One line describing a finished run, whichever trigger produced it. */
+	function describe(rec) {
+		if (!rec || !rec.finished_at) {
+			return t('penpot_sync', 'Never run.');
+		}
+		if (rec.status === 'error') {
+			return t('penpot_sync', 'Last sync failed: {message}', { message: rec.message || '?' });
+		}
+		return t('penpot_sync', 'Last sync: {files} file(s), {exported} archive(s) exported.', {
+			files: rec.files == null ? '?' : rec.files,
+			exported: rec.exported == null ? 0 : rec.exported,
+		});
+	}
+
+	function getStatus() {
+		return fetch(url('/sync/status'), {
+			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
+		}).then(function (r) { return r.ok ? r.json() : null; });
+	}
+
+	/** Paint the current state on load, without polling an idle page. */
 	function refreshStatus() {
-		return fetch(url('/sync/status'), { headers: { Accept: 'application/json' } })
-			.then(function (res) { return res.ok ? res.json() : null; })
-			.then(function (st) {
-				var busy = renderStatus(st);
-				// Keep polling only while something is actually running, so an idle
-				// settings page makes no requests at all.
-				if (busy) {
-					window.setTimeout(refreshStatus, 3000);
-				}
-				return busy;
-			})
-			.catch(function () { return false; });
+		return getStatus().then(function (rec) {
+			if (!rec) { return; }
+			if (rec.status === 'queued' || rec.status === 'running') {
+				// A run is already in flight — probably the schedule. Follow it.
+				pollUntilDone(document.querySelector('#penpot-sync-manual .js-run'));
+				return;
+			}
+			flash(rec.status === 'error' ? 'error' : '', describe(rec));
+		}).catch(function () { /* an idle panel is not worth an error */ });
 	}
 
-	function startPull() {
-		var run = document.querySelector('.penpot-sync-manual__row[data-direction="pull"] .js-run');
-		var out = manualStatus();
-		run.disabled = true;
-		out.className = 'msg';
-		out.textContent = t('penpot_sync', 'Starting…');
+	/**
+	 * The bulk sync is ASYNC: this POST enqueues a job and returns. The visible
+	 * feedback is the BUTTON'S OWN LABEL — "Queued…" then "Running…" — because a
+	 * status line below the fold is not something a person notices when they have
+	 * just pressed a button and are looking straight at it.
+	 */
+	function startPull(btn) {
+		// Feedback BEFORE the round trip. The click must look like it landed even
+		// if the POST takes a moment; waiting for the response is what made the
+		// first version feel like nothing happened.
+		btn.disabled = true;
+		btn.setAttribute('aria-busy', 'true');
+		flash('', t('penpot_sync', 'Queued…'), true);
 
 		fetch(url('/sync/pull'), {
 			method: 'POST',
 			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
 		})
 			.then(function (res) {
-				// 409 = a sync is already running. Not an error: the admin asked
-				// for a sync and a sync is happening.
 				if (res.status === 409) {
-					out.textContent = t('penpot_sync', 'A sync is already running.');
+					// Not an error: a sync was asked for and a sync is happening.
+					flash('', t('penpot_sync', 'A sync is already running.'), true);
+					pollUntilDone(btn);
 					return;
 				}
 				if (!res.ok) {
 					throw new Error(t('penpot_sync', 'Could not start the sync ({status}).', { status: res.status }));
 				}
+				pollUntilDone(btn);
 			})
-			.catch(function (e) {
-				out.className = 'msg error';
-				out.textContent = e.message;
-			})
-			.then(function () {
-				run.disabled = false;
-				refreshStatus();
+			.catch(function (err) {
+				flash('error', err.message || t('penpot_sync', 'Could not start the sync.'));
+				release(btn);
 			});
+	}
+
+	function release(btn) {
+		if (btn) {
+			btn.disabled = false;
+			btn.removeAttribute('aria-busy');
+		}
+	}
+
+	/**
+	 * Poll until the run finishes, backing off as it goes.
+	 *
+	 * Two deliberate departures from the sibling's version:
+	 *
+	 *  - **setTimeout, not setInterval.** An interval keeps firing while a slow
+	 *    request is still in flight, so a sluggish server gets a pile-up of
+	 *    overlapping polls exactly when it can least afford them. Each tick here
+	 *    schedules the next one only after the previous answered.
+	 *  - **It starts fast and slows down.** 400ms, 800ms, then a steady 2s. A
+	 *    queued job is usually picked up almost immediately, so a flat 2s poll
+	 *    means up to two seconds of dead air before "Running…" appears — which is
+	 *    the exact window where a button feels broken.
+	 */
+	function pollUntilDone(btn) {
+		var waited = 0;
+		var delay = 400;
+
+		function tick() {
+			getStatus()
+				.then(function (rec) {
+					if (!rec) { return schedule(); }
+
+					if (rec.status === 'running') {
+						flash('', t('penpot_sync', 'Syncing…'), true);
+					}
+					if (rec.status === 'ok' || rec.status === 'error') {
+						flash(rec.status === 'error' ? 'error' : 'success', describe(rec));
+						release(btn);
+						return;
+					}
+					schedule();
+				})
+				.catch(schedule);
+		}
+
+		function schedule() {
+			// ~5 minutes. A queued job only moves when a cron worker picks it up,
+			// so an instance with cron misconfigured would otherwise spin here
+			// forever. Say it may still be running rather than call it failed.
+			if (waited > 300000) {
+				flash('', t('penpot_sync', 'Still running in the background — check back shortly.'));
+				release(btn);
+				return;
+			}
+			waited += delay;
+			window.setTimeout(tick, delay);
+			delay = Math.min(delay * 2, 2000);
+		}
+
+		tick();
 	}
 
 	function testConnection() {
