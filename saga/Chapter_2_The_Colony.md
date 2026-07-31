@@ -1543,9 +1543,55 @@ sitting in a sibling repository.
   process stacks the handler and purges twice per file. Guarded with a static
   flag.
 
-#### Filed against n8n
+#### And then it still did not fire — the second half of the bug
+
+Porting the hook did not fix the failing scenario. Three more rounds went into
+that, two of them wasted on evidence about the wrong thing (a pod running code
+from before the port; a `Trashbin::delete()` call missing its timestamp, which
+made the method early-return *before* the emit). Both silences were the test's,
+not the app's.
+
+What finally settled it was instrumenting rather than theorising: CI integration
+failures were throwing away `nextcloud.log`, and **every listener in this app
+logs its failure and swallows it by design** — a remote problem must never break
+a file operation — so the reason was always in a file nobody kept. Dumping it on
+failure is now part of the workflow.
+
+With the log in hand the answer was immediate: **no purge line at all**, while
+the same code logged one locally. The difference is which entry point serves the
+request:
+
+```php
+// remote.php — the WebDAV door
+$appManager->loadApps(['authentication']);
+$appManager->loadApps(['extended_authentication']);
+$appManager->loadApps(['filesystem', 'logging']);
+```
+
+`register()` runs for every enabled app during bootstrap. **`boot()` runs only
+when an app is LOADED**, and a DAV request loads only those types. This app
+declared none, so on every DAV request `boot()` never ran.
+
+That is why the gap was invisible for so long: everything else this course built
+is wired in `register()` — copy, move, rename, create, soft delete — and all of
+it works over DAV. Exactly one thing lived in `boot()`, and it was the one thing
+that never fired.
+
+`<types><filesystem/></types>` in `appinfo/info.xml` is the fix, and it is the
+right one on its own terms: `filesystem` is the type for apps that must be
+present when the filesystem is in play, which is what a file-event-driven mirror
+is.
+
+#### Filed against BOTH siblings
 
 n8n has no `connectHook` anywhere in `lib/`, so its hard step has only ever had
-the trigger that does not fire — meaning a `sync+two-way` workflow is likely left
-alive in n8n forever when its Nextcloud file is purged. A note was dropped into
-that repo's saga; it is **unverified there**, and says so.
+the trigger that does not fire.
+
+**And grafana declares no `<types>` either.** It has the hook, correctly wired in
+`boot()` — and on a DAV request `boot()` does not run. Its purge almost certainly
+never fires either, which would mean a dashboard parked in Grafana's bin outlives
+the Nextcloud file that owned it, silently, forever. Grafana got the mechanism
+right and the loading wrong; this app copied the mechanism and inherited the
+second half of the bug without ever seeing the first.
+
+Both notes are **unverified against those apps** and say so.
