@@ -93,6 +93,7 @@ final class MotionService {
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
+		private readonly DestinationResolver $destinations,
 		private readonly PersonalTokenService $personalTokens,
 		private readonly LoggerInterface $logger,
 	) {
@@ -145,7 +146,7 @@ final class MotionService {
 		// the truth (§C6.7).
 		$membership = $this->resolver->resolve($target);
 
-		$to = $this->destinationProject($membership);
+		$to = $this->destinations->projectFor($membership);
 		if ($to === null) {
 			// Landed outside every mapped folder, or in a team whose Drafts we
 			// could not resolve. Penpot keeps the file where it is: unmapping is
@@ -197,28 +198,6 @@ final class MotionService {
 	}
 
 	/**
-	 * The Penpot project a resolved membership points at, or null for none.
-	 *
-	 * A resolved project id is used as-is. A team with no project above the node
-	 * is Penpot's Drafts (§6.35), which IS a real project — the team's default
-	 * one — so it is looked up rather than treated as "no project".
-	 *
-	 * Takes the resolved {@see Membership} rather than the node, so the caller
-	 * that also needs the destination TEAM (to verify the file's cached
-	 * `penpot_team_id`, §C6.7) can walk the tree once instead of twice.
-	 */
-	private function destinationProject(Membership $membership): ?string {
-		if ($membership->projectId !== null) {
-			return $membership->projectId;
-		}
-		if ($membership->teamId === null) {
-			return null;
-		}
-
-		return $this->draftsProject($membership->teamId);
-	}
-
-	/**
 	 * Where the node came from, resolved through the *old parent folder* — never
 	 * through the node itself, which no longer exists at that path.
 	 *
@@ -235,33 +214,6 @@ final class MotionService {
 			return null;
 		}
 
-		return $this->destinationProject($this->resolver->resolve($parent));
-	}
-
-	/**
-	 * A team's Drafts project — the one flagged `is-default` (§6.35, same lookup
-	 * the pull uses to decide a project's files belong at the team root).
-	 *
-	 * Returns null when the token cannot see it, which the caller treats as "no
-	 * destination": better an un-pushed move than a file re-filed into a guess.
-	 *
-	 * @throws PenpotApiException
-	 */
-	private function draftsProject(string $teamId): ?string {
-		foreach ($this->client->getAllProjects() as $project) {
-			$sameTeam = ($project['team-id'] ?? null) === $teamId;
-			$isDefault = filter_var($project['is-default'] ?? false, FILTER_VALIDATE_BOOLEAN);
-			$id = $project['id'] ?? null;
-			if ($sameTeam && $isDefault && is_string($id) && $id !== '') {
-				return $id;
-			}
-		}
-
-		$this->logger->warning('penpot_sync writeback: no default (Drafts) project visible for team', [
-			'app' => Application::APP_ID,
-			'teamId' => $teamId,
-		]);
-
-		return null;
+		return $this->destinations->projectFor($this->resolver->resolve($parent));
 	}
 }

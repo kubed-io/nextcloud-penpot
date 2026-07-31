@@ -117,6 +117,12 @@ final class PenpotClient {
 		// Note `ids` is a SET of file ids, the one command in this table whose
 		// value is not a scalar — see wireParams()' widened type.
 		'move-files' => ['project' => 'project-id', 'files' => 'ids'],
+		// ── confirmed live, Ch2 §C6.8 (the copy probe) ──
+		// KEBAB `file-id`, which CORRECTS §6.28's record of a camelCase `fileId`.
+		// The row exists because that correction cost a live call to find: the
+		// survey wrote the wrong casing down and nothing contradicted it until a
+		// schema was read back off the server.
+		'duplicate-file' => ['file' => 'file-id', 'name' => 'name'],
 		// ── confirmed live, Chapter 1 §5.1/§5.4 ──
 		// CAMELCASE, and that is not a slip: §1918 established that `import-binfile`
 		// takes kebab (`project-id`) while `export-binfile` takes camel (`fileId`).
@@ -230,6 +236,36 @@ final class PenpotClient {
 		$this->assertName($name);
 
 		return $this->record($this->call('rename-file', ['file' => $fileId, 'name' => $name], $actorToken));
+	}
+
+	/**
+	 * Duplicate a design, server-side. Proven live in §C6.8: HTTP 200 with a full
+	 * new file record, and the `name` IS honoured (unlike `import-binfile`, §6.20).
+	 *
+	 * ## NO BYTES TRAVEL, WHICH IS WHY MODE DOES NOT MATTER
+	 *
+	 * Penpot copies the design from its id alone. Nothing is exported, uploaded
+	 * or re-imported, so a `link` file holding **zero bytes** (§C6.6) duplicates
+	 * exactly as completely as a stored `sync` archive. Neither sibling app can
+	 * do this — they copy by pushing the file's own content, so a pointer would
+	 * have nothing to push.
+	 *
+	 * ## IT CANNOT CHOOSE A PROJECT
+	 *
+	 * There is no project parameter in the schema, so the duplicate always lands
+	 * in the SOURCE design's project. A copy that must end up elsewhere is this
+	 * call followed by {@see moveFiles()} — which is exactly why one Nextcloud
+	 * gesture is two mechanisms (copy.feature). The returned record carries
+	 * `projectId`, so the caller compares against that rather than guessing.
+	 *
+	 * @return array<string, mixed> the new file record, incl. `id` and `projectId`
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function duplicateFile(string $fileId, string $name, ?string $actorToken = null): array {
+		$this->assertName($name);
+
+		return $this->record($this->call('duplicate-file', ['file' => $fileId, 'name' => $name], $actorToken));
 	}
 
 	/**

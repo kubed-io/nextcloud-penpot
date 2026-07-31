@@ -196,6 +196,10 @@ jobs:
           --admin-user="$NC_ADMIN_USER" \
           --admin-pass="$NC_ADMIN_PASS"
         ./occ config:system:set trusted_domains 1 --value=localhost
+        # The gesture channel (copy/move/rename) reaches NC over HTTP at
+        # localhost:8080, so that host:port must be trusted too. Same arrangement
+        # as nextcloud-n8n, whose suite this one is catching up with.
+        ./occ config:system:set trusted_domains 2 --value=localhost:8080
         # Nextcloud's SSRF guard refuses outbound requests to local addresses,
         # so the app cannot reach the Penpot service container at localhost:9001
         # without this. The client reports it precisely — "Host localhost
@@ -205,6 +209,25 @@ jobs:
         # homelab reaches Penpot at an in-cluster address (saga §6.17 hit the
         # same gate on the live instance), so the same setting is needed there.
         ./occ config:system:set allow_local_remote_servers --value=true --type=boolean
+
+    # ── Serve: the occ-only scenarios need no HTTP, but copy/move/rename do.
+    # Those three are driven by events Nextcloud emits from its Files API, and
+    # nothing in `occ` performs a file-manager gesture — which is why
+    # copy/move/rename.feature sat @todo while the code they describe shipped
+    # untested against a real Penpot. WebDAV is how a browser does it, and PHP's
+    # built-in server is enough for DAV: no nginx, no fpm. Ported from
+    # nextcloud-n8n, where this has been carrying a much deeper suite.
+    - name: Start Nextcloud (php built-in server)
+      run: |
+        php -S localhost:8080 -t "$GITHUB_WORKSPACE" >/tmp/nc-web.log 2>&1 &
+        echo "NC_WEB_PID=$!" >> "$GITHUB_ENV"
+        for i in $(seq 1 30); do
+          if curl -fsS -o /dev/null "$NC_BASE_URL/status.php"; then echo "NC web up"; exit 0; fi
+          sleep 2
+        done
+        echo "NC web server did not come up" >&2; cat /tmp/nc-web.log >&2; exit 1
+      env:
+        NC_BASE_URL: http://localhost:8080
 
     # ── Act: everything provisioned — now do the work ────────────────────────
     # Penpot's backend runs migrations on first boot, so the container is
@@ -341,6 +364,9 @@ jobs:
       working-directory: apps/${{ env.APP_ID }}/tests/integration
       env:
         OCC: php ${{ github.workspace }}/occ
+        NC_BASE_URL: http://localhost:8080
+        NC_ADMIN_USER: ${{ env.NC_ADMIN_USER }}
+        NC_ADMIN_PASS: ${{ env.NC_ADMIN_PASS }}
         PENPOT_URL: http://localhost:9001
         PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
       run: vendor/bin/behat --config behat.dist.yml

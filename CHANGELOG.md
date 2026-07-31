@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Copying a design file makes a real copy in Penpot** — in the same project when you copy in place, or into that team's Drafts when you copy to the team root. A `link` copies as completely as a `sync`, because Penpot duplicates the design server-side and no bytes need to travel.
+- Mapped folders now behave like ordinary Nextcloud folders: the **+ New button**, subfolders, and paste all work. They never granted a way to write design content to Penpot, and still don't.
+
 - Point the app at a Penpot instance and store an encrypted service-account token, from the admin UI or entirely headlessly over `occ`.
 - **Test connection** tells an unset token, a rejected token, and an unreachable Penpot apart — and names the `enable-access-tokens` flag, whose absence looks exactly like a bad token.
 - Map a Penpot team to a Nextcloud folder, shared with chosen groups, as a Team Folder or a plain folder. A team can only be mapped if the service account can actually see it.
@@ -49,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Design record in `saga/`, with every Penpot API claim verified against a live instance.
 
 ### Fixed
+
+- Large Penpot responses are decoded correctly. The Transit cache was capped at 94 entries (the real limit is 1936) and skipped plain-string keys, so any big record decoded against a shifted cache — which could silently return the wrong field for the wrong key.
 
 - Penpot's export response could not be read at all: the archive URL arrives as a Transit *tagged map*, which the decoder mistook for plain JSON and rejected with advice that did not apply.
 - The "pull on a schedule" setting silently reverted after saving.

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
@@ -50,6 +51,7 @@ final class MotionServiceTest extends TestCase {
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
+	private DestinationResolver $destinations;
 	private PersonalTokenService $personalTokens;
 	private MotionService $motion;
 
@@ -59,10 +61,15 @@ final class MotionServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->personalTokens = $this->createMock(PersonalTokenService::class);
+		// The REAL destination resolver over the mocked client, deliberately: the
+		// Drafts lookup is the behaviour a team-root move depends on, and mocking
+		// it away is what let the copy path ship with the opposite rule (§C6.10).
+		$this->destinations = new DestinationResolver($this->client, new NullLogger());
 		$this->motion = new MotionService(
 			$this->client,
 			$this->metadata,
 			$this->resolver,
+			$this->destinations,
 			$this->personalTokens,
 			new NullLogger(),
 		);

@@ -13,11 +13,13 @@ use Behat\Behat\Context\Context;
 use OCA\PenpotSync\Tests\Integration\Steps\AdminSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\GestureSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ModeSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PruneSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PullSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
+use OCA\PenpotSync\Tests\Integration\Support\WebDavTrait;
 
 /**
  * Behat context for the penpot_sync integration suite.
@@ -54,6 +56,7 @@ use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
  */
 final class FeatureContext implements Context {
 	use OccTrait;
+	use WebDavTrait;
 	use AppLifecycleSteps;
 	use AdminSteps;
 	use ConnectionSteps;
@@ -61,11 +64,22 @@ final class FeatureContext implements Context {
 	use PullSteps;
 	use ModeSteps;
 	use PruneSteps;
+	use GestureSteps;
 
 	private const APP_ID = 'penpot_sync';
 
 	/** The occ invocation prefix, e.g. "php occ". */
 	private string $occ;
+
+	/** WebDAV coordinates — the channel that performs file-manager gestures. */
+	private ?\GuzzleHttp\Client $dav = null;
+	private string $ncBaseUrl;
+	private string $ncUser;
+	private string $ncPass;
+
+	/** Folders this scenario made over DAV, so teardown can take them away. */
+	/** @var list<string> */
+	private array $createdFolders = [];
 
 	/** Result of the most recent occ command. */
 	private int $lastExit = 0;
@@ -75,5 +89,10 @@ final class FeatureContext implements Context {
 		// The runner tells us how to invoke occ (path differs between the CI
 		// checkout and a local docker stack), defaulting to the common case.
 		$this->occ = getenv('OCC') ?: 'php occ';
+		// The gesture channel. Defaults match the workflow's php -S invocation, so
+		// a local docker stack only has to override what it actually changes.
+		$this->ncBaseUrl = rtrim(getenv('NC_BASE_URL') ?: 'http://localhost:8080', '/');
+		$this->ncUser = getenv('NC_ADMIN_USER') ?: 'admin';
+		$this->ncPass = getenv('NC_ADMIN_PASS') ?: 'admin';
 	}
 }

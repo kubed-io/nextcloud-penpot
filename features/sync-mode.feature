@@ -157,3 +157,41 @@ Feature: Choosing whether a mirrored file stores its archive
     And every file's name and project placement is still reconciled
     # The listing carries name, projectId, revn and modifiedAt for every file in
     # one response (saga §5.5) — which is what makes link mode nearly free.
+
+  # ── what a "link" actually holds (saga §C6.6) ─────────────────────────────
+
+  @todo
+  Scenario: A link file holds nothing at all
+    Given a mirrored ".penpot" file in "link" mode
+    Then the file is zero bytes
+    And "occ penpot_sync:status" reports its content as "empty"
+    # Everything identifying the file — id, revision, mode, team — is metadata.
+    # A body would be a second copy of the same facts, free to drift from the
+    # first, which is exactly what the drift signal's two halves once did.
+
+  @todo
+  Scenario: A link is never a small placeholder archive
+    Given a mirrored ".penpot" file in "link" mode
+    Then it is not a ZIP, empty or otherwise
+    # A ZIP with any entry starts with the same magic bytes a real export does,
+    # so the app could no longer tell a pointer from a backup. That would
+    # silently disable the prune's final snapshot, make a demotion ask to delete
+    # an archive that does not exist, and report "archive" in status.
+
+  @todo
+  Scenario: A leftover body from an older version is truncated by the next pull
+    Given a "link" file still holding a JSON pointer body from an earlier version
+    When the pull runs
+    Then the file is emptied
+    And "occ penpot_sync:status" reported it as "pointer" until that happened
+    # The migration needs no repair step and no version check: the pull already
+    # calls the same code path on every link. "pointer" is a real third state
+    # meaning "an old body, not yet truncated".
+
+  @todo
+  Scenario: An already-empty link is left strictly alone
+    Given a mirrored ".penpot" file in "link" mode that is already empty
+    When the pull runs
+    Then the file's modification time and etag are unchanged
+    # Rewriting it would be a no-op in content and a very real one in metadata:
+    # every desktop client would re-download every link file after every pull.

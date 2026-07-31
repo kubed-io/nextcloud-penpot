@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\PenpotSync\Listener\CopyListener;
 use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
@@ -22,6 +23,7 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
+use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 
 /**
@@ -108,6 +110,13 @@ final class Application extends App implements IBootstrap {
 		// (a cross-team reparent in Penpot) nor ignoring it (a silent desync) is
 		// acceptable. Aborting the event shows the user why, at the moment they try.
 		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveGuardListener::class);
+
+		// A COPY IS ITS OWN EVENT. NodeCopiedEvent fires for neither a write nor a
+		// rename, so without this a copied design is simply never noticed. It
+		// becomes a real new design in Penpot (copy.feature, reversed deliberately
+		// in §C6.8) — one `duplicate-file` when it lands in the same project, plus
+		// a `move-files` when it lands anywhere else.
+		$context->registerEventListener(NodeCopiedEvent::class, CopyListener::class);
 
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to

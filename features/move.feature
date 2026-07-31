@@ -1,3 +1,6 @@
+# THE LIVE HALF IS gestures.feature — a sync design dragged between two mapped
+# project folders, asserted in Penpot rather than in a mock.
+#
 # Moving things. The guiding principle, stated by Command and applied to every
 # scenario below: DON'T LOSE DATA. A move never destroys bytes, never contacts
 # Penpot destructively, and never leaves a file in a state the user can't get

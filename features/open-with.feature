@@ -94,6 +94,21 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     # Unlike both sibling apps, this holds for every state a file can be in —
     # there is no mode where a text-editor fallback becomes the default click.
 
+  Scenario: The deep link carries both the team and the file
+    Given a mirrored ".penpot" file
+    When I choose "Open in Penpot"
+    Then the link names both the Penpot team and the design
+    # Penpot's workspace route refuses to open on a file id alone — its own
+    # legacy route exists to look the team up before navigating (saga §C6.7).
+
+  Scenario: A file pulled before the team was recorded cannot build a link
+    Given a mirrored ".penpot" file carrying no "penpot_team_id"
+    When I choose "Open in Penpot"
+    Then nothing opens, and no error is shown
+    And the next pull stamps the team, after which the link works
+    # Silence beats opening a workspace with a missing team, which is an error
+    # page.
+
   Scenario: A file with no live design has no Penpot-specific opener
     Given a ".penpot" file with no "penpot_id" (never tracked)
     Then "Open in Penpot" is hidden from its context menu

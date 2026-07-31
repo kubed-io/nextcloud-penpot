@@ -1222,3 +1222,163 @@ stranger opens this link?" **Reading an implementation is not the same as
 exercising an entry point**, and the gap between them is exactly wide enough to
 fit a confident paragraph. The check that found this was a person clicking a
 link, which no amount of further reading would have replaced.
+### C6.8 — The copy probe: it was never impossible, only decided against
+
+`copy.feature` says, in its loudest scenario, *"No copy, anywhere, ever writes to
+Penpot."* Reading it cold, that sounds like a limitation. It is not — the file
+already recorded that `duplicate-file` works (§6.28) and filed a **"PROPOSED,
+NOT ADOPTED"** scenario for it. The refusal was a *design* judgement (a Ctrl+C is
+someone organising files, not authoring work — §6.1), not a capability finding.
+
+What had never happened is the thing this project's charter demands: **calling
+it.** So it was called, against the running instance, and the answers moved two
+sections of the survey.
+
+#### What the wire actually says
+
+| Command | Live schema (Penpot 2.17.0) | Result |
+|---|---|---|
+| `duplicate-file` | `{file-id: uuid, name?: string≤250}` | new design, **name honoured**, full record returned |
+| `move-files` | `{project-id: uuid, ids: set<uuid> min 1}` | **204**, including on a just-created duplicate |
+| `delete-file` | `{id: uuid}` | **204** (soft; §6.42's grace window) |
+
+**Two corrections to §6.28.** It records `duplicate-file` as taking **camelCase
+`fileId`** — the schema says **kebab `file-id`**. And it has **no project
+parameter at all**, which §6.28 never claimed but every reader would assume from
+"a Penpot-side copy is one call": a duplicate always lands in the *source's*
+project. That single missing parameter is why the user's two gestures are two
+different mechanisms rather than one.
+
+#### The copy is two calls, and which two depends on where it lands
+
+- **Copy inside the same folder** — the destination resolves to the same Penpot
+  project, so `duplicate-file` alone is the whole operation.
+- **Copy up to the team root** — the destination is Drafts, a *different*
+  project, so it is `duplicate-file` **then** `move-files`. Confirmed working end
+  to end: duplicate → 204 move → the copy is in Drafts.
+
+Both are the same feature and want to be scenarios of one feature file, not two
+features. They differ only in whether the nearest-ancestor walk (§6.29) returns
+the source's project or another one — which is the same question every other
+write path already asks.
+
+#### The bug this probe did NOT find, and the retraction
+
+This section first read: *"`move-files` wants `project-id` and `ids`.
+`PenpotClient::moveFiles` sends `project` and `files`. Course 4's move
+write-back has never worked once."* Written with the schema quoted beside it,
+and completely wrong.
+
+`PenpotClient` has a **per-command parameter table** (`PARAMS`), because §6.21
+established there is no convention to derive — only a table. `move-files` has a
+row in it:
+
+```php
+'move-files' => ['project' => 'project-id', 'files' => 'ids'],
+```
+
+The method's array keys are the *app's* vocabulary; `call()` translates them to
+Penpot's on the way out. `PenpotClientTest` even asserts this exact row. The
+move write-back is fine, and always was.
+
+**The error was reading one layer and concluding about another** — the method
+body, not the wire. It is the same shape as the id mistake below: a plausible
+reading of partial evidence, stated as a finding about the remote system. Twice
+in one probe.
+
+What makes it worth keeping is that the table is the *reason* the mistake was
+available. A per-command translation layer is exactly right for an API with four
+casing conventions, and it also means **a method signature no longer tells you
+what goes on the wire.** Anyone auditing this client against a live schema must
+read `PARAMS`, not the callers. That is the cost of the table, and it is worth
+paying — but it should be paid knowingly.
+
+#### The other error, same shape
+
+The first duplicate's id was extracted with a greedy `sed` that captured the
+**last** uuid in the response rather than the file id. Every call made with it
+failed — a 500 on `move-files`, a 404 on `delete-file` — and the obvious reading
+was "Penpot refuses to move or delete a fresh duplicate." That conclusion was
+about to be written down as a finding. It was entirely an artefact of the probe.
+
+Reading the id back out of `get-project-files` instead of scraping it made all
+three calls succeed. **A probe that mutates is only as trustworthy as the ids it
+echoes back.**
+
+Both errors in this section share one shape, and it is worth naming because the
+saga's whole method is built to prevent it: *evidence from one layer, stated as a
+conclusion about another.* A uuid scraped from a response is not the file id. A
+method's parameter names are not the wire's. Both readings were plausible, both
+were confident, and both were wrong in the direction of "the remote system is
+broken" rather than "I am holding it wrong." That direction is the tell.
+
+### C6.9 — The decoder bug Course 1 predicted, found two courses late
+
+Course 1 named the Transit write cache *"the single most under-appreciated
+risk"*, and said exactly how it would fail: *"a naive parse appears to work on
+small payloads and silently mangles large ones."* That is precisely what
+happened, and it took a user copying a file to surface it.
+
+The copy created the design in Penpot and then reported failure:
+
+```
+penpot_sync copy: could not duplicate the design; the copy is untracked
+Penpot response referenced Transit cache entry "^23" (index 91)
+but only 91 entries were seen.
+```
+
+**Two bugs, both in the cache, both invisible until a big record arrived.**
+
+#### 1. The ceiling was 94. It is 1936.
+
+`CACHE_MAX` was set to 94 with a comment asserting Transit "holds at most 94
+entries before it resets". It does not. An index is one or two base-44 digits,
+so `MAX_CACHE_ENTRIES = 44 * 44 = 1936`.
+
+The damage is worse than the number suggests, because **a capped cache does not
+fail at the cap.** It keeps decoding against a cache that has stopped growing,
+so every later reference resolves against the wrong slot or misses.
+
+#### 2. Keys and values are not cached by the same rule
+
+`isCacheable()` demanded a `~:` or `~#` prefix in **both** positions. Transit
+caches **every map key** over three characters — plain strings included — and in
+value position only the tagged forms (`~:`, `~#`, `~$`).
+
+Every plain-string key was therefore skipped, shifting every subsequent index.
+
+**Why it survived two courses:** the payload the decoder was originally verified
+against — `get-teams` — has only keyword keys and fewer than 94 entries. It
+cannot exercise either bug. Both faults were latent in every response too small
+to reach them, which is the exact failure profile Course 1 wrote down.
+
+#### The proof, measured rather than argued
+
+A real 65 KB `get-file` body was captured off the running instance and replayed
+through both rule sets:
+
+| Rule | Cache built | Bad references |
+|---|---|---|
+| As shipped (prefix required in both positions, cap 94) | 161 | **109** |
+| Corrected (any map key; tagged values only; cap 1936) | 206 | **0** |
+
+Not "looks right" — 109 versus 0 on a payload the app fetches in normal use.
+
+#### What this cost, and the shape of it
+
+A copy created a real design in Penpot and then told the user nothing had
+happened, leaving an untracked file beside an orphaned design. A retry would
+have made a second one. The write succeeded; only our reading of the reply
+failed — which is the worst division of labour available, because it is the one
+where retrying makes things worse.
+
+**And the silent case is the one to fear.** A missing reference throws in key
+position, which is how this was caught at all. A *shifted* reference does not:
+it resolves to a real, plausible field name for the wrong field. `created-at`
+reads back as `modified-at`, and the pull's drift check quietly compares the
+wrong number. There is no telling how many small responses were decoded slightly
+wrong before a big one finally threw.
+
+The guard that saved us is the one the decoder already had: refusing to guess on
+a key-position miss instead of falling back to the raw token. It converted a
+silent corruption into a loud failure two courses later — late, but not never.

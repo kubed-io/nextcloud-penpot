@@ -1,3 +1,6 @@
+# THE LIVE HALF IS gestures.feature — a rename driven over WebDAV, asserted
+# against Penpot's own listing.
+#
 # Rename — the ONE place saga §6.1's read-only stance is genuinely narrower than
 # it sounds. BOTH DIRECTIONS ARE NOW SETTLED (saga §6.54 closed the §6.2 fork).
 #
@@ -145,3 +148,28 @@ Feature: Renaming a mirrored Penpot file
     Given a mirrored ".penpot" file with a known "penpot_id"
     When the file is renamed by any means
     Then the "penpot_id" metadata is unchanged
+
+  # ── renaming something that was just created by another gesture ───────────
+
+  @todo
+  Scenario: Renaming a design that was just copied propagates to Penpot
+    Given a mirrored ".penpot" file that I copied a moment ago
+    When I rename the copy
+    Then the copy's own design is renamed in Penpot
+    And the original design's name is untouched
+    # WALKED BY HAND, AND IT FAILED — but not here. The copy had silently failed
+    # to record its "penpot_id", so this rename correctly ignored an untracked
+    # file and looked like the bug (saga §C6.9). Kept in rename.feature as well
+    # as copy.feature on purpose: the symptom appeared at THIS gesture, so this
+    # is where someone will come looking.
+
+  @todo
+  Scenario: Renaming an untracked ".penpot" file is not a failure
+    Given a ".penpot" file carrying no "penpot_id"
+    When I rename it
+    Then Penpot is never contacted
+    And no error is shown
+    # This is correct behaviour and must stay — a file we do not track is not
+    # ours to rename anywhere. It is also indistinguishable, from the user's
+    # side, from the bug above. That is exactly why the tracking failure has to
+    # be loud where it happens.

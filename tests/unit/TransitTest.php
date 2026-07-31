@@ -354,4 +354,76 @@ final class TransitTest extends TestCase {
 			['aaaa' => 'z', 'bbbb' => 2],
 		], $out);
 	}
+
+	// ── the write cache, at real-response scale (saga §C6.9) ─────────────────
+
+	/**
+	 * A PLAIN-STRING MAP KEY CONSUMES A CACHE SLOT, exactly like a keyword one.
+	 *
+	 * The decoder demanded a `~:` / `~#` prefix in BOTH positions, mirroring the
+	 * value rule. Transit does not: every map key over three characters is
+	 * cached, whatever it looks like. Skip one and every later index shifts.
+	 *
+	 * `plainkey` here is a plain string in KEY position, so it takes slot 1. If
+	 * it is skipped, `^2` resolves to `cccc` instead of `bbbb` — a real field
+	 * name, for the wrong field, with nothing thrown.
+	 */
+	public function testAPlainStringMapKeyConsumesACacheSlot(): void {
+		$out = $this->transit->decode(
+			'[["^ ","~:aaaa",1,"plainkey",2,"~:bbbb",3,"~:cccc",4],'
+			. '["^ ","^0",9,"^1",8,"^2",7,"^3",6]]',
+		);
+
+		self::assertSame([
+			['aaaa' => 1, 'plainkey' => 2, 'bbbb' => 3, 'cccc' => 4],
+			['aaaa' => 9, 'plainkey' => 8, 'bbbb' => 7, 'cccc' => 6],
+		], $out);
+	}
+
+	/**
+	 * A PLAIN-STRING VALUE DOES NOT. The asymmetry is the whole rule: caching it
+	 * would over-count by exactly as much as skipping a plain key under-counts.
+	 *
+	 * "plainvalue" sits in value position, so the cache holds only `aaaa` and
+	 * `bbbb`; `^1` must therefore be `bbbb`.
+	 */
+	public function testAPlainStringValueDoesNotConsumeACacheSlot(): void {
+		$out = $this->transit->decode(
+			'[["^ ","~:aaaa","plainvalue","~:bbbb",1],["^ ","^0","z","^1",2]]',
+		);
+
+		self::assertSame([
+			['aaaa' => 'plainvalue', 'bbbb' => 1],
+			['aaaa' => 'z', 'bbbb' => 2],
+		], $out);
+	}
+
+	/**
+	 * THE CACHE HOLDS FAR MORE THAN 94 ENTRIES, and the ceiling used to be set
+	 * there — which broke every response big enough to reach it.
+	 *
+	 * Transit's real limit is 44 * 44 = 1936, because an index is one or two
+	 * base-44 digits. A capped cache does not fail AT the cap; it keeps decoding
+	 * against a cache that stopped growing, so every later reference is wrong or
+	 * missing. A real 65 KB `get-file` body produced 109 bad references.
+	 *
+	 * This builds a document with 120 distinct keys — past the old ceiling, well
+	 * inside the real one — and reads one back through a TWO-DIGIT reference,
+	 * which is the form that only exists above index 43. `^28` is 2 * 44 + 8 =
+	 * index 96, i.e. the key "k096".
+	 */
+	public function testTheCacheSurvivesPastTheOldNinetyFourEntryCeiling(): void {
+		$pairs = [];
+		for ($i = 0; $i < 120; $i++) {
+			$pairs[] = sprintf('"~:k%03d",%d', $i, $i);
+		}
+		$first = '["^ ",' . implode(',', $pairs) . ']';
+		// ^28 = 2 * 44 + 8 = index 96 — a reference the old 94-entry ceiling could
+		// not even represent, let alone resolve.
+		$second = '["^ ","^28",777]';
+
+		$out = $this->transit->decode('[' . $first . ',' . $second . ']');
+
+		self::assertSame(['k096' => 777], $out[1]);
+	}
 }
