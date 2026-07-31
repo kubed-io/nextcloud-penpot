@@ -209,6 +209,13 @@ jobs:
         # homelab reaches Penpot at an in-cluster address (saga §6.17 hit the
         # same gate on the live instance), so the same setting is needed there.
         ./occ config:system:set allow_local_remote_servers --value=true --type=boolean
+        # INFO, not the default WARN. Every listener in this app logs its outcome
+        # and swallows its failures by design, so at WARN a run that did the wrong
+        # thing successfully leaves no trace at all — which is exactly the state a
+        # prune of one unexpected mirror left this suite in: a count in the CLI
+        # summary, and nothing anywhere naming the file. The failure-path log dump
+        # below is only as useful as the level allows.
+        ./occ config:system:set loglevel --value=1 --type=integer
 
     # ── Serve: the occ-only scenarios need no HTTP, but copy/move/rename do.
     # Those three are driven by events Nextcloud emits from its Files API, and
@@ -390,7 +397,7 @@ jobs:
       if: failure()
       run: |
         echo "── penpot_sync lines ──"
-        grep -a '"app":"penpot_sync"' data/nextcloud.log 2>/dev/null | tail -40 || echo "(none)"
+        grep -a '"app":"penpot_sync"' data/nextcloud.log 2>/dev/null | tail -80 || echo "(none)"
         echo "── last 30 lines, any app ──"
         tail -30 data/nextcloud.log 2>/dev/null || echo "(no log)"
       working-directory: ${{ github.workspace }}

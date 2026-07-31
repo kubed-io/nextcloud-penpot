@@ -62,10 +62,20 @@
 # The half of this file CI can prove today has moved to **prune.feature**, where
 # it runs live against a design this suite really deletes in Penpot.
 #
-# WHAT STAYS @todo HERE: adopting a mirror out of the Nextcloud TRASH (§6.37) —
-# both the "don't duplicate a trashed mirror" and the "a design restored in
-# Penpot's own UI comes back" scenarios need `files_trashbin`, and are their own
-# slice. So do the ignore marker, the scheduled job, and the admin buttons.
+# The scheduled job and the admin buttons are built too, as of the triggers
+# slice — the pull now runs on its interval and from a button, and reports what
+# it did.
+#
+# WHAT STAYS @todo HERE: adopting a mirror out of the Nextcloud TRASH (§6.37).
+# Both the "don't duplicate a trashed mirror" and the "a design restored in
+# Penpot's own UI comes back" scenarios need the reconciler to READ the trash,
+# which it still does not do — see the note on that scenario below, which used to
+# claim the opposite. So does the ignore marker.
+#
+# NOT THE SAME THING as restoring a design (the restore slice, §C6.15): that runs
+# when the USER takes a mirror out of the Nextcloud trash, and it reaches back
+# into Penpot's trash to match. The gap here is the reverse direction — noticing,
+# during a pull, that a design came back on its own.
 
 @todo
 Feature: Scheduled or manual pull from Penpot
@@ -163,8 +173,33 @@ Feature: Scheduled or manual pull from Penpot
     Then the "My Stuff" folder still holds exactly 1 mirrored file
     And no file gains a " (2)" collision-suffixed duplicate
 
-  # The reconciler must look in the Nextcloud trash before creating a mirror,
-  # or restoring one file yields two (saga §6.37).
+  # ── THE OPEN FORK: does the reconciler read the Nextcloud trash at all? ────
+  #
+  # SETTLED, for PRUNING (prune.feature): it does not, ever. The pull walks the
+  # mapped folder's listing, so a trashed mirror is not spared by a check — it is
+  # never seen. That is what makes "Nextcloud never purges because Penpot did" a
+  # rule with no edge cases rather than a policy with a cross-trash comparison
+  # behind it.
+  #
+  # STILL OPEN, for CREATING, which is what the two scenarios below describe. If
+  # a design is alive in Penpot and its only mirror is in the Nextcloud trash, the
+  # pull today creates a second, fresh mirror beside it — because it cannot see
+  # what it is not looking at. §6.37 wanted the opposite: read the trash first,
+  # match by `penpot_id`, and adopt.
+  #
+  # WHAT CHANGED THE CALCULUS, and why this is now a fork rather than a bug: that
+  # state is no longer reachable by the ordinary route. A user deleting a mirror
+  # also deletes the design in Penpot, so the pull stops naming it and creates
+  # nothing; and restoring the mirror now restores the design with it (§C6.15).
+  # What is left are genuinely odd cases — the delete never reached Penpot, or a
+  # human restored the design in Penpot's own UI — where "the design exists, so a
+  # visible mirror should exist" is a defensible answer rather than an obvious
+  # bug.
+  #
+  # NEITHER IS BUILT. Both scenarios stay here as the specification of the
+  # adopting behaviour, and stay unclaimed until someone decides that reading
+  # `files_trashbin` on every pull is worth what it buys.
+
   Scenario: A design whose mirror sits in the Nextcloud trash is not duplicated
     Given a mirrored ".penpot" file that has been moved to the Nextcloud trash
     When the pull runs and finds the design still exists in Penpot
@@ -178,6 +213,10 @@ Feature: Scheduled or manual pull from Penpot
     Then the restored file is adopted as the mirror for its design
     And exactly one mirrored file exists for that design
     And it is refreshed if Penpot has changed since it was trashed
+    # NOTE: the first half of this is already true without any trash reading —
+    # a restored file is back in the folder, so the next pull simply finds it by
+    # `penpot_id` like any other mirror. Only the "exactly one" clause depends on
+    # the fork above, and only in the odd cases it names.
 
   Scenario: A design already in Penpot's Drafts surfaces at the Team Folder root
     Given the "Northwind" team has a design in its "Drafts" project
@@ -292,9 +331,18 @@ Feature: Scheduled or manual pull from Penpot
     Then no extra export is performed
     And the file is moved to the Nextcloud trash with its existing archive intact
 
-  # DETECTING A PENPOT-SIDE RESTORE (saga §6.46). We cannot DRIVE Penpot's trash
-  # — no API command restores a file — but we can notice when a human does it in
-  # Penpot's own UI: the design reappears under its ORIGINAL id.
+  # DETECTING A PENPOT-SIDE RESTORE (saga §6.46). This section used to open "we
+  # cannot DRIVE Penpot's trash — no API command restores a file", which was
+  # simply wrong: `restore-deleted-team-files` exists, was confirmed live in
+  # §6.52/§6.49, and the restore slice (§C6.15) calls it. That sentence predates
+  # the discovery of Penpot's trash and survived several rewrites of the file
+  # around it.
+  #
+  # What is described below is still the OTHER direction, and it is still not
+  # built: noticing during a pull that a design came back on its own — because a
+  # human restored it in Penpot's UI, or another Nextcloud did. The design
+  # reappears under its ORIGINAL id, so the reconciler could match the trashed
+  # mirror by `penpot_id` and put it back.
   Scenario: A design restored in Penpot's own UI is re-adopted from the trash
     Given a mirrored ".penpot" file that the pull trashed when its design vanished
     When a human restores that design in Penpot's own UI
@@ -302,8 +350,10 @@ Feature: Scheduled or manual pull from Penpot
     Then the trashed mirror is restored in place, matched by its "penpot_id"
     And no new file is created for the design
     And the file keeps its original id, metadata and mode
-    # The cleanest restore path in the app — and it belongs to Penpot, not us.
-    # It costs no new mechanism: the trash-aware reconciler already does this.
+    # NOT BUILT. It needs the pull to read `files_trashbin`, which nothing in the
+    # reconciler does yet — so today that design simply gets a second, fresh
+    # mirror beside the trashed one. The claim that "the trash-aware reconciler
+    # already does this" was aspirational when written and is corrected here.
 
   Scenario: A pull never prunes on a failed or incomplete listing
     Given a mirrored ".penpot" file in the "My Stuff" subfolder

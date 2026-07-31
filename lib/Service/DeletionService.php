@@ -93,11 +93,14 @@ final class DeletionService {
 	 * these ids" into "empty this trash".
 	 */
 	public function onPurged(File $node): void {
+		// One guard for both conditions, so the team read below knows the stamp is
+		// real. The `?->` form it replaced left every later field possibly-null for
+		// a state this line has already ruled out.
 		$stamped = $this->metadata->readFile($node->getId());
-		$penpotId = $stamped?->penpotId ?? '';
-		if ($penpotId === '') {
+		if ($stamped === null || $stamped->penpotId === '') {
 			return;
 		}
+		$penpotId = $stamped->penpotId;
 
 		// The team comes off the file's own stamp (§C6.7) rather than the folder
 		// tree, because a node being purged lives under files_trashbin and has no

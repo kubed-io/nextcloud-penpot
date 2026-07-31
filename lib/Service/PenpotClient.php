@@ -364,6 +364,77 @@ final class PenpotClient {
 	}
 
 	/**
+	 * Bring designs back OUT of a team's trash — the exact inverse of
+	 * {@see deleteFile()}, and lossless where an archive import never can be.
+	 *
+	 * The design returns with its **id, revision, history and deep links intact**
+	 * (§6.49, re-confirmed live in §C6.11), which is why every restore path in this
+	 * app must try this before it offers anything else.
+	 *
+	 * ## THE RETURN VALUE IS THE POINT, AND IT IS NOT A BOOLEAN
+	 *
+	 * `restore-deleted-team-files` answers **200 with an `end` event carrying an
+	 * EMPTY SET** for an id it did not restore (§C6.11) — no error, no warning. A
+	 * caller that reads the status code, or even the `end` event's existence, will
+	 * cheerfully report a restore that restored nothing, and the user will go
+	 * looking for a file that is not there.
+	 *
+	 * So this returns **the ids Penpot says it actually restored**, and the caller
+	 * compares. {@see \OCA\PenpotSync\Service\RestoreService} then re-reads the
+	 * trash listing on top of that, because §6.49 once saw the `end` event arrive
+	 * while `deleted_at` was still set.
+	 *
+	 * SSE, like the export and the permanent delete.
+	 *
+	 * @param list<string> $fileIds
+	 *
+	 * @return list<string> the ids Penpot reports as restored — a SUBSET of
+	 *                      `$fileIds`, and empty when nothing was restored
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function restoreDeletedFiles(string $teamId, array $fileIds, ?string $actorToken = null): array {
+		if ($fileIds === []) {
+			return [];
+		}
+
+		$payload = $this->consumeEventStream(
+			'restore-deleted-team-files',
+			['team' => $teamId, 'files' => $fileIds],
+			$actorToken,
+		);
+
+		return $this->idsFrom($payload);
+	}
+
+	/**
+	 * Normalise an `end` payload into a list of ids.
+	 *
+	 * Penpot sends a Transit `~#set` of `~u<uuid>` values, which the decoder hands
+	 * back as a plain list of uuid strings. The record form is tolerated too — the
+	 * cost is one `is_array()` and the alternative is a restore that silently
+	 * reports failure if Penpot ever enriches the event.
+	 *
+	 * @return list<string>
+	 */
+	private function idsFrom(mixed $payload): array {
+		if (!is_array($payload)) {
+			return [];
+		}
+
+		$ids = [];
+		foreach ($payload as $entry) {
+			if (is_string($entry) && $entry !== '') {
+				$ids[] = $entry;
+			} elseif (is_array($entry) && is_string($entry['id'] ?? null) && $entry['id'] !== '') {
+				$ids[] = $entry['id'];
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
 	 * Rename a project. Its own flow, not a variant of file rename (saga §6.39).
 	 *
 	 * Penpot answers 204 with NO BODY, unlike `rename-file`'s 200 + record.
@@ -562,25 +633,35 @@ final class PenpotClient {
 	}
 
 	/**
-	 * POST an SSE command and assert its stream reached `end` without an `error`.
+	 * POST an SSE command, assert its stream reached `end` without an `error`, and
+	 * return what that `end` event carried.
 	 *
-	 * For the streaming commands whose ANSWER is the work itself rather than a
-	 * payload — `permanently-delete-team-files` today, `restore-deleted-team-files`
-	 * when that lands. The export has its own reader because it needs the asset
-	 * URL out of the `end` event; these only need to know it got there.
+	 * For the two streaming commands whose answer is the work itself rather than a
+	 * download — `permanently-delete-team-files` and `restore-deleted-team-files`.
+	 * The export has its own reader because it needs the asset URL out of the `end`
+	 * event and then a second request; these two finish inside the stream.
 	 *
 	 * **HTTP 200 IS NOT SUCCESS** (§5.1, and it is just as true here): an error
 	 * arrives as an event INSIDE a 200 response. Anything that returns early on
 	 * the status code alone would call a failed purge a completed one.
 	 *
+	 * **AND `end` IS NOT SUCCESS EITHER** (§C6.11). The restore answers 200 with an
+	 * `end` carrying an EMPTY SET for an id it did not restore — no error, no
+	 * warning. So the payload is returned rather than discarded: for the restore it
+	 * is the only honest answer to "did this work", and the purge simply ignores it.
+	 *
 	 * @param array<string, string|list<string>|bool> $args logical args, mapped through PARAMS
+	 *
+	 * @return mixed the decoded `end` payload — a list of ids for both commands,
+	 *               `null` when the event carried no data
 	 *
 	 * @throws PenpotApiException on an `error` event or a stream with no `end`
 	 */
-	private function consumeEventStream(string $command, array $args, ?string $actorToken = null): void {
+	private function consumeEventStream(string $command, array $args, ?string $actorToken = null): mixed {
 		$stream = $this->postStream($command, $args, $actorToken);
 
 		$sawEnd = false;
+		$payload = null;
 		foreach ($this->events($stream) as [$name, $data]) {
 			if ($name === 'error') {
 				throw new PenpotApiException(
@@ -592,6 +673,7 @@ final class PenpotClient {
 			}
 			if ($name === 'end') {
 				$sawEnd = true;
+				$payload = $data === '' ? null : $this->transit->decode($data);
 			}
 		}
 
@@ -603,6 +685,8 @@ final class PenpotClient {
 				PenpotApiException::KIND_PROTOCOL,
 			);
 		}
+
+		return $payload;
 	}
 
 	/**

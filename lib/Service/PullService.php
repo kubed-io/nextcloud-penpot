@@ -525,6 +525,27 @@ final class PullService {
 			} elseif ($rescue === false) {
 				$lost++;
 			}
+
+			// NAME WHAT WAS TRASHED. The CLI prints counts, which is right for a
+			// summary and useless for the only question anyone ever asks afterwards:
+			// *which* file, and why. This is the app's most dangerous operation —
+			// driven entirely by "Penpot did not name this id" — and until this line
+			// existed a prune left no record of its subjects at all. A CI run that
+			// pruned one mirror unexpectedly could not be diagnosed from its log.
+			$this->logger->info('penpot_sync pull: trashed a mirror whose design Penpot no longer lists', [
+				'app' => Application::APP_ID,
+				// The PATH, not just the name: which project folder a mirror was in is
+				// half of any "why did this go" question, and two designs in different
+				// projects can share a name.
+				'file' => $node->getPath(),
+				'penpot_id' => $penpotId,
+				'final_archive' => $rescue,
+				// How many ids Penpot named this run. A prune against a plausible
+				// count is a real deletion; a prune against a suspiciously small one
+				// is a listing that came back short, which is the failure mode the
+				// $complete flag exists to catch and cannot always see.
+				'ids_listed' => count($seen),
+			]);
 		}
 	}
 

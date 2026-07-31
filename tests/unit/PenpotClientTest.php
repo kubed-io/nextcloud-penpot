@@ -42,6 +42,9 @@ final class PenpotClientTest extends TestCase {
 	/** @var ICrypto&\PHPUnit\Framework\MockObject\Stub */
 	private ICrypto $crypto;
 	private PenpotClient $client;
+	/** The real decoder, shared with the client — the `end`-payload tests decode
+	 * genuine Transit rather than hand-building the shape they expect. */
+	private Transit $transit;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -54,11 +57,13 @@ final class PenpotClientTest extends TestCase {
 		$this->config = $this->createStub(IAppConfig::class);
 		$this->crypto = $this->createStub(ICrypto::class);
 
+		$this->transit = new Transit();
+
 		$this->client = new PenpotClient(
 			$this->config,
 			$this->crypto,
 			$this->createStub(IClientService::class),
-			new Transit(),
+			$this->transit,
 			$this->createStub(LoggerInterface::class),
 		);
 	}
@@ -378,6 +383,48 @@ final class PenpotClientTest extends TestCase {
 		self::assertSame('https://penpot.example.com/a', $this->assetUrlFrom($stream));
 	}
 
+	// ── the restore's `end` payload (saga §C6.11) ───────────────────────────
+
+	/**
+	 * A restore that worked: the `end` event carries the ids Penpot ACTUALLY
+	 * restored, as a Transit set of `~u<uuid>` values.
+	 *
+	 * The whole point of returning this rather than a bool is the next test.
+	 */
+	public function testTheRestoredIdsAreReadFromTheEndPayload(): void {
+		self::assertSame(
+			['61d8ecb9-c430-8120-8008-6225c5b12134'],
+			$this->idsFrom($this->transit->decode('["~#set",["~u61d8ecb9-c430-8120-8008-6225c5b12134"]]')),
+		);
+	}
+
+	/**
+	 * THE 200-THAT-DID-NOTHING (saga §C6.11). Handed an id that is not in the
+	 * trash, Penpot answers 200 with an `end` event carrying an **empty set** — no
+	 * error, no warning, nothing for the transport layer to notice.
+	 *
+	 * So an empty list is the honest answer here, and it is the caller's job to
+	 * compare it against what it asked for. A client that returned `void` (or
+	 * `true`, on the strength of having seen `end`) would report a restore that
+	 * restored nothing, and the user would go looking for a file that is not there.
+	 */
+	public function testAnEmptySetIsWhatARestoreThatRestoredNothingLooksLike(): void {
+		self::assertSame([], $this->idsFrom($this->transit->decode('["~#set",[]]')));
+	}
+
+	/** An `end` with no payload at all is the same non-answer, not a crash. */
+	public function testAnEndEventWithNoPayloadYieldsNoIds(): void {
+		self::assertSame([], $this->idsFrom(null));
+	}
+
+	/**
+	 * Tolerated, not expected: if Penpot ever enriches the event into records, the
+	 * restore keeps working instead of silently reporting failure for every id.
+	 */
+	public function testRecordShapedIdsAreAlsoUnderstood(): void {
+		self::assertSame(['abc'], $this->idsFrom([['id' => 'abc', 'name' => 'My firsty']]));
+	}
+
 	/**
 	 * An error payload that is not Transit at all (a proxy's plain-text 502 body
 	 * arriving inside the stream) still has to produce a message with the reason
@@ -478,6 +525,23 @@ final class PenpotClientTest extends TestCase {
 	}
 
 	/** Drive the private SSE reader. */
+	/**
+	 * Reach the `end`-payload normaliser. Private for the same reason the param
+	 * table is: the alternative is asserting on a mocked HTTP stack instead of on
+	 * the one decision that matters.
+	 *
+	 * @return list<string>
+	 */
+	private function idsFrom(mixed $payload): array {
+		$method = new \ReflectionMethod(PenpotClient::class, 'idsFrom');
+		$method->setAccessible(true);
+
+		/** @var list<string> $ids */
+		$ids = $method->invoke($this->client, $payload);
+
+		return $ids;
+	}
+
 	private function assetUrlFrom(string $stream): string {
 		$method = new \ReflectionMethod(PenpotClient::class, 'assetUrlFrom');
 		$method->setAccessible(true);

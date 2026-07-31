@@ -164,6 +164,26 @@ trait PullSteps {
 	 *
 	 * @return list<array<string, mixed>>
 	 */
+	/**
+	 * Encode a command's params for the wire.
+	 *
+	 * `JSON_FORCE_OBJECT` ONLY WHEN THE MAP IS EMPTY, and the distinction is not
+	 * cosmetic. Penpot 500s on `[]` where it wants `{}` (§R1.3), which is why the
+	 * flag was here — but applied unconditionally it also rewrites every nested
+	 * LIST into an object, so a set param like `ids: ["<uuid>"]` goes out as
+	 * `{"0":"<uuid>"}` and the command fails validation. A non-empty PHP map
+	 * already encodes as a JSON object without any help; the flag is needed for
+	 * exactly one case and harmful in another.
+	 *
+	 * Latent until the first list-valued param — `permanently-delete-team-files`,
+	 * whose whole payload is a set of ids — needed to go through here.
+	 *
+	 * @param array<string, string|list<string>> $params
+	 */
+	private function encodeParams(array $params): string {
+		return json_encode($params, JSON_THROW_ON_ERROR | ($params === [] ? JSON_FORCE_OBJECT : 0));
+	}
+
 	private function penpotRpcRead(string $command, array $params): array {
 		$url = getenv('PENPOT_URL');
 		$token = getenv('PENPOT_TOKEN');
@@ -179,7 +199,7 @@ trait PullSteps {
 					'Accept' => 'application/json',
 					'Content-Type' => 'application/json',
 				],
-				'body' => json_encode($params, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT),
+				'body' => $this->encodeParams($params),
 				'http_errors' => false,
 				'connect_timeout' => 10,
 				'timeout' => 30,
@@ -210,9 +230,7 @@ trait PullSteps {
 					'Authorization' => 'Token ' . $token,
 					'Content-Type' => 'application/json',
 				],
-				// FORCE_OBJECT for the same reason PenpotClient uses it: an empty
-				// param map must serialise as `{}`, not `[]` (Penpot 500s on `[]`).
-				'body' => json_encode($params, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT),
+				'body' => $this->encodeParams($params),
 				'http_errors' => false,
 				// Bound the wait: a wedged Penpot must fail the scenario, not hang
 				// the whole integration job until the CI runner's global timeout.

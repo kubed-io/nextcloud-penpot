@@ -1672,3 +1672,418 @@ layer out: **the unit tests, the integration tests and the files on disk were al
 correct simultaneously, and the feature was still dead in the browser.** Nothing
 in the repo could have caught it, because the defect lived in the deploy path.
 The verification had to run where the user's click runs.
+
+### C6.15 — The delete grew an undo, and the command it needs lies twice
+
+Course 5's salvage yard shipped its destructive half first — delete, purge, and
+the prune that trashes a mirror whose design vanished. The gesture that undoes
+all of it was written up as "the next slice" and left there, with the gap stated
+in `delete.feature`'s own header:
+
+> restoring a mirror from the NEXTCLOUD trash puts the file back in the folder,
+> but the design stays in Penpot's trash. The next pull will not see it named by
+> Penpot and will prune the mirror again.
+
+Nothing was lost when that happened. The file simply appeared to delete itself a
+second time, a few minutes after the user had rescued it — which is its own kind
+of bad, and the kind that makes someone stop trusting the app rather than file a
+bug.
+
+#### The gesture is a typed event, and its opposite number is not
+
+§C6.13 cost an integration test to establish that a trash **purge** fires nothing
+typed at all — the trashbin's `removeItem` emits a legacy `\OCP\Trashbin`
+`preDelete` hook and that is the only door. The restore is not like that:
+`files_trashbin` dispatches `NodeRestoredEvent` after the rename lands, carrying
+source and target. Both sibling apps already listen to exactly it.
+
+Worth stating together, because the pair is genuinely asymmetric and nothing
+about the API suggests which half is which:
+
+| Gesture | Signal |
+|---|---|
+| delete → trash | `BeforeNodeDeletedEvent` (typed, abortable) |
+| restore ← trash | `NodeRestoredEvent` (typed, after the fact) |
+| purge | **nothing typed** — legacy `\OCP\Trashbin` `preDelete` hook |
+
+The listener reads the event's **target**, not its source. The source is the node
+at its trash path, where the name carries a `.dTIMESTAMP` suffix — so a listener
+that read it would fail its own `.penpot` extension check and never fire, and it
+would fail *silently*, which is the failure mode this app keeps meeting. That is
+pinned by a unit test whose source node is deliberately named
+`Login.penpot.d1785457295`.
+
+#### The DAV protocol for a restore is a MOVE to nowhere
+
+The integration step had to perform a real restore, and the plausible guess —
+MOVE the trash href back to the file's original path — is wrong in a way that
+would have passed a weaker assertion: it copies, and leaves the trash entry
+behind. Read out of the running server instead (§C6.1's rule, again):
+`RestoreFolder` is an `IMoveTarget` whose `moveInto()` ignores the target name
+entirely and calls `$sourceNode->restore()`. So the protocol is
+
+    MOVE /remote.php/dav/trashbin/<user>/trash/<entry>
+    Destination: /remote.php/dav/trashbin/<user>/restore/<entry>
+
+and the destination name is decoration. That door is the one that reaches
+`Trashbin::restore()`, which is what dispatches the event — a test that put the
+file back any other way would never have fired the listener it was testing.
+
+#### The command reports success in two different ways without doing the work
+
+This is why restore was its own slice rather than three lines in the delete's.
+`restore-deleted-team-files` has now been caught lying twice, in two unrelated
+ways, and both were already in the record:
+
+1. **§C6.11 — an id it does not restore gets 200 and an `end` event carrying an
+   EMPTY SET.** No error, no warning. The stream succeeded and the work did not
+   happen.
+2. **§6.49 — the `end` event once arrived while `deleted_at` was still set.** A
+   second call cleared it. This did not reproduce on 2.17.0.
+
+So the client returns **the ids the `end` event actually carries**, and the
+service compares them against what it asked for. A false success is worse than an
+error, because the user stops looking.
+
+That makes three commands in this app where **HTTP 200 settles nothing**: the
+export (§5.1), the permanent delete, and now the restore. It is no longer a
+gotcha about one endpoint; it is how Penpot's streaming commands work.
+
+#### …and the second lie came back, exactly where §6.49 left it
+
+The first draft of this slice handled lie 2 by re-reading the **trash listing**:
+restore, then ask `get-team-deleted-files` whether the design had left. That
+sounds equivalent to "it is back" and it is not, and the reasoning that produced
+it is worth naming because it was comfortable and wrong:
+
+> §6.49 saw this once, §C6.11 could not reproduce it, so the check is a
+> formality — any cheap read will do.
+
+The integration suite then failed on **the one scenario the whole slice exists
+for** — *"a pull after a restore neither prunes the mirror nor duplicates it"* —
+about half the time. Passing, failing, failing, passing across four runs of the
+same code.
+
+What the log said, once it was made to say anything (see below): the pull trashed
+`Second Thoughts.penpot` and `Round Trip.penpot`, the two files those scenarios
+had just restored. Each survived the pull immediately after its own restore and
+was trashed by the next scenario's pull, seconds later. And the scenario's own
+assertions had passed first — the design was out of the trash and, at that
+moment, listed.
+
+The mechanism is §6.49's, stated in Chapter 1 in one sentence that this slice had
+read and discounted:
+
+> **the SSE returns before the transaction settles.** A second call cleared it.
+
+Inside that window the two listings disagree. `get-team-deleted-files` can have
+stopped naming the design while `get-project-files` still omits it, because
+`deleted_at` is what the second one filters on and the transaction has not
+committed. So the trash listing answers "yes, it left the trash" for a design
+that is, as far as every other query is concerned, still deleted.
+
+**The oracle mattered more than the check.** Every decision in this app is made
+from the project listing: the pull builds its seen-set from it and trashes any
+mirror missing from it. Confirming a restore against anything else confirms
+nothing that matters. The service now asks the same question the pull will ask —
+*is the design back in its project's listing?* — and, when it is not, issues the
+second call §6.49 prescribed and asks again. A mirror at the team root is
+confirmed against that team's **Drafts** project, because Drafts is a real
+project with no folder (§6.35).
+
+Two live details that made this hard to see, both worth keeping:
+
+- **The live instance never reproduced it.** Delete/restore/poll for 40 seconds
+  on `drive.kellyferrone.com` showed the design listed continuously from 600 ms
+  after the restore returned. A near-idle Penpot with five designs settles inside
+  the gap; CI's, mid-suite with seventeen projects, does not. *"It works on the
+  real instance"* was true and meant nothing.
+- **The failing pull reported 14 files** — which is exactly the number of designs
+  those scenarios leave alive, including the restored one. That count is what
+  ruled out "the listing came back short" and pointed at a specific id being
+  absent from a specific project.
+
+#### Three layers, and the honest report for the one that is not built
+
+"Restore" means genuinely different things depending on what survived (§6.52),
+and the app must pick the cheapest, most lossless layer that applies:
+
+1. the design still exists in Penpot → **Penpot is not contacted at all**;
+2. it is in Penpot's trash → `restore-deleted-team-files`, lossless;
+3. it is gone for good → only the local archive is left, and importing it mints a
+   **new id** (§6.20, tested directly: a purged id cannot be resurrected).
+
+Layer 3 is not built, and the interesting decision was what to do when the app
+lands in it. Silence would be indistinguishable from success. Attempting the
+restore command anyway would produce §C6.11's empty set and a misleading log. So
+the app spends one project listing to tell layers 1 and 3 apart — the only
+uncommon path, since the ordinary trash-then-restore round trip never gets there
+— and says plainly that the design is gone and this mirror is now the only copy
+of it.
+
+Layer 3 stays deferred for a reason that is not phase ordering: it is the only
+restore that changes a design's identity, so it cannot be a listener that fires
+on a gesture. It needs a human to be told what they are trading and to say yes.
+`restore.feature` is that specification, and what it is waiting for is the
+confirmation surface, not the detection.
+
+#### The prune could not say what it had done
+
+None of the above was visible for two CI runs, and the reason is its own finding:
+**the prune logged nothing on its success path.** It moves a user's files to the
+trash, driven entirely by an absence — "Penpot did not name this id" — and it
+reported a count to the CLI and left no record anywhere of *which* files. The
+first failing run could only be described as "one mirror was pruned that should
+not have been". The second, after one log line was added, named both files
+immediately and turned a mystery into a mechanism.
+
+Two things follow, and neither is about this bug:
+
+1. **An operation that deletes on inference must name its subjects.** "Why did my
+   file disappear?" is the only question anyone asks afterwards, and until now
+   this app could not answer it for its most dangerous operation. The line now
+   carries the path (which project folder it was in), the id, whether a final
+   archive was rescued, and **how many ids Penpot named that run** — a prune
+   against a plausible count is a real deletion; a prune against a suspiciously
+   small one is a short listing, which is the failure `$complete` exists to catch
+   and cannot always see.
+2. **The integration suite ran at the default WARN level**, so info-level lines
+   were dropped before the failure-path log dump could show them. Every listener
+   in this app logs its outcome and swallows its failures by design (§6.18 rule
+   3) — which means at WARN, a run that did the wrong thing *successfully* leaves
+   no trace at all. The suite now runs at INFO. A log dump is only as useful as
+   the level allows, and this one had been quietly useless since it was added.
+
+#### The shape, one more time
+
+§C6.14 said: the unit tests, the integration tests and the files on disk were all
+correct simultaneously, and the feature was still dead in the browser. This is
+its sibling and the sharper version, because here the tests *did* catch it:
+
+**a flaky test is a finding, not a nuisance.** The instinct on a 50%-failing
+scenario is to re-run it, and the first re-run passed — which is precisely the
+evidence that would have shipped the bug. What made it a bug rather than a flake
+was refusing to accept the green and going after what the red had named.
+
+And underneath that, the reason the wrong check was written at all: **a
+non-reproduction is not a disproof.** §C6.11 tried §6.49's race once, did not see
+it, and wrote "the re-read rule stays anyway" — which was right — but the code
+that followed weakened the rule to a cheaper read on the strength of the same
+non-reproduction. The rule survived; the reason for it did not.
+
+### C6.16 — The prune's promise was never asserted, and the trash it fills is not yours
+
+A report, in the user's own words: *"I delete `My Ultra Kicker` in Penpot. I
+expect Nextcloud to prune it. Confirmed I do not see it in the Nextcloud folder.
+**Fail** — I do not see it in the Nextcloud trash."*
+
+Two findings came out of it, and only one is a bug.
+
+#### 1. It WAS in a trash. Just not theirs.
+
+The prune log — added one course earlier, and the reason this took minutes rather
+than a day — named it exactly:
+
+```
+"message":"penpot_sync pull: trashed a mirror whose design Penpot no longer lists"
+"scriptName":"/var/www/html/cron.php","user":"--"
+"file":"/nextcloud/files/Design Files/My Stuff/My Ultra Kicker.penpot"
+"penpot_id":"86f123cb-…-68bf65e62ba7","final_archive":"true","ids_listed":"4"
+```
+
+The trash row and the blob were both there, on **storage 1**:
+
+```
+oc_files_trash    My Ultra Kicker.penpot | nextcloud | 1785513504 | /Design Files/My Stuff
+oc_filecache      files_trashbin/files/My Ultra Kicker.penpot.d1785513504 | storage 1 | 2558 bytes
+oc_storages       1 = object::user:nextcloud       3 = object::user:kelly
+```
+
+The mapped folder is owned by the service account, and **the pull runs as its
+owner**, so the mirror went to the owner's trash. The human looking at their own
+Files app is a *member* of that share and sees nothing.
+
+This is not something the app invents — it is how Nextcloud handles every shared
+file: the owner's delete fills the owner's trash. Which makes it a documentation
+problem rather than a bug to engineer around, because working around it means
+second-guessing Nextcloud's sharing model on the most destructive path in the
+app. The README now says whose trash to look in, and offers the reliable escape:
+**move a file out of the mapped folder** and no prune can ever reach it.
+
+Also visible in that dump, and worth keeping: the 2558 bytes are the final
+snapshot. The rescue worked. The user's design was never at risk — only findable
+in the wrong place.
+
+#### 2. "Trash, never destroy" was a comment for three courses
+
+`prune.feature`'s header said it. `reconcile.feature` said it. Neither asserted
+it. Every scenario checked **"there is no node at that path"** — which a hard
+delete satisfies exactly as well as a trash does.
+
+So the app's single most destructive operation had its central safety property
+verified by prose. It happened to be true; nothing would have caught it becoming
+false. The scenarios now assert the file is *in* the trash, including a new one
+where Penpot has **permanently** deleted the design — reached in CI by calling
+`permanently-delete-team-files`, which puts Penpot in the same state a seven-day-
+old deletion does without waiting a week.
+
+Same shape as §C6.14 and §C6.15, at a different layer: a green suite that was
+green about the wrong thing.
+
+#### 3. The rule that has no exception, and why the tidy symmetry is wrong
+
+The user asked the right question directly: should a design *purged* in Penpot be
+purged in Nextcloud too, mirroring the trash flow one-to-one? And answered it —
+
+> we could have a rule that states nextcloud never auto purges a file from trash
+> because it's no longer in penpot
+
+That is the rule, it is now written down, and the argument for it is stronger
+than symmetry. **The two trashes expire on schedules neither side controls.**
+Penpot's is ~7 days and not configurable; a Nextcloud instance may keep 30. Mirror
+the purge and every design that ages out of Penpot's trash silently takes the
+user's last copy with it — precisely when the mirror has become the only copy
+that exists. The gesture that empties the Nextcloud trash is the user's, and the
+pull has no business reaching into it.
+
+It also collapses a branch out of restore, which is the second reason to like it:
+a mirror in the Nextcloud trash is always restorable *locally*, whatever Penpot
+did. Whether Penpot can match the restore is then a separate question with three
+honest answers (§C6.15's layers) rather than a precondition.
+
+The code already behaved this way — `prune()` has only ever called `$node->delete()`,
+which trashes. What was missing was any statement that this is a **rule** rather
+than an implementation detail someone could later "fix" into symmetry.
+
+#### 4. A latent trap in the test harness, found by the new scenario
+
+The purge scenario needed `permanently-delete-team-files`, whose payload is a
+**set of ids** — the first list-valued param the seed channel had ever sent. Both
+RPC helpers encoded with `JSON_FORCE_OBJECT` unconditionally:
+
+```php
+json_encode($params, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT)
+```
+
+That flag is there for §R1.3 — Penpot 500s on `[]` where it wants `{}` — but it
+rewrites **every nested list too**, so `ids: ["<uuid>"]` would have gone out as
+`{"0":"<uuid>"}` and failed validation. A non-empty PHP map already encodes as a
+JSON object with no help at all, so the flag was only ever needed for the empty
+case. Fixed to apply only there.
+
+Worth noting how it was found: not by reading, but by asking what the wire would
+actually carry before sending it — the same habit §C6.7 records failing to apply
+to route parameters, which shipped broken instead.
+
+#### 5. A stale claim, retired
+
+`reconcile.feature` had been asserting, in a comment, that *"we cannot DRIVE
+Penpot's trash — no API command restores a file"*. `restore-deleted-team-files`
+exists, was confirmed live in §6.52, was called in §C6.11, and is the backbone of
+§C6.15's slice. The sentence predates the discovery of Penpot's trash and
+survived every rewrite around it, because comments are not executable and nothing
+was checking.
+
+Its neighbour claimed the trash-aware reconciler "already does this". It does
+not — reading `files_trashbin` during a pull is still unbuilt, so a design
+restored in Penpot's own UI today gets a second mirror beside the trashed one.
+Both corrected. The lesson is not new but it keeps arriving in new clothes: **a
+feature file's prose ages exactly like a code comment, and neither is tested.**
+
+#### 6. The reconciler's field of view, stated at last
+
+The sharpest framing came from the user, and it retires a question rather than
+answering it:
+
+> we only spoke of the reconcile seeing a penpot file went to penpot trash or
+> it's gone and the state in nextcloud was the file is visible and active in a
+> folder. the other state is when nextcloud put it in the trash, both penpot and
+> nextcloud have it in the trash, so if penpot purges, the reconciler maybe
+> shouldn't care about the nextcloud trash and only focus on visible files which
+> need pruning.
+
+That is exactly what `collectMirrors()` has always done — it walks the mapped
+folder's directory listing, which does not contain trashed files. A trashed
+mirror is not *spared* by a check; it is **never seen**. But nothing said so, and
+the difference between "we decided not to" and "we happen not to" is the
+difference between a rule and an accident waiting to be refactored.
+
+Written down, a whole class of question stops existing:
+
+| Question | Answer once the rule is stated |
+|---|---|
+| Both trashes hold it, then Penpot purges — now what? | Nothing. The pull was never looking. |
+| Do the two trashes need reconciling against each other? | There is no such comparison anywhere in this app. |
+| Can a Penpot-side expiry take a user's last copy? | No. Nothing reaches into the Nextcloud trash. |
+
+**The price, named rather than hidden:** a design that comes back in Penpot while
+its old mirror sits in the Nextcloud trash gets a *new* mirror beside the trashed
+one, because the pull cannot re-adopt what it cannot see. §6.37 wanted the
+opposite — read the trash, match by `penpot_id`, adopt.
+
+What makes that a fork rather than a bug is that the restore slice removed the
+ordinary route into the state. Deleting a mirror deletes the design in Penpot, so
+the pull stops naming it and creates nothing; restoring the mirror restores the
+design with it (§C6.15). What remains are odd cases — the delete never reached
+Penpot, or a human restored the design in Penpot's own UI — where *"the design
+exists, so a visible mirror should exist"* is a defensible answer. `reconcile.feature`
+now carries both readings and claims neither, which is the honest state.
+
+The general lesson is the one this chapter keeps circling from new directions:
+**the strongest simplification available is usually a scope boundary, not a
+smarter algorithm.** Two trashes with independent retention policies is a genuinely
+hard reconciliation problem. Deciding that one of them is simply not ours to look
+at makes it disappear.
+
+#### 7. `permanently-delete-team-files` returns before the data is gone
+
+The new purge scenario asserted that no final archive could be saved for a
+permanently-deleted design — the obvious consequence of §6.42's grace window
+closing. Penpot disagreed, live:
+
+```
+And the design "No Way Back" is permanently deleted in Penpot
+And the admin runs a pull
+  → 1 design(s) no longer exist in Penpot. Their mirrors were moved to the
+    Nextcloud trash: 1 saved as a final archive first, 0 could not be recovered.
+```
+
+`export-binfile` **still exported it**, seconds after the destroy command
+returned 200 with an `end` event. Chapter 1 §2229 had the explanation waiting:
+Penpot's deletion is *"soft — and scheduled"*, rows marked and removed later by a
+worker. The permanent delete is no different in kind from the soft one; it just
+schedules the removal instead of the expiry.
+
+Two consequences worth keeping:
+
+- **A destroy command that returns is not a destroy that happened.** This is the
+  fourth Penpot command where the reply describes an intention rather than an
+  outcome, after export, restore and the trash listing. The pattern is now
+  reliable enough to assume: *ask again if it matters.*
+- **The scenario stopped asserting it.** Whether the snapshot lands is Penpot's
+  worker timing, not this app's behaviour, and a test that asserts the other
+  side's scheduling is a test that fails on a busy afternoon. It asserts where
+  the mirror ends up, which is the thing the feature is actually about.
+
+#### 8. An error is not an empty result
+
+The same run failed a second scenario with `expected a design named 'Round Trip'
+in Penpot project 'Stay Put'; found: (none)` — which reads exactly like a restore
+that silently did not work, and sent this investigation straight back to §C6.15's
+territory.
+
+It was not. The restore had logged success, the pull had listed the design and
+pruned nothing. What failed was the **probe**, for one project, transiently:
+`occ penpot_sync:probe --files` catches a per-project listing error, prints
+`<error>…</error>` where the files would be, and exits 0. The step's parser
+looked for lines containing `revn=`, found none, and reported an empty project.
+
+A listing failure and an empty listing are not the same fact, and a test that
+collapses them will send its reader to the wrong place every time. The step now
+raises the error line as itself.
+
+That makes three findings in this section that are all the same shape one level
+apart: the prune reported a count and not its subjects (§C6.16.2); the restore
+confirmed against a listing that could not answer the question (§C6.15); and the
+harness turned a failure into an absence. **Every one of them was a system
+answering a question that had not been asked.**

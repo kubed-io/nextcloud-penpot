@@ -124,8 +124,10 @@ the click-through.
 - No content writeback. Editing a mirrored file's bytes never reaches Penpot.
 - No tag sync — Penpot's API has no tags, labels, or annotations at all
   (confirmed by scanning its full RPC surface: 149 commands, zero hits).
-- **Copying, deleting and trashing a mirror are purely local.** Nothing you do to
-  a mirrored file in the Files app ever deletes anything in Penpot.
+- No design content is ever written back. Deleting *is* passed on — to Penpot's
+  own trash, which is as reversible as your Nextcloud one, and restoring the
+  file brings the design back with it. Nothing is destroyed until you empty the
+  trash, and even then only if Penpot still has it in its own.
 
 ### What *can* reach Penpot, and why it's safe
 
@@ -137,14 +139,17 @@ complete list:
 | Drag a design into another project folder | It moves to that project | Drag it back |
 | Drag it to the team root | It moves to Drafts | Drag it back |
 | **New → Penpot design** | A design is created | Delete it |
-| Restore an archived design | It's imported | — |
-| Rename a project folder | The project is renamed | Rename it back |
-| **Delete in Penpot** *(explicit action)* | Moved to Penpot's trash | Restore it, for ~7 days |
+| Copy a design file | A real copy is created | Delete it |
+| Rename a design or project folder | It's renamed | Rename it back |
+| Delete a mirror | Moved to **Penpot's trash** | Restore it from your trash |
+| Restore a mirror from your trash | Taken back out of Penpot's trash | Delete it again |
+| **Empty your trash** | Permanently deleted **— only if still in Penpot's trash** | **NO** |
 
-**Exactly one operation in the entire app destroys anything** — and it only ever
-runs behind an explicit, confirmed "Delete in Penpot". Everything else is
-additive or reversible. That, rather than a short list, is what the read-only
-promise actually protects.
+**Exactly one operation in the entire app destroys anything** — emptying your
+Nextcloud trash, the one gesture Nextcloud itself treats as irreversible.
+Everything else is additive or reversible, and the delete/restore pair mirrors
+Penpot's own trash step for step. That, rather than a short list, is what the
+read-only promise actually protects.
 
 ### Nesting: flat in Penpot, however you like in Nextcloud
 
@@ -449,25 +454,29 @@ something nobody is tracking — it looks like a backup and isn't one.
 "Restore" can mean several different things. The app picks the best path
 available and tells you which one it used — best first:
 
-| # | Situation | What you get back |
-|---|---|---|
-| 1 | Only the **Nextcloud** file was deleted | Everything — the design never moved |
-| 2 | It's in **Penpot's trash** (~7 days) | **Everything** — id, revision, history, links |
-| 3 | Deleted in Penpot, you have a `sync` archive | The design, not its id or history |
-| 4 | Deleted in Penpot, rescued by a **final snapshot** | The design, not its id or history |
-| 5 | A `link` whose design vanished over a week ago | Nothing |
+| # | Situation | What you get back | |
+|---|---|---|---|
+| 1 | Only the **Nextcloud** file was deleted | Everything — the design never moved | ✅ |
+| 2 | It's in **Penpot's trash** (~7 days) | **Everything** — id, revision, history, links | ✅ |
+| 3 | Deleted in Penpot, you have a `sync` archive | The design, not its id or history | not yet |
+| 4 | Deleted in Penpot, rescued by a **final snapshot** | The design, not its id or history | not yet |
+| 5 | A `link` whose design vanished over a week ago | Nothing | — |
 
-**Row 2 is Penpot's own Trash, and it's the important one.** A design deleted in
-Penpot stays recoverable for about a week, and it can be restored either by a
-human in Penpot's UI or by this app calling Penpot's restore directly — both
-bring it back with its id, revision and history intact. Either way, the next pull
-finds your old mirror in the Nextcloud trash and puts it back rather than
-creating a duplicate. Nothing to configure.
+**Rows 1 and 2 need no thought and no clicks: just restore the file from your
+Nextcloud trash.** The app works out which case it is and does the least
+destructive thing that applies. If the design never left Penpot, nothing is sent
+at all; if it's in Penpot's trash, the app takes it back out — with its id,
+revision, history and links intact — and confirms by re-reading, because Penpot's
+restore command reports success for ids it did not restore. Either way you end up
+with one mirror, not two, and the next pull leaves it alone.
 
-Rows 3 and 4 are best-effort: **a deleted Penpot design cannot be resurrected at
-its original id**, verified against a live instance, so importing returns the
-*artwork* rather than the *file* — same name, pages and assets, new identity, no
-edit history.
+Rows 3 and 4 are best-effort and **not built yet**: **a deleted Penpot design
+cannot be resurrected at its original id**, verified against a live instance, so
+importing returns the *artwork* rather than the *file* — same name, pages and
+assets, new identity, no edit history. That's a trade worth making, but it's
+yours to make, so it needs a confirmation step rather than a listener. Until it
+lands, the app tells you when you're in this case instead of failing quietly:
+the design is gone from Penpot and your file is the only copy of it.
 
 **Row 5 is the only real loss, and the app works hard to avoid it.** When a pull
 notices a `link` file's design was deleted, it takes a **final snapshot** first —
@@ -484,61 +493,85 @@ app says so rather than quietly offering you the worse option.
 
 ### Deleting
 
-Two independent layers, and the app always says which one it's acting on:
+**Each Nextcloud gesture gets the Penpot operation with the same
+reversibility** — that symmetry is the whole design:
 
-**Deleting the file in Nextcloud** is purely local. Trash, restore, and
-empty-trash never contact Penpot. Restoring a mirror from the Nextcloud trash
-re-adopts it — the pull won't leave you with a duplicate.
+| You do | Penpot does | Get it back by |
+|---|---|---|
+| Delete a mirror (→ your trash) | The design goes to **Penpot's trash**, ~7 days | Restoring the file |
+| Restore it from your trash | The design comes **back out**, losslessly | — |
+| Empty your trash | The design is **permanently deleted** | Nothing. This is the irreversible one |
 
-**"Delete in Penpot"** is a separate, explicit action — and it is **recoverable**.
-Penpot has its own Trash, and this app uses it:
+An earlier version of this app kept the delete purely local, on the belief that
+Penpot's trash was unreachable by API. It isn't — and once that's true, "purely
+local" stops being the safe choice and starts being the surprising one: someone
+who deletes a design in Nextcloud and finds it still in Penpot hasn't been
+protected, they've been ignored.
 
-| What happens | What a restore returns |
-|---|---|
-| The design goes to **Penpot's trash** for ~7 days | **Everything** — same id, revision, history, links |
-| After that window closes | Best-effort rebuild from your archive — the design, not its id or history |
+**Restoring inside the window costs nothing.** The app calls Penpot's own restore
+and the design comes back exactly as it was — verified against a live instance:
+same id, same revision, deep links working again.
 
-Restoring inside the window costs nothing: the app calls Penpot's own restore and
-the design comes back exactly as it was. Verified against a live instance — same
-id, same revision, deep links working again.
+It does not trust the reply. Penpot's restore answers "success" for ids it did
+not restore, and it answers *before its own transaction settles*, so the app
+re-reads the design's project listing — the same listing the sync reads — and
+calls the restore a second time if the design is not in it yet. That is the
+difference between your file coming back and your file coming back for ninety
+seconds until the next sync tidies it away again.
 
 **There is no trash-bin setting to configure.** An earlier design built a
-parallel "trash project" inside a service account's team, on the mistaken belief
-that Penpot's own trash was unreachable by API. It isn't — and Penpot's trash
-preserves strictly more, with no configuration and without a design vanishing
-into a robot's private team.
+parallel "trash project" inside a service account's team, on the same mistaken
+belief. Penpot's own trash preserves strictly more, with no configuration and
+without a design vanishing into a robot's private team.
 
-**After the window, a best-effort restore still gets your work back.** Measured
-on a real round trip:
+**Emptying your trash is the irreversible one, and it has a guard.** Penpot's
+`permanently-delete-team-files` does *not* check that a design is in the trash —
+proven live on a design that had been restored, which it destroyed anyway. So the
+app reads Penpot's trash listing first and passes on only ids that come back in
+it. If someone restored the design in Penpot in the meantime, emptying your trash
+leaves it alone.
 
-```
-comes back:  name, pages, shapes, assets, even the revision number
-does not:    the file id (old deep links stay dead), the edit history
-```
+⚠️ **After the window closes, only the bytes are left.** A `sync` file holds a
+real archive and a `link` holds none, so if a link's design is deleted in Penpot
+the pull takes a [final snapshot](#restore--putting-a-design-back) on its way out
+rather than leaving you a dead pointer. Rebuilding a design *from* that archive
+is the one restore path still to come — see rows 3 and 4 above.
 
-Nobody loses design work — you lose undo-history and a URL.
+**Deleting a `link` currently behaves like deleting a `sync`** — the design goes
+to Penpot's trash, and restoring the file brings it back. The intended end state
+is different: a link holds no content, so trashing one should be a *visibility*
+choice that Penpot never hears about, with the trashed file itself acting as the
+"hidden" marker. That needs the pull to read your trash before it recreates a
+mirror, or a dismissed link would simply reappear on the next run — so the two
+land together, in a later release, and until then the delete is uniform.
 
-**Permanent deletion is its own explicit action.** It's the only irreversible
-call in the app, and an ordinary delete never reaches it.
+### When someone deletes a design in Penpot
 
-⚠️ **Best-effort restore needs the bytes.** A `link` file holds no archive, so
-there is nothing to rebuild from once the window closes. The app says so *before*
-you delete one, and if a link's design is deleted in Penpot the pull takes a
-[final snapshot](#restore--putting-a-design-back) rather than leaving you a dead
-pointer.
+The sync notices on its next run and moves your mirror to the **Nextcloud
+trash** — never a hard delete, and never anything else. Three things are worth
+knowing about that, in order of how likely they are to surprise you.
 
-**Deleting a link is different: it just hides it.** A link has no content, so
-there is nothing to delete — trashing one is a *visibility* choice. The file goes
-to the Nextcloud trash and the pull leaves it alone instead of recreating it.
-Restore it from the trash to unhide it. **Penpot is never contacted either way:**
-a link's design is never imported, moved, or touched, for any reason.
+**Nextcloud never empties its own trash because Penpot did.** Even a design
+*permanently* deleted in Penpot leaves your mirror sitting in the trash, with
+whatever archive it had. The tidy-looking alternative — mirror Penpot's purge too
+— is a trap: the two trashes expire on their own schedules (Penpot's is about 7
+days and not configurable, yours might be 30), so every design that quietly ages
+out of Penpot's trash would take your last copy with it, on a schedule nobody
+chose. Emptying your trash stays your decision.
 
-> The trash *is* the hidden marker — there's no separate setting or flag. One
-> consequence worth knowing: emptying your trash forgets the dismissal, so hidden
-> links reappear on the next pull.
+**It goes to the trash of whoever owns the folder.** The sync runs as the account
+that owns the mapped folder — the service account, for a shared Team Folder — so
+that is whose trash the mirror lands in. This is ordinary Nextcloud behaviour for
+shared files rather than anything this app invents: the owner's delete fills the
+owner's trash. If you are a *member* of a shared design folder, you will see the
+file disappear and find nothing in your own trash. Ask whoever owns the folder,
+or check the account the mapping was created under.
 
-When the pull finds a design deleted in Penpot by someone else, it moves the
-local mirror to the **Nextcloud trash** — never a hard delete.
+**Want a copy that no Penpot deletion can ever touch?** Move the file **out of
+the mapped folder** first. The sync only ever prunes inside folders it manages,
+so a design parked anywhere else is yours permanently — and if it is in `sync`
+mode it is a real archive, not a pointer. That is the honest way to keep
+something before deleting it in Penpot.
 
 ### Failures never cost you data
 

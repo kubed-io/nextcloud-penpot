@@ -52,7 +52,21 @@
 # conflating them would be a lie to the user. That is why restore ALWAYS checks
 # the cheaper layers first, ALWAYS asks, and ALWAYS says which one it is doing.
 #
-# @todo — no lib/Service/ exists yet.
+# WHAT IS BUILT, AND WHAT THIS FILE IS STILL WAITING FOR (§C6.15). Layers 1 and 2
+# ship: taking a mirror out of the Nextcloud trash restores the design out of
+# Penpot's trash with it, losslessly, and does nothing at all when the design
+# never left. Their scenarios live in delete.feature, next to the delete they
+# undo. THIS file is layer 3 — the archive import — and only layer 3.
+#
+# Layer 3 is deliberately last, and not merely unfinished. It is the only restore
+# that CHANGES A DESIGN'S IDENTITY, so it cannot be a listener that fires on a
+# gesture the way the other two are: it needs a human to be told what they are
+# about to trade and to say yes. The app already reports the state that leads
+# here — "the design is gone from Penpot and this mirror is the only copy" — so
+# the missing piece is the confirmation surface and the import itself, not the
+# detection.
+#
+# @todo — the import, and the confirmation it requires, are not built.
 
 @todo
 Feature: Restoring a design from its Nextcloud archive back into Penpot
@@ -149,8 +163,9 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And no import is performed
     And the design keeps its original id, revision, history and links
     And the app makes clear this restore lost nothing
-    # Layer 2 always beats layer 3 (saga §6.49/§6.52). The app must CHECK
-    # get-team-deleted-files before offering an import — see delete.feature.
+    # Layer 2 always beats layer 3 (saga §6.49/§6.52), and it is BUILT: the trash
+    # listing is read before anything else is considered. Kept here as the rule
+    # this file must obey; its live scenarios are in delete.feature.
 
   Scenario: A mirror in the Nextcloud trash is restored locally, not re-imported
     Given the design still exists in Penpot
@@ -159,7 +174,8 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     Then the app restores the file from the Nextcloud trash
     And Penpot is never contacted
     And no duplicate mirror is created
-    # Layer 1 — nothing was ever lost remotely, so nothing needs sending.
+    # Layer 1 — nothing was ever lost remotely, so nothing needs sending. BUILT;
+    # same note as above.
 
   # ── naming, and the two-call reality ─────────────────────────────────────────
 

@@ -127,6 +127,55 @@ trait GestureSteps {
 		$this->assertStatus($res, [204, 200], "purge {$entry}");
 	}
 
+	/**
+	 * The OTHER second step, and the one that undoes the first: take the file back
+	 * out of the Nextcloud trash.
+	 *
+	 * Looked up by the ORIGINAL path even though the trash entry is named
+	 * `<name>.dTIMESTAMP` — {@see trashbinPathFor()} matches on the trashbin's own
+	 * `nc:trashbin-filename` property, so the scenarios stay readable and never
+	 * have to know about the suffix. That suffix is also exactly what makes
+	 * matching trashed files by NAME wrong (#43); the app matches by fileid.
+	 *
+	 * @When /^I restore "([^"]*)" from the Nextcloud trash$/
+	 */
+	public function iRestoreFromTheNextcloudTrash(string $path): void {
+		$entry = $this->trashbinPathFor($path);
+		if ($entry === null) {
+			throw new \RuntimeException("no trashbin entry found for '{$path}' — was it actually deleted?");
+		}
+		$this->davRestoreFromTrash($entry);
+		$this->gestureTarget = $path;
+	}
+
+	// ── Nextcloud's trash ───────────────────────────────────────────────────
+
+	/**
+	 * THE HALF THE PRUNE SCENARIOS WERE MISSING. They asserted the mirror was gone
+	 * from its folder and stopped there — which is equally true of a hard delete,
+	 * the one outcome the prune must never produce. "Trash, never destroy" was a
+	 * comment in a feature header for three courses and an assertion in none of
+	 * them, and the gap surfaced as a user report: *the file left the folder and I
+	 * cannot find it in the trash.*
+	 *
+	 * @Then /^the file "([^"]*)" is in the Nextcloud trash$/
+	 */
+	public function theFileIsInTheNextcloudTrash(string $path): void {
+		if ($this->trashbinPathFor($path) === null) {
+			throw new \RuntimeException(
+				"expected '{$path}' in the Nextcloud trash; it is not there — a prune that "
+				. 'hard-deletes looks exactly like this from the folder side',
+			);
+		}
+	}
+
+	/** @Then /^the file "([^"]*)" is not in the Nextcloud trash$/ */
+	public function theFileIsNotInTheNextcloudTrash(string $path): void {
+		if ($this->trashbinPathFor($path) !== null) {
+			throw new \RuntimeException("expected no trashbin entry for '{$path}', but one is there");
+		}
+	}
+
 	// ── Penpot's trash ──────────────────────────────────────────────────────
 
 	/** @Then /^the design "([^"]*)" is in Penpot's trash$/ */
@@ -264,6 +313,17 @@ trait GestureSteps {
 	 *
 	 * A project line ends in `[<team>]`; a file line under it carries `revn=`.
 	 *
+	 * ## AN ERROR IS NOT AN EMPTY PROJECT, AND THIS USED TO REPORT IT AS ONE
+	 *
+	 * `probe --files` catches a per-project listing failure and prints
+	 * `<error>…</error>` where the files would be, exiting 0 — so a transient
+	 * Penpot 502 for ONE project used to reach the assertion as the flat, wrong
+	 * `found: (none)`, indistinguishable from "the design really is gone". That
+	 * sent an hour after a restore bug that had not happened: the restore had
+	 * logged success, the pull had listed the design, and only the probe failed.
+	 *
+	 * The error line is now raised as itself.
+	 *
 	 * @return list<string>
 	 */
 	private function penpotFileNamesIn(string $projectName): array {
@@ -278,6 +338,12 @@ trait GestureSteps {
 			if (preg_match('/^  (\S.*?)\s{2,}[0-9a-f-]{36}\s+\[/', $line, $m) === 1) {
 				$inProject = trim($m[1]) === $projectName;
 				continue;
+			}
+			if ($inProject && str_contains($line, '<error>')) {
+				throw new \RuntimeException(
+					"Penpot could not list project '{$projectName}' — this is a LISTING failure, "
+					. "not an empty project:\n" . trim(strip_tags($line)),
+				);
 			}
 			if ($inProject && preg_match('/^\s+(.*?)\s+revn=/', $line, $m) === 1) {
 				$names[] = trim($m[1]);
