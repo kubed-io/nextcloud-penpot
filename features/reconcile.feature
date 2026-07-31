@@ -92,30 +92,37 @@ Feature: Scheduled or manual pull from Penpot
   #
   # The structural claims, driven live: a mapped team becomes a folder tree
   # stamped with Penpot's own ids, and running twice changes nothing.
+  #
+  # EACH MAPS ITS OWN FOLDER, and that is load-bearing rather than tidy. These
+  # four are the only scenarios in the suite that assert about a mapped folder AS
+  # A WHOLE, so they must not share one with scenarios that leave designs in it —
+  # and "mapped into the folder" (a Team Folder) is not interchangeable with
+  # "mapped as a plain folder" if both land on the same name. The first version
+  # of this section reused "Penpot" and the project folder simply never appeared.
 
   @admin @occ
   Scenario: A pull mirrors a mapped team's root folder and stamps its team id
-    Given the first visible team is mapped into the folder "Penpot"
+    Given the first visible team is mapped into the folder "Team Root"
     When the admin runs a pull
     Then the pull succeeds
-    And the folder "Penpot" carries the team's Penpot id
+    And the folder "Team Root" carries the team's Penpot id
 
   @admin @occ
   Scenario: A pull mirrors a project as a folder carrying its project id
-    Given the first visible team is mapped into the folder "Penpot"
+    Given the first visible team is mapped into the folder "Project Folders"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     Then the pull succeeds
-    And the folder "Penpot/Widgets" carries a Penpot project id
+    And the folder "Project Folders/Widgets" carries a Penpot project id
 
   @admin @occ
   Scenario: A second pull reconciles in place and does not duplicate the folder
-    Given the first visible team is mapped into the folder "Penpot"
+    Given the first visible team is mapped into the folder "Twice Pulled"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     And the admin runs a pull
     Then the pull succeeds
-    And there is no node at "Penpot/Widgets (2)"
+    And there is no node at "Twice Pulled/Widgets (2)"
     # IDEMPOTENCE IS THE WHOLE POINT of a reconciler: the second run must find
     # what the first one made, by id, and leave it alone.
 
