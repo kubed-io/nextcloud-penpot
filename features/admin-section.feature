@@ -112,13 +112,68 @@ Feature: The admin section's shape and actions
     # file reads as the complete inventory of the section's actions.
 
   @todo
-  Scenario: Bulk sync is offered but disabled until the pull exists
+  # ── the three ways a pull is triggered ────────────────────────────────────
+  #
+  # Until now there was exactly ONE: `occ penpot_sync:sync pull`. The button was
+  # rendered disabled with a "later release" tooltip, and the interval in Sync
+  # Settings was read by nothing at all — so a design renamed in Penpot stayed
+  # renamed only in Penpot until someone ran occ by hand. The pull itself was
+  # never the problem; it has followed renames since Course 3.
+  #
+  # Both siblings have all three, and the split between them is deliberate:
+  #
+  #   per-mapping "Sync now"  SYNCHRONOUS — one mapping, bounded, instant answer
+  #   "Sync from Penpot"      ASYNC       — every mapping, a queued job, polled
+  #   the schedule            a TimedJob  — the same work, unattended
+  #
+  # WHY THE BULK ONE CANNOT BE SYNCHRONOUS: it walks every mapped team and, for
+  # `sync` files whose revision moved, exports each archive. On a real instance
+  # that outlives a PHP request, and a request that dies half way leaves no
+  # record of how far it got. A queued job survives the admin navigating away,
+  # which is the actual user behaviour being designed for.
+  #
+  # WHY THE PER-MAPPING ONE SHOULD NOT BE ASYNC: it is one team, usually a
+  # handful of files, and the admin is looking at that card waiting for an
+  # answer. Queuing it would replace a two-second wait with a spinner and a poll.
+
+  Scenario: "Sync from Penpot" queues a background job and says so
     When the admin opens the Penpot settings section
-    Then the "Sync from Penpot" button is present
-    And the "Sync from Penpot" button is disabled
-    And it explains that it arrives with a later release
-    # Present-but-disabled, not absent — the shape of the finished section is
-    # visible from the first release.
+    And the admin clicks "Sync from Penpot"
+    Then the button reports that a sync has started
+    And the request returns immediately, without waiting for the pull
+    And the panel shows the run as queued, then running, then finished
+    # The admin can navigate away and come back to a finished run.
+
+  Scenario: The panel reports the outcome of the last run
+    Given a bulk sync has finished
+    When the admin opens the Penpot settings section
+    Then the panel shows when it last ran and what it did
+    And a failed run says so, with the reason
+    # Same record for every trigger, so a scheduled run is visible here too —
+    # otherwise the schedule is a setting with no observable effect, which is
+    # exactly what it was.
+
+  Scenario: A second click while a sync is running does not start another
+    Given a bulk sync is already running
+    When the admin clicks "Sync from Penpot" again
+    Then no second job is queued
+    # Two concurrent pulls over one folder tree would race on the same files.
+
+  Scenario: The scheduled pull uses the interval from Sync Settings
+    Given the scheduled pull is enabled with an interval
+    When the interval elapses and Nextcloud's cron runs
+    Then a pull runs without anyone asking for it
+    And a design renamed in Penpot is renamed in Nextcloud
+    And the run is recorded like any other
+    # This is the scenario the whole slice exists for: a rename in Penpot should
+    # reach Nextcloud eventually, with nobody watching.
+
+  Scenario: Turning the schedule off stops the runs
+    Given the scheduled pull is disabled
+    When Nextcloud's cron runs
+    Then no pull happens
+    # The job still ticks — the interval gates how often it re-reads the
+    # setting — but it does nothing while off.
 
   @todo
   Scenario: There is no "Sync to Penpot" button, ever
