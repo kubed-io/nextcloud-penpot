@@ -243,13 +243,16 @@ Feature: Deleting designs, locally and in Penpot
     And the design "Twice Dead" is purged from Penpot's trash
     And the admin runs a pull
     Then the pull succeeds
-    And the pull pruned nothing
     And the file "Penpot/Left Alone/Twice Dead.penpot" is in the Nextcloud trash
+    And there is no node at "Penpot/Left Alone/Twice Dead.penpot"
     # THE SEQUENCE THE RULE EXISTS FOR, end to end: the user deletes the mirror
     # (which puts the design in Penpot's trash), then the design is destroyed in
     # Penpot for good. Both sides are now gone in their own way — and the pull
     # does nothing at all, because a trashed mirror was never in its field of
-    # view. "Pruned nothing" is the whole assertion: not "pruned it gently".
+    # view: it is still in the trash afterwards, and no mirror reappeared for it.
+    #
+    # Asserted on this file rather than on the pull's prune COUNTER, which is a
+    # claim about every mirror any scenario ever left in the shared folder.
 
   # ── the soft step: a delete reaches Penpot's trash ────────────────────────
 

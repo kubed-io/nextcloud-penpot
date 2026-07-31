@@ -112,13 +112,18 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And I delete "Penpot/Stay Put/Round Trip.penpot"
     And I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
     And the admin runs a pull
-    Then the pull pruned nothing
+    Then the file "Penpot/Stay Put/Round Trip.penpot" is not in the Nextcloud trash
     And the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
     And Penpot project "Stay Put" holds a design named "Round Trip"
-    # THE WHOLE POINT OF THE SLICE, asserted end to end. "Pruned nothing" is the
-    # half that was broken: the design is listed by Penpot again, so the pull has
-    # no reason to trash the mirror — and the file keeping its id is what stops a
-    # second mirror appearing beside it.
+    # THE WHOLE POINT OF THE SLICE, asserted end to end: the mirror is NOT trashed
+    # a second time, and it keeps its id so no duplicate appears beside it.
+    #
+    # ASSERTED ON THIS FILE, NOT ON THE PULL'S COUNTER. An earlier version used
+    # "the pull pruned nothing", which is a claim about the whole mapped folder —
+    # every design every other scenario has ever left in it. It passed or failed
+    # on what its NEIGHBOURS did, which is why it flapped for a whole session and
+    # then broke again the moment the feature files were reordered. A scenario
+    # about one file asserts on that file.
 
   @in-nextcloud @gesture
   Scenario: Restoring an untracked ".penpot" file never contacts Penpot

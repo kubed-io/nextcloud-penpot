@@ -297,7 +297,7 @@ Feature: Moving a design
     And the admin runs a pull
     Then there is no node at "Penpot/Upstream From/Relocated.penpot"
     And the file "Penpot/Upstream To/Relocated.penpot" carries a Penpot id
-    And the pull pruned nothing
+    And the file "Penpot/Upstream To/Relocated.penpot" is not in the Nextcloud trash
     # THE PRUNE MUST NOT FIRE. The design is still named by Penpot, just from a
     # different project — a reconciler that keyed on "not in this folder" instead
     # of "not in this team's listing" would trash the mirror and re-create it,

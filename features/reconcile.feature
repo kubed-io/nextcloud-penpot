@@ -129,7 +129,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: A pull that changed nothing prunes nothing
-    Given the first visible team is mapped as a plain folder "Penpot"
+    Given the first visible team is mapped as a plain folder "Quiet Pull"
     And a Penpot project named "Untouched" exists in that team
     And a Penpot file named "Poster" exists in the project "Untouched"
     When the admin runs a pull
@@ -139,6 +139,13 @@ Feature: Scheduled or manual pull from Penpot
     # The safety property, asserted first because it is the one a regression
     # breaks silently. Pruning on a listing that simply did not mention a file is
     # the single most destructive thing this app could do.
+    #
+    # ITS OWN FOLDER, deliberately. This is the one assertion in the suite that
+    # IS about the whole mapped folder, so it must not share one: every other
+    # scenario's leftovers land in "Penpot", and a design any of them deleted in
+    # Penpot is a mirror this pull would correctly prune. A fresh folder is
+    # mirrored from the current listing and therefore has nothing to prune —
+    # which is exactly the state this scenario means to describe.
 
   # ── what a pull produces ─────────────────────────────────────────────────────
 
