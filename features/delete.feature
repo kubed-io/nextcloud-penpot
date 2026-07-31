@@ -279,6 +279,20 @@ Feature: Deleting designs, locally and in Penpot
     # Being asked to delete something already deleted is not a problem, it is
     # the outcome the user wanted.
 
+  @in-nextcloud @gesture @todo
+  Scenario: Deleting a project folder never deletes the Penpot project
+    Given a mirrored project "My Stuff"
+    When I delete the "My Stuff" project folder
+    Then Penpot is never contacted
+    And the Penpot project and its designs are completely unaffected
+    And the folder is recoverable from the Nextcloud trash
+    When the team is mirrored again
+    Then the project folder is recreated, because the project still exists in Penpot
+    # Deleting the folder is a LOCAL act, and the pull restoring the mirror is
+    # the correct outcome — the project never went anywhere. Same rule as
+    # removing the `penpot` tag (project-folder.feature): unmapping a folder is
+    # not destroying what it pointed at.
+
     # ── the hard step: emptying the trash purges Penpot ───────────────────────
 
   @todo

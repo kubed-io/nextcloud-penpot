@@ -17,6 +17,7 @@ use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
+use OCA\PenpotSync\Service\ProjectTags;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\SyncGuard;
@@ -55,6 +56,7 @@ final class PullServiceTest extends TestCase {
 	private PenpotMetadata $metadata;
 	private StorageService $storage;
 	private ArchiveService $archives;
+	private ProjectTags $tags;
 	private PullService $pull;
 
 	/**
@@ -74,6 +76,7 @@ final class PullServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->storage = $this->createMock(StorageService::class);
 		$this->archives = $this->createMock(ArchiveService::class);
+		$this->tags = $this->createMock(ProjectTags::class);
 
 		// An unstamped node reads back as null — *untracked*, the state that makes a
 		// file the user's rather than ours.
@@ -91,6 +94,7 @@ final class PullServiceTest extends TestCase {
 			$this->metadata,
 			$this->storage,
 			$this->archives,
+			$this->tags,
 			new SyncGuard(),
 			new NullLogger(),
 		);

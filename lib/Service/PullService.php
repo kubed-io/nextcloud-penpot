@@ -103,6 +103,7 @@ final class PullService {
 		private readonly PenpotMetadata $metadata,
 		private readonly StorageService $storage,
 		private readonly ArchiveService $archives,
+		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
 		private readonly LoggerInterface $logger,
 	) {
@@ -319,7 +320,24 @@ final class PullService {
 
 	/**
 	 * Find (by `penpot_project_id`) or create the folder for a project under the
-	 * team root, and (re)stamp its marker. A rename upstream renames the folder.
+	 * team root, and (re)stamp its markers. A rename upstream renames the folder.
+	 *
+	 * ## TWO MARKERS, ONE MACHINE-READABLE AND ONE HUMAN-READABLE
+	 *
+	 * `penpot_project_id` is authoritative — it is what {@see MembershipResolver}
+	 * reads and what every other feature defers to. The `penpot` TAG is the same
+	 * fact made visible in the Files app, and it is stamped here so that the two
+	 * directions share ONE marker (§C6.18):
+	 *
+	 *   a project mirrored FROM Penpot   → tagged here
+	 *   a folder opted IN from Nextcloud → tagged by the user, which is the opt-in
+	 *
+	 * A user cannot tell, and should not have to, which way round a given project
+	 * folder came about. Both carry the tag; both are projects.
+	 *
+	 * Tagging is idempotent and this runs on every pull, which is deliberate: a
+	 * folder whose tag someone removed gets it back on the next run, because the
+	 * project id — the thing that actually decides — never went anywhere.
 	 *
 	 * @param array<string, Folder> $folderIndex penpot_project_id -> folder, built once by the caller
 	 */
@@ -328,6 +346,7 @@ final class PullService {
 		if ($existing !== null) {
 			$this->tryRename($existing, $root, $name);
 			$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
+			$this->tagProject($existing);
 			return $existing;
 		}
 
@@ -336,7 +355,28 @@ final class PullService {
 		$adopt = $root->nodeExists($name) ? $root->get($name) : null;
 		$folder = $adopt instanceof Folder ? $adopt : $root->newFolder($this->freeName($root, $name));
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
+		$this->tagProject($folder);
 		return $folder;
+	}
+
+	/**
+	 * Mark a project folder with the `penpot` tag, never at the cost of the pull.
+	 *
+	 * The tag is decoration over an authoritative id, so a tag backend that is
+	 * unhappy must not be able to fail a mirror run that has otherwise worked.
+	 * The folder is still a project; it is simply not wearing its badge yet, and
+	 * the next pull tries again.
+	 */
+	private function tagProject(Folder $folder): void {
+		try {
+			$this->tags->apply($folder->getId());
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not tag a project folder', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'exception' => $e,
+			]);
+		}
 	}
 
 	/**

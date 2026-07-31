@@ -174,7 +174,14 @@ Northwind/                     ← Team Folder (team id in metadata)
 
 Identity lives in **metadata, not in path**, so a project folder works the same
 at any depth and you can reorganise freely. Project folders also carry a visible
-**tag** (🏷) so you can spot and search for them among ordinary folders.
+`penpot` **tag** (🏷) so you can spot and search for them among ordinary folders.
+
+**And the tag works in reverse.** Every Penpot project becomes a folder here
+automatically — but a folder of yours becomes a Penpot project *only if you ask*.
+Put the `penpot` tag on any folder inside a mapped folder and it becomes a real
+Penpot project, taking any designs already inside it with it. Everything else
+stays an ordinary folder: notes, exports, whatever you like. Removing the tag
+never deletes the project — it is a label, not a lifetime.
 
 **The one restriction:** a project folder may move anywhere *inside* its Team
 Folder, but **not out of it**. Moving a project between teams is a destructive
@@ -419,7 +426,8 @@ That invariant is what makes the project tag meaningful: a tagged folder named
 
 Renaming a project folder is a genuinely different operation from renaming a file
 — different Nextcloud event, different Penpot endpoint, no file extension to
-handle — so it lives in its own spec, [`project-folder.feature`](features/project-folder.feature).
+handle — but it is still a rename, so both live side by side in
+[`rename.feature`](features/rename.feature) where the two can be compared.
 
 **One caveat runs backwards from expectation.** Penpot's naming rules are *looser*
 than Nextcloud's: it accepts essentially any non-empty string, including `/`,
@@ -739,13 +747,11 @@ The specs *are* the requirements, read before any code lands.
 | [`sync-mode.feature`](features/sync-mode.feature) | `link` vs `sync`, promotion, and the one lossy direction. |
 | [`set-mode.feature`](features/set-mode.feature) | **Live.** The real export: promotion leaves ZIP bytes, links cost zero exports. |
 | [`reconcile.feature`](features/reconcile.feature) | The pull, revision gating, and safe pruning. |
-| [`prune.feature`](features/prune.feature) | **Live.** A deleted design's mirror is snapshotted, then trashed — and an unchanged pull prunes nothing. |
-| [`pull.feature`](features/pull.feature) | **Live.** The pull as CI proves it, end to end against a real Penpot. |
 | [`create-design.feature`](features/create-design.feature) | New → Penpot design, and Drafts semantics. |
-| [`move.feature`](features/move.feature) | Free nesting; the project-folder restriction. |
-| [`project-folder.feature`](features/project-folder.feature) | Renaming, tagging, and why copying a project folder is refused. |
+| [`move.feature`](features/move.feature) | Free nesting; the project-folder restriction. Moving a project folder lives here. |
+| [`project-folder.feature`](features/project-folder.feature) | **Live.** How a folder becomes a project: the `penpot` tag opt-in, and the marker both directions share. |
 | [`copy.feature`](features/copy.feature) | Copies never create designs. |
-| [`rename.feature`](features/rename.feature) | Penpot→NC (settled) vs NC→Penpot (open fork). |
+| [`rename.feature`](features/rename.feature) | **Live.** Renaming a design *and* a project folder — both name guards, both directions. |
 | [`ignore.feature`](features/ignore.feature) | Stop mirroring without losing the file. |
 | [`restore.feature`](features/restore.feature) | Putting a design back, and what it can't recover. |
 | [`delete.feature`](features/delete.feature) | Local-only deletes; Penpot's 7-day grace period. |

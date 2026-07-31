@@ -25,14 +25,31 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | File | Owns |
 |---|---|
 | `create-design.feature` | A design coming into existence, on either side |
-| `copy.feature` | Duplicating a design |
-| `move.feature` | A design changing project, team, or Drafts state |
-| `rename.feature` | A design or project folder changing name |
-| `delete.feature` | Everything that removes a design: the two trashes, the prune, the purge |
+| `copy.feature` | Duplicating a design — and why a project FOLDER may not be copied |
+| `move.feature` | A design or project folder changing project, team, or Drafts state |
+| `rename.feature` | A design or project folder changing name, incl. both name guards |
+| `delete.feature` | Everything that removes a design or a project folder: the two trashes, the prune, the purge |
 | `restore.feature` | Everything that brings one back: both trashes, the archive |
+| `project-folder.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
 | `set-mode.feature` / `sync-mode.feature` | `sync` ⇄ `link`, and what each mode means |
 | `ignore.feature` | Excluding a file from the sync |
 | `open-with.feature` / `file-type.feature` | The Files-app surface of a mirror |
+
+**The behaviour is the axis, not the kind of thing acted on.** `project-folder.feature`
+used to own every verb a project folder could be on the receiving end of —
+renaming one, copying one, moving one, deleting one. That is the same mistake
+`gestures.feature` made in the other direction, and it cost the same thing:
+"what happens when I rename a project folder?" had two answers in two files, and
+the two had already drifted. `rename.feature` had *live* coverage of the
+project-folder rename while `project-folder.feature` still called it unbuilt;
+`move.feature` had all four project-folder move scenarios; `copy.feature` had the
+refusal plus a comment pointing back for reasons it could simply have stated.
+
+A project folder is not a separate universe. Renaming one is a RENAME, and it
+belongs beside the other rename where a reader comparing the two sees the whole
+table at once. What is left in `project-folder.feature` is the one thing no
+behaviour file can own: a folder's **identity** as a project — how it acquires
+one, and the marker that says so.
 
 **Mechanism files** — the sync run itself, whose actor is an admin or the clock:
 
@@ -47,8 +64,8 @@ about the run, and lives here.
 
 **Configuration files** — the admin and per-user surface: `admin-connection`,
 `admin-mapping`, `admin-section`, `personal-settings`, `remove-mapping`,
-`mapping-membership`, `project-folder`, `personal-projects`, `team-import`,
-`lifecycle`, `uninstall`, `errors`.
+`mapping-membership`, `personal-projects`, `team-import`, `lifecycle`,
+`uninstall`, `errors`.
 
 ## Tags
 

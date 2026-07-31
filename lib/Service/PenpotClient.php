@@ -435,6 +435,33 @@ final class PenpotClient {
 	}
 
 	/**
+	 * Create a project in a team. Confirmed live in §6.38: KEBAB `team-id`, and
+	 * HTTP 200 with the **full project record** — unlike its sibling
+	 * {@see renameProject()}, which answers 204 with no body at all. Two halves of
+	 * one feature, disagreeing about whether a response has content; the param
+	 * table above exists for the same reason.
+	 *
+	 * ONLY EVER CALLED ON AN EXPLICIT OPT-IN (`project-folder.feature`). Every
+	 * Penpot project becomes a Nextcloud folder automatically, but a Nextcloud
+	 * folder becomes a project only when someone tags it — so this method has
+	 * exactly one caller, {@see ProjectFolderService::onTagged()}, and no path
+	 * from the pull.
+	 *
+	 * `$actorToken` attributes the creation exactly as {@see renameProject()}: the
+	 * project should be owned by the person who asked for it, not by the service
+	 * account that happened to carry the request.
+	 *
+	 * @return array<string, mixed> the new project record, incl. `id`
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function createProject(string $teamId, string $name, ?string $actorToken = null): array {
+		$this->assertName($name);
+
+		return $this->record($this->call('create-project', ['team' => $teamId, 'name' => $name], $actorToken));
+	}
+
+	/**
 	 * Rename a project. Its own flow, not a variant of file rename (saga §6.39).
 	 *
 	 * Penpot answers 204 with NO BODY, unlike `rename-file`'s 200 + record.

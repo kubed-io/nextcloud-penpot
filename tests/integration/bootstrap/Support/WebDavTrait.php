@@ -78,6 +78,20 @@ trait WebDavTrait {
 		}
 	}
 
+	/**
+	 * MKCOL at any depth under the user's files root, unlike {@see davMkdir()}
+	 * which only makes a top-level folder and registers it for teardown.
+	 *
+	 * This is the folder half of "+ New": a user making a subfolder inside a
+	 * mapped folder, which `project-folder.feature` requires to stay an ORDINARY
+	 * folder.
+	 */
+	private function davMkcol(string $path): void {
+		// 201 created, 405 already exists — both leave the folder there, which is
+		// all any caller wants.
+		$this->assertStatus($this->davClient()->request('MKCOL', $this->davEncode($path)), [201, 405], "MKCOL $path");
+	}
+
 	/** PUT file content at a path under the user's files root. */
 	private function davPut(string $path, string $body): void {
 		$this->assertStatus($this->davClient()->request('PUT', $this->davEncode($path), ['body' => $body]), [201, 204], "PUT $path");
@@ -223,6 +237,47 @@ trait WebDavTrait {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The system tags on a node, by name, via PROPFIND of `{nc}system-tags`.
+	 *
+	 * READ THROUGH CORE, NOT THROUGH THIS APP. The claim under test is that the
+	 * `penpot` marker is a real, user-visible Nextcloud tag — the same object the
+	 * Files app shows and a user can assign by hand — rather than a private
+	 * marker the app draws for itself. Asking the app would only prove the app
+	 * agrees with the app.
+	 *
+	 * `occ info:file` was the obvious first try and it does not print tags at all
+	 * (checked live on 33.0.4). This property does, and it is the same one the
+	 * Files sidebar reads. Each tag serialises as
+	 * `<nc:system-tag …>Name</nc:system-tag>` (see `OCA\DAV\SystemTag\SystemTagList`).
+	 *
+	 * @return list<string>
+	 */
+	private function davSystemTags(string $path): array {
+		$ns = 'http://nextcloud.org/ns';
+		$reqBody = '<?xml version="1.0"?>'
+			. '<d:propfind xmlns:d="DAV:" xmlns:nc="' . $ns . '">'
+			. '<d:prop><nc:system-tags/></d:prop></d:propfind>';
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
+			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
+			'body' => $reqBody,
+		]);
+		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('nc', $ns);
+
+		$names = [];
+		foreach ($doc->xpath('//nc:system-tag') ?: [] as $tag) {
+			$name = trim((string)$tag);
+			if ($name !== '') {
+				$names[] = $name;
+			}
+		}
+
+		return $names;
 	}
 
 	/** Percent-encode each path segment but keep the slashes. */
