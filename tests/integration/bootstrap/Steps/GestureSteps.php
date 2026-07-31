@@ -148,6 +148,40 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
+	/** The status of the last refused gesture, for the assertion to read. */
+	private int $lastGestureStatus = 0;
+
+	/**
+	 * A gesture the app is expected to REFUSE.
+	 *
+	 * `MoveGuardListener` aborts the event before the move happens, which Sabre
+	 * turns into a 4xx — so unlike every other gesture here the interesting result
+	 * is the STATUS, not what ended up in Penpot. `davMoveStatus()` has existed
+	 * since the harness was written, for exactly this, and had never been called.
+	 *
+	 * @When /^I try to move "([^"]*)" to "([^"]*)"$/
+	 */
+	public function iTryToMove(string $from, string $to): void {
+		$this->lastGestureStatus = $this->davMoveStatus($from, $to);
+		$this->gestureTarget = $from;
+	}
+
+	/**
+	 * THE GUARD IS THE ONLY THING IN THIS APP THAT SAYS NO, and until now nothing
+	 * proved it ever does. A guard that silently stopped refusing would let a
+	 * `link` leave its project — handing someone an empty husk that looks like a
+	 * design — and no test would have noticed.
+	 *
+	 * @Then /^the move is refused$/
+	 */
+	public function theMoveIsRefused(): void {
+		if ($this->lastGestureStatus < 400 || $this->lastGestureStatus >= 500) {
+			throw new \RuntimeException(
+				"expected the move to be refused, but Nextcloud answered {$this->lastGestureStatus}",
+			);
+		}
+	}
+
 	// ── Nextcloud's trash ───────────────────────────────────────────────────
 
 	/**

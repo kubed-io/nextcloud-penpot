@@ -209,19 +209,38 @@ Feature: Moving a design
     # (Written as a comment, not a Gherkin `Rule:` block — Behat's parser rejects
     # that keyword outright. See features/README.md.)
 
-  @in-nextcloud @gesture @todo
-  Scenario Outline: A link cannot be moved out of its project
-    Given a "link" design at "Penpot/Confined/Pointer.penpot"
-    When I try to move it to <destination>
+  # DRIVEN LIVE. The guard is the only thing in this app that says no, and until
+  # now nothing proved it ever does — a guard that silently stopped refusing
+  # would hand someone an empty husk that looks like a design, and every test
+  # would still have been green.
+  @in-nextcloud @gesture
+  Scenario Outline: A link cannot be moved out of the project it points into
+    Given a mirrored design "Pointer" in the project "Confined"
+    And a mirrored project "Elsewhere"
+    When I try to move "Penpot/Confined/Pointer.penpot" to "<destination>"
     Then the move is refused
-    And the refusal offers to promote the file to "sync" mode first
-    And Penpot is never contacted
+    And the file "Penpot/Confined/Pointer.penpot" carries a Penpot id
+    And Penpot project "Confined" holds a design named "Pointer"
 
     Examples: destinations that would change what the pointer points at
-      | destination                     |
-      | another project folder          |
-      | the team root, which means Drafts |
-      | a folder outside every mapping  |
+      | destination                          |
+      | Penpot/Elsewhere/Pointer.penpot      |
+      | Penpot/Pointer.penpot                |
+      | Pointer.penpot                       |
+    # Row 1 is another project, row 2 is the team root (which MEANS Drafts, a
+    # real project change, §6.35), and row 3 leaves every mapping. One rule,
+    # three destinations, one outcome — which is what makes it a table.
+    #
+    # The last two assertions are the point of the refusal: the file is still
+    # where it was, still tracked, and Penpot never heard about any of it.
+
+  @in-nextcloud @gesture @todo
+  Scenario: A link refusal offers to promote the file to "sync" mode first
+    Given a mirrored design "Pointer" in the project "Confined"
+    When I try to move it into a different project folder
+    Then the refusal offers to promote the file to "sync" mode first
+    # Split from the outline above because it asserts on the MESSAGE, which the
+    # DAV status alone cannot carry — it needs the exception body surfaced.
 
   @in-nextcloud @gesture @todo
   Scenario: A link moves freely inside its own project
@@ -254,15 +273,23 @@ Feature: Moving a design
     And a pull does not move the folder back
     # Free organisation is the whole point of §6.29 — Penpot is flat, we needn't be.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: A project folder cannot be moved out of its team folder
-    Given a project folder inside a mapped team folder
-    When I try to move it outside that team folder
+    Given a mirrored project "Stays Inside"
+    When I try to move "Penpot/Stays Inside" to "Stays Inside"
     Then the move is refused
-    And the refusal explains a project cannot leave its team from Nextcloud
+    And the folder "Penpot/Stays Inside" carries a Penpot project id
+    # The folder is still there, still stamped — the refusal happened BEFORE the
+    # move, which is the whole point of guarding on the `Before` event.
+
+  @in-nextcloud @gesture @todo
+  Scenario: The project-folder refusal explains why, and what to do instead
+    Given a mirrored project "Stays Inside"
+    When I try to move it outside its team folder
+    Then the refusal explains a project cannot leave its team from Nextcloud
     And it explains that moving a project between teams must be done in Penpot
-    And Penpot is never contacted
-    And the folder and its files are left exactly as they were
+    # Split from the scenario above, which proves the refusal HAPPENS; this one
+    # is about what it SAYS, and needs the exception body surfaced through DAV.
     # Saga §6.30. Reparenting a project in Penpot (`move-project`) is real and
     # confirmed, but it is a destructive cross-team mutation that changes who can
     # see the work — far outside §6.1. Refuse loudly; never silently undo.
