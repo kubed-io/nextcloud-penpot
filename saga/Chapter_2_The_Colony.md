@@ -1595,3 +1595,80 @@ right and the loading wrong; this app copied the mechanism and inherited the
 second half of the bug without ever seeing the first.
 
 Both notes are **unverified against those apps** and say so.
+
+### C6.14 — The endpoint existed, the controller existed, and it 404ed anyway
+
+The sync triggers were built, deployed, verified on disk — and the button
+returned a red 404. Twice, on two different endpoints. Nothing was wrong with the
+code.
+
+Nextcloud caches its **route collection** in `memcache.local`, which is
+`\OC\Memcache\APCu` on this instance, under the key
+`"<host>#<baseUrl>#rootCollection"` with a 3600s TTL
+(`lib/private/Route/CachingRouter.php::findMatchingRoute`). Two properties of
+that key turn a normal dev loop into an hour-long ghost hunt:
+
+- **The key contains no app version.** The instinct — bump `<version>` to
+  invalidate — does nothing. There is no version in the key to change.
+- **APCu is per-process-tree.** `php occ` gets its own segment. Clearing the
+  route cache from the CLI reports success, and the web server never sees it.
+  That success message is the trap: it looks like the fix landed.
+
+So a deploy that ADDS a route leaves Apache matching against a collection that
+predates it. Existing routes keep working, which is what makes it read as "my new
+code is broken" rather than "the router never learned about it".
+
+#### The probe that settled it in one shot
+
+Unauthenticated, from inside the pod, no session needed:
+
+```
+404  POST /apps/penpot_sync/sync/pull          <-- new route
+404  GET  /apps/penpot_sync/sync/status        <-- new route
+404  POST /apps/penpot_sync/mappings/{id}/sync <-- new route
+401  GET  /apps/penpot_sync/mappings           <-- route that predates the deploy
+```
+
+**404 vs 401 is the whole diagnosis.** A route that does not exist 404s; one that
+exists and wants a session 401s. Same app, same request, same auth state — the
+only variable is when the route was added. No amount of reading the controller
+would have produced this; one curl did.
+
+#### The second cache, hiding behind the first
+
+With the 404 fixed the button then rendered *the previous build's* placeholder
+text. Nextcloud stamps asset URLs `?v=<hash>-<cachebuster>`, where `<hash>`
+derives from core and app **versions** — so a dev deploy that rewrites `js/` in
+place produces a byte-identical URL and the browser serves the file it already
+had, in front of the new PHP. `config:system:set cachebuster` is the supported
+lever.
+
+Both caches are keyed to a version that a dev deploy, by construction, never
+changes. Releases bump `<version>` and are fine; only this loop is exposed, which
+is exactly why it survived this long unnoticed.
+
+#### What the header comment had promised
+
+`deploy-dev.sh` said *"no pod restart needed"* — reasoning from opcache
+(`validate_timestamps=1`, `revalidate_freq=60`). True, and true only of PHP code.
+It generalised one cache's behaviour to every cache, and the two it missed do not
+expire on a timer anyone would wait out.
+
+The script now bumps `cachebuster`, recreates the pod (the only lever that clears
+the web server's APCu — `apache2ctl -k restart` is refused, we run as `www-data`
+and PID 1 is root-owned), and then **probes every static route in `routes.php`
+and fails loudly on a 404**. It reads the routes out of the file, so it keeps
+telling the truth as routes are added.
+
+`delete pod`, not `rollout restart`: the PVC is ReadWriteOnce and the Deployment
+is `maxSurge=1/maxUnavailable=0`, so a surge rollout can deadlock waiting to
+mount the volume into a second pod.
+
+#### The recurring shape, again
+
+§C6.8, §C6.10, §C6.12 and §C6.13 all say a version of *a test that mocks the
+boundary cannot fail the way the boundary fails*. This one is the same lesson one
+layer out: **the unit tests, the integration tests and the files on disk were all
+correct simultaneously, and the feature was still dead in the browser.** Nothing
+in the repo could have caught it, because the defect lived in the deploy path.
+The verification had to run where the user's click runs.
