@@ -85,9 +85,7 @@ Feature: Moving a design
 
   @in-nextcloud @gesture @todo
   Scenario: Moving a file into a plain subfolder of its project keeps its project
-    Given a Penpot project named "Stays Put" exists in that team
-    And a Penpot file named "Wanderer" exists in the project "Stays Put"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Wanderer" in the project "Stays Put"
     When I move "Penpot/Stays Put/Wanderer.penpot" to "Penpot/Stays Put/wip/Wanderer.penpot"
     Then Penpot project "Stays Put" holds a design named "Wanderer"
     And the file "Penpot/Stays Put/wip/Wanderer.penpot" still carries its Penpot id
@@ -96,9 +94,7 @@ Feature: Moving a design
 
   @in-nextcloud @gesture @todo
   Scenario: A pull never relocates a file the user filed into a subfolder
-    Given a Penpot project named "Left Where I Put It" exists in that team
-    And a Penpot file named "Nested" exists in the project "Left Where I Put It"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Nested" in the project "Left Where I Put It"
     When I move "Penpot/Left Where I Put It/Nested.penpot" to "Penpot/Left Where I Put It/wip/Nested.penpot"
     And the team has been mirrored into Nextcloud
     Then the file "Penpot/Left Where I Put It/wip/Nested.penpot" still carries its Penpot id
@@ -147,8 +143,7 @@ Feature: Moving a design
 
   @in-nextcloud @gesture
   Scenario: Filing a draft — dragging from the team root into a project
-    Given a Penpot project named "File Me" exists in that team
-    And the team has been mirrored into Nextcloud
+    Given a mirrored project "File Me"
     And I create a new design file at "Penpot/Loose Draft.penpot"
     And "Penpot/Loose Draft.penpot" is a "sync" design
     When I move "Penpot/Loose Draft.penpot" to "Penpot/File Me/Loose Draft.penpot"
@@ -157,9 +152,7 @@ Feature: Moving a design
 
   @in-nextcloud @gesture
   Scenario: Un-filing — dragging from a project out to the team root
-    Given a Penpot project named "Unfile Me" exists in that team
-    And a Penpot file named "Going Loose" exists in the project "Unfile Me"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Going Loose" in the project "Unfile Me"
     And "Penpot/Unfile Me/Going Loose.penpot" is a "sync" design
     When I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
     Then Penpot project "Unfile Me" holds no design named "Going Loose"
@@ -293,9 +286,9 @@ Feature: Moving a design
     Given a Penpot project named "Upstream From" exists in that team
     And a Penpot project named "Upstream To" exists in that team
     And a Penpot file named "Relocated" exists in the project "Upstream From"
-    When the admin runs a pull
-    And the design "Relocated" is moved to the project "Upstream To" in Penpot
     And the team has been mirrored into Nextcloud
+    And the design "Relocated" is moved to the project "Upstream To" in Penpot
+    When the team is mirrored again
     Then there is no node at "Penpot/Upstream From/Relocated.penpot"
     And the file "Penpot/Upstream To/Relocated.penpot" carries a Penpot id
     And the file "Penpot/Upstream To/Relocated.penpot" is not in the Nextcloud trash
@@ -306,11 +299,9 @@ Feature: Moving a design
 
   @in-penpot @todo
   Scenario: A design moved into Drafts in Penpot surfaces at the team root
-    Given a Penpot project named "Unfiled Upstream" exists in that team
-    And a Penpot file named "Sent To Drafts" exists in the project "Unfiled Upstream"
-    When the admin runs a pull
+    Given a mirrored design "Sent To Drafts" in the project "Unfiled Upstream"
     And the design "Sent To Drafts" is moved to Drafts in Penpot
-    And the team has been mirrored into Nextcloud
+    When the team is mirrored again
     Then there is no node at "Penpot/Unfiled Upstream/Sent To Drafts.penpot"
     And the file "Penpot/Sent To Drafts.penpot" carries a Penpot id
     # Drafts is a state, so the mirror lands at the team root — the mirror image

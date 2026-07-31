@@ -56,9 +56,7 @@ Feature: Renaming a mirrored Penpot file
 
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot
-    Given a Penpot project named "Rename Live" exists in that team
-    And a Penpot file named "Old Name" exists in the project "Rename Live"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Old Name" in the project "Rename Live"
     When I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
     Then Penpot project "Rename Live" holds a design named "New Name"
     And Penpot project "Rename Live" holds no design named "Old Name"

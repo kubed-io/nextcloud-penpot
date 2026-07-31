@@ -88,11 +88,68 @@ trait PullSteps {
 	 * (reconcile.feature), and the STATE phrasing everywhere the mirror merely has
 	 * to exist first. One implementation, because it is one operation.
 	 *
+	 * THREE PHRASINGS, ONE OPERATION:
+	 *
+	 *   "the admin runs a pull"                  the run IS the behaviour under
+	 *                                            test — reconcile.feature only
+	 *   "the team has been mirrored into
+	 *    Nextcloud"                              setup: a mirror has to exist
+	 *                                            before a gesture can touch it
+	 *   "the team is mirrored again"             the EVENT in a Penpot-origin
+	 *                                            scenario: someone changed
+	 *                                            something upstream, and nothing
+	 *                                            happens in Nextcloud until the
+	 *                                            next sync notices
+	 *
+	 * That last one matters more than it looks. A Penpot-side change is context —
+	 * it already happened, elsewhere, possibly by someone else. The event this
+	 * app is responsible for is the sync seeing it.
+	 *
 	 * @When /^the admin runs a pull$/
 	 * @Given /^the team has been mirrored into Nextcloud$/
+	 * @When /^the team is mirrored again$/
 	 */
 	public function theAdminRunsAPull(): void {
 		$this->occ('penpot_sync:sync pull');
+	}
+
+	/**
+	 * A design that already exists in Penpot AND is already mirrored.
+	 *
+	 * ## THE SETUP PULL SHOULD NOT BE A STEP AT ALL
+	 *
+	 * Almost every scenario here needs a mirror before it can do anything, and
+	 * spelling that out cost three lines: seed a project, seed a file, run a pull.
+	 * The pull in that trio is not something the scenario DOES — it is how the
+	 * precondition comes to be true, which is the step definition's business, not
+	 * the reader's.
+	 *
+	 * Left visible it also lied about the system: it read as though an admin were
+	 * on call to run a sync before every gesture a user makes. Nobody does that;
+	 * the mirror is simply there, because a sync ran at some point.
+	 *
+	 * So the pull survives in the Gherkin in exactly two places — where the run IS
+	 * the behaviour (`reconcile.feature`), and where it is the EVENT that lets
+	 * Nextcloud notice an upstream change ("when the team is mirrored again").
+	 * Everywhere else it belongs in here.
+	 *
+	 * @Given /^a mirrored design "([^"]*)" in the project "([^"]*)"$/
+	 */
+	public function aMirroredDesignInTheProject(string $design, string $project): void {
+		$this->aPenpotProjectExistsInThatTeam($project);
+		$this->aPenpotFileExistsInTheProject($design, $project);
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * The same, for a project with no design in it yet — "+ New" scenarios need
+	 * the folder to exist but must create the design themselves.
+	 *
+	 * @Given /^a mirrored project "([^"]*)"$/
+	 */
+	public function aMirroredProject(string $project): void {
+		$this->aPenpotProjectExistsInThatTeam($project);
+		$this->theAdminRunsAPull();
 	}
 
 	/** @Then /^the pull succeeds$/ */

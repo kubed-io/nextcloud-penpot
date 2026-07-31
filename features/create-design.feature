@@ -76,8 +76,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
   @in-nextcloud @gesture
   Scenario: A new design file in a project folder becomes a design in that project
-    Given a Penpot project named "Make Here" exists in that team
-    And the team has been mirrored into Nextcloud
+    Given a mirrored project "Make Here"
     When I create a new design file at "Penpot/Make Here/Fresh Idea.penpot"
     Then the file "Penpot/Make Here/Fresh Idea.penpot" carries a Penpot id
     And Penpot project "Make Here" holds a design named "Fresh Idea"
@@ -85,8 +84,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
   @in-nextcloud @gesture
   Scenario: A new design file at the team root is created in Drafts
-    Given a Penpot project named "Anchor" exists in that team
-    And the team has been mirrored into Nextcloud
+    Given a mirrored project "Anchor"
     When I create a new design file at "Penpot/Loose Idea.penpot"
     Then the file "Penpot/Loose Idea.penpot" carries a Penpot id
     And Penpot project "Anchor" holds no design named "Loose Idea"
@@ -98,8 +96,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # empty export.
   @in-nextcloud @gesture
   Scenario: Uploading a ".penpot" archive does not create an empty design
-    Given a Penpot project named "No Invent" exists in that team
-    And the team has been mirrored into Nextcloud
+    Given a mirrored project "No Invent"
     When I upload a ".penpot" archive at "Penpot/No Invent/Dragged In.penpot"
     Then the file "Penpot/No Invent/Dragged In.penpot" carries no Penpot id
     And Penpot project "No Invent" holds no design named "Dragged In"

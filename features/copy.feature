@@ -79,9 +79,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
 
   @in-nextcloud @gesture
   Scenario: Copying in place creates a second design in the same project
-    Given a Penpot project named "Copy Here" exists in that team
-    And a Penpot file named "Original" exists in the project "Copy Here"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Original" in the project "Copy Here"
     When I copy "Penpot/Copy Here/Original.penpot" to "Penpot/Copy Here/Original copy.penpot"
     Then the file "Penpot/Copy Here/Original copy.penpot" carries a Penpot id
     And the files "Penpot/Copy Here/Original.penpot" and "Penpot/Copy Here/Original copy.penpot" carry different Penpot ids
@@ -95,18 +93,14 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # and nothing whatsoever happened in Penpot, with nothing logged.
   @in-nextcloud @gesture
   Scenario: Copying up to the team root creates the design in Drafts
-    Given a Penpot project named "Copy Up" exists in that team
-    And a Penpot file named "Promote Me" exists in the project "Copy Up"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Promote Me" in the project "Copy Up"
     When I copy "Penpot/Copy Up/Promote Me.penpot" to "Penpot/Promote Me copy.penpot"
     Then the file "Penpot/Promote Me copy.penpot" carries a Penpot id
     And Penpot project "Copy Up" holds no design named "Promote Me copy"
 
   @in-nextcloud @gesture
   Scenario: A copy can be renamed immediately, because it was tracked
-    Given a Penpot project named "Chain" exists in that team
-    And a Penpot file named "Before" exists in the project "Chain"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Before" in the project "Chain"
     And I copy "Penpot/Chain/Before.penpot" to "Penpot/Chain/Before copy.penpot"
     When I rename "Penpot/Chain/Before copy.penpot" to "After.penpot"
     Then Penpot project "Chain" holds a design named "After"

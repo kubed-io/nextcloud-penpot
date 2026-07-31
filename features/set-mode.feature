@@ -41,6 +41,34 @@
 # the file is empty again, and Penpot was never contacted.
 
   @sync-mode
+# ## WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
+#
+# STATED PLAINLY BECAUSE IT DIVERGED FROM THE DESIGN WITHOUT A DECISION: mode is
+# PER FILE and MUTABLE. `occ penpot_sync:set-mode` takes a PATH, not a mapping,
+# and a file can be flipped `sync` ⇄ `link` any number of times. The mapping's
+# mode is only the default a NEW mirror inherits.
+#
+# The expectation was the opposite — mode set on the team-folder mapping and
+# IMMUTABLE there, the way `folder_mode` is. Nobody asked for per-file switching;
+# it arrived because the move guard needed an escape hatch to offer. A `link` is
+# confined to its project (§6.43), so "promote it to sync first" is the only
+# advice a refusal can give that leads anywhere — and that advice needs a lever.
+#
+# So it exists, it is load-bearing, and it is specified here rather than left as
+# an undocumented capability. Two consequences the scenarios below hold to:
+#
+#   1. IT IS AN ADMIN ACTION. Changing a file's mode decides whether Nextcloud
+#      stores a real archive or a pointer — a storage-and-recovery decision about
+#      someone else's team folder. There is no per-user surface for it.
+#   2. DEMOTION DESTROYS A LOCAL BACKUP. `sync` → `link` deletes the archive
+#      Penpot is not keeping for you. It is the one direction that loses
+#      something, and it confirms before it does.
+#
+# IF IMMUTABILITY IS WANTED INSTEAD, this is the file that changes: the lever
+# goes, the move guard loses the escape it offers, and every "promote to sync
+# first" refusal in move.feature needs a different answer. That is a design
+# decision, not a spec tidy-up.
+
 Feature: Storing and discarding a mirrored design's archive
   As an operator who has mapped a Penpot team
   I want `occ penpot_sync:set-mode` to decide which designs are really backed up
@@ -53,15 +81,17 @@ Feature: Storing and discarding a mirrored design's archive
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
 
+  @admin @occ
   Scenario: A whole team of link files costs no exports at all
-    When the admin runs a pull
+    When the team is mirrored again
     Then the pull succeeds
     And the pull exported 0 archives
 
+  @admin @occ
   Scenario: Promoting a mirrored design fetches a real ZIP from Penpot
     Given a Penpot project named "Archive Me" exists in that team
     And a Penpot file named "Cover" exists in the project "Archive Me"
-    When the admin runs a pull
+    When the team is mirrored again
     And "Penpot/Archive Me/Cover.penpot" is a "sync" design
     Then the mode change succeeds
     And the file "Penpot/Archive Me/Cover.penpot" is in "sync" mode
@@ -70,22 +100,22 @@ Feature: Storing and discarding a mirrored design's archive
     # An export never writes to Penpot and never re-stamps the id — promotion is
     # purely additive, which is what makes it safe to retry.
 
+  @admin @occ
   Scenario: A promoted file is not re-exported by the next pull
-    Given a Penpot project named "Stable" exists in that team
-    And a Penpot file named "Logo" exists in the project "Stable"
-    When the admin runs a pull
+    Given a mirrored design "Logo" in the project "Stable"
     And "Penpot/Stable/Logo.penpot" is a "sync" design
-    And the team has been mirrored into Nextcloud
+    When the team is mirrored again
     Then the pull succeeds
     And the pull exported 0 archives
     And the file "Penpot/Stable/Logo.penpot" holds a real ".penpot" archive
     # Mode is stored PER FILE, and an unchanged revision means an unchanged
     # archive — so staying in sync mode is free until the design actually moves.
 
+  @admin @occ
   Scenario: Demoting throws the archive away and never contacts Penpot
     Given a Penpot project named "Demote Me" exists in that team
     And a Penpot file named "Sketch" exists in the project "Demote Me"
-    When the admin runs a pull
+    When the team is mirrored again
     And "Penpot/Demote Me/Sketch.penpot" is a "sync" design
     And "Penpot/Demote Me/Sketch.penpot" is a "link" design
     Then the mode change succeeds
@@ -95,8 +125,9 @@ Feature: Storing and discarding a mirrored design's archive
     # The design in Penpot is completely unaffected: demotion deletes a LOCAL
     # backup and nothing else.
 
+  @admin @occ
   Scenario: A folder has no mode to set
-    When the admin runs a pull
+    When the team is mirrored again
     And the admin sets the mode of "Penpot" to "sync"
     Then the mode change is refused
     And the refusal mentions "Modes are per-file"

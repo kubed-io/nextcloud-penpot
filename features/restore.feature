@@ -94,9 +94,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
   @in-nextcloud @gesture
   Scenario: Restoring a mirror brings its design back out of Penpot's trash
-    Given a Penpot project named "Bring Back" exists in that team
-    And a Penpot file named "Second Thoughts" exists in the project "Bring Back"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Second Thoughts" in the project "Bring Back"
     And I delete "Penpot/Bring Back/Second Thoughts.penpot"
     When I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
     Then the design "Second Thoughts" is not in Penpot's trash
@@ -106,9 +104,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
   @in-nextcloud @gesture
   Scenario: A pull after a restore neither prunes the mirror nor duplicates it
-    Given a Penpot project named "Stay Put" exists in that team
-    And a Penpot file named "Round Trip" exists in the project "Stay Put"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Round Trip" in the project "Stay Put"
     And I delete "Penpot/Stay Put/Round Trip.penpot"
     When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
     And the team has been mirrored into Nextcloud
@@ -126,9 +122,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
   @in-nextcloud @gesture @todo
   Scenario: A pull after a restore does not trash the mirror a second time
-    Given a Penpot project named "Stay Put" exists in that team
-    And a Penpot file named "Round Trip" exists in the project "Stay Put"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Round Trip" in the project "Stay Put"
     And I delete "Penpot/Stay Put/Round Trip.penpot"
     When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
     And the team has been mirrored into Nextcloud
@@ -151,9 +145,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
   @in-nextcloud @gesture
   Scenario: Restoring an untracked ".penpot" file never contacts Penpot
-    Given a Penpot project named "Bystander" exists in that team
-    And a Penpot file named "Not Involved" exists in the project "Bystander"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Not Involved" in the project "Bystander"
     And I upload a ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
     And I delete "Penpot/Bystander/Strays In.penpot"
     When I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash

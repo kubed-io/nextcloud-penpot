@@ -109,9 +109,7 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-nextcloud @gesture
   Scenario: Deleting a mirror moves the design into Penpot's trash
-    Given a Penpot project named "Bin Me" exists in that team
-    And a Penpot file named "Doomed" exists in the project "Bin Me"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Doomed" in the project "Bin Me"
     When I delete "Penpot/Bin Me/Doomed.penpot"
     Then the design "Doomed" is in Penpot's trash
     And Penpot project "Bin Me" holds no design named "Doomed"
@@ -120,9 +118,7 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-nextcloud @gesture
   Scenario: Emptying the Nextcloud trash destroys the design in Penpot
-    Given a Penpot project named "Purge Me" exists in that team
-    And a Penpot file named "Gone For Good" exists in the project "Purge Me"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Gone For Good" in the project "Purge Me"
     And I delete "Penpot/Purge Me/Gone For Good.penpot"
     When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
     Then the design "Gone For Good" is not in Penpot's trash
@@ -133,9 +129,7 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-nextcloud @gesture
   Scenario: Deleting an untracked ".penpot" file leaves Penpot alone
-    Given a Penpot project named "Untouched" exists in that team
-    And a Penpot file named "Keep Me" exists in the project "Untouched"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Keep Me" in the project "Untouched"
     And I upload a ".penpot" archive at "Penpot/Untouched/Not Ours.penpot"
     When I delete "Penpot/Untouched/Not Ours.penpot"
     Then Penpot project "Untouched" holds a design named "Keep Me"
@@ -158,11 +152,9 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-penpot
   Scenario: A design deleted in Penpot is snapshotted, then moved to the trash
-    Given a Penpot project named "Doomed" exists in that team
-    And a Penpot file named "Farewell" exists in the project "Doomed"
-    When the admin runs a pull
+    Given a mirrored design "Farewell" in the project "Doomed"
     And the design "Farewell" is deleted in Penpot
-    And the team has been mirrored into Nextcloud
+    When the team is mirrored again
     Then the pull succeeds
     And the pull pruned 1 mirror
     And the pull saved 1 final archive
@@ -181,12 +173,10 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-penpot
   Scenario: A design that already had its archive needs no second export
-    Given a Penpot project named "Kept" exists in that team
-    And a Penpot file named "Backup" exists in the project "Kept"
-    When the admin runs a pull
+    Given a mirrored design "Backup" in the project "Kept"
     And "Penpot/Kept/Backup.penpot" is a "sync" design
     And the design "Backup" is deleted in Penpot
-    And the team has been mirrored into Nextcloud
+    When the team is mirrored again
     Then the pull succeeds
     And the pull pruned 1 mirror
     And the pull saved 0 final archives
@@ -197,11 +187,9 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-penpot
   Scenario: A design purged in Penpot still only reaches the Nextcloud trash
-    Given a Penpot project named "Erased" exists in that team
-    And a Penpot file named "No Way Back" exists in the project "Erased"
-    When the admin runs a pull
+    Given a mirrored design "No Way Back" in the project "Erased"
     And the design "No Way Back" is permanently deleted in Penpot
-    And the team has been mirrored into Nextcloud
+    When the team is mirrored again
     Then the pull succeeds
     And the pull pruned 1 mirror
     And there is no node at "Penpot/Erased/No Way Back.penpot"
@@ -236,9 +224,7 @@ Feature: Deleting designs, locally and in Penpot
 
   @in-penpot
   Scenario: A mirror already in the Nextcloud trash is invisible to the pull
-    Given a Penpot project named "Left Alone" exists in that team
-    And a Penpot file named "Twice Dead" exists in the project "Left Alone"
-    And the team has been mirrored into Nextcloud
+    Given a mirrored design "Twice Dead" in the project "Left Alone"
     When I delete "Penpot/Left Alone/Twice Dead.penpot"
     And the design "Twice Dead" is purged from Penpot's trash
     And the team has been mirrored into Nextcloud
