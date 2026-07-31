@@ -58,8 +58,8 @@ final class AutoSyncSettings implements IDeclarativeSettingsForm {
 			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_INTERNAL,
 			'title' => 'Sync Settings',
 			'description' => 'How often Nextcloud mirrors mapped Penpot teams. The pull is read-only — '
-				. 'it never changes anything in Penpot. Saved here now; the background job that '
-				. 'reads these values is not built yet, so nothing is mirrored regardless of this setting.',
+				. 'it never changes anything in Penpot. Runs unattended on this interval; '
+				. 'the last run is reported under Sync Actions.',
 			'fields' => [
 				[
 					'id' => self::KEY_ENABLED,

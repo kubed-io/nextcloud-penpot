@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Command;
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
+use OCA\PenpotSync\Service\PullStatus;
 use OCA\PenpotSync\Service\ScheduleConfig;
 use OCA\PenpotSync\Settings\InstanceSettings;
 use OCP\IAppConfig;
@@ -40,6 +41,7 @@ final class ShowConfig extends Command {
 		private IAppConfig $config,
 		private MappingService $mappings,
 		private ScheduleConfig $schedule,
+		private PullStatus $status,
 	) {
 		parent::__construct();
 	}
@@ -85,14 +87,36 @@ final class ShowConfig extends Command {
 			));
 		}
 
-		// Reported even though nothing reads it yet, because it is stored state an
-		// operator can set — and a setting you can change but cannot read back is
-		// how "did that apply?" becomes an unanswerable question.
+		// This line used to end "(not running — the pull job is not built yet)".
+		// That was true when written and became a lie the moment ScheduledPullJob
+		// landed — a caveat nobody thinks to delete, which is worse than no caveat
+		// at all: it tells an operator the schedule is inert while it is running.
+		// It now reports the LAST RUN instead, which is a fact rather than a claim
+		// about what exists, so it cannot rot the same way.
 		$output->writeln(sprintf(
-			'Scheduled pull: %s, every %s <comment>(not running — the pull job is not built yet)</comment>',
+			'Scheduled pull: %s, every %s',
 			$this->schedule->isEnabled() ? '<info>enabled</info>' : '<comment>disabled</comment>',
 			ScheduleConfig::formatInterval($this->schedule->getIntervalSeconds()),
 		));
+
+		$last = $this->status->get();
+		if ($last === []) {
+			$output->writeln('  last run: <comment>never</comment>');
+		} else {
+			$output->writeln(sprintf(
+				'  last run: %s%s%s',
+				($last['status'] ?? '?') === PullStatus::OK
+					? '<info>' . ($last['status'] ?? '?') . '</info>'
+					: '<comment>' . ($last['status'] ?? '?') . '</comment>',
+				isset($last['finished_at']) ? ' at ' . $last['finished_at'] : '',
+				isset($last['processed'])
+					? sprintf(' (%d processed, %d exported)', $last['processed'], $last['exported'] ?? 0)
+					: '',
+			));
+			if (($last['message'] ?? null) !== null && $last['message'] !== '') {
+				$output->writeln('  message: <comment>' . $last['message'] . '</comment>');
+			}
+		}
 
 		return 0;
 	}

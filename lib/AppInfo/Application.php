@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\PenpotSync\BackgroundJob\ScheduledPullJob;
 use OCA\PenpotSync\Listener\CopyListener;
 use OCA\PenpotSync\Listener\CreateListener;
 use OCA\PenpotSync\Listener\DeleteListener;
@@ -25,6 +26,7 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
@@ -157,6 +159,18 @@ final class Application extends App implements IBootstrap {
 		// getAppContainer() resolves THIS app's services — the same boot-time
 		// accessor both siblings use to register their metadata keys.
 		$context->getAppContainer()->get(PenpotMetadata::class)->register();
+
+		// THE SCHEDULED PULL, at last. The interval has been configurable since
+		// Course 2 and was read by NOTHING — `occ penpot_sync:show-config` said so
+		// out loud ("not running — the pull job is not built yet"), but from the
+		// admin surface it looked like a working setting, so a design renamed in
+		// Penpot stayed renamed only in Penpot until someone ran occ by hand.
+		//
+		// IJobList::add is idempotent, so calling it on every boot just ensures
+		// the TimedJob exists. The job self-gates on the schedule being enabled
+		// and re-reads its interval every time it is instantiated, so changing
+		// either setting takes effect on the next tick with no re-registration.
+		$context->getAppContainer()->get(IJobList::class)->add(ScheduledPullJob::class);
 
 		// EMPTYING THE TRASH IS NOT AN EVENT. Nextcloud fires no typed event when
 		// a file is purged from the trash — the trashbin emits the legacy

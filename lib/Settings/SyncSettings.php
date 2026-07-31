@@ -32,12 +32,13 @@ use OCP\Util;
  *
  * ## HONEST BUTTONS (saga Ch2)
  *
- * **Test connection works today.** "Sync from Penpot" is rendered **disabled**
- * until Course 3's pull lands, and "Purge" until Course 5's delete machine. They
- * are present-but-disabled rather than absent, for the same reason the siblings
- * do it: the shape of the finished section is visible from the first release,
- * and enabling one later is deleting a `disabled` attribute — not redesigning
- * the page.
+ * **Test connection and "Sync from Penpot" both work today** — the latter since
+ * the triggers slice. Only "Purge" is still rendered **disabled**, awaiting
+ * Course 5's delete machine. Present-but-disabled rather than absent, for the
+ * same reason the siblings do it: the shape of the finished section is visible
+ * from the first release, and enabling one later is deleting a `disabled`
+ * attribute — not redesigning the page, which is exactly how the sync button
+ * went live.
  *
  * There is deliberately **no "Sync to Penpot"** button, and there never will be.
  * This app is read-only for file *content* (§6.1) — that is the spine of the

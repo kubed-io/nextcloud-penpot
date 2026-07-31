@@ -37,6 +37,18 @@
 # never been observed (saga §6.17, open question #19) — two confirmed rename-file
 # mutations produced zero POSTs. Cron is the sole trigger until that's explained.
 #
+# HOW A PULL IS TRIGGERED (three ways, admin-section.feature + admin-mapping.feature):
+#
+#   occ penpot_sync:sync pull   the CLI twin, and for a long time the ONLY one
+#   "Sync now" on a card        synchronous, one mapping, bounded
+#   "Sync from Penpot"          async, every mapping, a queued job the UI polls
+#   the schedule                a TimedJob on the Sync Settings interval
+#
+# The interval was a setting nothing read until that job existed, which meant a
+# design renamed in Penpot stayed renamed only in Penpot unless someone ran occ.
+# The pull has followed renames since Course 3 — it was never the pull that was
+# missing, only a way to ask for it.
+#
 # @todo — no lib/Service/SyncService or lib/BackgroundJob/ exists yet.
 #
 # BUILD STATE (Course 5, the prune slice). THE PRUNE AND ITS FINAL SNAPSHOT ARE

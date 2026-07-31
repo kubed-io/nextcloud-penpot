@@ -137,6 +137,48 @@ Feature: Admin configures team mappings
     When the admin maps the first visible team shared with the group "admin"
     Then the mapping's groups are "admin"
 
+  # ── syncing ONE mapping, from its own card ────────────────────────────────
+  #
+  # The granular twin of the section-wide "Sync from Penpot" button, and
+  # deliberately the opposite shape: SYNCHRONOUS and scoped to one mapping.
+  #
+  # The admin is looking at that card and waiting for an answer about that team.
+  # One team is a bounded amount of work — usually a handful of files, and no
+  # exports at all for a `link` mapping (§5.5) — so queuing it would replace a
+  # short wait with a spinner and a poll. The bulk button is async precisely
+  # because it is NOT bounded: it walks every mapping and can export archives.
+
+  @todo
+  Scenario: A mapping card can sync just its own team
+    Given two Penpot teams are mapped
+    When the admin clicks "Sync now" on the first mapping's card
+    Then only that team is pulled
+    And the second mapping's folder is untouched
+    And the result is reported on that card when it finishes
+
+  @todo
+  Scenario: A per-mapping sync is synchronous
+    Given a Penpot team is mapped
+    When the admin clicks "Sync now" on its card
+    Then the answer comes back in the same request
+    And no background job is queued
+    # Fast feedback on a bounded set. The bulk button is the one that queues.
+
+  @todo
+  Scenario: A per-mapping sync reports its failure on the card
+    Given a Penpot team is mapped and Penpot cannot be reached
+    When the admin clicks "Sync now" on its card
+    Then the card reports the failure and why
+    And the other mappings are unaffected
+
+  @todo
+  Scenario: Syncing one mapping records the run like any other
+    Given a Penpot team is mapped
+    When the admin clicks "Sync now" on its card
+    Then the run appears in the same last-run record the bulk sync uses
+    # One record for every trigger, or "when did this last sync?" has three
+    # different answers depending on which button was pressed.
+
   # ── what a mapped folder LETS YOU DO (saga §C6.8) ─────────────────────────
   #
   # A mapped folder is an ORDINARY Nextcloud folder that happens to be mirrored.

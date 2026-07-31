@@ -156,16 +156,66 @@
 		});
 	}
 
-	// Per-mapping sync isn't wired yet — the button exists for parity with the
-	// siblings, and says so rather than failing silently or doing nothing. The
-	// handler lands with the pull in Course 3.
+	/**
+	 * "Sync now" on one card — SYNCHRONOUS, unlike the section-wide button.
+	 *
+	 * One team is bounded work (a `link` mapping exports nothing at all), and the
+	 * admin is looking at this card waiting for an answer about this team. Queuing
+	 * it would trade a short wait for a spinner and a poll; the bulk button is
+	 * async precisely because it is NOT bounded.
+	 *
+	 * The card keeps its own status line so two mappings can be synced in turn
+	 * without their results overwriting each other.
+	 */
 	function syncCard(card) {
 		if (!card.dataset.id) {
 			cardStatus(card, 'error', t('penpot_sync', 'Save the mapping first.'));
 			return;
 		}
 
-		cardStatus(card, '', t('penpot_sync', 'Per-team sync isn\u2019t available yet — it arrives with the pull.'));
+		var btn = card.querySelector('.js-sync');
+		if (btn) {
+			btn.disabled = true;
+			btn.setAttribute('aria-busy', 'true');
+		}
+		cardStatus(card, '', t('penpot_sync', 'Syncing…'));
+
+		fetch(OC.generateUrl('/apps/penpot_sync/mappings/' + encodeURIComponent(card.dataset.id) + '/sync'), {
+			method: 'POST',
+			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
+		})
+			.then(function (res) {
+				return res.text().then(function (body) {
+					var data;
+					try {
+						data = JSON.parse(body);
+					} catch {
+						// A proxy page, a login redirect or a CSRF failure answers with
+						// HTML; parsing it would surface "Unexpected token <" instead of
+						// anything the admin can act on.
+						throw new Error(t('penpot_sync', 'Sync failed ({status}).', { status: res.status }));
+					}
+					if (!res.ok) {
+						throw new Error(data.message || t('penpot_sync', 'Sync failed ({status}).', { status: res.status }));
+					}
+					return data;
+				});
+			})
+			.then(function (data) {
+				cardStatus(card, 'success', t('penpot_sync', 'Synced: {files} file(s), {exported} archive(s).', {
+					files: data.files == null ? '?' : data.files,
+					exported: data.exported == null ? 0 : data.exported,
+				}));
+			})
+			.catch(function (err) {
+				cardStatus(card, 'error', err.message || t('penpot_sync', 'Sync failed.'));
+			})
+			.finally(function () {
+				if (btn) {
+					btn.disabled = false;
+					btn.removeAttribute('aria-busy');
+				}
+			});
 	}
 
 	function deleteCard(card) {

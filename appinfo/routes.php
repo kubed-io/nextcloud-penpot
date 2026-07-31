@@ -22,5 +22,14 @@ return [
 		['name' => 'mapping#update', 'url' => '/mappings/{id}', 'verb' => 'PUT'],
 		['name' => 'mapping#destroy', 'url' => '/mappings/{id}', 'verb' => 'DELETE'],
 		['name' => 'mapping#testConnection', 'url' => '/test-connection', 'verb' => 'POST'],
+		// Per-mapping "Sync now" — SYNCHRONOUS and scoped to one team, because the
+		// admin is watching that card and one team is bounded work.
+		['name' => 'mapping#sync', 'url' => '/mappings/{id}/sync', 'verb' => 'POST'],
+		// The section-wide button — ASYNC, because a full pull can export an
+		// archive per drifted file and outlive the request. `status` is what the
+		// panel polls, and it reports runs from every trigger including the
+		// schedule.
+		['name' => 'sync#pull', 'url' => '/sync/pull', 'verb' => 'POST'],
+		['name' => 'sync#status', 'url' => '/sync/status', 'verb' => 'GET'],
 	],
 ];

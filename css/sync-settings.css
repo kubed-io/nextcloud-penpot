@@ -41,3 +41,13 @@
 	margin-top: 8px;
 	min-height: 1.6em;
 }
+
+/* The status line while a sync is in flight.
+ *
+ * NC's `.icon-loading-small` paints its spinner as a background image, so the
+ * text needs to move out of its way — otherwise the two overlap and the line
+ * looks like a rendering bug rather than a spinner. */
+.penpot-sync-manual__footer .penpot-sync-busy {
+	padding-left: 22px;
+	background-position: left center;
+}

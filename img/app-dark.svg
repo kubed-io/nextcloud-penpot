@@ -1,14 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
   SPDX-FileCopyrightText: 2026 kubed-io
   SPDX-License-Identifier: AGPL-3.0-or-later
 
-  App mark for the admin sidebar (black variant, per Nextcloud convention —
-  core themes it to the sidebar colour). A generic design/artboard glyph, NOT
-  Penpot's logo: this is a community integration and must not present itself
-  with the trademark.
+  App mark for the settings sidebar (black variant, per Nextcloud
+  convention — core themes it to the sidebar colour). This is the one AdminSection and PersonalSection actually request.
+
+  THE SAME PEN POT as img/penpot.svg (the file-row icon) and
+  img/icons/penpot.svg (the menu glyph): three pen tips standing in a container,
+  which is what Penpot's own logo depicts and what the name is a joke about.
+  Until now this one was still the app's first-draft glyph — an artboard with a
+  dot — so the settings section and the files it manages looked like two
+  different apps.
+
+  FILLED PATHS, NEVER STROKES. Nextcloud paints icons by setting a fill, so a
+  stroke-and-fill:none drawing collapses into a solid block wherever a surface
+  applies its own — which is exactly what happened to the first menu glyph. The
+  gaps between the pens are empty geometry, not a second colour, so the mark
+  survives being recoloured wholesale.
+
+  An original mark, not a copy of Penpot's logo artwork: "Penpot" and its logo
+  are trademarks of Kaleidos Ventures SL, and this community integration is not
+  affiliated with, endorsed by, or sponsored by Penpot.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <path d="M2 2h12v12H2z" fill="none" stroke="#000" stroke-width="1.4"/>
-  <path d="M2 6h12M6 2v12" stroke="#000" stroke-width="1" opacity=".55"/>
-  <circle cx="10" cy="10" r="2" fill="#000"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
+  <g fill="#000000">
+    <path d="M5.4 11.5V7.2L7.2 3l1.8 4.2v4.3z"/>
+    <path d="M10.2 11.5V7.2L12 3l1.8 4.2v4.3z"/>
+    <path d="M15 11.5V7.2L16.8 3l1.8 4.2v4.3z"/>
+    <path d="M3.4 10.2h17.2l-1.85 9.6a1 1 0 0 1-.98.8H6.23a1 1 0 0 1-.98-.8z"/>
+  </g>
 </svg>
