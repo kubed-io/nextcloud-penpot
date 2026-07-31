@@ -11,6 +11,8 @@ namespace OCA\PenpotSync\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\PenpotSync\Listener\CopyListener;
+use OCA\PenpotSync\Listener\CreateListener;
+use OCA\PenpotSync\Listener\DeleteListener;
 use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
@@ -22,9 +24,11 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Events\Node\NodeWrittenEvent;
 
 /**
  * App bootstrap.
@@ -117,6 +121,19 @@ final class Application extends App implements IBootstrap {
 		// in §C6.8) — one `duplicate-file` when it lands in the same project, plus
 		// a `move-files` when it lands anywhere else.
 		$context->registerEventListener(NodeCopiedEvent::class, CopyListener::class);
+
+		// A NEW .penpot FILE BECOMES A DESIGN (§6.33, create-design.feature). The
+		// "+ New" menu writes a file and nothing more — that is the whole
+		// Nextcloud-sanctioned pattern — so the server notices it here. The
+		// SyncGuard is load-bearing: the pull writes .penpot files constantly.
+		$context->registerEventListener(NodeWrittenEvent::class, CreateListener::class);
+
+		// DELETING REACHES PENPOT'S TRASH, and emptying the Nextcloud trash
+		// destroys the design (delete.feature). One event covers both steps,
+		// told apart by whether the node already sits under files_trashbin —
+		// getting that backwards would permanently destroy a design on an
+		// ordinary delete, which is why it lives in one clearly-named place.
+		$context->registerEventListener(BeforeNodeDeletedEvent::class, DeleteListener::class);
 
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to

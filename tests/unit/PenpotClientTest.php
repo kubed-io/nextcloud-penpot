@@ -129,6 +129,21 @@ final class PenpotClientTest extends TestCase {
 		yield 'duplicate-file uses kebab file-id, correcting §6.28' => [
 			'duplicate-file', ['file' => 'f1', 'name' => 'N'], ['file-id' => 'f1', 'name' => 'N'],
 		];
+		// The trash surface, all four confirmed live in §C6.11. `create-file` takes
+		// kebab project-id; `delete-file` takes a BARE id like rename-file; and the
+		// two team-scoped commands take a SET under `ids`, like move-files.
+		yield 'create-file uses kebab project-id' => [
+			'create-file', ['project' => 'p1', 'name' => 'N'], ['project-id' => 'p1', 'name' => 'N'],
+		];
+		yield 'delete-file uses a bare id' => [
+			'delete-file', ['file' => 'f1'], ['id' => 'f1'],
+		];
+		yield 'restore-deleted-team-files uses team-id + ids' => [
+			'restore-deleted-team-files', ['team' => 't1', 'files' => ['f1']], ['team-id' => 't1', 'ids' => ['f1']],
+		];
+		yield 'permanently-delete-team-files uses team-id + ids' => [
+			'permanently-delete-team-files', ['team' => 't1', 'files' => ['f1']], ['team-id' => 't1', 'ids' => ['f1']],
+		];
 		// THE ONE THAT DISAGREES WITH ITS OWN SIBLING. §1918: `import-binfile`
 		// takes kebab (`project-id`) while `export-binfile` takes camel (`fileId`)
 		// — the two halves of the same feature, on the same server, disagreeing.

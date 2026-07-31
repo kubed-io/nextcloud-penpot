@@ -123,6 +123,15 @@ final class PenpotClient {
 		// survey wrote the wrong casing down and nothing contradicted it until a
 		// schema was read back off the server.
 		'duplicate-file' => ['file' => 'file-id', 'name' => 'name'],
+		// ── confirmed live, Ch2 §C6.11 (the trash probe) ──
+		// `create-file` takes KEBAB `project-id`, and `name` is REQUIRED — a
+		// design cannot be created nameless. Its optional `id` (a caller-supplied
+		// uuid) is deliberately not offered: Penpot assigns identities, we record
+		// them. Closes open question #27.
+		'create-file' => ['project' => 'project-id', 'name' => 'name'],
+		'delete-file' => ['file' => 'id'],
+		'restore-deleted-team-files' => ['team' => 'team-id', 'files' => 'ids'],
+		'permanently-delete-team-files' => ['team' => 'team-id', 'files' => 'ids'],
 		// ── confirmed live, Chapter 1 §5.1/§5.4 ──
 		// CAMELCASE, and that is not a slip: §1918 established that `import-binfile`
 		// takes kebab (`project-id`) while `export-binfile` takes camel (`fileId`).
@@ -269,6 +278,92 @@ final class PenpotClient {
 	}
 
 	/**
+	 * Create a new design in a project. Confirmed live in §C6.11.
+	 *
+	 * `name` is required by the schema — Penpot has no nameless design — and the
+	 * project is mandatory too: there is no team-level or rootless create, which
+	 * is exactly why the New-menu action is only offered where a project can be
+	 * resolved (create-design.feature).
+	 *
+	 * @return array<string, mixed> the new file record, incl. `id`
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function createFile(string $projectId, string $name): array {
+		$this->assertName($name);
+
+		return $this->record($this->call('create-file', ['project' => $projectId, 'name' => $name]));
+	}
+
+	/**
+	 * Move a design into Penpot's own trash. **SOFT — this is not destructive.**
+	 *
+	 * §6.34 recorded this as the app's one destructive call, on the belief that
+	 * Penpot's trash was unreachable. §6.52 disproved that and §C6.11 confirmed it
+	 * again: the design keeps its id, revision and history, stays listed by
+	 * {@see deletedFiles()}, and comes back whole. It is exactly as reversible as
+	 * moving a Nextcloud file to the Nextcloud trash, which is what makes it the
+	 * right partner for that gesture.
+	 *
+	 * Penpot answers 204 with no body.
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function deleteFile(string $fileId, ?string $actorToken = null): void {
+		$this->call('delete-file', ['file' => $fileId], $actorToken);
+	}
+
+	/**
+	 * The designs currently in a team's trash.
+	 *
+	 * ALSO A SAFETY DEVICE, not just a listing: it is the only sanctioned source
+	 * of ids for {@see permanentlyDeleteFiles()}, which has no safety of its own.
+	 * See that method.
+	 *
+	 * @return list<array<string, mixed>>
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function deletedFiles(string $teamId): array {
+		return $this->records($this->call('get-team-deleted-files', ['team' => $teamId]));
+	}
+
+	/**
+	 * DESTROY designs. The one irreversible call in this app.
+	 *
+	 * ## IT DOES NOT CHECK THAT THEY ARE IN THE TRASH (saga §C6.11)
+	 *
+	 * The name says "permanently-delete-team-FILES", not "empty the trash", and
+	 * that is exactly what it means. Proven live: a design that had been RESTORED
+	 * — live, listed in its project, not deleted at all — was destroyed by
+	 * passing its id here. HTTP 200, a progress event, gone.
+	 *
+	 * So the caller carries the entire safety burden, and there is one rule:
+	 * **every id passed here must have come from a fresh {@see deletedFiles()}
+	 * listing.** Not from a mirror's metadata, not from a user's selection, not
+	 * from anything this app worked out for itself. An id absent from that
+	 * listing means the design was already purged or someone restored it in
+	 * Penpot's UI — and in both cases destroying it is not what was asked for.
+	 *
+	 * SSE, like the export: progress per file, then `end`.
+	 *
+	 * @param list<string> $fileIds ids taken from deletedFiles(), and nowhere else
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function permanentlyDeleteFiles(string $teamId, array $fileIds, ?string $actorToken = null): void {
+		if ($fileIds === []) {
+			return;
+		}
+
+		$this->consumeEventStream(
+			'permanently-delete-team-files',
+			['team' => $teamId, 'files' => $fileIds],
+			$actorToken,
+		);
+	}
+
+	/**
 	 * Rename a project. Its own flow, not a variant of file rename (saga §6.39).
 	 *
 	 * Penpot answers 204 with NO BODY, unlike `rename-file`'s 200 + record.
@@ -339,7 +434,7 @@ final class PenpotClient {
 	 * @throws PenpotApiException
 	 */
 	public function exportBinfile(string $fileId): string {
-		$stream = $this->postEventStream($fileId);
+		$stream = $this->postStream('export-binfile', ['file' => $fileId, 'libraries' => false, 'assets' => false]);
 		$assetUrl = $this->assetUrlFrom($fileId, $stream);
 		$archive = $this->fetchAsset($fileId, $assetUrl);
 
@@ -366,18 +461,26 @@ final class PenpotClient {
 	}
 
 	/**
-	 * Fire the export and return the raw event-stream text.
+	 * POST any SSE command and return the raw event-stream text.
+	 *
+	 * Shared by the export (which reads the asset URL out of the `end` event) and
+	 * by {@see consumeEventStream()} (which only needs to know the stream got
+	 * there). Three commands stream today — export, permanent delete, and restore
+	 * when it lands — and they all need the same non-Accept headers and the same
+	 * long timeout, so they share one door.
+	 *
+	 * @param array<string, string|list<string>|bool> $args logical args, mapped through PARAMS
 	 *
 	 * @throws PenpotApiException
 	 */
-	private function postEventStream(string $fileId): string {
-		$url = $this->getBaseUrl() . self::RPC_PATH . 'export-binfile';
-		$body = $this->wireParams('export-binfile', ['file' => $fileId, 'libraries' => false, 'assets' => false]);
+	private function postStream(string $command, array $args, ?string $actorToken = null): string {
+		$url = $this->getBaseUrl() . self::RPC_PATH . $command;
+		$body = $this->wireParams($command, $args);
 
 		try {
 			$response = $this->clientService->newClient()->post($url, [
 				'headers' => [
-					'Authorization' => 'Token ' . $this->getToken(),
+					'Authorization' => 'Token ' . ($actorToken ?? $this->getToken()),
 					'Content-Type' => 'application/json',
 					// Still NO `Accept` header — see call(). The event payloads are
 					// Transit exactly like every other response, and asking for JSON
@@ -408,7 +511,7 @@ final class PenpotClient {
 		if ($status < 200 || $status >= 300) {
 			// A non-2xx here is an ordinary RPC failure (a bad id, a bad token)
 			// that never reached the streaming stage, so it classifies like one.
-			throw $this->errorFor('export-binfile', $status, (string)$response->getBody());
+			throw $this->errorFor($command, $status, (string)$response->getBody());
 		}
 
 		return (string)$response->getBody();
@@ -456,6 +559,50 @@ final class PenpotClient {
 		}
 
 		return $url;
+	}
+
+	/**
+	 * POST an SSE command and assert its stream reached `end` without an `error`.
+	 *
+	 * For the streaming commands whose ANSWER is the work itself rather than a
+	 * payload — `permanently-delete-team-files` today, `restore-deleted-team-files`
+	 * when that lands. The export has its own reader because it needs the asset
+	 * URL out of the `end` event; these only need to know it got there.
+	 *
+	 * **HTTP 200 IS NOT SUCCESS** (§5.1, and it is just as true here): an error
+	 * arrives as an event INSIDE a 200 response. Anything that returns early on
+	 * the status code alone would call a failed purge a completed one.
+	 *
+	 * @param array<string, string|list<string>|bool> $args logical args, mapped through PARAMS
+	 *
+	 * @throws PenpotApiException on an `error` event or a stream with no `end`
+	 */
+	private function consumeEventStream(string $command, array $args, ?string $actorToken = null): void {
+		$stream = $this->postStream($command, $args, $actorToken);
+
+		$sawEnd = false;
+		foreach ($this->events($stream) as [$name, $data]) {
+			if ($name === 'error') {
+				throw new PenpotApiException(
+					sprintf('Penpot reported an error during %s: %s', $command, $data),
+					0,
+					null,
+					PenpotApiException::KIND_REMOTE,
+				);
+			}
+			if ($name === 'end') {
+				$sawEnd = true;
+			}
+		}
+
+		if (!$sawEnd) {
+			throw new PenpotApiException(
+				sprintf('Penpot %s ended without an `end` event; the work may be incomplete.', $command),
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
 	}
 
 	/**
