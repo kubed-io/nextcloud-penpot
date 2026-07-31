@@ -489,12 +489,14 @@ namespace OCP\SystemTag {
 			 * @param list<string> $objectIds
 			 * @param list<int> $tags
 			 */
+			// No `parent::__construct()`: the stubbed Event above declares none,
+			// and calling a constructor that does not exist is a fatal, not a
+			// no-op the way it is against the real class.
 			public function __construct(
 				private string $objectType,
 				private array $objectIds,
 				private array $tags,
 			) {
-				parent::__construct();
 			}
 
 			public function getObjectType(): string {
