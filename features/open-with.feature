@@ -83,13 +83,13 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     When I choose "Open in Penpot" from its context menu
     Then Penpot opens at that design (not a download, not a text editor)
 
-  @todo
+  @blocked
   Scenario: Open in Penpot is the default click
     Given a mirrored ".penpot" file with a live design in Penpot
     When I click the file in the Files app
     Then it opens in Penpot by default
 
-  @todo
+  @decision
   Scenario: There is no "Edit as text" action, ever
     Given a mirrored ".penpot" file
     Then its context menu has no "Open with text editor" or "Edit as text" action
@@ -138,7 +138,7 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     # Handing a user an empty or placeholder file that looks like a design export
     # would be the same kind of quiet lie restore.feature exists to avoid.
 
-  @todo
+  @unbuilt
   Scenario: A file whose design was deleted in Penpot says so instead of dead-linking
     Given an unmapped ".penpot" file whose Penpot original has been deleted
     When I choose "Open in Penpot"

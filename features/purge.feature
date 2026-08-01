@@ -38,7 +38,7 @@ Feature: Purge the app's mirrored files from Nextcloud
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
-  @todo
+  @unbuilt
   Scenario: Purge deletes mirrored files but leaves Penpot and the mapping intact
     Given a mirrored ".penpot" file in the "My Stuff" subfolder
     When the admin purges the Nextcloud files
@@ -46,7 +46,7 @@ Feature: Purge the app's mirrored files from Nextcloud
     And the design file still exists, unchanged, in Penpot
     And the "Northwind" mapping is still configured
 
-  @todo
+  @unbuilt
   Scenario: Purge keeps an unmapped file — a standalone copy is never lost
     Given an unmapped ".penpot" file that still carries its "penpot_id"
     And I remember the unmapped file
@@ -55,13 +55,13 @@ Feature: Purge the app's mirrored files from Nextcloud
     Then no mirrored files remain in the "My Stuff" subfolder
     And the remembered unmapped file is left in place
 
-  @todo
+  @unbuilt
   Scenario: Purge keeps an untracked ".penpot" file — never the app's business
     Given a ".penpot" file with no "penpot_id" (never tracked)
     When the admin purges the Nextcloud files
     Then that untracked file is left in place
 
-  @todo
+  @unbuilt
   Scenario: Purge keeps an ignored file — the ignore tag is a keep request
     Given a mirrored ".penpot" file tagged as ignored in the "My Stuff" subfolder
     When the admin purges the Nextcloud files
@@ -69,7 +69,7 @@ Feature: Purge the app's mirrored files from Nextcloud
     # Ignore exists precisely to say "this archive is mine now" (ignore.feature).
     # A purge that deleted ignored files would defeat the tag's only purpose.
 
-  @todo
+  @unbuilt
   Scenario: A purge warns what is actually being deleted
     Given 3 mirrored files in "sync" mode and 10 in "link" mode in the "My Stuff" subfolder
     When the admin starts a purge
@@ -77,7 +77,7 @@ Feature: Purge the app's mirrored files from Nextcloud
     And it explains that link files hold no content to lose
     # Purging 10 pointers and purging 3 backups are very different events.
 
-  @todo
+  @blocked
   Scenario: Sync from Penpot brings a sync file back after a purge
     Given a mirrored ".penpot" file in "sync" mode in the "My Stuff" subfolder
     And the admin purges the Nextcloud files
@@ -85,7 +85,7 @@ Feature: Purge the app's mirrored files from Nextcloud
     Then the design file appears again as a file in the "My Stuff" subfolder
     And it is re-exported and re-downloaded from Penpot, not restored from any local backup
 
-  @todo
+  @blocked
   Scenario: Sync from Penpot brings a link file back as a pointer
     Given a mirrored ".penpot" file in "link" mode in the "My Stuff" subfolder
     And the admin purges the Nextcloud files

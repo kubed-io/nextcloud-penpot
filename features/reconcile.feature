@@ -174,7 +174,7 @@ Feature: Scheduled or manual pull from Penpot
     # there is no content push (saga §6.1). See admin-section.feature for where
     # they sit; this is what they do.
 
-  @todo
+  @blocked
   Scenario: Sync now on a mapping card pulls just that team
     Given the Penpot team "Northwind" is mapped
     When the admin uses that mapping's "Sync now" button
@@ -183,7 +183,7 @@ Feature: Scheduled or manual pull from Penpot
     # The per-mapping equivalent of "Sync from Penpot", exactly as in both
     # siblings — the same button, in the same place on the card.
 
-  @todo
+  @blocked
   Scenario: Sync now reports honestly while the pull is unbuilt
     Given the Penpot team "Northwind" is mapped
     When the admin uses that mapping's "Sync now" button
@@ -194,7 +194,7 @@ Feature: Scheduled or manual pull from Penpot
     # enabling it later a one-line change. Silently doing nothing would be worse
     # than either a disabled button or an absent one.
 
-  @todo
+  @blocked
   Scenario: Sync now on an unsaved mapping asks for a save first
     Given the admin has added a mapping card but not saved it
     When the admin uses that card's "Sync now" button
@@ -449,7 +449,7 @@ Feature: Scheduled or manual pull from Penpot
     # A `sync` file already holds its archive, so a second export would be work
     # with a knowable answer. The counter is the assertion: 1 pruned, 0 rescued.
 
-  @in-penpot @todo
+  @in-penpot @blocked
   Scenario: A snapshot that cannot be taken is reported, not faked
     Given a mirrored ".penpot" file in "link" mode
     When its design was deleted in Penpot longer ago than the grace window
@@ -507,12 +507,12 @@ Feature: Scheduled or manual pull from Penpot
 
     # ── there is no push, and there is no user-attributed pull ───────────────────
 
-  @todo
+  @decision
   Scenario: There is no push counterpart to this feature
     Given the "Northwind" mapping exists
     Then no "Sync to Penpot" action exists anywhere in the admin panel or CLI
 
-  @todo
+  @blocked
   Scenario: The pull always runs as the service account, never as a user
     Given two Nextcloud users both have personal Penpot tokens configured
     And both are members of the mapped "Northwind" team

@@ -57,8 +57,8 @@ Feature: Uninstall reverts the system and reinstall reconnects the data
     Given the app is connected to Penpot
     And a folder mapped to the Penpot team "Northwind"
 
-    # ── system cleanup (needs a live app remove — @todo in CI) ────────────────────
-  @todo
+    # ── system cleanup (needs a live app remove — @blocked in CI) ────────────────────
+  @blocked
   Scenario: Removing the app reverts the custom mimetype registration
     Given the app registered a custom mimetype for ".penpot" files on install
     When the app is removed
@@ -75,7 +75,7 @@ Feature: Uninstall reverts the system and reinstall reconnects the data
     And each file still carries its "penpot_id" metadata
 
     # ── reinstall reconnects with no duplicates (the headline) ────────────────────
-  @todo
+  @blocked
   Scenario: Re-enabling and pulling reconciles the existing files without duplicates
     Given the mapped folder has mirrored ".penpot" files
     And the admin disables and then re-enables the app

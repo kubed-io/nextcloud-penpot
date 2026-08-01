@@ -247,7 +247,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
 
     # ── where nothing is created ──────────────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Copying outside every mapping creates nothing in Penpot
     Given a mirrored ".penpot" file in the "My Stuff" folder
     When I copy the file to a folder with no Penpot ancestor

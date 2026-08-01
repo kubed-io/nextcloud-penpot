@@ -41,7 +41,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And a Team Folder mapped to the Penpot team "Northwind"
     And the Penpot project "My Stuff" is mirrored as a folder inside it
 
-  @todo
+  @unbuilt
   Scenario: Removing the team mapping trashes its mirrored files and leaves standalone files alone
     Given a mirrored ".penpot" file in the "My Stuff" folder
     And an untracked standalone ".penpot" file also sitting in the "My Stuff" folder
@@ -53,7 +53,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And Penpot is never contacted by this action
     And the design still exists, unchanged, in Penpot
 
-  @todo
+  @decision
   Scenario: There is no project mapping to remove
     Given the "Northwind" mapping exists with several mirrored project folders
     Then no individual project folder can be unmapped

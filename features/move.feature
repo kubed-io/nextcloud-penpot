@@ -120,7 +120,7 @@ Feature: Moving a design
     # and the guard refuses this drag before it happens — that refusal is its own
     # scenario below, and needs a different assertion.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @blocked
   Scenario: A move between projects is attributed to the acting user
     Given the user has a valid personal Penpot token
     When the user moves a mirrored file into another project folder
@@ -164,7 +164,7 @@ Feature: Moving a design
 
     # ── out of every mapping: the meaningful move ─────────────────────────────
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: Moving a "sync" file out of every mapped folder leaves real, openable bytes
     Given a mirrored ".penpot" file in "sync" mode in a project folder
     When I move the file to a folder with no Penpot ancestor
@@ -176,7 +176,7 @@ Feature: Moving a design
     # The "zip in nextcloud only" state (§6.23) — the same state the ignore tag
     # produces. Moving it back in offers a restore; see restore.feature.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: Moving an unmapped tracked file back under a project offers a restore
     Given an unmapped ".penpot" file in "sync" mode that still carries its "penpot_id"
     When I move the file back under a folder mapping to a Penpot project
@@ -298,7 +298,7 @@ Feature: Moving a design
     # confirmed, but it is a destructive cross-team mutation that changes who can
     # see the work — far outside §6.1. Refuse loudly; never silently undo.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: A project folder cannot be moved into a different team's folder
     Given a second team folder mapped to another Penpot team
     When I try to move a project folder into it
@@ -338,7 +338,7 @@ Feature: Moving a design
     # Drafts is a state, so the mirror lands at the team root — the mirror image
     # of "Un-filing" above, and the same rule read from the other side.
 
-  @in-penpot @todo
+  @in-penpot @unbuilt
   Scenario: A design moved to another team in Penpot leaves this mapping
     Given a mirrored ".penpot" file whose design is moved to an unmapped team
     When the pull runs

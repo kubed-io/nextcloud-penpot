@@ -37,7 +37,7 @@ Feature: Failures never cost the user data
 
     # ── the transport lies: parse the stream, not the status ─────────────────────
 
-  @todo
+  @unbuilt
   Scenario: An error inside a 200 response is treated as a failure
     Given a mirrored ".penpot" file in "sync" mode
     When an export returns HTTP 200 but the stream carries an "error" event
@@ -94,7 +94,7 @@ Feature: Failures never cost the user data
     And nothing is pruned
     # The asset URL requires the bearer token — 401 without it, confirmed live.
 
-  @todo
+  @blocked
   Scenario: The inner signed storage URL is never persisted
     When an export completes and yields an asset URL
     Then the app does not store the redirect target for later use
@@ -135,7 +135,7 @@ Feature: Failures never cost the user data
     Then no project subfolder is removed
     And no mirrored file is pruned
 
-  @todo
+  @blocked
   Scenario: An expired service token prunes nothing
     Given mirrored ".penpot" files in the "My Stuff" subfolder
     When the service-account token has expired
@@ -174,7 +174,7 @@ Feature: Failures never cost the user data
     # projects listing. Trusting it would resurrect deleted project folders on
     # every pull.
 
-  @todo
+  @blocked
   Scenario: A design deleted in Penpot can still be rescued inside the grace window
     Given a mirrored ".penpot" file in "link" mode, holding no archive
     When its design is deleted in Penpot
@@ -201,7 +201,7 @@ Feature: Failures never cost the user data
     # Never revert the user's local action to "fix" a remote failure, and never
     # silently drop the write (saga §6.18 rule 3).
 
-  @todo
+  @unbuilt
   Scenario: A restore whose follow-up rename fails reports partial success
     Given a restore that creates a new Penpot file
     When the import succeeds but the follow-up rename fails
@@ -220,7 +220,7 @@ Feature: Failures never cost the user data
     Then the mapping is refused
     And the refusal explains that a service-account token is required
 
-  @todo
+  @blocked
   Scenario: An invalid personal token falls back rather than blocking
     Given the user's personal Penpot token is invalid
     When the user performs an action that writes to Penpot

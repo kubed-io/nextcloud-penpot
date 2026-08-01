@@ -100,7 +100,7 @@ Feature: Renaming a mirrored Penpot file
     # as the file twin below, and it has to be stated for both because they are
     # different listeners reading different ids.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @blocked
   Scenario: A project rename is attributed to the acting user
     Given the user has a valid personal Penpot token
     When the user renames a project folder
@@ -160,7 +160,7 @@ Feature: Renaming a mirrored Penpot file
     # :params-validation with missing-key [:id]. There is no inferable casing
     # rule across this API — only a per-command table. See saga open question #21.
 
-  @todo
+  @blocked
   Scenario: A propagated rename is attributed to the acting user
     Given the user has a valid personal Penpot token
     When the user renames a mirrored file in the Files app
@@ -170,7 +170,7 @@ Feature: Renaming a mirrored Penpot file
     # of the app's few write paths (saga §6.19), all of which attribute the same
     # way.
 
-  @todo
+  @blocked
   Scenario: A propagated rename with no personal token uses the service account
     Given the user has no personal Penpot token configured
     When the user renames a mirrored file in the Files app

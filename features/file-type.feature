@@ -121,7 +121,7 @@ Feature: A mirrored Penpot file is a first-class file type
     # TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
     # glyph are the same drawing with opposite colour treatments, and collapsing
     # them fails in both directions — this is not a style preference.
-  @todo
+  @blocked
   Scenario: The row icon and the menu glyph are separate files
     Given a mirrored ".penpot" file
     Then the Files-row icon comes from the app's colour mark, with a fixed fill
@@ -176,7 +176,7 @@ Feature: A mirrored Penpot file is a first-class file type
     # Folder metadata works exactly as file metadata does — same Node type, same
     # fileid space (§6.21). The tag is the human half of the same fact (§C6.18).
 
-  @todo
+  @unbuilt
   Scenario: A file moved out of its mapped folder is unmapped, not untracked
     Given a mirrored ".penpot" file that has been moved out of its mapped folder
     Then its "nc:metadata-penpot_id" property is still present
@@ -192,7 +192,7 @@ Feature: A mirrored Penpot file is a first-class file type
     Then its "nc:metadata-penpot_mode" property is "sync"
     And the file holds the real ".penpot" archive
 
-  @todo
+  @unbuilt
   Scenario: The metadata is read-only over DAV
     Given a mirrored ".penpot" file
     When a client tries to change "nc:metadata-penpot_id" via PROPPATCH
@@ -222,14 +222,14 @@ Feature: A mirrored Penpot file is a first-class file type
     # to move neither mtime nor etag. Any implementation has to set it exactly
     # when the design's own timestamp changed, and never otherwise.
 
-  @in-penpot @todo
+  @in-penpot @unbuilt
   Scenario: A mirror's modified time reflects when the design changed, not when we synced
     Given a mirrored design whose Penpot "modified-at" is a week old
     When the team is mirrored again
     Then the file's Nextcloud modification time matches Penpot's "modified-at"
     And it is not the time the pull ran
 
-  @in-penpot @todo
+  @in-penpot @unbuilt
   Scenario: A mirror's creation time reflects when the design was created in Penpot
     Given a design created in Penpot a month ago and mirrored today
     Then the file's Nextcloud creation time matches Penpot's "created-at"

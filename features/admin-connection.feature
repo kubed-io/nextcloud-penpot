@@ -68,7 +68,7 @@ Feature: Admin and per-user Penpot connection setup
       | penpot.example.com      |
       | ftp://penpot.example.com |
 
-  @todo
+  @blocked
   Scenario: The URL card carries no credential field
     Then no credential field exists on this card — tokens are configured elsewhere
 
@@ -166,7 +166,7 @@ Feature: Admin and per-user Penpot connection setup
     # visibility is always membership-scoped, so which teams the token can see is
     # exactly the fact that decides what can be mapped.
 
-  @todo
+  @blocked
   Scenario: A connection test surfaces the required Penpot instance flag
     Given the admin has set the Penpot base URL and a service-account token
     But the Penpot instance has "enable-access-tokens" disabled
@@ -179,7 +179,7 @@ Feature: Admin and per-user Penpot connection setup
 
     # ── the personal token: optional, per-user, attribution only ─────────────────
 
-  @todo
+  @blocked
   Scenario: The app works fully with no personal tokens configured anywhere
     Given the admin has configured the service-account token
     And no Nextcloud user has set a personal Penpot token
@@ -188,7 +188,7 @@ Feature: Admin and per-user Penpot connection setup
     And write actions are performed as the service account
     # The personal layer is additive. Nothing is blocked by its absence.
 
-  @todo
+  @blocked
   Scenario: A user's personal token is used to attribute their writes
     Given the admin has configured the service-account token
     And the user has set a valid personal Penpot token
@@ -196,7 +196,7 @@ Feature: Admin and per-user Penpot connection setup
     Then the write uses that user's own token
     And Penpot attributes the change to that user, not to the service account
 
-  @todo
+  @blocked
   Scenario: A personal token is never used for the scheduled pull
     Given two Nextcloud users have valid personal Penpot tokens
     When the scheduled pull runs
@@ -204,7 +204,7 @@ Feature: Admin and per-user Penpot connection setup
     And neither personal token is used for any read
     # Saga §6.18 — one puller, always, or the shared-Team-Folder race returns.
 
-  @todo
+  @blocked
   Scenario: A personal token never widens what the app mirrors
     Given the user's personal token can see the Penpot team "Private Team"
     But the service account has not been invited to "Private Team"

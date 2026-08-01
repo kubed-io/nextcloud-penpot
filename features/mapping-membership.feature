@@ -205,7 +205,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     Then it still resolves to the "Northwind" team
     And the depth between them is irrelevant to the lookup
 
-  @todo
+  @blocked
   Scenario: A personal project folder has no team ancestor, and that is valid
     Given the user has a personal Penpot token configured
     And a personal project folder mounted at the root of the user's home
@@ -230,7 +230,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
     # ── the ambiguity free nesting introduces ────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Two folders carrying the same project id is a reported conflict
     Given two different folders both carry the Penpot project id for "My Stuff"
     Then any file inside either folder still resolves unambiguously to "My Stuff"

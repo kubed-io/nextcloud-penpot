@@ -45,7 +45,7 @@ Feature: Personal Penpot projects in the user's home folder
 
     # ── what appears, and what doesn't ───────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: A user's personal projects mount at their home root
     Given the user has set a valid personal Penpot token
     And the user's personal Penpot team contains the projects "Sketches" and "Logos"
@@ -55,7 +55,7 @@ Feature: Personal Penpot projects in the user's home folder
     And each folder carries its Penpot project id as metadata
     And each folder carries the app's project tag
 
-  @todo
+  @blocked
   Scenario: The personal team itself gets no folder
     Given the user has set a valid personal Penpot token
     When the personal pull runs
@@ -64,7 +64,7 @@ Feature: Personal Penpot projects in the user's home folder
     And the personal projects sit directly at the home root
     # A personal team is not a sharing boundary — there is nobody to share with.
 
-  @todo
+  @unbuilt
   Scenario: A personal project folder resolves without a team ancestor
     Given a personal project folder at the root of the user's home
     Then the folder carries a Penpot project id
@@ -73,7 +73,7 @@ Feature: Personal Penpot projects in the user's home folder
     And a mirrored ".penpot" file inside it belongs to that project
     # The explicit exception to saga §6.29's team lookup.
 
-  @todo
+  @unbuilt
   Scenario: A user can move their personal project folders anywhere in their home
     Given a personal project folder "Sketches" at the user's home root
     And a plain folder "Design" in the user's home
@@ -86,7 +86,7 @@ Feature: Personal Penpot projects in the user's home folder
 
     # ── the credential boundary ──────────────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: Personal projects are pulled with the user's own token, never the service account
     Given the user has set a valid personal Penpot token
     When the personal pull runs
@@ -94,7 +94,7 @@ Feature: Personal Penpot projects in the user's home folder
     And the service-account token is not used for any personal project
     # The service account cannot see a personal team and never will (saga §6.12).
 
-  @todo
+  @blocked
   Scenario: Without a personal token, no personal projects appear at all
     Given the user has not set a personal Penpot token
     When any pull runs
@@ -102,7 +102,7 @@ Feature: Personal Penpot projects in the user's home folder
     And the user's mapped Team Folders are unaffected and keep pulling normally
     # Team content is the service account's job and does not depend on this.
 
-  @todo
+  @blocked
   Scenario: One user's personal projects never appear in another user's home
     Given user "dana" has a personal Penpot token and personal projects
     And user "alex" has their own personal Penpot token
@@ -110,7 +110,7 @@ Feature: Personal Penpot projects in the user's home folder
     Then "alex" sees only their own personal projects
     And no folder from "dana"'s personal team appears anywhere in "alex"'s home
 
-  @todo
+  @blocked
   Scenario: Clearing a personal token stops personal pulls without deleting anything
     Given the user has personal project folders in their home
     When the user clears their personal Penpot token
@@ -122,14 +122,14 @@ Feature: Personal Penpot projects in the user's home folder
 
     # ── modes and behaviour are identical to team projects ──────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Personal projects support the same link and sync modes
     Given a personal project folder with mirrored files
     Then each file is in "link" or "sync" mode exactly as a team file would be
     And promoting or demoting a personal file behaves identically
     # Nothing about personal projects changes the storage model (sync-mode.feature).
 
-  @todo
+  @unbuilt
   Scenario: Deleting a personal project folder never touches Penpot
     Given a personal project folder in the user's home
     When the user deletes the folder

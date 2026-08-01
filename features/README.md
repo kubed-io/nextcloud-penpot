@@ -135,13 +135,69 @@ The test: can you write the restriction as a sentence beginning *"A link…"*? I
 yes it is a rule worth its own section. If mode makes no difference to the
 outcome, leave it out.
 
-### Status
+### Status — four tags, and only one of them is a backlog
 
-| Tag | Meaning |
-|---|---|
-| `@todo` | The steps do not exist. Excluded by `behat.dist.yml`, which filters `~@todo`. |
+`@todo` used to mean four different things at once: the test is unwritten, the
+*feature* is unwritten, the harness cannot reach it, and there is nothing to
+execute in the first place. Those need four different people to do four
+different things, and lumping them together meant that "what is actually built
+but untested?" — the most useful question you can ask of a spec — took a
+hand-analysis every time it was asked.
 
-**A `@todo` tag sits on its own scenario, never above a comment block.** Gherkin
+| Tag | Meaning | What to do about it |
+|---|---|---|
+| *(none)* | Runs in CI. | Keep it green. |
+| `@todo` | **The code exists; only the test is missing.** | Write the test. |
+| `@unbuilt` | A spec awaiting code. | Build the feature. |
+| `@blocked` | Real behaviour this harness cannot reach. | Build the harness capability — or accept it. |
+| `@decision` | Records a deliberate absence. There is no operation. | Nothing, ever. |
+
+All four are excluded from the run. The distinction is not about whether a
+scenario executes today; it is about **who picks it up**.
+
+**`behat --tags @todo` is the work queue.** That is the whole point of narrowing
+it: the list is now things a person can sit down and do, with no triage step in
+front of it.
+
+#### What makes something `@blocked` rather than `@todo`
+
+Name the missing capability, in the scenario or the section above it. The four
+that exist today:
+
+* **no browser** — anything about a button, card, panel, icon, or menu entry;
+* **no logged-in session** — every personal-token attribution scenario, because
+  the occ+DAV harness has no acting user to attribute to;
+* **no groupfolders in the CI image** — Team Folder provisioning (which is also
+  why `@team-folder` is a dimension to run across rather than a thing to write
+  twice, above);
+* **no time travel** — anything gated on Penpot's deletion delay, which is
+  7 days by default and set per team, not per request (§C6.19).
+
+A `@blocked` scenario with no stated reason is really a `@todo` nobody checked.
+
+#### What makes something `@decision`
+
+There is no operation to perform. *"There is no 'Sync to Penpot' button, ever"*
+records a design choice; it will never become live, and that is not a gap.
+
+Do not confuse it with a scenario that asserts **nothing happened** — *"Penpot is
+never contacted"*, *"no folder named Drafts is created"*. Those are ordinary
+behaviour, entirely testable by absence, and several of them run in CI today.
+The test: is there a gesture in the `When`? If yes it is a behaviour, whatever
+the `Then` says.
+
+#### A `@todo` that fails is a finding, not a status
+
+One scenario is `@todo` because it FAILS, not because it is unwritten — the
+restore/pull listing disagreement (§6.49), and it says so in a comment. That is
+a deliberate use of the tag: the spec is right, the code is wrong, and the
+scenario is the evidence. Promoting it is a bug fix, not a test-writing task.
+
+Say so in a comment when you do this. A silent failing `@todo` is
+indistinguishable from an unwritten one, and the difference is the whole value
+of the tag.
+
+**A status tag sits on its own scenario, never above a comment block.** Gherkin
 binds a floating tag to whatever scenario comes next, across any number of
 intervening comment lines — which is exactly how one scenario was silently
 excluded while four others ran undefined (§C6.14). CI runs `--strict` so

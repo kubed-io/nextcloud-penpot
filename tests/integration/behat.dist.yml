@@ -12,12 +12,22 @@
 #   NC_BASE_URL, NC_ADMIN_USER, NC_ADMIN_PASS, PENPOT_URL, OCC
 
 default:
-  # @todo scenarios are the documented spec for stages not yet wired (their step
-  # defs don't exist yet); skip them so CI runs only live scenarios. Drop the
-  # filter (or retag) as each stage's steps land.
+  # FOUR STATUS TAGS, AND ONLY ONE OF THEM IS A BACKLOG (features/README.md):
+  #
+  #   @todo      the code EXISTS; only the test is missing. Pick one up and
+  #              write it — `behat --tags @todo` is the work queue.
+  #   @unbuilt   a spec awaiting code. Nothing to test yet.
+  #   @blocked   real behaviour this harness cannot reach (no browser, no
+  #              logged-in session, no groupfolders, cannot age a deletion).
+  #   @decision  records a deliberate absence. There is no operation, ever.
+  #
+  # All four are excluded from the run; the distinction is about who picks the
+  # scenario up and what they do with it, not about whether it executes today.
+  # It used to be one @todo meaning all four at once, which is why "what is
+  # actually built but untested?" needed a hand-analysis every time it was asked.
   gherkin:
     filters:
-      tags: '~@todo'
+      tags: '~@todo&&~@unbuilt&&~@blocked&&~@decision'
 
   suites:
     default:

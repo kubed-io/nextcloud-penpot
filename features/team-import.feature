@@ -80,7 +80,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # groups" automatically once granted — there's no separate pending state to
     # build. So detecting "is this already imported" is a read-only match, not a
     # grant action.
-  @todo
+  @unbuilt
   Scenario: A Penpot team already mapped to a Team Folder is detected, not re-imported
     Given the Penpot team "Northwind" is already mapped to a Team Folder
     And the user's Nextcloud group has access to that Team Folder
@@ -89,7 +89,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     And no new folder or mapping is created
 
     # ── importing a NOT-yet-mapped team — the permission gate is the open point ──
-  @todo
+  @blocked
   Scenario: Importing an unmapped team as a Team Folder requires Team Folder rights
     Given the Penpot team "New Team" is visible to the user's token but not yet mapped
     And the acting user does not hold Team Folder admin or delegated rights
@@ -105,7 +105,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # A user seeing a team through their personal token is NOT sufficient. The
     # service account does all mirroring, so it must be able to see the team too,
     # or the resulting mapping would pull nothing forever.
-  @todo
+  @blocked
   Scenario: A team the service account cannot see is shown as not importable
     Given the Penpot team "Solo Team" is visible to the user's personal token
     But the service account has not been invited to "Solo Team"
@@ -133,7 +133,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # looking at a team they have not mapped should be told what tagging would do,
     # not left to discover it.
 
-  @todo
+  @unbuilt
   Scenario: The import surface explains that tagging a folder creates a project
     Given a Team Folder mapped to the Penpot team "Northwind"
     And a plain, untagged subfolder created directly inside it
