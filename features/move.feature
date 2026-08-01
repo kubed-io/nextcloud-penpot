@@ -195,6 +195,55 @@ Feature: Moving a design
     # Creating a design is a deliberate action (create-design.feature), never a
     # side effect of dragging a file somewhere.
 
+    # ── across two mappings: personal ⇄ a shared team ──────────────────────────
+    # A user's home root and a mapped Team Folder are two mappings to two
+    # DIFFERENT Penpot teams (personal-projects.feature — setting a personal token
+    # maps the personal team to the home root, implicitly). So a drag between them
+    # is a real cross-team move, and Penpot supports it directly: `move-files`
+    # carries the destination's team with it, proven live in §6.27/§6.34.
+    #
+    # ALLOWED IN BOTH DIRECTIONS, deliberately and for now. It is the simple
+    # behaviour — the user moved a design, so the design moved. An admin option to
+    # FORBID moving designs out of a team folder is a reasonable thing to want and
+    # is deliberately NOT specified: see saga §C6.21 for why it is a bigger
+    # decision than it looks.
+    #
+    # @unbuilt rather than @todo: the personal side of the mapping does not exist
+    # in `lib/` at all. The cross-TEAM machinery underneath these does — it is the
+    # same `move-files` the scenarios above use.
+
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Moving a design from a personal project into a mapped team project
+    Given the user has a personal project folder "Sketches" holding a design
+    And a mapped team with a project folder "Client Work"
+    When the user moves the design into "Client Work"
+    Then the design changes team and project in Penpot in one "move-files" call
+    And it keeps its id, its revision and its history
+    And the file's "penpot_team_id" is re-stamped to the new team
+    # One call does both: the destination project's team follows automatically.
+    # The re-stamp matters because the workspace deep link is built from it
+    # (§C6.7) — a stale one opens the wrong team's workspace.
+
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Moving a design from a mapped team into a personal project
+    Given a mirrored design in a mapped team's project folder
+    And the user has a personal project folder "Sketches"
+    When the user moves the design into "Sketches"
+    Then the design moves into that personal project in Penpot
+    And it keeps its id, its revision and its history
+    # The mirror image, and it has to work: allowing one direction and refusing
+    # the other would make the rule impossible to state.
+
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Moving a design out of both mappings unmaps it, from either side
+    Given the user has a personal project folder "Sketches" holding a "sync" design
+    When the user moves the design to a folder with no Penpot ancestor
+    Then Penpot is never contacted
+    And the design still exists, untouched, in Penpot
+    And the file keeps its archive and its Penpot id, and stops being mirrored
+    # The existing unmapped state (§6.23, above), reached from the personal side.
+    # Nothing about the personal mapping changes what leaving a mapping means.
+
     # ── RULE: a link may not leave the project it points into (§6.43) ────────
     #
     # A "sync" file is a real archive, so moving it anywhere leaves the user

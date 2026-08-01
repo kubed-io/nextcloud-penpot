@@ -2509,3 +2509,123 @@ first run. This is the same lesson turned inward: the asymmetry was between two
 methods **in the same class**, both answering the same question, and it survived
 because the cheap scenarios around it passed. The suite did not lie — it simply
 never asked.
+
+---
+
+### C6.21 — A token is a mapping, and the option not to build
+
+Two rules arrived together, and the second turns out to be the first one's
+consequence rather than a separate feature.
+
+#### Nextcloud cannot make a design; it can only ask for one
+
+A `.penpot` is a Penpot artefact. Nextcloud can write an empty file with that
+extension and nothing more. So "+ New → Penpot design" was never a local create
+— it is a **request**, and a request needs somewhere to go. Penpot has no
+rootless design (§C6.11: `create-file` requires a project), so "somewhere" means
+a resolvable Penpot home:
+
+    inside a project folder    →  that project
+    under a mapped team        →  that team's Drafts        (§6.35)
+    anywhere else              →  NOTHING HAPPENS
+
+The last line is the rule, and the important thing about it is that it is a
+**refusal to guess, not an error**. A `.penpot` outside every mapping is an
+ordinary inert file: the user made a file, it is theirs, and it simply is not a
+design. Inventing a team to file it into would be worse than doing nothing, and
+erroring would make a mapped folder unusable for the ordinary things folders are
+for — the same rule the tag opt-in rests on (§C6.18).
+
+The code already behaved this way. What was missing was saying so as a rule, and
+a live scenario, rather than leaving it as an implementation detail three
+different features happened to depend on.
+
+#### The consequence: a user's own home has nowhere to put a design
+
+Which immediately raises the case the rule handles badly. A user makes a
+`.penpot` in their own home folder — the most natural place for personal work —
+and it is inert, because the home root has no team ancestor. That is correct by
+the rule and wrong by intent.
+
+The fix is not an exception to the rule. It is to give the home root a marker.
+
+#### Setting a personal token IS creating a mapping
+
+    admin maps a team    →  a folder, listed in the admin panel, visible
+    user sets a token    →  their home root, IMPLICIT and invisible
+
+Nothing for the user to see, decide, or name. The mapping exists exactly because
+the token does, and it goes away when the token does. **Showing it would be
+offering a choice that has only one possible answer** — a personal team can only
+map to the one home that can reach it, because §6.12 established no Penpot
+credential ever gets an instance-wide view and a personal team is precisely the
+space nobody else is in.
+
+Framing it as a *mapping* rather than as a *pull* is what makes the rest fall
+out for free. §6.31 already had personal projects mounting as folders at the home
+root; that gave those folders a project id but left the root itself bare. Once
+the root carries a team id, every other feature works unchanged:
+
+* a design made at the home root → the personal team's Drafts (§6.35, same rule);
+* a design made in a plain folder in the home → also Drafts (nearest-ancestor,
+  §6.29, same walk);
+* a drag between the home and a mapped Team Folder → an ordinary cross-team move.
+
+No new rules. One new marker, on a root that never had one.
+
+#### Crossing between two mappings is not a new mechanism either
+
+A user's home and a mapped Team Folder are two mappings to two different teams,
+so a drag between them is a real cross-team move — and Penpot supports that
+directly: `move-files` carries the destination's team with it, proven live in
+§6.27/§6.34. One call does both hops.
+
+So the scenarios went to `move.feature` and `copy.feature`, not to
+`personal-projects.feature`. That is the §C6.18 lesson applied before it could
+cost anything: a move is a move whatever its two ends are, and filing it under
+the *kind of thing* being moved is how one behaviour ends up described in two
+places and drifting. `personal-projects.feature` keeps only the fact that makes
+the crossing possible — the root has a team ancestor because a token was set.
+
+#### The option NOT taken, and why it is recorded rather than built
+
+There is an obvious next want: **an admin switch on a team mapping that forbids
+moving designs out of its Team Folder.** A shared team's work leaving for
+somebody's personal space is a real concern, and the switch would be three lines
+of guard.
+
+It is deliberately not specified, and the reason is worth writing down because
+"three lines of guard" is exactly how the estimate goes wrong. The switch has to
+answer, at minimum:
+
+* **What does it do to a move that already happened?** The guard fires on
+  `BeforeNodeRenamedEvent` and can abort — but a user with the file open on a
+  desktop client gets a sync error, not an explanation.
+* **Does it forbid COPY too?** A copy out is the same data leaving. If yes, the
+  one gesture that is genuinely non-destructive becomes the one that is refused;
+  if no, the switch does not do what its name says.
+* **What about the pull?** A design moved to another team *in Penpot* leaves the
+  mapping (move.feature). The switch cannot forbid that — it has no authority
+  over Penpot — so the same outcome is blocked from one side and not the other.
+* **Whose rule wins when a folder carries two mappings?** On this cluster a
+  folder can also be n8n's and Grafana's (§6.40). A per-app move ban is a
+  per-app answer to a shared question.
+* **Does it apply to admins?** A switch nobody can override is a support ticket;
+  one everybody can override is a suggestion.
+
+None of those is hard on its own. Together they are a feature, not a flag — and
+the failure mode of shipping it as a flag is that the answers get chosen
+implicitly, one bug report at a time.
+
+So the current behaviour is the simple one, stated plainly: **moves and copies
+work in both directions and mirror to Penpot.** The user moved a design, so the
+design moved. If the ban is wanted later, this section is the list of questions
+it has to answer first.
+
+#### The shape
+
+§C6.20 was one rule that had not been applied everywhere it was needed. This is
+the opposite and rarer thing: a *new* capability that needed **no new rules at
+all** — just a marker on a root, after which four existing rules produced the
+whole feature. Worth noticing which kind you have, because the two are worked
+very differently.

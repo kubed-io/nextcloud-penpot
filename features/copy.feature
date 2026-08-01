@@ -326,6 +326,21 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # usable as an ordinary folder, which is the same rule the tag opt-in rests
     # on (project-folder.feature).
 
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Copying a design across two mappings makes a new design in the destination team
+    Given the user has a personal project folder "Sketches" holding a design
+    And a mapped team with a project folder "Client Work"
+    When the user copies the design into "Client Work"
+    Then a NEW design exists in "Client Work", with its own id
+    And the original is untouched in the personal project
+    # The cross-team copy is the ordinary copy path — `duplicate-file` then
+    # `move-files` (§C6.8) — with a destination that happens to belong to another
+    # team. `move-files` carries the team, so nothing extra is needed.
+    #
+    # @unbuilt for the personal half only: a user's home root becomes a mapping
+    # when they set a personal token (personal-projects.feature), and none of
+    # that exists in `lib/` yet. Team-to-team copying is built.
+
   # ══ COPIED IN PENPOT ═══════════════════════════════════════════════════════
   #
   # THE ASYMMETRY IS THE FINDING, and it is why both directions belong in one
