@@ -353,10 +353,11 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: An unchanged pull moves no file's mtime or etag
-    Given a mirrored design "Steady" in the project "Idempotent"
-    And I note the mtime and etag of "Penpot/Idempotent/Steady.penpot"
+    Given the first visible team is mapped as a plain folder "Steady State"
+    And a mirrored design "Steady" in the project "Idempotent"
+    And I note the mtime and etag of "Steady State/Idempotent/Steady.penpot"
     When the team is mirrored again
-    Then "Penpot/Idempotent/Steady.penpot" has the same mtime and etag
+    Then "Steady State/Idempotent/Steady.penpot" has the same mtime and etag
     # NOT A MICRO-OPTIMISATION — it is what stops every desktop and mobile client
     # re-downloading the whole mapped folder after every scheduled pull. mtime and
     # etag ARE the sync protocol, so rewriting a byte-identical file is a
