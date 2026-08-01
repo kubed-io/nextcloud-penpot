@@ -183,8 +183,15 @@ records a design choice; it will never become live, and that is not a gap.
 Do not confuse it with a scenario that asserts **nothing happened** — *"Penpot is
 never contacted"*, *"no folder named Drafts is created"*. Those are ordinary
 behaviour, entirely testable by absence, and several of them run in CI today.
-The test: is there a gesture in the `When`? If yes it is a behaviour, whatever
-the `Then` says.
+
+The test is on the `Then`, not the `When`: does it name **the outcome of an
+operation**, or **the permanent absence of a capability**? *"Penpot is never
+contacted"* is an outcome — something happened, and this is what it did not
+cause. *"No button offers to push designs to Penpot"* is an absence: there is no
+operation to have an outcome, and there never will be.
+
+Looking at the `When` instead would get this wrong, because a `@decision`
+scenario may still open a page to have somewhere to look.
 
 #### A `@todo` that fails is a finding, not a status
 
