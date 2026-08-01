@@ -58,7 +58,7 @@ Feature: The admin section's shape and actions
 
     # ── the layout ───────────────────────────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: The section presents four panels in the family's order
     When the admin opens the Penpot settings section
     Then the panels appear in this order:
@@ -68,7 +68,7 @@ Feature: The admin section's shape and actions
       | Sync Actions  |
     # Identical to nextcloud-n8n and nextcloud-grafana, deliberately.
 
-  @todo
+  @blocked
   Scenario: The Instance card holds both the URL and the service-account token
     When the admin opens the Penpot settings section
     Then the "Instance" card has a Penpot base URL field
@@ -78,7 +78,7 @@ Feature: The admin section's shape and actions
     # optional per-user token is on the PERSONAL page — see
     # personal-settings.feature.
 
-  @todo
+  @blocked
   Scenario: The token field never echoes a stored token back
     Given the admin has configured the service-account token
     When the admin opens the Penpot settings section
@@ -87,7 +87,7 @@ Feature: The admin section's shape and actions
     # A sensitive field is blank even when populated, so the COPY is the only
     # signal of whether one is set. Both siblings learned this the same way.
 
-  @todo
+  @blocked
   Scenario: Every button in the section lives in Sync Actions
     When the admin opens the Penpot settings section
     Then all of the section's action buttons are in the "Sync Actions" panel
@@ -95,7 +95,7 @@ Feature: The admin section's shape and actions
 
     # ── the actions themselves ───────────────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: Test connection works today and reports what the account can see
     Given the Penpot base URL points at the test instance
     And the admin has configured the service-account token
@@ -142,7 +142,7 @@ Feature: The admin section's shape and actions
     # handful of files, and the admin is looking at that card waiting for an
     # answer. Queuing it would replace a two-second wait with a spinner and a poll.
 
-  @todo
+  @blocked
   Scenario: "Sync from Penpot" queues a background job and says so
     When the admin opens the Penpot settings section
     And the admin clicks "Sync from Penpot"
@@ -151,7 +151,7 @@ Feature: The admin section's shape and actions
     And the panel shows the run as queued, then running, then finished
     # The admin can navigate away and come back to a finished run.
 
-  @todo
+  @blocked
   Scenario: The panel reports the outcome of the last run
     Given a bulk sync has finished
     When the admin opens the Penpot settings section
@@ -161,7 +161,7 @@ Feature: The admin section's shape and actions
     # otherwise the schedule is a setting with no observable effect, which is
     # exactly what it was.
 
-  @todo
+  @blocked
   Scenario: A second click while a sync is running does not start another
     Given a bulk sync is already running
     When the admin clicks "Sync from Penpot" again
@@ -186,7 +186,7 @@ Feature: The admin section's shape and actions
     # The job still ticks — the interval gates how often it re-reads the
     # setting — but it does nothing while off.
 
-  @todo
+  @decision
   Scenario: There is no "Sync to Penpot" button, ever
     When the admin opens the Penpot settings section
     Then no button offers to push designs to Penpot
@@ -196,7 +196,7 @@ Feature: The admin section's shape and actions
     # a phase-ordering gap — so a disabled push button would promise a feature
     # that is never coming.
 
-  @todo
+  @blocked
   Scenario: Purge is offered but disabled until the delete machine exists
     When the admin opens the Penpot settings section
     Then the "Purge Nextcloud files" button is present

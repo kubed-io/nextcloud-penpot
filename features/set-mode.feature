@@ -40,7 +40,6 @@
 # here pass `--force` and assert the CONSEQUENCE instead — the archive is gone,
 # the file is empty again, and Penpot was never contacted.
 
-  @sync-mode
 # ## WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
 #
 # STATED PLAINLY BECAUSE IT DIVERGED FROM THE DESIGN WITHOUT A DECISION: mode is
@@ -69,6 +68,7 @@
 # first" refusal in move.feature needs a different answer. That is a design
 # decision, not a spec tidy-up.
 
+@sync-mode
 Feature: Storing and discarding a mirrored design's archive
   As an operator who has mapped a Penpot team
   I want `occ penpot_sync:set-mode` to decide which designs are really backed up

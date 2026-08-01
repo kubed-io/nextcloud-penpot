@@ -38,7 +38,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
 
     # ── the core behaviour ───────────────────────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Ignoring a sync file keeps the archive and stops the mirroring
     Given a mirrored ".penpot" file in "sync" mode in the "My Stuff" subfolder
     When I apply the app's ignore tag to the file
@@ -47,7 +47,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And Penpot is never contacted
     And the design still exists, untouched, in Penpot
 
-  @todo
+  @unbuilt
   Scenario: An ignored file is skipped by every pull
     Given a mirrored ".penpot" file tagged as ignored
     When the Penpot file's "revn" increases
@@ -58,7 +58,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And the file is not pruned, even if it was deleted in Penpot
     # Ignore means the app's hands are off, in every direction.
 
-  @todo
+  @unbuilt
   Scenario: An ignored file whose Penpot original is deleted is still kept
     Given a mirrored ".penpot" file tagged as ignored
     When the underlying Penpot file is deleted in Penpot
@@ -70,7 +70,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
 
     # ── the mode restriction, and why it exists ──────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Ignoring a link file is refused, with an offer to make it real first
     Given a mirrored ".penpot" file in "link" mode in the "My Stuff" subfolder
     When I apply the app's ignore tag to the file
@@ -81,7 +81,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     # Refusing beats silently accepting: an "ignored link" is a pointer to a
     # design nobody is tracking — it looks like a backup and is not one.
 
-  @todo
+  @unbuilt
   Scenario: Promoting a link file to sync, then ignoring it, works
     Given a mirrored ".penpot" file in "link" mode in the "My Stuff" subfolder
     When I promote the file to "sync" mode
@@ -93,7 +93,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
 
     # ── reversing it ─────────────────────────────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Removing the ignore tag resumes mirroring
     Given a mirrored ".penpot" file tagged as ignored
     When I remove the ignore tag
@@ -102,7 +102,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And it is refreshed if its Penpot revision moved while it was ignored
     And its "penpot_id" was never lost
 
-  @todo
+  @unbuilt
   Scenario: Un-ignoring a file whose Penpot original was deleted offers a restore
     Given a mirrored ".penpot" file tagged as ignored
     And the underlying Penpot file was deleted in Penpot while it was ignored
@@ -115,7 +115,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
 
     # ── the invariant ────────────────────────────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Ignoring never deletes anything in Penpot
     Given a mirrored ".penpot" file in "sync" mode
     When I apply the app's ignore tag

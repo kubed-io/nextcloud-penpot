@@ -101,33 +101,46 @@ Feature: Creating a new Penpot design from Nextcloud
     Then the file "Penpot/No Invent/Dragged In.penpot" carries no Penpot id
     And Penpot project "No Invent" holds no design named "Dragged In"
 
+    # ══ THE RULE: NEXTCLOUD CANNOT MAKE A DESIGN, IT CAN ONLY ASK FOR ONE ══════
+    #
+    # A `.penpot` is a Penpot artefact. Nextcloud has no way to produce one — it
+    # can write an empty file with that extension, and that is all. So "+ New →
+    # Penpot design" is not a local create at all: it is a REQUEST, and the
+    # request needs somewhere to go.
+    #
+    # Penpot has no rootless design (§C6.11: `create-file` requires a project),
+    # so "somewhere" means a resolvable Penpot home:
+    #
+    #     inside a project folder    →  that project
+    #     under a mapped team        →  that team's Drafts        (§6.35)
+    #     at the user's own root     →  their PERSONAL team's Drafts
+    #                                   (personal-projects.feature — needs a
+    #                                    personal token, and is not built)
+    #     anywhere else              →  NOTHING HAPPENS
+    #
+    # The last line is the rule, and it is a refusal to guess rather than an
+    # error. A `.penpot` outside every mapping is an ordinary, inert file: the
+    # user made a file, it is theirs, and it is simply not a design. Inventing a
+    # team to file it into would be worse than doing nothing, and erroring would
+    # make a mapped folder unusable for the ordinary things folders are for.
+
+  @in-nextcloud @gesture
+  Scenario: A ".penpot" file created outside every mapping is an inert file
+    Given I create a folder at "No Mapping Here"
+    When I create a new design file at "No Mapping Here/Wishful.penpot"
+    Then the file "No Mapping Here/Wishful.penpot" carries no Penpot id
+    And "No Mapping Here/Wishful.penpot" resolves to no Penpot mapping at all
+    # Nothing is created, nothing is reported, and the file stays exactly as the
+    # user left it. This is the same state an untracked upload lands in.
+
     # ── where the action appears ─────────────────────────────────────────────────
 
-  @todo
-  Scenario: Creating inside a project folder creates the design in that project
-    When I choose "New → Penpot design" inside the "My Stuff" folder
-    And I give it a name
-    Then a new design is created in the Penpot project "My Stuff"
-    And a mirrored ".penpot" file appears in that folder
-    And the file carries the new design's "penpot_id"
-    And "Open in Penpot" opens the new design
-
-  @todo
-  Scenario: Creating at a team folder's root puts the design in that team's Drafts
-    When I choose "New → Penpot design" at the root of the "Northwind" Team Folder
-    Then the design is created in the "Northwind" team's "Drafts" project
-    And the mirrored file appears where I created it, at the team folder root
-    And the app explains the design lives in Penpot's Drafts
-
-  @todo
-  Scenario: Creating in a plain folder under a team also lands in Drafts
-    Given a plain folder "scratch" inside the Team Folder, with no Penpot metadata
-    When I choose "New → Penpot design" inside "scratch"
-    Then the design is created in the "Northwind" team's "Drafts" project
-    And the mirrored file appears in "scratch", where I created it
-    And no folder named "Drafts" is created anywhere
-    # No project-id ancestor, but a team-id ancestor exists — so the team is
-    # known and Drafts is unambiguous.
+    # THE THREE PLACEMENT CASES ARE LIVE ABOVE, driven over WebDAV — which is
+    # what the "+ New" menu actually does: write an empty file and stop. They
+    # used to be repeated here in menu vocabulary ("I choose New → Penpot design
+    # inside the My Stuff folder"), which described the same three outcomes a
+    # second time and had already drifted from them. Only the MENU SURFACE is
+    # this section's own, and that is what is left.
 
   @todo
   Scenario: Filing a newly created draft is just a drag
@@ -138,7 +151,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # The create/file split costs the user nothing: make it anywhere sensible,
     # file it later with an ordinary drag (move.feature, saga §6.35).
 
-  @todo
+  @blocked
   Scenario: The action is not offered where no team can be determined
     Given a folder with no Penpot team or project ancestor
     When I open the New menu there
@@ -146,7 +159,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # Penpot's create-file requires a projectId; there is no rootless design. An
     # action that could only fail is better not shown.
 
-  @todo
+  @blocked
   Scenario: Creating inside a personal project folder uses the user's own token
     Given the user has a personal Penpot token and a personal project folder
     When I choose "New → Penpot design" inside that folder
@@ -156,7 +169,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
     # ── attribution ──────────────────────────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: A created design is attributed to the acting user when possible
     Given the user has a valid personal Penpot token
     When the user creates a new design
@@ -165,7 +178,7 @@ Feature: Creating a new Penpot design from Nextcloud
     # This matters more for creation than for any other write: authorship is a
     # durable property of a design, not just a history line.
 
-  @todo
+  @blocked
   Scenario: Creation falls back to the service account, and says so
     Given the user has no personal Penpot token configured
     When the user creates a new design in a team project

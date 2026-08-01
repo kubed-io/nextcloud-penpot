@@ -95,6 +95,18 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
+	/**
+	 * Ordinary Nextcloud content in a mapped folder — a note, an export, whatever
+	 * the user likes. Written through the same PUT as a design so the same
+	 * listeners see it; the ONLY thing that makes it not ours is the extension.
+	 *
+	 * @When /^I create an unrelated file at "([^"]*)"$/
+	 */
+	public function iCreateAnUnrelatedFileAt(string $path): void {
+		$this->davPut($path, "not a design\n");
+		$this->gestureTarget = $path;
+	}
+
 	/** @When /^I upload a ".penpot" archive at "([^"]*)"$/ */
 	public function iUploadAnArchiveAt(string $path): void {
 		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the

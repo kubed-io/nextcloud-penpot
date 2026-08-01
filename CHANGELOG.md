@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A design you filed into a subfolder is no longer duplicated by the next sync.** Moving a mirror into a folder of your own inside its project used to leave a second copy of the same design behind on the following sync, and nothing ever cleaned it up.
+
 ### Added
 
 - **Turn any folder into a Penpot project by tagging it `penpot`** — and it takes the designs already inside it with it. Everything else in a mapped folder stays an ordinary folder.

@@ -158,7 +158,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
     # ── restore is never automatic ───────────────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Restoring is always confirmed, never silent
     Given an unmapped ".penpot" file in "sync" mode carrying a "penpot_id"
     When I move the file into the "My Stuff" folder
@@ -166,7 +166,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And nothing is sent to Penpot until I confirm
     And declining leaves the file in place as ordinary tolerated content
 
-  @todo
+  @unbuilt
   Scenario: A file with no archive cannot be restored
     Given an unmapped ".penpot" file in "link" mode carrying a "penpot_id"
     When I move the file into the "My Stuff" folder
@@ -174,7 +174,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And the app explains that a link file holds no archive to restore from
     # You cannot put back bytes you never had.
 
-  @todo
+  @unbuilt
   Scenario: An untracked file is never restored, because it was never in Penpot
     Given a ".penpot" file with no "penpot_id"
     When I move the file into the "My Stuff" folder
@@ -186,7 +186,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
     # ── the good case: the original still exists ─────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Restoring over a design that still exists keeps its identity
     Given an unmapped ".penpot" file in "sync" mode carrying a "penpot_id"
     And the Penpot file with that id still exists
@@ -202,7 +202,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
     # ── the lossy case: the original is gone ─────────────────────────────────────
 
-  @todo
+  @unbuilt
   Scenario: Restoring a deleted design states clearly what does and does not return
     Given an unmapped ".penpot" file in "sync" mode carrying a "penpot_id"
     And the Penpot file with that id has been deleted in Penpot
@@ -221,7 +221,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # offer. Pointing the user at the better option, even though it isn't ours,
     # is the honest thing to do (saga §6.26).
 
-  @todo
+  @unbuilt
   Scenario: Confirming a restore of a deleted design creates a new file and re-points the mirror
     Given an unmapped ".penpot" file whose Penpot original was deleted
     When I confirm the restore
@@ -230,7 +230,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And the old id is not kept as the file's identity
     And the file's "Open in Penpot" action points at the new design
 
-  @todo
+  @unbuilt
   Scenario: The app never silently resurrects a deleted design
     Given an unmapped ".penpot" file whose Penpot original was deleted
     When a pull runs
@@ -240,7 +240,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
     # ── the app must offer the BETTER layer when one applies ────────────────────
 
-  @todo
+  @unbuilt
   Scenario: A design still in Penpot's trash is restored losslessly, not imported
     Given the design was deleted in Penpot within the last few days
     When I ask to restore it
@@ -252,7 +252,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # listing is read before anything else is considered. Kept here as the rule
     # this file must obey; its live scenarios are in delete.feature.
 
-  @todo
+  @unbuilt
   Scenario: A mirror in the Nextcloud trash is restored locally, not re-imported
     Given the design still exists in Penpot
     And its mirror was moved to the Nextcloud trash
@@ -265,7 +265,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
     # ── naming, and the two-call reality ─────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: A restored file takes the name from its archive, not from the request
     Given an unmapped ".penpot" file renamed locally to "My Renamed Design.penpot"
     And its archive's manifest still carries the original name "My firsty"
@@ -277,14 +277,14 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
 
     # ── attribution ──────────────────────────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: A restore is attributed to the acting user when they have a personal token
     Given the user has a valid personal Penpot token
     When the user confirms a restore
     Then the import is performed using that user's own token
     And Penpot attributes the change to that user
 
-  @todo
+  @blocked
   Scenario: A restore falls back to the service account, and says so
     Given the user has no personal Penpot token configured
     When the user confirms a restore
@@ -304,7 +304,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # The fileid survives the trash, so the metadata does too (§6.44/§6.45).
     # That id-stability is why restore needs no extra state of its own.
 
-  @todo
+  @unbuilt
   Scenario: Restoring the mirror also restores the design in Penpot
     Given a trashed ".penpot" file whose design is in Penpot's trash
     When I restore it from the Nextcloud trash
@@ -336,7 +336,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # is the only answer worth having — asking the other one failed this file's
     # own scenario about half the time (§C6.15).
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @blocked
   Scenario: A pull after a restore leaves exactly one mirror, in any mode
     Given a mirrored ".penpot" file that I moved to the trash
     When I restore it from the Nextcloud trash
@@ -372,7 +372,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # AND A PROJECT DELETED WHILE EMPTY CANNOT BE RESTORED THROUGH THE API AT
     # ALL — there is no file to carry it back. It simply expires.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: Restoring a project folder brings back the project and every design in it
     Given a mirrored project "Doomed" holding 3 designs
     And I deleted the "Doomed" project folder
@@ -396,7 +396,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # happened to find in the Nextcloud trash would produce exactly this
     # half-restored state without ever looking wrong.
 
-  @todo
+  @blocked
   Scenario: A project deleted while empty cannot be restored, and the app says so
     Given a project folder whose project was deleted with no designs in it
     When I restore the folder from the Nextcloud trash
@@ -419,7 +419,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # restored the design in Penpot's own UI first. Nothing was ever lost
     # remotely, so taking the file out of the trash IS the whole restore.
 
-  @todo
+  @unbuilt
   Scenario: A design that is gone for good is not silently recreated
     Given a trashed ".penpot" file whose design was permanently deleted in Penpot
     When I restore it from the Nextcloud trash
@@ -431,7 +431,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # user decision with real consequences, specified in restore.feature. The one
     # thing that must not happen is quietly doing nothing.
 
-  @todo
+  @unbuilt
   Scenario: An untracked file coming out of the trash is never restored into Penpot
     Given a ".penpot" file with no "penpot_id" in the Nextcloud trash
     When I restore it from the Nextcloud trash

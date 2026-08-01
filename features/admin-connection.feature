@@ -68,7 +68,7 @@ Feature: Admin and per-user Penpot connection setup
       | penpot.example.com      |
       | ftp://penpot.example.com |
 
-  @todo
+  @blocked
   Scenario: The URL card carries no credential field
     Then no credential field exists on this card — tokens are configured elsewhere
 
@@ -166,7 +166,7 @@ Feature: Admin and per-user Penpot connection setup
     # visibility is always membership-scoped, so which teams the token can see is
     # exactly the fact that decides what can be mapped.
 
-  @todo
+  @blocked
   Scenario: A connection test surfaces the required Penpot instance flag
     Given the admin has set the Penpot base URL and a service-account token
     But the Penpot instance has "enable-access-tokens" disabled
@@ -177,9 +177,41 @@ Feature: Admin and per-user Penpot connection setup
     # observed working (saga §6.17, open question #19), so nothing in the current
     # design depends on it. Adding it back is a saga decision, not a settings tweak.
 
+    # ══ THE ATTRIBUTION RULE, IN ONE LINE ══════════════════════════════════════
+    #
+    #     READS are always the service account.
+    #     WRITES attribute to the acting user when there is one.
+    #
+    # Those are two different kinds of statement, and conflating them is what
+    # makes token handling feel complicated when it is not.
+    #
+    # READS — THE SERVICE ACCOUNT IS A REQUIREMENT, NOT A DEFAULT. Penpot has no
+    # admin scope; every token sees exactly the teams its account belongs to
+    # (§6.12). So the puller must be an account that is a member of every mapped
+    # team, and that is the whole reason a service account exists. Using a
+    # personal token to read would not merely attribute differently — it would
+    # change WHAT IS MIRRORED, per user, which is the dual-pull-path complexity
+    # §6.16 rejected and the shared-Team-Folder race with it.
+    #
+    # WRITES — ATTRIBUTION ONLY, AND IT CANNOT WIDEN ANYTHING. A write always
+    # targets something the service account already mirrored, so using the user's
+    # token changes the name in Penpot's history and nothing else. That is why it
+    # is safe to make it best-effort.
+    #
+    # THE ACTING USER IS WHOEVER THE SESSION SAYS (saga §C6.22). Every gesture —
+    # rename, move, copy, create, delete, restore, tag — runs inside the user's
+    # own HTTP request, so `IUserSession` has them and attribution just works. The
+    # scheduled pull has no session because NOBODY PERFORMED IT: it reconciles
+    # what Penpot already says. Attributing it to a user would be a fiction.
+    #
+    # A background job CAN act as a user when one is genuinely responsible —
+    # Nextcloud's own `IUserSession::setVolatileActiveUser()` (NC 29+) is exactly
+    # that, and core uses it so "event listeners can correctly work". This app has
+    # no such job today; §C6.22 records when it would want one.
+
     # ── the personal token: optional, per-user, attribution only ─────────────────
 
-  @todo
+  @blocked
   Scenario: The app works fully with no personal tokens configured anywhere
     Given the admin has configured the service-account token
     And no Nextcloud user has set a personal Penpot token
@@ -188,7 +220,7 @@ Feature: Admin and per-user Penpot connection setup
     And write actions are performed as the service account
     # The personal layer is additive. Nothing is blocked by its absence.
 
-  @todo
+  @blocked
   Scenario: A user's personal token is used to attribute their writes
     Given the admin has configured the service-account token
     And the user has set a valid personal Penpot token
@@ -196,7 +228,7 @@ Feature: Admin and per-user Penpot connection setup
     Then the write uses that user's own token
     And Penpot attributes the change to that user, not to the service account
 
-  @todo
+  @blocked
   Scenario: A personal token is never used for the scheduled pull
     Given two Nextcloud users have valid personal Penpot tokens
     When the scheduled pull runs
@@ -204,7 +236,7 @@ Feature: Admin and per-user Penpot connection setup
     And neither personal token is used for any read
     # Saga §6.18 — one puller, always, or the shared-Team-Folder race returns.
 
-  @todo
+  @blocked
   Scenario: A personal token never widens what the app mirrors
     Given the user's personal token can see the Penpot team "Private Team"
     But the service account has not been invited to "Private Team"
@@ -212,3 +244,45 @@ Feature: Admin and per-user Penpot connection setup
     And no content from "Private Team" is mirrored
     # Deliberately closed (saga §6.18): letting personal tokens widen the mirror
     # would reintroduce exactly the dual-pull-path complexity §6.16 rejected.
+
+    # ── when attribution FAILS, the action must not ─────────────────────────────
+    # A personal token is not merely "sometimes expired". A Nextcloud user need
+    # not have a Penpot account at all, and if they do, they need not be a member
+    # of the Penpot team behind a shared Team Folder — the mapping only ever
+    # required the SERVICE ACCOUNT to be a member (§6.18). So "the acting user's
+    # token cannot write here" is an ORDINARY state, not an edge case.
+    #
+    # NOT BUILT, AND THE PROMISE IS ALREADY WRITTEN DOWN. `PersonalTokenService`
+    # says every caller "is expected to fall back to the service account and carry
+    # on", and the fall back that exists is the pre-flight one: no token → service
+    # account. There is no post-failure retry. A user whose token Penpot rejects
+    # loses the write entirely (§C6.22).
+
+  @unbuilt
+  Scenario: A write rejected because of the personal token is retried as the service account
+    Given the user has a personal Penpot token that cannot write to this team
+    When the user renames a mirrored design
+    Then the first attempt uses the user's token and is rejected
+    And the write is retried with the service-account token and succeeds
+    And the rename reaches Penpot
+    # THE ACTION IS THE POINT, ATTRIBUTION IS THE GARNISH. Losing a user's rename
+    # to protect the accuracy of a history entry is the wrong trade in every case.
+
+  @unbuilt
+  Scenario: A degraded attribution is reported once, not on every gesture
+    Given a user whose personal token Penpot keeps rejecting
+    When the user performs several write actions
+    Then each action succeeds as the service account
+    And the user is told once that their token is not being used
+    And they are not warned again for every subsequent action
+    # A per-gesture warning for a routine state trains people to ignore warnings.
+
+  @unbuilt
+  Scenario: Only an authorisation failure falls back, never a real error
+    Given the user has a valid personal Penpot token
+    When a write fails because Penpot is unreachable
+    Then the write is NOT retried with the service-account token
+    And the failure is reported as itself
+    # The fallback answers "this token may not", not "this call did not work".
+    # Retrying a timeout as the service account would double every outage and
+    # could apply a write twice — see errors.feature.

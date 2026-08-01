@@ -148,7 +148,7 @@ Feature: Admin configures team mappings
     # short wait with a spinner and a poll. The bulk button is async precisely
     # because it is NOT bounded: it walks every mapping and can export archives.
 
-  @todo
+  @blocked
   Scenario: A mapping card can sync just its own team
     Given two Penpot teams are mapped
     When the admin clicks "Sync now" on the first mapping's card
@@ -156,7 +156,7 @@ Feature: Admin configures team mappings
     And the second mapping's folder is untouched
     And the result is reported on that card when it finishes
 
-  @todo
+  @blocked
   Scenario: A per-mapping sync is synchronous
     Given a Penpot team is mapped
     When the admin clicks "Sync now" on its card
@@ -164,14 +164,14 @@ Feature: Admin configures team mappings
     And no background job is queued
     # Fast feedback on a bounded set. The bulk button is the one that queues.
 
-  @todo
+  @blocked
   Scenario: A per-mapping sync reports its failure on the card
     Given a Penpot team is mapped and Penpot cannot be reached
     When the admin clicks "Sync now" on its card
     Then the card reports the failure and why
     And the other mappings are unaffected
 
-  @todo
+  @blocked
   Scenario: Syncing one mapping records the run like any other
     Given a Penpot team is mapped
     When the admin clicks "Sync now" on its card
@@ -202,7 +202,7 @@ Feature: Admin configures team mappings
     # not by a permission bit. Withholding CREATE stopped no write to Penpot; it
     # only stopped the user from using their own files.
 
-  @todo
+  @blocked
   Scenario: A mapped folder behaves like any other Nextcloud folder
     Given a folder mapped to the Penpot team "Northwind"
     When a member of its groups opens the folder in the Files app
@@ -218,7 +218,7 @@ Feature: Admin configures team mappings
     # Unlike the siblings, the grant is mode-independent: penpot's link/sync is a
     # per-file archive choice, not a folder-wide read-vs-write stance.
 
-  @todo
+  @blocked
   Scenario: Both storage backends grant the same surface
     Given one mapping using a Team Folder and one using a plain shared folder
     Then the content groups hold the same rights on both
@@ -298,7 +298,7 @@ Feature: Admin configures team mappings
 
     # ── the core mapping action ──────────────────────────────────────────────────
 
-  @todo
+  @blocked
   Scenario: Mapping a Penpot team provisions a Team Folder and mirrors its projects
     Given the service account has been invited as "viewer" on the Penpot team "Northwind"
     When the admin maps the Penpot team "Northwind"
@@ -313,7 +313,7 @@ Feature: Admin configures team mappings
     # within the Team Folder (saga §6.29) — but not out of it (saga §6.30).
 
     # The precondition that makes the single-puller model work (saga §6.18).
-  @todo
+  @blocked
   Scenario: A team the service account cannot see cannot be mapped
     Given the Penpot team "Private Team" is visible to a user's personal token
     But the service account has not been invited to "Private Team"
@@ -323,7 +323,7 @@ Feature: Admin configures team mappings
     And no Team Folder is provisioned
     # Better an honest refusal now than a mapping that silently pulls nothing.
 
-  @todo
+  @decision
   Scenario: There is no project-level mapping to configure
     Given the Penpot team "Northwind" is mapped
     Then the mapping list shows exactly 1 mapping, for the team
@@ -334,7 +334,7 @@ Feature: Admin configures team mappings
 
     # Team Folders are admin-configured by default (groupfolders' own documentation
     # and this cluster's live config, checked directly — no delegation configured).
-  @todo
+  @blocked
   Scenario: Mapping a team into a Team Folder requires Team Folder creation rights
     Given the acting Nextcloud user does not hold Team Folder admin or delegated rights
     When that user tries to map a Penpot team to a new Team Folder
@@ -343,7 +343,7 @@ Feature: Admin configures team mappings
 
     # The fallback tier — same "optional dependency" precedent both sibling apps'
     # TeamFolderService.php already establish, mirrored here for the team level.
-  @todo
+  @blocked
   Scenario: Mapping a team without groupfolders installed falls back to a plain shared folder
     Given the "groupfolders" app is not installed
     When the admin maps the Penpot team "Northwind"
@@ -433,7 +433,7 @@ Feature: Admin configures team mappings
     When the admin maps the Penpot team "Northwind" without choosing a folder mode
     Then the mapping's folder mode is "nested"
 
-  @todo
+  @unbuilt
   Scenario: The folder mode cannot be changed after the mapping is created
     Given the Penpot team "Northwind" is mapped with folder mode "nested"
     When the admin tries to change that mapping's folder mode to "keyed"
@@ -490,7 +490,7 @@ Feature: Admin configures team mappings
     # migration behind a dropdown. Same immutability precedent both sibling apps
     # already set for a mapping's structural fields.
 
-  @todo
+  @unbuilt
   Scenario: A team can be mapped in keyed mode
     When the admin maps the Penpot team "Design Co" with folder mode "keyed"
     Then the mapping's folder mode is "keyed"

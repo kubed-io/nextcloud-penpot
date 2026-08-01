@@ -226,9 +226,200 @@ trait PullSteps {
 
 	/** @Then /^there is no node at "([^"]*)"$/ */
 	public function thereIsNoNodeAt(string $path): void {
+		$this->mustNotExist($path);
+	}
+
+	/**
+	 * Assert a path does not exist, ON THE SPECIFIC FAILURE that means that.
+	 *
+	 * A non-zero exit is NOT enough. `penpot_sync:status` also exits 1 when it
+	 * cannot resolve the sync actor's home at all, so "any failure" would read a
+	 * broken fixture as a passing absence assertion — a test that goes green
+	 * precisely when the thing it depends on has stopped working. The command
+	 * prints `No such node: <path>` for the one case we mean.
+	 */
+	private function mustNotExist(string $path): void {
 		$res = $this->occ('penpot_sync:status ' . escapeshellarg($path));
 		if ($res['exit'] === 0) {
 			throw new \RuntimeException("expected no node at '{$path}', but one exists:\n{$res['output']}");
+		}
+		if (!str_contains($res['output'], 'No such node')) {
+			throw new \RuntimeException(
+				"status failed for '{$path}', but NOT because the node is absent — so this "
+				. "assertion proves nothing:\n{$res['output']}",
+			);
+		}
+	}
+
+	// ── resolution: what the folder walk says a node belongs to ──────────────
+
+	/**
+	 * The resolver's answer for a node, as `penpot_sync:status` reports it.
+	 *
+	 * ASSERTED ON THE PROJECT'S REAL PENPOT ID, not on a folder name. The whole
+	 * claim of `mapping-membership.feature` is that membership comes from
+	 * METADATA rather than from position or naming, so an assertion that only
+	 * compared paths would pass for a resolver that had never read a marker.
+	 * Resolving the name through Penpot's own listing first is what makes this
+	 * test the rule rather than a restatement of the folder tree.
+	 *
+	 * @Then /^"([^"]*)" resolves to the project "([^"]*)"$/
+	 */
+	public function resolvesToTheProject(string $path, string $project): void {
+		$this->mustContain($this->status($path), 'project=' . $this->penpotProjectId($project), $path);
+	}
+
+	/**
+	 * In a team, in no project — which is Penpot's Drafts (§6.35), and NOT an
+	 * error state. The distinction this asserts is the one three separate bugs
+	 * lived in (§C6.8/§C6.9/§C6.10): "no project ancestor" means Drafts, not
+	 * "outside every mapping".
+	 *
+	 * @Then /^"([^"]*)" is in the team's Drafts$/
+	 */
+	public function isInTheTeamsDrafts(string $path): void {
+		$out = $this->status($path);
+		$this->mustContain($out, 'Membership: drafts', $path);
+		$this->mustContain($out, 'team=' . $this->pulledTeamId, $path);
+		// `project=)` — the CLOSING PAREN is the assertion. The line is
+		// "Membership: drafts (team=<id> project=)", so an empty project is
+		// `project=` immediately followed by `)`. Matching `project=\S` instead
+		// matched that paren and failed on correct output.
+		$this->mustContain($out, 'project=)', $path);
+	}
+
+	/** @Then /^"([^"]*)" resolves to no Penpot mapping at all$/ */
+	public function resolvesToNoMapping(string $path): void {
+		$out = $this->status($path);
+		$this->mustContain($out, 'Membership: none', $path);
+		// Both ids empty: "(team= project=)" exactly. See the paren note above.
+		$this->mustContain($out, '(team= project=)', $path);
+	}
+
+	/**
+	 * Membership is DERIVED, never stored (§6.29). There is no `penpot_mapping`
+	 * key, and a file must not carry a copy of its project — a copy would have to
+	 * be rewritten on every move, which is the drift the derived design exists to
+	 * avoid. Asserted by checking the file's own stamp list, not the resolved
+	 * line below it.
+	 *
+	 * @Then /^the file "([^"]*)" stores no copy of its project$/
+	 */
+	public function storesNoCopyOfItsProject(string $path): void {
+		$out = $this->status($path);
+		$this->mustContain($out, 'Type: file', $path);
+		if (preg_match('/^penpot_project_id: \S/m', $out) === 1) {
+			throw new \RuntimeException(
+				"'{$path}' carries a penpot_project_id of its own. Membership is derived from "
+				. "the folder walk; a copy on the file would go stale on the first move:\n{$out}",
+			);
+		}
+	}
+
+	/** @Then /^no folder named "([^"]*)" exists under the mapped folder$/ */
+	public function noFolderNamedExists(string $name): void {
+		$this->mustNotExist('Penpot/' . $name);
+	}
+
+	/** @Then /^the file "([^"]*)" is still there and untouched$/ */
+	public function isStillThereAndUntouched(string $path): void {
+		if (!$this->davExists($path)) {
+			throw new \RuntimeException("'{$path}' is gone — the pull pruned a file it does not manage");
+		}
+	}
+
+	/**
+	 * A project's Penpot id, looked up by name through the app's own probe.
+	 *
+	 * The probe prints `  <name>  <uuid>  [<team>]` per project — the same
+	 * listing {@see GestureSteps::penpotFileNamesIn()} parses for designs.
+	 */
+	private function penpotProjectId(string $name): string {
+		$res = $this->occ('penpot_sync:probe --files');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("probe failed while resolving project '{$name}':\n{$res['output']}");
+		}
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^  (\S.*?)\s{2,}([0-9a-f-]{36})\s+\[/', $line, $m) === 1 && trim($m[1]) === $name) {
+				return $m[2];
+			}
+		}
+
+		throw new \RuntimeException("Penpot has no project named '{$name}':\n{$res['output']}");
+	}
+
+	// ── the DAV surface: what a client actually sees ─────────────────────────
+
+	/**
+	 * A Penpot metadata property, read over PROPFIND (`file-type.feature`).
+	 *
+	 * READ THROUGH DAV, NOT THROUGH THE APP, and that is the whole point of these
+	 * scenarios: the README promises these keys are visible to any WebDAV client,
+	 * and `occ penpot_sync:status` cannot answer whether DAV advertises them. The
+	 * keys are registered in `Application::boot()` precisely so they ride the
+	 * directory PROPFIND, and nothing had ever checked that they do.
+	 *
+	 * @Then /^the DAV property "nc:metadata-([^"]*)" of "([^"]*)" is set$/
+	 */
+	public function theDavPropertyIsSet(string $key, string $path): void {
+		if (($this->davReadMetadata($path, $key) ?? '') === '') {
+			throw new \RuntimeException(
+				"PROPFIND on '{$path}' returned no nc:metadata-{$key}. The key is registered in "
+				. 'Application::boot() so DAV advertises it; a client that cannot read it has no '
+				. 'way to tell a mirror from an ordinary file.',
+			);
+		}
+	}
+
+	/** @Then /^the DAV property "nc:metadata-([^"]*)" of "([^"]*)" is "([^"]*)"$/ */
+	public function theDavPropertyEquals(string $key, string $path, string $expected): void {
+		$actual = $this->davReadMetadata($path, $key) ?? '';
+		if ($actual !== $expected) {
+			throw new \RuntimeException(
+				"expected nc:metadata-{$key} of '{$path}' to be '{$expected}', got '{$actual}'",
+			);
+		}
+	}
+
+	/** @Then /^the DAV property "nc:metadata-([^"]*)" of "([^"]*)" is absent$/ */
+	public function theDavPropertyIsAbsent(string $key, string $path): void {
+		$actual = $this->davReadMetadata($path, $key) ?? '';
+		if ($actual !== '') {
+			throw new \RuntimeException(
+				"expected '{$path}' to carry NO nc:metadata-{$key}, got '{$actual}'",
+			);
+		}
+	}
+
+	/**
+	 * The custom mimetype, read off the same PROPFIND a Files client uses.
+	 *
+	 * NOT `application/zip`, which is what a `.penpot` archive would otherwise be
+	 * sniffed as — the whole reason the app registers a mimetype and ships a
+	 * repair step for it (§C6.1). Asserted over DAV because that is where the
+	 * Files app reads it from; the mapping file on disk being right proves
+	 * nothing about what a client is told.
+	 *
+	 * @Then /^the DAV content type of "([^"]*)" is "([^"]*)"$/
+	 */
+	public function theDavContentTypeIs(string $path, string $expected): void {
+		$reqBody = '<?xml version="1.0"?>'
+			. '<d:propfind xmlns:d="DAV:"><d:prop><d:getcontenttype/></d:prop></d:propfind>';
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
+			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
+			'body' => $reqBody,
+		]);
+		$this->assertStatus($res, [207], "PROPFIND $path");
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		$actual = trim((string)(($doc->xpath('//d:getcontenttype') ?: [])[0] ?? ''));
+		if ($actual !== $expected) {
+			throw new \RuntimeException(
+				"expected '{$path}' to be served as '{$expected}', got '{$actual}'. "
+				. 'A generic type means the mimetype repair step did not run, and the Files app '
+				. 'shows a zip icon with no Open in Penpot action.',
+			);
 		}
 	}
 

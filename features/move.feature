@@ -83,18 +83,20 @@ Feature: Moving a design
     # Nextcloud owns folder layout (§6.29). Sub-foldering a design changes nothing
     # Penpot can even represent, so nothing is sent and nothing is undone.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Moving a file into a plain subfolder of its project keeps its project
     Given a mirrored design "Wanderer" in the project "Stays Put"
+    And I create a folder at "Penpot/Stays Put/wip"
     When I move "Penpot/Stays Put/Wanderer.penpot" to "Penpot/Stays Put/wip/Wanderer.penpot"
     Then Penpot project "Stays Put" holds a design named "Wanderer"
     And the file "Penpot/Stays Put/wip/Wanderer.penpot" still carries its Penpot id
     # No project change, so no `move-files`. "wip" is never created in Penpot,
     # which has no concept of subfolders.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: A pull never relocates a file the user filed into a subfolder
     Given a mirrored design "Nested" in the project "Left Where I Put It"
+    And I create a folder at "Penpot/Left Where I Put It/wip"
     When I move "Penpot/Left Where I Put It/Nested.penpot" to "Penpot/Left Where I Put It/wip/Nested.penpot"
     And the team has been mirrored into Nextcloud
     Then the file "Penpot/Left Where I Put It/wip/Nested.penpot" still carries its Penpot id
@@ -118,7 +120,7 @@ Feature: Moving a design
     # and the guard refuses this drag before it happens — that refusal is its own
     # scenario below, and needs a different assertion.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @blocked
   Scenario: A move between projects is attributed to the acting user
     Given the user has a valid personal Penpot token
     When the user moves a mirrored file into another project folder
@@ -162,7 +164,7 @@ Feature: Moving a design
 
     # ── out of every mapping: the meaningful move ─────────────────────────────
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: Moving a "sync" file out of every mapped folder leaves real, openable bytes
     Given a mirrored ".penpot" file in "sync" mode in a project folder
     When I move the file to a folder with no Penpot ancestor
@@ -174,7 +176,7 @@ Feature: Moving a design
     # The "zip in nextcloud only" state (§6.23) — the same state the ignore tag
     # produces. Moving it back in offers a restore; see restore.feature.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: Moving an unmapped tracked file back under a project offers a restore
     Given an unmapped ".penpot" file in "sync" mode that still carries its "penpot_id"
     When I move the file back under a folder mapping to a Penpot project
@@ -183,15 +185,64 @@ Feature: Moving a design
     # Never automatic — a deleted Penpot file cannot come back at its original id
     # (§6.20/§6.26). See restore.feature.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Moving a never-tracked ".penpot" file under a project creates nothing
-    Given a ".penpot" file that was never tracked (no "penpot_id")
-    When I move the file into a project folder
-    Then the file is NOT automatically registered as a new Penpot design
-    And Penpot is never contacted
-    And the file sits as ordinary tolerated content, untouched by the pull
+    Given a mirrored project "Adopt Nothing"
+    And I upload a ".penpot" archive at "Uploaded.penpot"
+    When I move "Uploaded.penpot" to "Penpot/Adopt Nothing/Uploaded.penpot"
+    Then the file "Penpot/Adopt Nothing/Uploaded.penpot" carries no Penpot id
+    And Penpot project "Adopt Nothing" holds no design named "Uploaded"
     # Creating a design is a deliberate action (create-design.feature), never a
     # side effect of dragging a file somewhere.
+
+    # ── across two mappings: personal ⇄ a shared team ──────────────────────────
+    # A user's home root and a mapped Team Folder are two mappings to two
+    # DIFFERENT Penpot teams (personal-projects.feature — setting a personal token
+    # maps the personal team to the home root, implicitly). So a drag between them
+    # is a real cross-team move, and Penpot supports it directly: `move-files`
+    # carries the destination's team with it, proven live in §6.27/§6.34.
+    #
+    # ALLOWED IN BOTH DIRECTIONS, deliberately and for now. It is the simple
+    # behaviour — the user moved a design, so the design moved. An admin option to
+    # FORBID moving designs out of a team folder is a reasonable thing to want and
+    # is deliberately NOT specified: see saga §C6.21 for why it is a bigger
+    # decision than it looks.
+    #
+    # @unbuilt rather than @todo: the personal side of the mapping does not exist
+    # in `lib/` at all. The cross-TEAM machinery underneath these does — it is the
+    # same `move-files` the scenarios above use.
+
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Moving a design from a personal project into a mapped team project
+    Given the user has a personal project folder "Sketches" holding a design
+    And a mapped team with a project folder "Client Work"
+    When the user moves the design into "Client Work"
+    Then the design changes team and project in Penpot in one "move-files" call
+    And it keeps its id, its revision and its history
+    And the file's "penpot_team_id" is re-stamped to the new team
+    # One call does both: the destination project's team follows automatically.
+    # The re-stamp matters because the workspace deep link is built from it
+    # (§C6.7) — a stale one opens the wrong team's workspace.
+
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Moving a design from a mapped team into a personal project
+    Given a mirrored design in a mapped team's project folder
+    And the user has a personal project folder "Sketches"
+    When the user moves the design into "Sketches"
+    Then the design moves into that personal project in Penpot
+    And it keeps its id, its revision and its history
+    # The mirror image, and it has to work: allowing one direction and refusing
+    # the other would make the rule impossible to state.
+
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Moving a design out of both mappings unmaps it, from either side
+    Given the user has a personal project folder "Sketches" holding a "sync" design
+    When the user moves the design to a folder with no Penpot ancestor
+    Then Penpot is never contacted
+    And the design still exists, untouched, in Penpot
+    And the file keeps its archive and its Penpot id, and stops being mirrored
+    # The existing unmapped state (§6.23, above), reached from the personal side.
+    # Nothing about the personal mapping changes what leaving a mapping means.
 
     # ── RULE: a link may not leave the project it points into (§6.43) ────────
     #
@@ -242,12 +293,14 @@ Feature: Moving a design
     # Split from the outline above because it asserts on the MESSAGE, which the
     # DAV status alone cannot carry — it needs the exception body surfaced.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: A link moves freely inside its own project
-    Given a "link" design at "Penpot/Confined/Pointer.penpot"
-    When I move it into a plain subfolder of that project
-    Then the move succeeds
-    And Penpot is never contacted
+    Given a mirrored design "Pointer" in the project "Confined"
+    And "Penpot/Confined/Pointer.penpot" is a "link" design
+    And I create a folder at "Penpot/Confined/wip"
+    When I move "Penpot/Confined/Pointer.penpot" to "Penpot/Confined/wip/Pointer.penpot"
+    Then the file "Penpot/Confined/wip/Pointer.penpot" still carries its Penpot id
+    And Penpot project "Confined" holds a design named "Pointer"
     # The negative case that gives the rule its edge: confinement is to the
     # PROJECT, not to a folder.
 
@@ -294,7 +347,7 @@ Feature: Moving a design
     # confirmed, but it is a destructive cross-team mutation that changes who can
     # see the work — far outside §6.1. Refuse loudly; never silently undo.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture @unbuilt
   Scenario: A project folder cannot be moved into a different team's folder
     Given a second team folder mapped to another Penpot team
     When I try to move a project folder into it
@@ -334,7 +387,7 @@ Feature: Moving a design
     # Drafts is a state, so the mirror lands at the team root — the mirror image
     # of "Un-filing" above, and the same rule read from the other side.
 
-  @in-penpot @todo
+  @in-penpot @unbuilt
   Scenario: A design moved to another team in Penpot leaves this mapping
     Given a mirrored ".penpot" file whose design is moved to an unmapped team
     When the pull runs

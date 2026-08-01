@@ -2440,3 +2440,307 @@ Three findings, one form. Penpot's project delete cascades but its restore does
 not; Nextcloud's delete event fires for the folder but not its children; the
 timestamps look symmetrical and are not. **In every case the asymmetry was
 invisible from the API's shape and obvious the moment it was run once.**
+
+---
+
+### C6.20 — The two halves of one question, one of which had never been asked
+
+Promoting the `@todo` scenarios that were already built turned up a defect on
+the first run. Not in the new tests — in the pull, and it had been there since
+the prune slice shipped.
+
+#### The asymmetry
+
+The pull asks "where is the mirror for this design?" in **two** places, and they
+disagreed about how hard to look:
+
+    collectMirrors()        the PRUNE's half     — walked the whole tree
+    indexFilesByPenpotId()  the UPSERT's half    — read direct children only
+
+`move.feature` explicitly allows a user to file a mirror into a plain subfolder;
+§6.29 makes that meaningless to Penpot, which has no concept of subfolders. So
+the moment anyone does it, the upsert cannot see the file, and creates a
+**second** mirror for the same design at the canonical path.
+
+Then nothing cleans up. The prune walks recursively, finds the id, sees Penpot
+still lists it, and correctly prunes nothing. Two files, one design, forever, no
+complaint anywhere — which is precisely the state `copy.feature`'s "exactly one
+file per design id, always" exists to forbid.
+
+#### Why nothing caught it
+
+Three separate scenarios describe behaviour that this breaks:
+
+* *Moving a file into a plain subfolder of its project keeps its project*
+* *A file nested deeper inside a project folder still belongs to that project*
+* *A pull never relocates a file the user filed into a subfolder*
+
+The first two pass **without a pull afterwards** — the move is correct, and the
+resolver is correct; the bug only appears on the next sync. The third is the one
+that runs a pull, and it was the one still `@todo`.
+
+So the defect sat behind exactly the scenario that had not been promoted, while
+its two neighbours went green and looked like coverage. **A gap in the test suite
+is not randomly placed: it is precisely where nobody looked, which is precisely
+where the bug is.**
+
+#### The fix is a rule the app already had, applied a third time
+
+The descent stops at any subfolder carrying its own `penpot_project_id` — those
+files have a nearer project ancestor and belong to that project. That is
+{@see MembershipResolver} read downwards, and it is character-for-character the
+rule `ProjectFolderService::managedDesignsBelow()` already used to collect
+designs when a folder is opted in by tag (§C6.18).
+
+Three call sites now walk the tree the same way. They *have* to agree: any one
+of them reading the tree differently claims files another attributes elsewhere,
+and the symptom is a silent duplicate rather than an error.
+
+Worth noting how the third one arrived. Writing `managedDesignsBelow()` for the
+tag opt-in meant thinking carefully about where a downward walk should stop —
+and that reasoning was sitting in the codebase, correct and documented, while
+the pull's own index a few hundred lines away still read one level. The rule was
+known; it just had not been applied everywhere it was already needed.
+
+#### The shape
+
+§C6.19 ended on asymmetries invisible from an API's shape and obvious on the
+first run. This is the same lesson turned inward: the asymmetry was between two
+methods **in the same class**, both answering the same question, and it survived
+because the cheap scenarios around it passed. The suite did not lie — it simply
+never asked.
+
+---
+
+### C6.21 — A token is a mapping, and the option not to build
+
+Two rules arrived together, and the second turns out to be the first one's
+consequence rather than a separate feature.
+
+#### Nextcloud cannot make a design; it can only ask for one
+
+A `.penpot` is a Penpot artefact. Nextcloud can write an empty file with that
+extension and nothing more. So "+ New → Penpot design" was never a local create
+— it is a **request**, and a request needs somewhere to go. Penpot has no
+rootless design (§C6.11: `create-file` requires a project), so "somewhere" means
+a resolvable Penpot home:
+
+    inside a project folder    →  that project
+    under a mapped team        →  that team's Drafts        (§6.35)
+    anywhere else              →  NOTHING HAPPENS
+
+The last line is the rule, and the important thing about it is that it is a
+**refusal to guess, not an error**. A `.penpot` outside every mapping is an
+ordinary inert file: the user made a file, it is theirs, and it simply is not a
+design. Inventing a team to file it into would be worse than doing nothing, and
+erroring would make a mapped folder unusable for the ordinary things folders are
+for — the same rule the tag opt-in rests on (§C6.18).
+
+The code already behaved this way. What was missing was saying so as a rule, and
+a live scenario, rather than leaving it as an implementation detail three
+different features happened to depend on.
+
+#### The consequence: a user's own home has nowhere to put a design
+
+Which immediately raises the case the rule handles badly. A user makes a
+`.penpot` in their own home folder — the most natural place for personal work —
+and it is inert, because the home root has no team ancestor. That is correct by
+the rule and wrong by intent.
+
+The fix is not an exception to the rule. It is to give the home root a marker.
+
+#### Setting a personal token IS creating a mapping
+
+    admin maps a team    →  a folder, listed in the admin panel, visible
+    user sets a token    →  their home root, IMPLICIT and invisible
+
+Nothing for the user to see, decide, or name. The mapping exists exactly because
+the token does, and it goes away when the token does. **Showing it would be
+offering a choice that has only one possible answer** — a personal team can only
+map to the one home that can reach it, because §6.12 established no Penpot
+credential ever gets an instance-wide view and a personal team is precisely the
+space nobody else is in.
+
+Framing it as a *mapping* rather than as a *pull* is what makes the rest fall
+out for free. §6.31 already had personal projects mounting as folders at the home
+root; that gave those folders a project id but left the root itself bare. Once
+the root carries a team id, every other feature works unchanged:
+
+* a design made at the home root → the personal team's Drafts (§6.35, same rule);
+* a design made in a plain folder in the home → also Drafts (nearest-ancestor,
+  §6.29, same walk);
+* a drag between the home and a mapped Team Folder → an ordinary cross-team move.
+
+No new rules. One new marker, on a root that never had one.
+
+#### Crossing between two mappings is not a new mechanism either
+
+A user's home and a mapped Team Folder are two mappings to two different teams,
+so a drag between them is a real cross-team move — and Penpot supports that
+directly: `move-files` carries the destination's team with it, proven live in
+§6.27/§6.34. One call does both hops.
+
+So the scenarios went to `move.feature` and `copy.feature`, not to
+`personal-projects.feature`. That is the §C6.18 lesson applied before it could
+cost anything: a move is a move whatever its two ends are, and filing it under
+the *kind of thing* being moved is how one behaviour ends up described in two
+places and drifting. `personal-projects.feature` keeps only the fact that makes
+the crossing possible — the root has a team ancestor because a token was set.
+
+#### The option NOT taken, and why it is recorded rather than built
+
+There is an obvious next want: **an admin switch on a team mapping that forbids
+moving designs out of its Team Folder.** A shared team's work leaving for
+somebody's personal space is a real concern, and the switch would be three lines
+of guard.
+
+It is deliberately not specified, and the reason is worth writing down because
+"three lines of guard" is exactly how the estimate goes wrong. The switch has to
+answer, at minimum:
+
+* **What does it do to a move that already happened?** The guard fires on
+  `BeforeNodeRenamedEvent` and can abort — but a user with the file open on a
+  desktop client gets a sync error, not an explanation.
+* **Does it forbid COPY too?** A copy out is the same data leaving. If yes, the
+  one gesture that is genuinely non-destructive becomes the one that is refused;
+  if no, the switch does not do what its name says.
+* **What about the pull?** A design moved to another team *in Penpot* leaves the
+  mapping (move.feature). The switch cannot forbid that — it has no authority
+  over Penpot — so the same outcome is blocked from one side and not the other.
+* **Whose rule wins when a folder carries two mappings?** On this cluster a
+  folder can also be n8n's and Grafana's (§6.40). A per-app move ban is a
+  per-app answer to a shared question.
+* **Does it apply to admins?** A switch nobody can override is a support ticket;
+  one everybody can override is a suggestion.
+
+None of those is hard on its own. Together they are a feature, not a flag — and
+the failure mode of shipping it as a flag is that the answers get chosen
+implicitly, one bug report at a time.
+
+So the current behaviour is the simple one, stated plainly: **moves and copies
+work in both directions and mirror to Penpot.** The user moved a design, so the
+design moved. If the ban is wanted later, this section is the list of questions
+it has to answer first.
+
+#### The shape
+
+§C6.20 was one rule that had not been applied everywhere it was needed. This is
+the opposite and rarer thing: a *new* capability that needed **no new rules at
+all** — just a marker on a root, after which four existing rules produced the
+whole feature. Worth noticing which kind you have, because the two are worked
+very differently.
+
+---
+
+### C6.22 — Who did this? Reads, writes, and the job that has no answer
+
+A question worth grounding rather than answering by instinct: when does this app
+act as the user, and when as the service account? The rule turns out to be one
+line, and most of the apparent complexity comes from conflating two different
+kinds of statement.
+
+    READS are always the service account.
+    WRITES attribute to the acting user when there is one.
+
+#### The reads half is a requirement, not a default
+
+Penpot has no admin scope. Every token sees exactly the teams its account
+belongs to (§6.12) — that is not a permission setting, it is the shape of the
+API. So the puller has to be an account that is a member of every mapped team,
+and that is the entire reason a service account exists at all.
+
+Which means using a personal token to read would not merely change a name in a
+history log. **It would change what is mirrored, per user** — two people with
+different Penpot memberships would produce two different folder trees for the
+same mapping. That is §6.16's rejected dual-pull-path and §6.18's
+shared-Team-Folder race, arriving by a different door.
+
+#### The writes half is safe precisely because it cannot widen anything
+
+A write always targets something the service account already mirrored. So
+swapping in the user's token changes who Penpot records as having done it and
+nothing else — no new visibility, no new reachable object. That is what makes it
+safe to be best-effort, and why `PersonalTokenService` returns `null` rather than
+throwing: attribution is a garnish on an action that must happen either way.
+
+#### "Can a move in a team folder be attributed to a user?" — yes, already
+
+This was the sharp version of the question, and the answer is better than
+expected: **every gesture already runs inside the acting user's own HTTP
+request.** Rename, move, copy, create, delete, restore and tag are all driven by
+Files events during a WebDAV or web-UI call, so `IUserSession` has the user and
+`tokenForActor()` finds their token with no extra machinery.
+
+There is no gap here. The gap people expect — "background work loses the user" —
+is real, but the app does almost none of its writing in the background.
+
+#### The pull has no acting user because nobody performed it
+
+This is worth stating as a fact about the *work* rather than about the harness. A
+scheduled pull reconciles what Penpot already says, on a timer. There is no user
+to attribute it to; picking one would be an invented answer to a question that
+has none, and attributing forty follow-renames to whoever happened to click
+"Sync" would make Penpot's history actively misleading.
+
+So the service account is the honest answer, not the fallback.
+
+#### But a background job *can* act as a user, and it is worth knowing how
+
+Because the interesting future question is not "can we?" — it is "when should
+we?". Nextcloud's answer is `IUserSession::setVolatileActiveUser(?IUser)`,
+`@since 29.0.0`: *"Temporarily sets the active user for this session without
+persisting it in the session storage."*
+
+Core uses it exactly this way, and its own comment is the useful part:
+
+    // Set an active user so that event listeners can correctly work
+    $this->session->setVolatileActiveUser($user);
+    $folder = $this->rootFolder->getUserFolder($user->getUID());
+    …
+    $this->setupManager->tearDown();   // per user, or the FS cache grows
+
+(`apps/files/lib/BackgroundJob/SanitizeFilenames.php`, verified in the live 33.0.4
+tree.) So a `QueuedJob` carrying a uid in its arguments can set the volatile user
+and everything downstream — including `tokenForActor()` — sees them.
+
+**When this app would want it:** a gesture that fans out. Dragging forty designs
+between projects is forty Penpot calls inside one request; queueing them with the
+uid would keep the request fast *and* keep the attribution. Nothing today needs
+it, and building the machinery before a gesture needs it would be scaffolding.
+Recorded so the answer is ready when one does.
+
+#### The finding: the promised fallback does not exist
+
+Chasing the rule turned up a gap between a docblock and its code.
+`PersonalTokenService` states that every caller "is expected to fall back to the
+service account and carry on — the user's rename must still happen, just
+attributed less precisely."
+
+The fallback that exists is **pre-flight**: `$token = $actorToken ?? $this->getToken()`.
+No token, service account. There is no **post-failure** retry. If Penpot rejects
+the user's token, the write is simply lost.
+
+And rejection is not exotic. A Nextcloud user need not have a Penpot account at
+all; if they do, they need not be a member of the Penpot team behind a shared
+Team Folder — the mapping only ever required the *service account* to be a
+member (§6.18). "The acting user's token cannot write here" is therefore an
+**ordinary state**, arguably the common one on any instance where Penpot
+membership is not managed alongside Nextcloud's.
+
+The trade is not close: losing a user's rename to protect the accuracy of a
+history entry is wrong in every case. But the retry has to be narrow —
+authorisation failures only. Retrying a *timeout* as the service account would
+double every outage and could apply a write twice.
+
+Three scenarios now specify it (`admin-connection.feature`), including the one
+that keeps it honest: report the degradation **once**, not on every gesture. A
+per-gesture warning for a routine state is how people learn to ignore warnings.
+
+#### The shape
+
+§C6.21 was a capability that needed no new rules. This is the inverse and the
+more common trap: a rule that was already **written down as though it were
+implemented**. The docblock was not aspirational when it was written — it
+described what callers should do — and then every caller did the easy half. A
+promise in prose with no test is indistinguishable from a promise kept, right up
+until someone's token expires.

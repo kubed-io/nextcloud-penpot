@@ -174,7 +174,7 @@ Feature: Scheduled or manual pull from Penpot
     # there is no content push (saga §6.1). See admin-section.feature for where
     # they sit; this is what they do.
 
-  @todo
+  @blocked
   Scenario: Sync now on a mapping card pulls just that team
     Given the Penpot team "Northwind" is mapped
     When the admin uses that mapping's "Sync now" button
@@ -183,7 +183,7 @@ Feature: Scheduled or manual pull from Penpot
     # The per-mapping equivalent of "Sync from Penpot", exactly as in both
     # siblings — the same button, in the same place on the card.
 
-  @todo
+  @blocked
   Scenario: Sync now reports honestly while the pull is unbuilt
     Given the Penpot team "Northwind" is mapped
     When the admin uses that mapping's "Sync now" button
@@ -194,7 +194,7 @@ Feature: Scheduled or manual pull from Penpot
     # enabling it later a one-line change. Silently doing nothing would be worse
     # than either a disabled button or an absent one.
 
-  @todo
+  @blocked
   Scenario: Sync now on an unsaved mapping asks for a save first
     Given the admin has added a mapping card but not saved it
     When the admin uses that card's "Sync now" button
@@ -406,32 +406,50 @@ Feature: Scheduled or manual pull from Penpot
 
     # ── pruning: the most dangerous thing this app does ──────────────────────────
 
-  @todo
+  @in-penpot @occ
   Scenario: A pull prunes a mirrored file whose Penpot file no longer exists
-    Given a mirrored ".penpot" file in the "My Stuff" folder
-    When the underlying Penpot file is deleted in Penpot
-    And the pull runs
-    Then the mirrored file is moved to the Nextcloud trash, not hard-deleted
-    And a file outside every mapping is never pruned by this pull
-    # Trash, never destroy — don't-lose-data. A pruned file is recoverable for as
-    # long as the user's trash retention allows.
+    Given the first visible team is mapped as a plain folder "Prune Target"
+    And a mirrored design "Doomed" in the project "Prune Me"
+    When the design "Doomed" is deleted in Penpot
+    And the admin runs a pull
+    Then the pull pruned 1 mirror
+    And the file "Prune Target/Prune Me/Doomed.penpot" is in the Nextcloud trash
+    # TRASH, NEVER DESTROY — the don't-lose-data rule. A pruned file is
+    # recoverable for as long as the user's trash retention allows, which is what
+    # makes the most dangerous thing this app does survivable.
 
     # THE FINAL SNAPSHOT (saga §6.46) — the app's one genuinely lossy moment,
     # fixed. A pruned "link" file would otherwise be a pointer to a design that no
     # longer exists, with nothing to rebuild from. But "export-binfile" still
     # exports a soft-deleted file for ~7 days (saga §6.42, confirmed live), and a
     # trashed Nextcloud file's content is writable (saga §6.44, confirmed live).
-  @todo
-  Scenario: A link file gets a final snapshot before being pruned
-    Given a mirrored ".penpot" file in "link" mode in the "My Stuff" folder
-    When its design is deleted in Penpot
-    And the pull runs within Penpot's grace window
-    Then the app exports the design one last time
-    And the archive is written into the file, which becomes a "sync" file
-    And only then is it moved to the Nextcloud trash
-    And the user is left with a real, openable ".penpot" archive
 
-  @todo
+  @in-penpot @occ
+  Scenario: A link file gets a final snapshot before being pruned
+    Given the first visible team is mapped as a plain folder "Snapshot Target"
+    And a mirrored design "Rescued" in the project "Snapshot Me"
+    When the design "Rescued" is deleted in Penpot
+    And the admin runs a pull
+    Then the pull pruned 1 mirror
+    And the pull saved 1 final archive
+    # The mirror is a `link` — it held nothing at all until this moment. The pull
+    # exports the design one last time INSIDE Penpot's grace window and writes the
+    # archive into the file before trashing it, so the user is left with a real,
+    # openable `.penpot` rather than a pointer to nothing.
+
+  @in-penpot @occ
+  Scenario: A sync file needs no snapshot, it already has one
+    Given the first visible team is mapped as a plain folder "Kept Target"
+    And a mirrored design "Already Kept" in the project "Has Archive"
+    And "Kept Target/Has Archive/Already Kept.penpot" is a "sync" design
+    When the design "Already Kept" is deleted in Penpot
+    And the admin runs a pull
+    Then the pull pruned 1 mirror
+    And the pull saved 0 final archives
+    # A `sync` file already holds its archive, so a second export would be work
+    # with a knowable answer. The counter is the assertion: 1 pruned, 0 rescued.
+
+  @in-penpot @blocked
   Scenario: A snapshot that cannot be taken is reported, not faked
     Given a mirrored ".penpot" file in "link" mode
     When its design was deleted in Penpot longer ago than the grace window
@@ -439,14 +457,9 @@ Feature: Scheduled or manual pull from Penpot
     Then the export fails
     And the pointer is moved to the Nextcloud trash as before
     And the app reports that no archive could be recovered for it
-    # Best-effort by design — we never pretend a snapshot succeeded.
-
-  @todo
-  Scenario: A sync file needs no snapshot, it already has one
-    Given a mirrored ".penpot" file in "sync" mode
-    When its design is deleted in Penpot and the pull runs
-    Then no extra export is performed
-    And the file is moved to the Nextcloud trash with its existing archive intact
+    # Best-effort by design — we never pretend a snapshot succeeded. Still @todo
+    # because CI cannot age a deletion past Penpot's grace window: the delay is
+    # 7 days by default and set per team, not per request (§C6.19).
 
     # DETECTING A PENPOT-SIDE RESTORE (saga §6.46). This section used to open "we
     # cannot DRIVE Penpot's trash — no API command restores a file", which was
@@ -494,12 +507,25 @@ Feature: Scheduled or manual pull from Penpot
 
     # ── there is no push, and there is no user-attributed pull ───────────────────
 
-  @todo
+  @decision
   Scenario: There is no push counterpart to this feature
     Given the "Northwind" mapping exists
     Then no "Sync to Penpot" action exists anywhere in the admin panel or CLI
 
-  @todo
+    # ── who the run acts as, and why it is nobody ───────────────────────────────
+    # A scheduled pull has NO ACTING USER, and that is a fact about the work
+    # rather than a limitation of the harness: nobody performed it. It reconciles
+    # what Penpot already says, on a timer. Attributing it to a user would be a
+    # fiction, and picking WHICH user would be an invented answer to a question
+    # with none.
+    #
+    # This is not the same as "a background job cannot act as a user". Nextcloud's
+    # `IUserSession::setVolatileActiveUser()` (NC 29+) exists precisely for that,
+    # and core uses it so "event listeners can correctly work" while a job walks
+    # one user's files. A job this app queued FROM a gesture could carry the uid
+    # and run as them. The pull is simply not that kind of job (saga §C6.22).
+
+  @blocked
   Scenario: The pull always runs as the service account, never as a user
     Given two Nextcloud users both have personal Penpot tokens configured
     And both are members of the mapped "Northwind" team
@@ -507,3 +533,14 @@ Feature: Scheduled or manual pull from Penpot
     Then the pull uses the service-account token only
     And neither user's personal token is used for any read
     And the mapped folder is written by exactly one job, not once per user
+    # One puller, always (§6.18) — reads decide WHAT is mirrored, so a second
+    # reader with different visibility is a second, different mirror.
+
+  @admin @occ @unbuilt
+  Scenario: A pull started by an admin is still attributed to the service account
+    Given the admin has a personal Penpot token
+    When the admin starts a sync from the settings panel
+    Then the pull uses the service-account token, not the admin's
+    # Starting a run is not performing the changes it makes. The admin asked for
+    # a reconcile; Penpot's history should not read as though they renamed forty
+    # designs by hand.

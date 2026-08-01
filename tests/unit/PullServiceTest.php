@@ -69,6 +69,15 @@ final class PullServiceTest extends TestCase {
 	 */
 	private array $stamps = [];
 
+	/**
+	 * Node id -> folder markers. Needed since the upsert index learned to descend
+	 * (§C6.20): the walk asks each subfolder whether it is a project of its own,
+	 * so a blanket "no markers" answer could not express a nested project folder.
+	 *
+	 * @var array<int, FolderMarkers>
+	 */
+	private array $folderMarkersById = [];
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->mappings = $this->createMock(MappingService::class);
@@ -86,7 +95,9 @@ final class PullServiceTest extends TestCase {
 		// A folder with no markers. Unlike readFile there is no null state here, so
 		// this has to be a real value object — a mock's auto-stub would hand back an
 		// object whose readonly promoted properties were never initialised.
-		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->metadata->method('readFolder')->willReturnCallback(
+			fn (int $id): FolderMarkers => $this->folderMarkersById[$id] ?? new FolderMarkers('', ''),
+		);
 
 		$this->pull = new PullService(
 			$this->mappings,
@@ -530,6 +541,102 @@ final class PullServiceTest extends TestCase {
 		$this->stamps[30] = new PenpotFileMetadata('file-1', $stored, $stampedMode !== '' ? $stampedMode : $mappingMode);
 		$this->archives->method('holdsArchive')->willReturn($holdsArchive);
 	}
+	/**
+	 * A MIRROR THE USER FILED INTO A PLAIN SUBFOLDER IS STILL THE SAME MIRROR.
+	 *
+	 * The upsert index used to read only a project folder's direct children while
+	 * the prune walked the whole tree (§C6.20). So a user files a design into
+	 * `wip/` — which move.feature explicitly allows, because Penpot has no
+	 * concept of subfolders — and the next pull cannot see it, creates a SECOND
+	 * mirror at the canonical path, and the prune then leaves both alone because
+	 * Penpot does still list that id. Two files, one design, forever, no
+	 * complaint anywhere.
+	 *
+	 * Pinned on the OBSERVABLE consequence: `newFile()` must never be called,
+	 * because the file already exists.
+	 */
+	public function testAMirrorFiledIntoASubfolderIsFoundRatherThanDuplicated(): void {
+		$mapping = $this->mapping(useTeamFolder: false);
+
+		$mirror = $this->emptyFile(40);
+		$this->stamps[40] = new PenpotFileMetadata('file-acme', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
+
+		$wip = $this->createMock(Folder::class);
+		$wip->method('getId')->willReturn(21);
+		$wip->method('getDirectoryListing')->willReturn([$mirror]);
+		$wip->method('nodeExists')->willReturn(false);
+
+		$acmeFolder = $this->createMock(Folder::class);
+		$acmeFolder->method('getId')->willReturn(20);
+		$acmeFolder->method('getDirectoryListing')->willReturn([$wip]);
+		$acmeFolder->method('nodeExists')->willReturn(false);
+		// THE ASSERTION. A second mirror would be born here.
+		$acmeFolder->expects($this->never())->method('newFile');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$acmeFolder]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-acme', 'name' => 'Acme', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([
+			['id' => 'file-acme', 'name' => 'Login', 'revn' => 5],
+		]);
+		// The Acme folder is found by its project marker, so no folder is made either.
+		$this->folderMarkersById[20] = new FolderMarkers('proj-acme', '');
+
+		$this->pull->pullOne($mapping);
+	}
+
+	/**
+	 * The descent stops at a NEARER project ancestor — those mirrors belong to
+	 * that project, not this one. Same rule as MembershipResolver read downwards,
+	 * and the same one ProjectFolderService uses to collect designs on opt-in.
+	 * Without it, one project's pull would adopt another project's files.
+	 */
+	public function testTheIndexStopsAtANestedProjectFolder(): void {
+		$mapping = $this->mapping(useTeamFolder: false);
+
+		$theirs = $this->emptyFile(50);
+		$this->stamps[50] = new PenpotFileMetadata('file-acme', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
+
+		$nested = $this->createMock(Folder::class);
+		$nested->method('getId')->willReturn(22);
+		$nested->method('getDirectoryListing')->willReturn([$theirs]);
+		$nested->method('nodeExists')->willReturn(false);
+
+		$made = $this->emptyFile(60);
+		$acmeFolder = $this->createMock(Folder::class);
+		$acmeFolder->method('getId')->willReturn(20);
+		$acmeFolder->method('getDirectoryListing')->willReturn([$nested]);
+		$acmeFolder->method('nodeExists')->willReturn(false);
+		// The nested folder is another project's, so `file-acme` is NOT found
+		// here and a mirror is correctly created in this one.
+		$acmeFolder->expects($this->once())->method('newFile')->willReturn($made);
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$acmeFolder]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-acme', 'name' => 'Acme', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([
+			['id' => 'file-acme', 'name' => 'Login', 'revn' => 5],
+		]);
+		$this->folderMarkersById[20] = new FolderMarkers('proj-acme', '');
+		$this->folderMarkersById[22] = new FolderMarkers('proj-other', '');
+
+		$this->pull->pullOne($mapping);
+	}
+
 	private function mapping(bool $useTeamFolder, string $mode = Mapping::MODE_LINK): Mapping {
 		return Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
