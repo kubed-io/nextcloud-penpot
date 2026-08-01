@@ -307,32 +307,39 @@ Feature: Renaming a mirrored Penpot file
 
     # ── the invariant, true under either branch ─────────────────────────────────
 
-  @todo
-  Scenario: Renaming never breaks the Penpot link, regardless of direction
-    Given a mirrored ".penpot" file with a known "penpot_id"
-    When the file is renamed by any means
-    Then the "penpot_id" metadata is unchanged
+  @in-nextcloud @gesture
+  Scenario: Renaming never breaks the Penpot link
+    Given a mirrored design "Before" in the project "Keeps Its Id"
+    When I rename "Penpot/Keeps Its Id/Before.penpot" to "After.penpot"
+    Then the file "Penpot/Keeps Its Id/After.penpot" still carries its Penpot id
+    And Penpot project "Keeps Its Id" holds a design named "After"
+    # The invariant under every rename path: the name changes, the identity does
+    # not. A rename that re-created the design would break every mirror, archive
+    # and deep link that points at it.
 
     # ── renaming something that was just created by another gesture ───────────
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: Renaming a design that was just copied propagates to Penpot
-    Given a mirrored ".penpot" file that I copied a moment ago
-    When I rename the copy
-    Then the copy's own design is renamed in Penpot
-    And the original design's name is untouched
+    Given a mirrored design "Original" in the project "Copy Then Rename"
+    And I copy "Penpot/Copy Then Rename/Original.penpot" to "Penpot/Copy Then Rename/Duplicate.penpot"
+    When I rename "Penpot/Copy Then Rename/Duplicate.penpot" to "Renamed Copy.penpot"
+    Then Penpot project "Copy Then Rename" holds a design named "Renamed Copy"
+    And Penpot project "Copy Then Rename" holds a design named "Original"
+    And the files "Penpot/Copy Then Rename/Original.penpot" and "Penpot/Copy Then Rename/Renamed Copy.penpot" carry different Penpot ids
     # WALKED BY HAND, AND IT FAILED — but not here. The copy had silently failed
     # to record its "penpot_id", so this rename correctly ignored an untracked
     # file and looked like the bug (saga §C6.9). Kept in rename.feature as well
     # as copy.feature on purpose: the symptom appeared at THIS gesture, so this
     # is where someone will come looking.
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: Renaming an untracked ".penpot" file is not a failure
-    Given a ".penpot" file carrying no "penpot_id"
-    When I rename it
-    Then Penpot is never contacted
-    And no error is shown
+    Given a mirrored project "Untracked Rename"
+    And I upload a ".penpot" archive at "Penpot/Untracked Rename/Dragged In.penpot"
+    When I rename "Penpot/Untracked Rename/Dragged In.penpot" to "Renamed Anyway.penpot"
+    Then the file "Penpot/Untracked Rename/Renamed Anyway.penpot" carries no Penpot id
+    And Penpot project "Untracked Rename" holds no design named "Renamed Anyway"
     # This is correct behaviour and must stay — a file we do not track is not
     # ours to rename anywhere. It is also indistinguishable, from the user's
     # side, from the bug above. That is exactly why the tracking failure has to

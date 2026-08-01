@@ -83,18 +83,20 @@ Feature: Moving a design
     # Nextcloud owns folder layout (§6.29). Sub-foldering a design changes nothing
     # Penpot can even represent, so nothing is sent and nothing is undone.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Moving a file into a plain subfolder of its project keeps its project
     Given a mirrored design "Wanderer" in the project "Stays Put"
+    And I create a folder at "Penpot/Stays Put/wip"
     When I move "Penpot/Stays Put/Wanderer.penpot" to "Penpot/Stays Put/wip/Wanderer.penpot"
     Then Penpot project "Stays Put" holds a design named "Wanderer"
     And the file "Penpot/Stays Put/wip/Wanderer.penpot" still carries its Penpot id
     # No project change, so no `move-files`. "wip" is never created in Penpot,
     # which has no concept of subfolders.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: A pull never relocates a file the user filed into a subfolder
     Given a mirrored design "Nested" in the project "Left Where I Put It"
+    And I create a folder at "Penpot/Left Where I Put It/wip"
     When I move "Penpot/Left Where I Put It/Nested.penpot" to "Penpot/Left Where I Put It/wip/Nested.penpot"
     And the team has been mirrored into Nextcloud
     Then the file "Penpot/Left Where I Put It/wip/Nested.penpot" still carries its Penpot id
@@ -183,13 +185,13 @@ Feature: Moving a design
     # Never automatic — a deleted Penpot file cannot come back at its original id
     # (§6.20/§6.26). See restore.feature.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Moving a never-tracked ".penpot" file under a project creates nothing
-    Given a ".penpot" file that was never tracked (no "penpot_id")
-    When I move the file into a project folder
-    Then the file is NOT automatically registered as a new Penpot design
-    And Penpot is never contacted
-    And the file sits as ordinary tolerated content, untouched by the pull
+    Given a mirrored project "Adopt Nothing"
+    And I upload a ".penpot" archive at "Uploaded.penpot"
+    When I move "Uploaded.penpot" to "Penpot/Adopt Nothing/Uploaded.penpot"
+    Then the file "Penpot/Adopt Nothing/Uploaded.penpot" carries no Penpot id
+    And Penpot project "Adopt Nothing" holds no design named "Uploaded"
     # Creating a design is a deliberate action (create-design.feature), never a
     # side effect of dragging a file somewhere.
 
@@ -242,12 +244,14 @@ Feature: Moving a design
     # Split from the outline above because it asserts on the MESSAGE, which the
     # DAV status alone cannot carry — it needs the exception body surfaced.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: A link moves freely inside its own project
-    Given a "link" design at "Penpot/Confined/Pointer.penpot"
-    When I move it into a plain subfolder of that project
-    Then the move succeeds
-    And Penpot is never contacted
+    Given a mirrored design "Pointer" in the project "Confined"
+    And "Penpot/Confined/Pointer.penpot" is a "link" design
+    And I create a folder at "Penpot/Confined/wip"
+    When I move "Penpot/Confined/Pointer.penpot" to "Penpot/Confined/wip/Pointer.penpot"
+    Then the file "Penpot/Confined/wip/Pointer.penpot" still carries its Penpot id
+    And Penpot project "Confined" holds a design named "Pointer"
     # The negative case that gives the rule its edge: confinement is to the
     # PROJECT, not to a folder.
 
