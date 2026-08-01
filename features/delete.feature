@@ -279,19 +279,97 @@ Feature: Deleting designs, locally and in Penpot
     # Being asked to delete something already deleted is not a problem, it is
     # the outcome the user wanted.
 
+    # ══ DELETING A PROJECT FOLDER ══════════════════════════════════════════════
+    #
+    # WHAT HAPPENS TODAY, AND IT IS NOT WHAT A USER EXPECTS (§C6.19). Deleting a
+    # project folder reaches Penpot **not at all** — verified live. Two reasons
+    # stack, and neither is deliberate:
+    #
+    #   1. `DeleteListener` returns unless the node is a `File`.
+    #   2. Nextcloud fires `BeforeNodeDeletedEvent` for the FOLDER ONLY. There is
+    #      no per-child event, so even removing (1) would not reach the designs
+    #      inside — a recursive walk is something this app would have to do
+    #      itself, before the node is gone.
+    #
+    # The folder then reappears on the next pull (the project never went
+    # anywhere), which reads as the app undoing the user's deletion.
+    #
+    # PENPOT SUPPORTS EXACTLY WHAT IS WANTED — checked in its source and proven
+    # live against a project holding two designs:
+    #
+    #   delete-project {id}      → HTTP 204. SOFT: project.deleted_at = now + 7d
+    #                              (per-team `deletion-delay`, default 7 days).
+    #                              A worker then cascades the SAME future
+    #                              timestamp onto every file in the project and
+    #                              its changes, data, media and thumbnails.
+    #   → the project vanishes from `get-all-projects` IMMEDIATELY;
+    #   → its designs appear in `get-team-deleted-files` IMMEDIATELY, before the
+    #     worker runs, because that query matches on `p.deleted_at > now` OR
+    #     `f.deleted_at > now` — the project's own mark is enough.
+    #
+    # So there is no "must be empty first" rule to mirror, and no reason to
+    # refuse. A project deletes with its contents, reversibly, on a grace window
+    # that lines up with the Nextcloud trash almost exactly.
+    #
+    # ONE PROJECT CANNOT BE DELETED: the team's default (Drafts) answers
+    # `:non-deletable-project`. It has no folder of its own in `nested` mode — it
+    # IS the team root (§6.35) — so this app cannot reach it by this gesture
+    # anyway; the guard is stated so a future folder mode cannot back into it.
+
   @in-nextcloud @gesture @todo
-  Scenario: Deleting a project folder never deletes the Penpot project
-    Given a mirrored project "My Stuff"
-    When I delete the "My Stuff" project folder
-    Then Penpot is never contacted
-    And the Penpot project and its designs are completely unaffected
+  Scenario: Deleting a project folder deletes the project in Penpot
+    Given a mirrored design "Inside" in the project "Doomed"
+    When I delete the "Doomed" project folder
+    Then "delete-project" is called with that project's id
+    And Penpot no longer lists a project named "Doomed"
+    And the design "Inside" is in Penpot's trash
     And the folder is recoverable from the Nextcloud trash
-    When the team is mirrored again
-    Then the project folder is recreated, because the project still exists in Penpot
-    # Deleting the folder is a LOCAL act, and the pull restoring the mirror is
-    # the correct outcome — the project never went anywhere. Same rule as
-    # removing the `penpot` tag (project-folder.feature): unmapping a folder is
-    # not destroying what it pointed at.
+    # The two trashes line up: Nextcloud's is reversible and so is Penpot's, on
+    # a comparable window. This is the same shape as deleting a single mirror
+    # (above) one level up the tree.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Deleting a project folder does not need a per-design call
+    Given a mirrored project "Doomed" holding 3 designs
+    When I delete the "Doomed" project folder
+    Then "delete-file" is never called
+    And exactly one "delete-project" call is made
+    # Penpot cascades server-side, so mirroring its behaviour is ONE call, not
+    # N+1 — and doing it per-file would be worse than redundant: it would leave
+    # the project itself alive and empty if the last call failed.
+
+  @in-nextcloud @gesture @todo
+  Scenario: A plain folder inside a mapped folder deletes without touching Penpot
+    Given a plain folder "Just My Notes" inside the mapped folder
+    When I delete it
+    Then Penpot is never contacted
+    # Only a folder carrying `penpot_project_id` is a project. This is the same
+    # rule the tag opt-in rests on (project-folder.feature), stated for delete.
+
+  @in-nextcloud @gesture @todo
+  Scenario: The team root is never deletable as a project
+    When I try to delete the mapped folder itself
+    Then "delete-project" is never called for the team's Drafts project
+    # Penpot answers `:non-deletable-project` for a team's default project. The
+    # team root carries `penpot_team_id`, not `penpot_project_id`, so it does not
+    # resolve as a project folder and never reaches the call.
+
+  @in-penpot @todo
+  Scenario: A project deleted in Penpot leaves no folder claiming its id
+    Given a mirrored design "Orphan" in the project "Deleted Upstream"
+    When the project is deleted in Penpot
+    And the team is mirrored again
+    Then the mirror of "Orphan" is in the Nextcloud trash
+    And the folder does not still carry the dead project's id
+    # THE GAP THE LIVE PROBE FOUND (§C6.19). The designs prune correctly, with
+    # rescue archives — but the FOLDER survives, still stamped with a project id
+    # that no longer resolves, still wearing the `penpot` tag. Anything dropped
+    # into it afterwards resolves to a project Penpot will refuse.
+    #
+    # `get-all-projects` filters deleted projects out, so the pull cannot tell
+    # "deleted" from "never existed" — which is exactly why the pull must not
+    # DELETE the folder either. Un-stamping it (and un-tagging it) turns it back
+    # into an ordinary folder, which is the truthful end state.
 
     # ── the hard step: emptying the trash purges Penpot ───────────────────────
 

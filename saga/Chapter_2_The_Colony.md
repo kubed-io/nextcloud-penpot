@@ -2301,3 +2301,142 @@ existed. Harmless while the whole file was `@todo`; an instant `--strict`
 failure the moment one scenario went live. **A Background under an all-`@todo`
 file is unexecuted code, and unexecuted code is not known to work** — the same
 lesson as §C6.14's floating tag, arriving from the other end.
+
+---
+
+### C6.19 — What Penpot does when you delete a project, and two things nobody had measured
+
+Two questions arrived together, and both turned out to be answerable only by
+doing it: *should deleting a tagged folder delete the Penpot project?* and *do
+the mirrors carry Nextcloud's ordinary file dates?* The first needed Penpot's
+source and a live probe; the second needed a stopwatch on two apps.
+
+#### The rule that was proposed, and why it did not apply
+
+The proposal was careful: *if Penpot cannot delete a project that still has
+files in it, then neither should we.* That is exactly the right instinct — this
+chapter keeps finding that the other system's limits pick the design (§C6.17) —
+and it turns out not to bind, because Penpot has no such limit.
+
+`delete-project {id}` answers **204** and is entirely soft. It sets
+`project.deleted_at` to a timestamp *in the future* — `now + deletion-delay`,
+7 days by default, longer on paid tiers — and submits a `delete-object` worker
+task that cascades the **same** future timestamp onto every file in the project,
+plus their changes, data fragments, media objects and thumbnails.
+
+So there is no emptiness precondition to mirror, no refusal to inherit, and the
+grace window lines up with a Nextcloud trash almost exactly. Proven live against
+a project holding two designs:
+
+    delete-project                          → HTTP 204
+    get-all-projects                        → the project is gone IMMEDIATELY
+    get-team-deleted-files                  → both designs are listed IMMEDIATELY
+    get-project-files (on the dead project) → STILL RETURNS THEM
+
+That third line is the one to remember. The trash query matches on
+`p.deleted_at > now` **OR** `f.deleted_at > now`, so the project's own mark is
+enough — the designs show as trashed before the worker has touched them. And the
+fourth line is a trap: `get-project-files` does not filter on the project's
+deletion at all, so anything holding a stale project id gets a confident, wrong
+answer. This app is safe by accident of an earlier decision — §6.42 made the pull
+use `get-all-projects`, which filters `deleted_at is null`, so a deleted project
+simply stops appearing and is never queried.
+
+One project refuses: a team's **default (Drafts)** answers
+`:non-deletable-project`. It has no folder of its own in `nested` mode — it *is*
+the team root (§6.35) — so this app cannot reach it by the folder gesture, but
+the guard is worth stating so a future folder mode cannot back into it.
+
+#### Restore is not delete run backwards
+
+There is **no `restore-project` RPC**. `projects.clj` offers create, rename,
+delete and pin, and nothing else. A project returns only as a *side effect* of
+restoring one of its files: `restore-deleted-team-files` collects the
+`project-id` of every file it restores and clears `deleted_at` on those projects
+too.
+
+Measured, because it is surprising enough to be worth measuring. Deleting a
+project holding **Alpha** and **Beta**, then restoring only Alpha:
+
+    the project  → back, listed by get-all-projects again
+    Alpha        → back in the project
+    Beta         → still in the trash
+
+Delete cascades; restore does not. So "restore the project folder" has to mean
+"restore every design that was in it, in one call" — not because one call is
+tidier, but because a per-file loop that failed halfway would leave a project
+holding some of its designs and no signal that anything went wrong.
+
+And a project deleted while **empty** has no file to carry it back. It cannot be
+restored through the API at all; it expires. That is a real end state the app has
+to be able to explain, not a case to leave undefined.
+
+#### What actually happens today: nothing, twice over
+
+Deleting a project folder in Nextcloud reaches Penpot **not at all**. Verified
+live: the project survived, its design survived, and the folder came back on the
+next pull — which reads as the app undoing the user's deletion.
+
+Two independent reasons stack, and the second is the one that would have bitten
+a quick fix:
+
+1. `DeleteListener` returns unless the node is a `File`.
+2. **Nextcloud fires `BeforeNodeDeletedEvent` for the FOLDER ONLY.** There is no
+   per-child event. So removing (1) would still not reach the designs inside —
+   a recursive walk is something this app must do *itself*, before the node is
+   gone.
+
+Worth writing down next to §C6.13's finding that the trash purge fires nothing
+typed at all: the Nextcloud event surface is not uniform, and the shape of each
+gesture has to be checked rather than assumed from the one next to it.
+
+#### The orphan the probe found on the way past
+
+Deleting the project upstream and then pulling did the file half correctly —
+both mirrors pruned to the Nextcloud trash, each with a final rescue archive
+(§C6.16). But the **folder survived**, still stamped with a `penpot_project_id`
+that no longer resolves and still wearing the `penpot` tag (§C6.18).
+
+Anything dropped into that folder afterwards resolves to a project Penpot will
+refuse. And the pull cannot fix it by deleting the folder, because
+`get-all-projects` gives it no way to tell "deleted upstream" from "never
+existed" — it must not delete a folder on the strength of an absence. Un-stamping
+it, and taking the tag off, turns it back into an ordinary folder, which is the
+truthful end state and the only one reachable from what the pull knows.
+
+#### The second question: mtime is a protocol, not decoration
+
+*Do the normal Nextcloud metadata props get set?* Two separate answers.
+
+**Does an unchanged pull churn them?** No — measured. Two consecutive pulls over
+an untouched instance left mtime and etag byte-identical. That is not luck; it
+rests on two guards that were each added for their own reason and turn out to be
+load-bearing together: `storeLink()` returns early on an already-empty file
+(§C6.6), and `driftedOrMissing()` gates the archive write on the revision signal.
+
+The sibling was measured the same way, and the suspicion about it was right:
+`nextcloud-n8n` calls `putContent()` on every workflow on every run,
+unconditionally, and a pull with nothing changed upstream moved both mtime and
+etag (1:34:03 → 1:34:54, new etag). That is a bug, and its blast radius is larger
+than it looks — mtime and etag *are* how every desktop and mobile client decides
+what to re-download, so rewriting a byte-identical file broadcasts "this changed"
+to every device the user owns.
+
+**Are Penpot's own dates mapped onto the node?** No. `get-project-files` returns
+`created-at` and `modified-at` for every design, and the pull already reads
+`modified-at` — it folds it into the opaque drift signal (§5.5) and discards the
+value. So a mapped folder sorted by "Modified" in Files sorts by *sync activity*,
+and a `link` design untouched for a year shows the timestamp of the pull that
+created it.
+
+That is a real gap, and the fix has a trap in it that the measurement above is
+exactly what protects against: setting mtime from Penpot must not become writing
+mtime on every pull, or this app acquires the sibling's bug while appearing to
+fix a different one. The scenario forbidding it is written before the code.
+
+#### The shape
+
+Three findings, one form. Penpot's project delete cascades but its restore does
+not; Nextcloud's delete event fires for the folder but not its children; the
+timestamps look symmetrical and are not. **In every case the asymmetry was
+invisible from the API's shape and obvious the moment it was run once.**

@@ -280,6 +280,40 @@ trait WebDavTrait {
 		return $names;
 	}
 
+	/**
+	 * A node's `getlastmodified` + `getetag`, as one comparable string.
+	 *
+	 * THESE TWO ARE THE SYNC PROTOCOL, not decoration: every desktop and mobile
+	 * client decides what to re-download from them. So "did an unchanged pull
+	 * rewrite this file?" is answerable only from outside the app, over the same
+	 * surface a client would read — which is what this is for
+	 * (`reconcile.feature`, §C6.19).
+	 *
+	 * Returned joined rather than as a pair because no caller wants to know
+	 * WHICH of the two moved: either one moving is the same defect.
+	 */
+	private function davStamp(string $path): string {
+		$reqBody = '<?xml version="1.0"?>'
+			. '<d:propfind xmlns:d="DAV:"><d:prop>'
+			. '<d:getlastmodified/><d:getetag/>'
+			. '</d:prop></d:propfind>';
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
+			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
+			'body' => $reqBody,
+		]);
+		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		$mtime = trim((string)($doc->xpath('//d:getlastmodified')[0] ?? ''));
+		$etag = trim((string)($doc->xpath('//d:getetag')[0] ?? ''));
+		if ($mtime === '' && $etag === '') {
+			throw new \RuntimeException("no mtime or etag came back for '{$path}' — is it there?");
+		}
+
+		return $mtime . ' / ' . $etag;
+	}
+
 	/** Percent-encode each path segment but keep the slashes. */
 	private function davEncode(string $path): string {
 		return implode('/', array_map('rawurlencode', explode('/', ltrim($path, '/'))));
