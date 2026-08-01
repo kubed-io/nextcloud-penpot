@@ -218,7 +218,7 @@ trait WebDavTrait {
 			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
 			'body' => $reqBody,
 		]);
-		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+		$this->assertStatus($res, [207], "PROPFIND $path");
 		$xml = (string)$res->getBody();
 		$doc = new \SimpleXMLElement($xml);
 		$doc->registerXPathNamespace('d', 'DAV:');
@@ -264,7 +264,7 @@ trait WebDavTrait {
 			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
 			'body' => $reqBody,
 		]);
-		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+		$this->assertStatus($res, [207], "PROPFIND $path");
 
 		$doc = new \SimpleXMLElement((string)$res->getBody());
 		$doc->registerXPathNamespace('nc', $ns);
@@ -301,7 +301,11 @@ trait WebDavTrait {
 			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
 			'body' => $reqBody,
 		]);
-		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+		// assertStatus, NOT Assert::assertSame — see its docblock. A failed PHPUnit
+		// assertion inside a Behat run throws an opaque "Registry::get(): ... null
+		// returned" TypeError that hides the status entirely, which is exactly how
+		// this method's first CI run reported nothing useful about why it failed.
+		$this->assertStatus($res, [207], "PROPFIND $path");
 
 		$doc = new \SimpleXMLElement((string)$res->getBody());
 		$doc->registerXPathNamespace('d', 'DAV:');
