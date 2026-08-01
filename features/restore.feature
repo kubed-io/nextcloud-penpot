@@ -349,6 +349,64 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # appeared to delete itself twice, which is its own kind of bad. Restoring
     # the design upstream is what makes the pull leave the file alone.
 
+    # ── restoring a whole PROJECT, and the asymmetry that makes it tricky ──────
+    #
+    # PENPOT HAS NO `restore-project` (checked in its source: projects.clj offers
+    # create / rename / delete / pin and nothing else). A project comes back only
+    # as a SIDE EFFECT of restoring one of its files — `restore-deleted-team-files`
+    # collects the `project-id` of every file it restores and clears `deleted_at`
+    # on those projects too.
+    #
+    # That makes restore asymmetric with delete, and the asymmetry is measured,
+    # not inferred (§C6.19). Deleting a project with two designs trashes both.
+    # Restoring ONE of them:
+    #
+    #     the project        → back, listed again by get-all-projects
+    #     the file restored  → back in the project
+    #     the OTHER file     → still in the trash
+    #
+    # So "restore the folder" must mean "restore every design that was in it",
+    # in one call, or the user gets a project back with a hole in it. The one
+    # call is also the only way to reach the project at all.
+    #
+    # AND A PROJECT DELETED WHILE EMPTY CANNOT BE RESTORED THROUGH THE API AT
+    # ALL — there is no file to carry it back. It simply expires.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Restoring a project folder brings back the project and every design in it
+    Given a mirrored project "Doomed" holding 3 designs
+    And I deleted the "Doomed" project folder
+    When I restore the folder from the Nextcloud trash
+    Then "restore-deleted-team-files" is called once with all 3 design ids
+    And Penpot lists the project "Doomed" again
+    And all 3 designs are back in it
+    # ONE call with the whole set, not three calls. Penpot restores the project
+    # from any file in it, so three calls would restore the project on the first
+    # and then merely add files — but a partial failure would leave a project
+    # holding some of its designs, which is worse than either extreme.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Restoring one design of a deleted project does not silently restore the rest
+    Given a Penpot project that was deleted with 2 designs in it
+    When only the first design is restored
+    Then the project exists again in Penpot
+    And the second design is still in Penpot's trash
+    # Confirmed live (§C6.19). Stated because it is genuinely surprising, and
+    # because a naive "restore the folder" that fired one call per file it
+    # happened to find in the Nextcloud trash would produce exactly this
+    # half-restored state without ever looking wrong.
+
+  @todo
+  Scenario: A project deleted while empty cannot be restored, and the app says so
+    Given a project folder whose project was deleted with no designs in it
+    When I restore the folder from the Nextcloud trash
+    Then the folder comes back as an ordinary folder
+    And the app explains that an empty Penpot project cannot be restored
+    And it names the grace window after which the project is gone for good
+    # Penpot offers no `restore-project`, and there is no file to carry it back.
+    # Saying so is the whole behaviour — the alternative is a folder that looks
+    # restored and points at nothing.
+
     # ── the layers restore does NOT use, and why it says so ───────────────────
 
   @todo

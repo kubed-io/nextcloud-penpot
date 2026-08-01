@@ -351,6 +351,27 @@ Feature: Scheduled or manual pull from Penpot
     # 1 get-projects + 3 get-project-files = 4 calls for 50 files. This is the
     # property that makes the design scale (saga §6.22).
 
+  @admin @occ
+  Scenario: An unchanged pull moves no file's mtime or etag
+    Given the first visible team is mapped as a plain folder "Steady State"
+    And a mirrored design "Steady" in the project "Idempotent"
+    And I note the mtime and etag of "Steady State/Idempotent/Steady.penpot"
+    When the team is mirrored again
+    Then "Steady State/Idempotent/Steady.penpot" has the same mtime and etag
+    # NOT A MICRO-OPTIMISATION — it is what stops every desktop and mobile client
+    # re-downloading the whole mapped folder after every scheduled pull. mtime and
+    # etag ARE the sync protocol, so rewriting a byte-identical file is a
+    # broadcast to every client that something changed.
+    #
+    # Measured on the sibling: `nextcloud-n8n` calls `putContent()` on every
+    # workflow on every run, unconditionally, and a pull with nothing changed
+    # upstream moves both (§C6.19). This app avoids it in two places, and BOTH
+    # are load-bearing rather than incidental:
+    #   - `storeLink()` returns early on an already-empty file (§C6.6);
+    #   - `driftedOrMissing()` gates the archive write on the revision signal.
+    # A change to either that makes the write unconditional would pass every
+    # other scenario in this suite, which is why this one exists.
+
     # ── name and placement reconcile for free, in both modes ─────────────────────
 
   @todo

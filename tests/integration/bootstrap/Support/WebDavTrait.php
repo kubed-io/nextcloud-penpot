@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Integration\Support;
 
 use GuzzleHttp\Client;
-use PHPUnit\Framework\Assert;
 
 /**
  * WebDAV transport (Guzzle, basic-auth as the admin user) — the channel that
@@ -159,15 +158,15 @@ trait WebDavTrait {
 			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns">'
 				. '<d:prop><nc:trashbin-filename/></d:prop></d:propfind>',
 		]);
-		Assert::assertSame(207, $res->getStatusCode(), 'trashbin PROPFIND failed: ' . (string)$res->getBody());
+		$this->assertStatus($res, [207], 'trashbin PROPFIND');
 		$doc = new \SimpleXMLElement((string)$res->getBody());
 		$doc->registerXPathNamespace('d', 'DAV:');
 		$doc->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
 		foreach ($doc->xpath('//d:response') ?: [] as $resp) {
 			$resp->registerXPathNamespace('d', 'DAV:');
 			$resp->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
-			$origName = trim((string)($resp->xpath('.//nc:trashbin-filename')[0] ?? ''));
-			$rawHref = rawurldecode(trim((string)($resp->xpath('d:href')[0] ?? '')));
+			$origName = trim((string)(($resp->xpath('.//nc:trashbin-filename') ?: [])[0] ?? ''));
+			$rawHref = rawurldecode(trim((string)(($resp->xpath('d:href') ?: [])[0] ?? '')));
 			if ($origName === $base && $rawHref !== '') {
 				return basename(rtrim($rawHref, '/'));
 			}
@@ -218,7 +217,7 @@ trait WebDavTrait {
 			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
 			'body' => $reqBody,
 		]);
-		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+		$this->assertStatus($res, [207], "PROPFIND $path");
 		$xml = (string)$res->getBody();
 		$doc = new \SimpleXMLElement($xml);
 		$doc->registerXPathNamespace('d', 'DAV:');
@@ -227,7 +226,7 @@ trait WebDavTrait {
 		foreach ($doc->xpath('//d:propstat') ?: [] as $propstat) {
 			$propstat->registerXPathNamespace('d', 'DAV:');
 			$propstat->registerXPathNamespace('nc', $ns);
-			$status = (string)($propstat->xpath('d:status')[0] ?? '');
+			$status = (string)(($propstat->xpath('d:status') ?: [])[0] ?? '');
 			if (!str_contains($status, '200')) {
 				continue;
 			}
@@ -264,7 +263,7 @@ trait WebDavTrait {
 			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
 			'body' => $reqBody,
 		]);
-		Assert::assertSame(207, $res->getStatusCode(), "PROPFIND $path failed: " . (string)$res->getBody());
+		$this->assertStatus($res, [207], "PROPFIND $path");
 
 		$doc = new \SimpleXMLElement((string)$res->getBody());
 		$doc->registerXPathNamespace('nc', $ns);
@@ -278,6 +277,60 @@ trait WebDavTrait {
 		}
 
 		return $names;
+	}
+
+	/**
+	 * A node's `getlastmodified` + `getetag`, as one comparable string.
+	 *
+	 * THESE TWO ARE THE SYNC PROTOCOL, not decoration: every desktop and mobile
+	 * client decides what to re-download from them. So "did an unchanged pull
+	 * rewrite this file?" is answerable only from outside the app, over the same
+	 * surface a client would read — which is what this is for
+	 * (`reconcile.feature`, §C6.19).
+	 *
+	 * Returned joined rather than as a pair because no caller wants to know
+	 * WHICH of the two moved: either one moving is the same defect.
+	 */
+	private function davStamp(string $path): string {
+		$reqBody = '<?xml version="1.0"?>'
+			. '<d:propfind xmlns:d="DAV:"><d:prop>'
+			. '<d:getlastmodified/><d:getetag/>'
+			. '</d:prop></d:propfind>';
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
+			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
+			'body' => $reqBody,
+		]);
+		// assertStatus, NOT Assert::assertSame — see its docblock. A failed PHPUnit
+		// assertion inside a Behat run throws an opaque "Registry::get(): ... null
+		// returned" TypeError that hides the status entirely, which is exactly how
+		// this method's first CI run reported nothing useful about why it failed.
+		$this->assertStatus($res, [207], "PROPFIND $path");
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		// `?: []` before indexing: SimpleXMLElement::xpath() returns FALSE on a
+		// bad expression, and `false[0]` raises "array offset on value of type
+		// bool" BEFORE the `??` can apply — a warning in the middle of an
+		// integration run, which is noise at best and a failure at worst. Same
+		// guard davSystemTags() uses.
+		$mtime = trim((string)(($doc->xpath('//d:getlastmodified') ?: [])[0] ?? ''));
+		$etag = trim((string)(($doc->xpath('//d:getetag') ?: [])[0] ?? ''));
+
+		// BOTH, not either. A stamp missing one half still compares equal to
+		// itself, so the guard would keep passing while silently covering only
+		// the field that happened to come back — an assertion that passes for the
+		// wrong reason, which is the failure mode this suite keeps finding.
+		if ($mtime === '' || $etag === '') {
+			throw new \RuntimeException(sprintf(
+				"PROPFIND on '%s' returned an incomplete stamp (mtime=%s, etag=%s). "
+				. 'Both fields are required — half a stamp cannot answer whether the file was rewritten.',
+				$path,
+				$mtime === '' ? '<missing>' : $mtime,
+				$etag === '' ? '<missing>' : $etag,
+			));
+		}
+
+		return $mtime . ' / ' . $etag;
 	}
 
 	/** Percent-encode each path segment but keep the slashes. */

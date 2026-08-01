@@ -117,14 +117,29 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # visibility. Failing to say WHICH one blocked the import turns a fixable
     # setup step into a mystery.
 
-    # ── the speculative, explicitly-not-decided creation-via-tag mechanism ──────
+    # ── creation-via-tag: DECIDED AND SHIPPED (§C6.18) ──────────────────────────
+    # This section used to be headed "the speculative, explicitly-not-decided
+    # creation-via-tag mechanism", with a tag "name TBD", an "open fork against
+    # §6.1", and a scenario that deliberately asserted nothing. All three are
+    # settled: the tag is `penpot`, the fork closed the same way §6.33 closed for
+    # files (creating a CONTAINER is not pushing CONTENT), and the behaviour is
+    # live in project-folder.feature.
+    #
+    # It happens on the TAG EVENT, not on the next pull — the pull never
+    # originates anything in Penpot, and making it the actor would have meant a
+    # user's gesture taking up to five minutes to have an effect.
+    #
+    # What is left for this file is the import surface's view of it: an admin
+    # looking at a team they have not mapped should be told what tagging would do,
+    # not left to discover it.
+
   @todo
-  Scenario: A tagged plain folder inside a mapped Team Folder is proposed to become a new Penpot project
+  Scenario: The import surface explains that tagging a folder creates a project
     Given a Team Folder mapped to the Penpot team "Northwind"
     And a plain, untagged subfolder created directly inside it
     Then that subfolder is ordinary tolerated content — nothing happens to it
-    # This is the confirmed, locked behaviour (§6.13's tolerated-content rule).
-    When the app's project-creation tag (name TBD) is applied to that subfolder
-    Then this is PROPOSED to make the next pull call "create-project" in Penpot
-    But whether this app may ever originate a Penpot project this way is an open fork against §6.1
-    And this scenario intentionally does not assert that Penpot is contacted
+    # The confirmed, locked tolerated-content rule (§6.13), unchanged by the tag.
+    And the import surface names the "penpot" tag as the way to make one a project
+    # The behaviour itself is asserted in project-folder.feature, where it is
+    # live. Duplicating the assertion here would be the two-files-one-behaviour
+    # mistake features/README.md exists to prevent.

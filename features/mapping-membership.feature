@@ -160,14 +160,25 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # This is the whole point of the tag: ordinary folders can live among project
     # folders without becoming projects.
 
+  # THIS FILE USED TO SAY THE OPPOSITE. It carried "Applying the project tag by
+  # hand does not create a Penpot project — the tag is app-owned output, not user
+  # input", which was true when it was written and became a FLAT CONTRADICTION of
+  # a live, passing scenario the moment §C6.18 shipped. A `@todo` spec that
+  # disagrees with tested behaviour is worse than a missing one: it reads as the
+  # rule to an implementer, and nothing red ever objects.
+  #
+  # The tag is now BOTH: app-owned output on the folders the pull mirrors, and
+  # user input on a folder someone opts in. Membership resolution is unchanged by
+  # that — it reads `penpot_project_id`, which the opt-in stamps like any other
+  # path — so what belongs here is only the resolution consequence.
   @todo
-  Scenario: Applying the project tag by hand does not create a Penpot project
-    Given a plain folder inside the Team Folder
-    When a user applies the app's project tag to it by hand
-    Then no Penpot project is created
-    And the folder carries no project id, so no file inside it resolves to a project
-    # The tag is app-owned output, not user input. Whether a tagged folder could
-    # ever BECOME a project is the still-open creation fork (team-import.feature).
+  Scenario: A folder opted in by tag resolves exactly like a mirrored one
+    Given a plain folder inside the mapped folder that a user tagged "penpot"
+    Then it carries a Penpot project id like any other project folder
+    And a design inside it resolves to that project
+    # The opt-in itself — what the tag DOES — is project-folder.feature's, and it
+    # is live there. This is only the half this file owns: once stamped, nothing
+    # downstream can tell which direction the folder came from.
 
     # ── team resolution, and the one exception ───────────────────────────────────
 
