@@ -408,11 +408,12 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A pull prunes a mirrored file whose Penpot file no longer exists
-    Given a mirrored design "Doomed" in the project "Prune Me"
+    Given the first visible team is mapped as a plain folder "Prune Target"
+    And a mirrored design "Doomed" in the project "Prune Me"
     When the design "Doomed" is deleted in Penpot
     And the admin runs a pull
     Then the pull pruned 1 mirror
-    And the file "Penpot/Prune Me/Doomed.penpot" is in the Nextcloud trash
+    And the file "Prune Target/Prune Me/Doomed.penpot" is in the Nextcloud trash
     # TRASH, NEVER DESTROY — the don't-lose-data rule. A pruned file is
     # recoverable for as long as the user's trash retention allows, which is what
     # makes the most dangerous thing this app does survivable.
@@ -425,7 +426,8 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A link file gets a final snapshot before being pruned
-    Given a mirrored design "Rescued" in the project "Snapshot Me"
+    Given the first visible team is mapped as a plain folder "Snapshot Target"
+    And a mirrored design "Rescued" in the project "Snapshot Me"
     When the design "Rescued" is deleted in Penpot
     And the admin runs a pull
     Then the pull pruned 1 mirror
@@ -437,8 +439,9 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A sync file needs no snapshot, it already has one
-    Given a mirrored design "Already Kept" in the project "Has Archive"
-    And "Penpot/Has Archive/Already Kept.penpot" is a "sync" design
+    Given the first visible team is mapped as a plain folder "Kept Target"
+    And a mirrored design "Already Kept" in the project "Has Archive"
+    And "Kept Target/Has Archive/Already Kept.penpot" is a "sync" design
     When the design "Already Kept" is deleted in Penpot
     And the admin runs a pull
     Then the pull pruned 1 mirror

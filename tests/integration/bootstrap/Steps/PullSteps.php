@@ -226,9 +226,28 @@ trait PullSteps {
 
 	/** @Then /^there is no node at "([^"]*)"$/ */
 	public function thereIsNoNodeAt(string $path): void {
+		$this->mustNotExist($path);
+	}
+
+	/**
+	 * Assert a path does not exist, ON THE SPECIFIC FAILURE that means that.
+	 *
+	 * A non-zero exit is NOT enough. `penpot_sync:status` also exits 1 when it
+	 * cannot resolve the sync actor's home at all, so "any failure" would read a
+	 * broken fixture as a passing absence assertion — a test that goes green
+	 * precisely when the thing it depends on has stopped working. The command
+	 * prints `No such node: <path>` for the one case we mean.
+	 */
+	private function mustNotExist(string $path): void {
 		$res = $this->occ('penpot_sync:status ' . escapeshellarg($path));
 		if ($res['exit'] === 0) {
 			throw new \RuntimeException("expected no node at '{$path}', but one exists:\n{$res['output']}");
+		}
+		if (!str_contains($res['output'], 'No such node')) {
+			throw new \RuntimeException(
+				"status failed for '{$path}', but NOT because the node is absent — so this "
+				. "assertion proves nothing:\n{$res['output']}",
+			);
 		}
 	}
 
@@ -262,18 +281,19 @@ trait PullSteps {
 		$out = $this->status($path);
 		$this->mustContain($out, 'Membership: drafts', $path);
 		$this->mustContain($out, 'team=' . $this->pulledTeamId, $path);
-		if (preg_match('/project=\S/', $out) === 1) {
-			throw new \RuntimeException("expected '{$path}' to resolve to NO project, got:\n{$out}");
-		}
+		// `project=)` — the CLOSING PAREN is the assertion. The line is
+		// "Membership: drafts (team=<id> project=)", so an empty project is
+		// `project=` immediately followed by `)`. Matching `project=\S` instead
+		// matched that paren and failed on correct output.
+		$this->mustContain($out, 'project=)', $path);
 	}
 
 	/** @Then /^"([^"]*)" resolves to no Penpot mapping at all$/ */
 	public function resolvesToNoMapping(string $path): void {
 		$out = $this->status($path);
 		$this->mustContain($out, 'Membership: none', $path);
-		if (preg_match('/(team|project)=\S/', $out) === 1) {
-			throw new \RuntimeException("expected '{$path}' to resolve to nothing, got:\n{$out}");
-		}
+		// Both ids empty: "(team= project=)" exactly. See the paren note above.
+		$this->mustContain($out, '(team= project=)', $path);
 	}
 
 	/**
@@ -298,10 +318,7 @@ trait PullSteps {
 
 	/** @Then /^no folder named "([^"]*)" exists under the mapped folder$/ */
 	public function noFolderNamedExists(string $name): void {
-		$res = $this->occ('penpot_sync:status ' . escapeshellarg('Penpot/' . $name));
-		if ($res['exit'] === 0) {
-			throw new \RuntimeException("expected no 'Penpot/{$name}' folder, but one exists:\n{$res['output']}");
-		}
+		$this->mustNotExist('Penpot/' . $name);
 	}
 
 	/** @Then /^the file "([^"]*)" is still there and untouched$/ */
