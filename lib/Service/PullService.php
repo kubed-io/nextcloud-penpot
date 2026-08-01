@@ -704,14 +704,46 @@ final class PullService {
 	}
 
 	/**
-	 * Index a folder's `.penpot` link files by their `penpot_id` in a single
-	 * directory walk, so upserting N files is O(children) not O(N × children).
+	 * Index a project folder's mirrors by `penpot_id` in a single walk, so
+	 * upserting N files is O(nodes) not O(N × nodes).
+	 *
+	 * ## IT MUST DESCEND, AND FOR A WHILE IT DID NOT (saga §C6.20)
+	 *
+	 * This used to read only the folder's DIRECT children, while
+	 * {@see collectMirrors()} — the prune's half of the same question — has
+	 * always walked the whole tree. That asymmetry produced duplicates: a user
+	 * files a mirror into a plain subfolder (which `move.feature` explicitly
+	 * allows and §6.29 makes meaningless to Penpot), the next pull cannot see it
+	 * here, and so it creates a SECOND mirror for the same design at the
+	 * canonical path.
+	 *
+	 * The duplicate then persists forever. The prune walks recursively, finds the
+	 * id, sees Penpot still lists it, and correctly prunes nothing — so nothing
+	 * ever cleans up after the mistake. Two files, one design, no complaint.
+	 *
+	 * ## WHERE IT STOPS, AND WHY THAT IS THE SAME RULE AS EVERYWHERE ELSE
+	 *
+	 * The descent stops at any subfolder carrying its own `penpot_project_id`:
+	 * those files have a NEARER project ancestor and belong to that project, not
+	 * this one. That is {@see MembershipResolver} read downwards, and it is the
+	 * identical rule {@see ProjectFolderService::managedDesignsBelow()} uses when
+	 * the tag opt-in collects designs to re-file. All three have to agree, or one
+	 * of them claims files another attributes elsewhere.
 	 *
 	 * @return array<string, File> penpot_id -> file
 	 */
 	private function indexFilesByPenpotId(Folder $target): array {
 		$index = [];
 		foreach ($target->getDirectoryListing() as $node) {
+			if ($node instanceof Folder) {
+				if ($this->metadata->readFolder($node->getId())->hasProject()) {
+					continue; // a nearer project ancestor owns everything below it
+				}
+				// A plain subfolder is ordinary Nextcloud organisation Penpot has
+				// no concept of — the mirrors inside it are still ours.
+				$index += $this->indexFilesByPenpotId($node);
+				continue;
+			}
 			if (!$node instanceof File) {
 				continue;
 			}

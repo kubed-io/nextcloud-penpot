@@ -2440,3 +2440,72 @@ Three findings, one form. Penpot's project delete cascades but its restore does
 not; Nextcloud's delete event fires for the folder but not its children; the
 timestamps look symmetrical and are not. **In every case the asymmetry was
 invisible from the API's shape and obvious the moment it was run once.**
+
+---
+
+### C6.20 — The two halves of one question, one of which had never been asked
+
+Promoting the `@todo` scenarios that were already built turned up a defect on
+the first run. Not in the new tests — in the pull, and it had been there since
+the prune slice shipped.
+
+#### The asymmetry
+
+The pull asks "where is the mirror for this design?" in **two** places, and they
+disagreed about how hard to look:
+
+    collectMirrors()        the PRUNE's half     — walked the whole tree
+    indexFilesByPenpotId()  the UPSERT's half    — read direct children only
+
+`move.feature` explicitly allows a user to file a mirror into a plain subfolder;
+§6.29 makes that meaningless to Penpot, which has no concept of subfolders. So
+the moment anyone does it, the upsert cannot see the file, and creates a
+**second** mirror for the same design at the canonical path.
+
+Then nothing cleans up. The prune walks recursively, finds the id, sees Penpot
+still lists it, and correctly prunes nothing. Two files, one design, forever, no
+complaint anywhere — which is precisely the state `copy.feature`'s "exactly one
+file per design id, always" exists to forbid.
+
+#### Why nothing caught it
+
+Three separate scenarios describe behaviour that this breaks:
+
+* *Moving a file into a plain subfolder of its project keeps its project*
+* *A file nested deeper inside a project folder still belongs to that project*
+* *A pull never relocates a file the user filed into a subfolder*
+
+The first two pass **without a pull afterwards** — the move is correct, and the
+resolver is correct; the bug only appears on the next sync. The third is the one
+that runs a pull, and it was the one still `@todo`.
+
+So the defect sat behind exactly the scenario that had not been promoted, while
+its two neighbours went green and looked like coverage. **A gap in the test suite
+is not randomly placed: it is precisely where nobody looked, which is precisely
+where the bug is.**
+
+#### The fix is a rule the app already had, applied a third time
+
+The descent stops at any subfolder carrying its own `penpot_project_id` — those
+files have a nearer project ancestor and belong to that project. That is
+{@see MembershipResolver} read downwards, and it is character-for-character the
+rule `ProjectFolderService::managedDesignsBelow()` already used to collect
+designs when a folder is opted in by tag (§C6.18).
+
+Three call sites now walk the tree the same way. They *have* to agree: any one
+of them reading the tree differently claims files another attributes elsewhere,
+and the symptom is a silent duplicate rather than an error.
+
+Worth noting how the third one arrived. Writing `managedDesignsBelow()` for the
+tag opt-in meant thinking carefully about where a downward walk should stop —
+and that reasoning was sitting in the codebase, correct and documented, while
+the pull's own index a few hundred lines away still read one level. The rule was
+known; it just had not been applied everywhere it was already needed.
+
+#### The shape
+
+§C6.19 ended on asymmetries invisible from an API's shape and obvious on the
+first run. This is the same lesson turned inward: the asymmetry was between two
+methods **in the same class**, both answering the same question, and it survived
+because the cheap scenarios around it passed. The suite did not lie — it simply
+never asked.
