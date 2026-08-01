@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Turn any folder into a Penpot project by tagging it `penpot`** — and it takes the designs already inside it with it. Everything else in a mapped folder stays an ordinary folder.
+- **Every project folder now carries a visible `penpot` tag**, whether it came from Penpot or you opted it in, so you can spot and search for them in Files. Removing the tag never deletes the project.
+
 - **Nextcloud never empties its own trash because Penpot did.** A design deleted — or even permanently deleted — in Penpot leaves your mirror in the Nextcloud trash, with whatever archive it had. Emptying that trash stays your decision.
 - **Restoring a design from your Nextcloud trash brings it back in Penpot too**, with its id, revision, history and links intact — nothing is re-imported. Restoring one no longer leaves a file that the next sync trashes all over again.
 - A restore that Penpot did not actually perform is reported as a failure rather than as success, so you never go looking for a design that never came back.

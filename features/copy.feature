@@ -303,11 +303,28 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     Given the Penpot project "My Stuff" is mirrored as a folder
     When I try to copy that folder
     Then the copy is refused with an explanation
+    And no new Penpot project is created
+    And no duplicate project folder is left behind
     And copying an individual ".penpot" file remains unaffected
-    # Unchanged, and see project-folder.feature: the copy would claim one project
-    # id for a whole tree, Nextcloud's "(2)" suffix breaks the names-match rule,
-    # and on this cluster the folder may also carry n8n and Grafana mappings
-    # (§6.40).
+    # DISABLED DELIBERATELY (saga §6.40), not merely unbuilt. Three reasons:
+    #  (1) the copy would carry the same project id, so two folders claim one
+    #      project — and every file in the copied tree would too;
+    #  (2) Nextcloud auto-increments a copy to "My Stuff (2)", which instantly
+    #      violates §6.36's names-always-match rule — and "fixing" it by rename
+    #      would rename the ORIGINAL Penpot project;
+    #  (3) on this cluster a single folder can also carry n8n and Grafana
+    #      mappings, so a folder copy asks three independent apps to agree on
+    #      what a duplicate means, with no coordination between them.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Copying an ordinary folder inside a mapped folder is unaffected
+    Given a plain folder "Clients" inside the mapped folder with no Penpot metadata
+    When I copy it
+    Then the copy succeeds normally
+    And Penpot is never contacted
+    # Only folders carrying a project id are refused. A mapped folder has to stay
+    # usable as an ordinary folder, which is the same rule the tag opt-in rests
+    # on (project-folder.feature).
 
   # ══ COPIED IN PENPOT ═══════════════════════════════════════════════════════
   #

@@ -2154,3 +2154,150 @@ other system's facts rather than our preferences (§C6.16's scope boundary,
 architectural choice, and there was never a version of this app where (1) was
 viable. **The design that survives contact is usually the one the other
 system's limits already picked.**
+
+---
+
+### C6.18 — A folder becomes a project, and the one marker that means both
+
+Two live reports opened this. A project made in Penpot did not seem to arrive in
+Nextcloud (it had — on the next five-minute pull), and there was no way to look
+at a folder and know it was a Penpot project. Out of the second came a feature
+request in one sentence: *every folder that maps to a Penpot project is tagged
+`penpot`, and adding that tag to a Nextcloud folder creates the project in
+Penpot.*
+
+That sentence contains a design the app had been circling for two courses.
+
+#### The asymmetry is the point
+
+    every Penpot project      →  a folder in Nextcloud     (automatic)
+    SOME Nextcloud folders    →  a project in Penpot       (opt-in only)
+
+Inbound is total: the pull mirrors every project it can see, because a project
+existing in Penpot is unambiguous evidence that someone wanted it. Outbound is
+opt-in, because a folder existing in Nextcloud is evidence of nothing at all. A
+mapped folder that turned every subfolder into a Penpot project would be
+unusable for the ordinary things folders are for — notes, exports, a subfolder
+of references — and this app has refused inference at every equivalent fork
+(§6.33 on creation, §C6.4 on the drag-in).
+
+So the two directions are not symmetrical, and trying to make them symmetrical
+would have broken the more important one.
+
+#### One tag, two jobs — which is what makes it good
+
+The tag is the app's **marker** and the user's **opt-in**, and the temptation
+was to separate them: `penpot:project` written by the app, `penpot:make-project`
+assigned by the user. That is worse, and the reason is a question a user should
+never have to answer: *did this folder start life in Penpot, or did someone opt
+it in from Nextcloud?* With two markers you have to know before you can read the
+folder. With one you do not — if it carries the tag, it is a project.
+
+The cost is a small idempotency obligation on the pull, which restamps the tag
+on every run. That turns out to be a feature: a folder whose tag someone removed
+gets it back on the next pull, because the thing that actually decides —
+`penpot_project_id` — never went anywhere. There is no repair path to write,
+because there is no broken state to repair.
+
+#### Not subscribing is a stronger guarantee than subscribing
+
+`TagUnassignedEvent` exists. The app does not listen to it.
+
+The scenario says *removing the tag does not delete the project*, and the
+obvious implementation is a listener that receives the event and returns early.
+That is a branch, and a branch is somewhere a later change can add an `else`.
+Declining to register the listener at all makes "Penpot is never contacted" true
+by construction — there is no code path to audit, and the scenario has nothing
+to assert against because nothing could possibly happen.
+
+Untagging is unmapping, not deleting: the same rule as moving a design out of a
+mapping (§6.23) and as deleting a project folder. Destroying someone's project,
+with every design in it, because they took a label off a folder would be the
+worst surprise this app could produce.
+
+#### Late opt-in is the whole reason to do it this way
+
+The interesting half is what happens to a folder someone has been *filling*
+before they tag it. It becomes a project **with its contents** — one
+`move-files` for the lot, non-destructive and reversible (§6.27/§6.34), nothing
+exported or re-id'd. Verified live: a design created in the folder went to the
+team's Drafts, and tagging the folder re-filed it into the new project.
+
+That is the reason to allow opting in late rather than forcing the decision up
+front, and it is only possible because Penpot's re-file is cheap and lossless.
+Another case of the other system's facts choosing the design (§C6.17).
+
+The descent that collects those designs reads the tree the way
+{@see MembershipResolver} reads it upwards, stopping at any subfolder carrying
+its own project id. The two have to agree or the re-file would claim designs the
+resolver still attributes elsewhere — the same class of bug as §C6.10, where a
+unit test passed against a shape the resolver never emits.
+
+#### The floor moved, and saying so is the point
+
+`OCP\SystemTag\TagAssignedEvent` is `@since 32.0.0`. `appinfo/info.xml` declared
+`min-version="30"`, inherited from the siblings — one of which uses the same
+event under the same false floor.
+
+On 30 or 31 nothing would crash. `registerEventListener(TagAssignedEvent::class, …)`
+resolves a class *constant*, which does not autoload, and the listener is only
+instantiated when the event fires — which it never would. The tag would land on
+the folder, nothing would happen, and nothing would say why. A **silently absent
+feature** is the exact failure mode this chapter keeps having to dig out of live
+reports (§C6.15's oracle, §C6.16's unasserted promise). The floor is now 32.
+
+#### The occ channel has no session, and that changed the design
+
+The browser gesture carries a user; `occ tag:files:add` fires the identical
+event with none. A listener written against `IUserSession` alone would pass
+every unit test and do nothing from the CLI.
+
+So the resolution falls back to the sync actor's home — the same uid
+`penpot_sync:status` reads through, which is by definition where the mapped
+folders live. The attribution follows honestly: with no session there is no
+personal token, and the project is created by the service account, which is
+exactly who asked for it.
+
+That fallback is what made the feature testable at all. Assigning a tag over
+WebDAV means a PROPPATCH against `systemtags-relations` and a round trip to find
+the tag's numeric id; `occ` fires the same event through the same
+`ISystemTagObjectMapper::assignTags()`. The cheaper channel was also the one that
+proved the harder case.
+
+#### Reading the tag back: ask core, not the app
+
+The assertion could not go through this app. The claim under test is that
+`penpot` is a **real, user-visible Nextcloud tag** — the same object the Files
+sidebar shows and a user can assign by hand — not a private marker the app draws
+for itself, and asking the app would only prove the app agrees with the app.
+
+`occ info:file` looked like the answer and prints no tags at all (checked live
+on 33.0.4). The DAV property `{http://nextcloud.org/ns}system-tags` does, and it
+is the very one the sidebar reads.
+
+#### The file that owned too much
+
+Writing the scenarios exposed something older. `project-folder.feature` owned
+every verb a project folder could be on the receiving end of: renaming one,
+copying one, moving one, deleting one. That is the mistake `gestures.feature`
+made in the other direction — organising by the KIND OF THING acted on rather
+than by the BEHAVIOUR — and it had already cost the same thing. `rename.feature`
+carried **live** coverage of the project-folder rename while `project-folder.feature`
+still called it unbuilt. `move.feature` had all four project-folder move
+scenarios. `copy.feature` had the refusal plus a comment pointing back here for
+reasoning it could simply have stated.
+
+Two files, one behaviour, already drifted — and the drift was invisible because
+nobody reads two files to answer one question.
+
+A project folder is not a separate universe. Renaming one is a RENAME. What is
+left in `project-folder.feature` is the one thing no behaviour file can own: a
+folder's **identity** as a project — how it acquires one, and the marker that
+says so.
+
+Its Background also turned out to be fiction: it provisioned a Team Folder and
+mirrored a project called "My Stuff", and none of those three steps had ever
+existed. Harmless while the whole file was `@todo`; an instant `--strict`
+failure the moment one scenario went live. **A Background under an all-`@todo`
+file is unexecuted code, and unexecuted code is not known to work** — the same
+lesson as §C6.14's floating tag, arriving from the other end.

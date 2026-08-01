@@ -88,7 +88,36 @@ Feature: Renaming a mirrored Penpot file
     # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
     # is on "New Name", not "New Name.penpot", and that is the whole rule.
 
+  @in-nextcloud @gesture @todo
+  Scenario: A failed project rename leaves the local rename standing
+    Given a mirrored project "My Stuff"
+    When I rename the project folder and the Penpot call fails
+    Then the folder keeps its new name locally
+    And Penpot is unchanged
+    And the divergence is reported
+    And the next pull reconciles the name
+    # Saga §6.18 rule 3 — a remote failure never destroys local state. Same rule
+    # as the file twin below, and it has to be stated for both because they are
+    # different listeners reading different ids.
+
+  @in-nextcloud @gesture @todo
+  Scenario: A project rename is attributed to the acting user
+    Given the user has a valid personal Penpot token
+    When the user renames a project folder
+    Then "rename-project" is called using that user's own token
+    # Needs a logged-in session the occ+DAV harness does not have.
+
     # ── Penpot → Nextcloud: confirmed, this is how renames normally happen ───────
+
+  @in-penpot @todo
+  Scenario: Renaming a project in Penpot renames the folder on the next pull
+    Given a mirrored project "My Stuff"
+    When the project is renamed to "Acme" in Penpot
+    And the team is mirrored again
+    Then the folder is renamed to "Acme"
+    And the folder stays exactly where the user had put it
+    # Nextcloud is authoritative for LAYOUT (§6.29), so the pull renames in place
+    # and never drags the folder back to a canonical path.
 
   @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull
@@ -157,7 +186,35 @@ Feature: Renaming a mirrored Penpot file
     And the next pull reconciles the name
     # Saga §6.18 rule 3 — a remote failure must never destroy local state.
 
-    # ── the name guard, same shape as the project one ───────────────────────────
+    # ── the name guard: the same shape at both levels ───────────────────────────
+    # THE GUARD RUNS BACKWARDS FROM EXPECTATION (saga §6.38). Penpot accepts
+    # essentially any non-empty string up to 250 characters — confirmed live:
+    # upper case, lower case, emoji, dots, leading spaces, and even "Has/Slash"
+    # all create fine. NEXTCLOUD is the stricter side. So going out, the only
+    # real check is non-empty and 250; coming in, a name Nextcloud cannot spell
+    # as a folder is the problem, which is the "/" section below.
+
+  @todo
+  Scenario: An empty or whitespace-only folder name is refused
+    When I try to rename a project folder to a name that is empty once trimmed
+    Then the rename is refused with an explanation
+    And Penpot is never contacted
+    # The one rule Penpot actually enforces: [:string {:max 250, :min 1}].
+
+  @todo
+  Scenario: A folder name longer than Penpot allows is refused before it is sent
+    When I try to rename a project folder to a name longer than 250 characters
+    Then the rename is refused with an explanation naming the limit
+    And Penpot is never contacted
+
+  @todo
+  Scenario: In nested mode the app never sends a slash to Penpot
+    Given the mapping's folder mode is "nested"
+    When a project is created or renamed through this app
+    Then the resulting Penpot project name never contains "/"
+    # A Nextcloud folder name cannot contain "/" anyway, so this is automatic for
+    # renames — but it must also hold for the CREATE path (project-folder.feature's
+    # tag opt-in), which is where a name could be composed rather than typed.
 
   @todo
   Scenario: An empty file name is refused before it is sent
@@ -187,6 +244,66 @@ Feature: Renaming a mirrored Penpot file
     # confirmed live, HTTP 200 (saga §6.54). So the §6.51 guard applies at both
     # levels, with the same refuse-and-report rule and a narrower blast radius:
     # one file skipped, not a whole subtree.
+
+    # ── "/" IN A PROJECT NAME: INVALID IN NESTED MODE (saga §6.53) ──────────────
+    # The project-level twin of the scenario above, and the wider blast radius —
+    # a project that cannot be spelled as a folder takes its whole file list with
+    # it. Everything here is scoped to `nested` mode, the default, where Nextcloud
+    # nests freely and a "/" in a project name would mean nothing. In `keyed` mode
+    # a "/" is not an error at all: it IS the path, which is the whole point of
+    # making folder mode a per-mapping choice (admin-mapping.feature).
+    #
+    # Checked live against Nextcloud's IFilenameValidator: the ONLY forbidden
+    # characters are "\" and "/" (plus ".."/"." as segments, ".htaccess", and the
+    # .part/.filepart extensions). Everything else — "a:b", "a*b", "CON",
+    # ".hidden" — is a perfectly legal folder name. So this is a two-character
+    # problem, not a general sanitisation problem.
+    #
+    # THE APP REJECTS IT AT THE SOURCE where it can: it owns project creation
+    # (project-folder.feature's tag opt-in) and project renames (§6.36), so a "/"
+    # never enters Penpot through this app in nested mode. What is left is the
+    # only case it cannot reach — a name typed directly in Penpot's own UI.
+
+  @in-penpot @todo
+  Scenario: In nested mode, a project whose name contains a slash is skipped with a clear reason
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash"
+    When the pull runs
+    Then no folder is created for that project
+    And no files from that project are mirrored
+    And the admin is told the project cannot be mirrored because "/" is not allowed in a folder name
+    And the message names the project so it can be renamed in Penpot
+
+  @in-penpot @todo
+  Scenario: One unmappable project does not block the rest of the team
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash"
+    And other projects with ordinary names in the same team
+    When the pull runs
+    Then every other project is mirrored normally
+    And only the unmappable project is skipped
+
+  @in-penpot @todo
+  Scenario: Renaming the project in Penpot fixes it on the next pull
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash" that was skipped
+    When it is renamed to "Has Slash" in Penpot
+    And the pull runs
+    Then a folder named "Has Slash" is created
+    And its files are mirrored normally
+
+  @in-penpot @todo
+  Scenario: The app never invents a substitute name
+    Given the mapping's folder mode is "nested"
+    And a Penpot project named "Has/Slash"
+    When the pull runs
+    Then no folder named "Has-Slash" or "Has Slash" is created for it
+    # Sanitising is REJECTED (saga §6.51): "foo/bar" and "foo-bar" would both
+    # become "foo-bar", silently collapsing two distinct projects into one folder
+    # with no way to tell which is which. That breaks the names-always-match rule
+    # invisibly, which is worse than refusing visibly. Inferring a parent folder
+    # from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), not
+    # something to fall back into because one name happened to contain a slash.
 
     # ── the invariant, true under either branch ─────────────────────────────────
 
