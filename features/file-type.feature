@@ -99,13 +99,24 @@ Feature: A mirrored Penpot file is a first-class file type
   So that they have the right mimetype + icon and expose their sync state
 
   Background:
-    Given the app is connected to Penpot
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    And no Penpot teams are mapped
+    And the first visible team is mapped as a plain folder "Penpot"
+    And the team has been mirrored into Nextcloud
 
-  @todo
-  Scenario: Mirrored files get the custom mimetype and Penpot icon
-    Given a mirrored ".penpot" file
-    Then its mimetype is a custom Penpot mimetype, not generic "application/zip"
-    And the Files app shows the Penpot icon instead of a generic archive icon
+  @in-penpot @occ
+  Scenario: Mirrored files get the custom Penpot mimetype, not a generic one
+    Given a mirrored design "Typed" in the project "Types"
+    Then the DAV content type of "Penpot/Types/Typed.penpot" is "application/vnd.penpot"
+    # ASSERTED OVER DAV, because that is where the Files app reads it. A `.penpot`
+    # archive would otherwise be sniffed as application/zip — a zip icon, no
+    # "Open in Penpot" action, and no hint as to why. The mapping file being
+    # right on disk proves nothing about what a client is told.
+    #
+    # The ICON half stays unasserted here: it is a rendering fact, and the two
+    # icon files' separate treatments (§C6.1) are not reachable from HTTP.
 
     # TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
     # glyph are the same drawing with opposite colour treatments, and collapsing
@@ -122,40 +133,48 @@ Feature: A mirrored Penpot file is a first-class file type
     # fill="none" and floods a stroked outline into a solid tile. A filled shape
     # cannot fail that way — recolouring it just recolours it.
 
-  @todo
+  @in-penpot @occ
   Scenario: WebDAV PROPFIND exposes the Penpot metadata in the XML
-    Given a mirrored ".penpot" file
-    When a WebDAV client requests the file's properties (PROPFIND)
-    Then the raw XML includes:
-      | property                    |
-      | nc:metadata-penpot_id       |
-      | nc:metadata-penpot_revision |
-      | nc:metadata-penpot_mode     |
-      | nc:metadata-penpot_team_id  |
+    Given a mirrored design "Advertised" in the project "Props"
+    Then the DAV property "nc:metadata-penpot_id" of "Penpot/Props/Advertised.penpot" is set
+    And the DAV property "nc:metadata-penpot_mode" of "Penpot/Props/Advertised.penpot" is set
+    And the DAV property "nc:metadata-penpot_team_id" of "Penpot/Props/Advertised.penpot" is set
+    # The keys are registered in Application::boot() precisely so they ride the
+    # directory PROPFIND, and nothing had ever checked that they do. The app's own
+    # `status` command cannot answer this — it reads the metadata store directly.
+    #
+    # `penpot_revision` is deliberately not asserted: a `link` file that has never
+    # drifted carries an empty one, so requiring it here would make this scenario
+    # about export state rather than about DAV advertising the key set.
 
-  @todo
-  Scenario: A file carries the team its design belongs to
-    Given a mirrored ".penpot" file
-    Then its "nc:metadata-penpot_team_id" property names the Penpot team
-    And it still carries no project id of its own
-    And moving the file between two mapped team folders re-stamps the team
-    And "occ penpot_sync:status" reports a stamp that disagrees with the folders
+  @in-penpot @occ
+  Scenario: A file carries the team its design belongs to, but never a project
+    Given a mirrored design "Team Stamped" in the project "Stamps"
+    Then the DAV property "nc:metadata-penpot_team_id" of "Penpot/Stamps/Team Stamped.penpot" is set
+    And the file "Penpot/Stamps/Team Stamped.penpot" stores no copy of its project
+    # THE ONE THING CACHED ON THE FILE (§C6.7), and the one thing that is not.
+    # The team is stamped because the browser builds the workspace deep link from
+    # it and cannot afford to walk a freely-nested tree on every render. The
+    # project is NOT, because it is derived from the folders and a copy would go
+    # stale on the first move — see mapping-membership.feature.
 
-  @todo
-  Scenario: A file's project is derived from its folders, not stored on the file
-    Given a mirrored ".penpot" file inside a project folder
-    Then the file carries no mapping key of its own
-    And its project is read from the nearest ancestor folder carrying a project id
-    And its team is read from the nearest ancestor folder carrying a team id
-    # Confirmed available and working on Team Folders specifically (saga §6.21).
-    # Nearest-ancestor at any depth (saga §6.29) — see mapping-membership.feature.
+  @in-penpot @occ
+  Scenario: A mirrored file's mode is visible over DAV
+    Given a mirrored design "Moded" in the project "Modes"
+    Then the DAV property "nc:metadata-penpot_mode" of "Penpot/Modes/Moded.penpot" is "reference"
+    And the file "Penpot/Modes/Moded.penpot" holds no content at all
+    # `link` is stored as `reference` ON THE WIRE — the key predates the rename
+    # and changing it would break every client already reading it, so the app
+    # translates at its own boundary and DAV keeps the old name. Written down
+    # here because a client author reading only the README would look for "link".
 
-  @todo
+  @in-penpot @occ
   Scenario: A project folder is identifiable by both metadata and a visible tag
-    Given a folder mirroring the Penpot project "My Stuff"
-    Then the folder carries "penpot_project_id" as folder metadata
-    And the folder carries the app's project tag, visible in the Files app
-    And a Team Folder carries "penpot_team_id" the same way
+    Given a mirrored project "Both Markers"
+    Then the folder "Penpot/Both Markers" carries a Penpot project id
+    And the folder "Penpot/Both Markers" carries the "penpot" tag
+    # Folder metadata works exactly as file metadata does — same Node type, same
+    # fileid space (§6.21). The tag is the human half of the same fact (§C6.18).
 
   @todo
   Scenario: A file moved out of its mapped folder is unmapped, not untracked

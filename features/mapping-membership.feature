@@ -43,7 +43,19 @@
 # folders already know, and a stored copy would have to be rewritten on every
 # move, which is exactly the drift an earlier move.feature tangled itself in.
 #
-# @todo — no lib/Service/MappingService exists yet.
+# BUILT AND NOW LIVE. `MembershipResolver` has existed since Course 3 and every
+# other feature defers to it, but nothing in CI had ever asked it a question —
+# the resolver was the most load-bearing rule in the app and the least tested.
+# The scenarios below drive it through `occ penpot_sync:status`, which prints the
+# resolved membership alongside the raw markers, so a failure says which of the
+# two disagreed.
+#
+# THE BACKGROUND WAS FICTION. It provisioned a Team Folder and mirrored a project
+# called "My Stuff", and none of those steps had ever existed — harmless while
+# the file was entirely @todo, an instant `--strict` failure the moment one
+# scenario went live. Same trap as project-folder.feature (§C6.18). It is now the
+# standard Background: a PLAIN mapped folder, because Team Folder provisioning is
+# not covered by this suite (features/README.md).
 
 Feature: Membership is the nearest ancestor folder carrying a Penpot id
   As a Nextcloud admin
@@ -51,131 +63,136 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
   So that Nextcloud can nest freely while Penpot stays flat
 
   Background:
-    Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Northwind"
-    And the Penpot project "My Stuff" is mirrored as a folder inside it
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    And no Penpot teams are mapped
+    And the first visible team is mapped as a plain folder "Penpot"
+    And the team has been mirrored into Nextcloud
 
     # ── the core lookup ──────────────────────────────────────────────────────────
 
-  @todo
+  @in-nextcloud @occ
   Scenario: A file's project is the nearest ancestor folder carrying a project id
-    When a mirrored ".penpot" file lives directly in the "My Stuff" folder
-    Then the file belongs to the "My Stuff" project, read from that folder's metadata
-    And that folder belongs to the "Northwind" team, read from the Team Folder's metadata
-    And the file itself stores no copy of its mapping
+    Given a mirrored design "Direct" in the project "Nearest"
+    Then "Penpot/Nearest/Direct.penpot" resolves to the project "Nearest"
+    And resolving "Penpot/Nearest/Direct.penpot" reports the team
+    And the file "Penpot/Nearest/Direct.penpot" stores no copy of its project
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: A file nested deeper inside a project folder still belongs to that project
-    Given a plain subfolder "wip" created inside the "My Stuff" folder
-    When a mirrored ".penpot" file lives inside "wip"
-    Then the file still belongs to the "My Stuff" project
-    And "wip" is ordinary Nextcloud organisation with no Penpot counterpart
-    # The old cap called this "too deep" and orphaned the file. It's just a
-    # subfolder — Penpot has no opinion about it, so neither do we.
+    Given a mirrored design "Deep" in the project "Nested Deep"
+    And I create a folder at "Penpot/Nested Deep/wip"
+    When I move "Penpot/Nested Deep/Deep.penpot" to "Penpot/Nested Deep/wip/Deep.penpot"
+    Then "Penpot/Nested Deep/wip/Deep.penpot" resolves to the project "Nested Deep"
+    And Penpot project "Nested Deep" holds a design named "Deep"
+    # The old cap called this "too deep" and orphaned the file. It is just a
+    # subfolder — Penpot has no opinion about it, so neither do we, and the
+    # design must not have moved project as a side effect of the drag.
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: The nearest project id wins when project folders are nested
-    Given the Penpot project "Design System" is mirrored as a folder
-    And the "Design System" folder has been moved inside the "My Stuff" folder
-    When a mirrored ".penpot" file lives directly in the "Design System" folder
-    Then the file belongs to "Design System", not to "My Stuff"
-    And nothing about this nesting is reflected in Penpot, where both are flat
-    # Nearest ancestor, not outermost — this is what makes nesting unambiguous.
+    Given a mirrored design "Outer Design" in the project "Outer"
+    And a mirrored project "Inner"
+    And I create a new design file at "Penpot/Inner/Inner Design.penpot"
+    When I move "Penpot/Inner" to "Penpot/Outer/Inner"
+    Then "Penpot/Outer/Inner/Inner Design.penpot" resolves to the project "Inner"
+    And "Penpot/Outer/Outer Design.penpot" resolves to the project "Outer"
+    # NEAREST ancestor, not outermost — this is what makes free nesting
+    # unambiguous, and it is only reachable now that a project folder can be
+    # moved inside another one. Nothing about the nesting reaches Penpot, where
+    # both projects stay flat.
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: Project folders can be grouped under ordinary Nextcloud folders
-    Given a plain folder "Clients" created inside the Team Folder
-    When the "My Stuff" project folder is moved inside "Clients"
-    Then files in "My Stuff" still belong to the "My Stuff" project
-    And "My Stuff" still belongs to the "Northwind" team, found further up
-    And "Clients" is never sent to Penpot, which has no concept of it
+    Given a mirrored design "Grouped" in the project "Grouped Project"
+    And I create a folder at "Penpot/Clients"
+    When I move "Penpot/Grouped Project" to "Penpot/Clients/Grouped Project"
+    Then "Penpot/Clients/Grouped Project/Grouped.penpot" resolves to the project "Grouped Project"
+    And resolving "Penpot/Clients/Grouped Project/Grouped.penpot" reports the team
+    And Penpot holds no project named "Clients"
+    # The team is found FURTHER UP, past a folder Penpot has no concept of.
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: A file with no project-id ancestor belongs to no mapping
-    Given a folder that carries no Penpot metadata, outside every Team Folder
-    When a ".penpot" file lives in that folder
-    Then the file belongs to no mapping
-    And it is "untracked" if it has no "penpot_id", or "unmapped" if it carries one
+    Given I create a folder at "Outside Everything"
+    When I create a new design file at "Outside Everything/Loose.penpot"
+    Then "Outside Everything/Loose.penpot" resolves to no Penpot mapping at all
+    And the file "Outside Everything/Loose.penpot" carries no Penpot id
+    # Untracked: no id, no mapping. A file that HAS an id and no mapping is the
+    # separate "unmapped" state — see move.feature.
 
     # ── the Drafts state: a team ancestor but no project ancestor ───────────────
-    # Drafts is NEVER a folder (saga §6.35). It's the name Penpot gives to "belongs
-    # to a team, sits in no project" — which is exactly what the nearest-ancestor
+    # Drafts is NEVER a folder (saga §6.35). It is the name Penpot gives to
+    # "belongs to a team, sits in no project" — exactly what the nearest-ancestor
     # rule produces when it finds a team id but no project id on the way up.
+    #
+    # This boundary is where §C6.8, §C6.9 and §C6.10 all lived, every one of them
+    # the same mistake: reading "no project ancestor" as "outside every mapping"
+    # when it means Drafts — a real project with a real id.
 
-  @todo
-  Scenario: A file at a Team Folder's root is in that team's Drafts
-    When a mirrored ".penpot" file lives directly at the Team Folder's root
-    Then it belongs to the "Northwind" team
-    And it belongs to no project
-    And in Penpot it lives in that team's "Drafts" project
+  @in-nextcloud @gesture
+  Scenario: A file at the mapped folder's root is in that team's Drafts
+    When I create a new design file at "Penpot/At The Root.penpot"
+    Then "Penpot/At The Root.penpot" is in the team's Drafts
+    And the file "Penpot/At The Root.penpot" carries a Penpot id
 
-  @todo
+  @in-nextcloud @gesture
   Scenario: A file in any plain folder under a team is also in Drafts
-    Given a plain folder "Inbox" inside the Team Folder, with no Penpot metadata
-    And a deeper plain folder "Inbox/2026" also with no Penpot metadata
-    When a mirrored ".penpot" file lives in "Inbox/2026"
-    Then it belongs to the "Northwind" team
-    And it belongs to no project
-    And in Penpot it lives in that team's "Drafts" project
+    Given I create a folder at "Penpot/Inbox"
+    And I create a folder at "Penpot/Inbox/2026"
+    When I create a new design file at "Penpot/Inbox/2026/Filed By Hand.penpot"
+    Then "Penpot/Inbox/2026/Filed By Hand.penpot" is in the team's Drafts
     # This is where Nextcloud is MORE expressive than Penpot: any arrangement of
-    # ordinary folders under a team all maps to the one Drafts bucket. Penpot has
-    # a single Drafts because a flat system has nowhere else to put an unfiled
+    # ordinary folders under a team maps to the one Drafts bucket. Penpot has a
+    # single Drafts because a flat system has nowhere else to put an unfiled
     # design; we can express the same state as a whole folder tree, for free.
 
-  @todo
+  @in-penpot @occ
   Scenario: No folder is ever created to represent Drafts
-    Given the "Northwind" team has a "Drafts" project in Penpot
-    When the pull runs
-    Then no folder named "Drafts" is created for it
-    And no folder carries the Drafts project's id as metadata
-    # Mirroring Drafts as a folder would make a design appear to be in two
-    # places at once — at the team root AND inside a Drafts folder.
+    When the team is mirrored again
+    Then no folder named "Drafts" exists under the mapped folder
+    # Mirroring Drafts as a folder would make a design appear to be in two places
+    # at once — at the team root AND inside a Drafts folder.
 
     # ── the visible marker ───────────────────────────────────────────────────────
 
-  @todo
+  @in-penpot @occ
   Scenario: A project folder carries a visible tag as well as its metadata
-    Given the Penpot project "My Stuff" is mirrored as a folder
-    Then the folder carries the Penpot project id as metadata
-    And the folder carries the app's project tag, visible in the Files app
-    And a user can search or filter for that tag to find every project folder
+    Given a mirrored project "Marked"
+    Then the folder "Penpot/Marked" carries a Penpot project id
+    And the folder "Penpot/Marked" carries the "penpot" tag
+    # Two markers, two jobs (§6.32): the metadata is what every lookup reads, the
+    # tag is what a user can see and search for. Under free nesting that matters
+    # more than it would have under the old depth cap — position no longer tells
+    # you which folders are projects.
 
-    # The tag only earns its keep if a tagged folder means exactly one thing —
-    # hence the naming invariant below (saga §6.36).
-  @todo
+  @in-penpot @occ
   Scenario: A tagged folder's name always equals its Penpot project's name
-    Given the Penpot project "My Stuff" is mirrored as a folder
-    Then the folder is named "My Stuff", exactly as Penpot names the project
-    And the app does not allow the two names to diverge
+    Given a mirrored project "Exactly This Name"
+    Then the folder "Penpot/Exactly This Name" carries a Penpot project id
+    And Penpot holds a project named "Exactly This Name"
     # Under free nesting a project folder is otherwise indistinguishable from an
     # ordinary folder someone named the same thing. Tag + matching name means a
     # tagged folder called "Acme" IS the Penpot project "Acme" — no ambiguity.
+    # The rename half of the invariant is rename.feature's, where it is live.
 
-  @todo
-  Scenario: A plain folder inside a Team Folder is tolerated, not adopted
-    When a plain, untagged folder with no Penpot metadata is created inside the Team Folder
-    Then the pull does not touch that folder
-    And it is not treated as a Penpot project
-    And nothing about it is ever sent to Penpot
+  @in-nextcloud @gesture
+  Scenario: A plain folder inside a mapped folder is tolerated, not adopted
+    Given I create a folder at "Penpot/Just Sitting Here"
+    When the team is mirrored again
+    Then the folder "Penpot/Just Sitting Here" carries no Penpot project id
+    And Penpot holds no project named "Just Sitting Here"
     # This is the whole point of the tag: ordinary folders can live among project
-    # folders without becoming projects.
+    # folders without becoming projects. The opt-in that DOES make one a project
+    # is project-folder.feature's, and it is live there.
 
-  # THIS FILE USED TO SAY THE OPPOSITE. It carried "Applying the project tag by
-  # hand does not create a Penpot project — the tag is app-owned output, not user
-  # input", which was true when it was written and became a FLAT CONTRADICTION of
-  # a live, passing scenario the moment §C6.18 shipped. A `@todo` spec that
-  # disagrees with tested behaviour is worse than a missing one: it reads as the
-  # rule to an implementer, and nothing red ever objects.
-  #
-  # The tag is now BOTH: app-owned output on the folders the pull mirrors, and
-  # user input on a folder someone opts in. Membership resolution is unchanged by
-  # that — it reads `penpot_project_id`, which the opt-in stamps like any other
-  # path — so what belongs here is only the resolution consequence.
-  @todo
+  @in-nextcloud @occ
   Scenario: A folder opted in by tag resolves exactly like a mirrored one
-    Given a plain folder inside the mapped folder that a user tagged "penpot"
-    Then it carries a Penpot project id like any other project folder
-    And a design inside it resolves to that project
+    Given I create a folder at "Penpot/Opted In"
+    And the folder "Penpot/Opted In" has been tagged "penpot"
+    When I create a new design file at "Penpot/Opted In/After The Tag.penpot"
+    Then "Penpot/Opted In/After The Tag.penpot" resolves to the project "Opted In"
     # The opt-in itself — what the tag DOES — is project-folder.feature's, and it
     # is live there. This is only the half this file owns: once stamped, nothing
     # downstream can tell which direction the folder came from.
@@ -202,13 +219,13 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
 
     # ── tolerated content ────────────────────────────────────────────────────────
 
-  @todo
+  @in-nextcloud @occ
   Scenario: Non-Penpot content inside a project folder is left alone
-    Given a mirrored ".penpot" file in the "My Stuff" folder
-    And an unrelated file "notes.txt" in the same folder
-    When the pull runs
-    Then "notes.txt" is untouched and never pruned
-    And only files the app recognizes by their metadata are managed
+    Given a mirrored design "Managed" in the project "Mixed Contents"
+    And I create an unrelated file at "Penpot/Mixed Contents/notes.txt"
+    When the team is mirrored again
+    Then the file "Penpot/Mixed Contents/notes.txt" is still there and untouched
+    And the file "Penpot/Mixed Contents/notes.txt" carries no Penpot id
     # Pruning keys on metadata, never on file extension or folder contents.
 
     # ── the ambiguity free nesting introduces ────────────────────────────────────
