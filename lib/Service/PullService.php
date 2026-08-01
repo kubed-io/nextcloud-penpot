@@ -619,10 +619,14 @@ final class PullService {
 	/**
 	 * Every stamped mirror file anywhere under $root, keyed by `penpot_id`.
 	 *
-	 * RECURSIVE, unlike {@see indexFilesByPenpotId()}, because free nesting means a
-	 * mirror may sit in any plain subfolder the user made (saga §6.29). A prune
-	 * that only looked one level down would leave the moved ones behind forever —
-	 * and, worse, would be *correct* often enough to look like it worked.
+	 * RECURSIVE, because free nesting means a mirror may sit in any plain
+	 * subfolder the user made (saga §6.29). A prune that only looked one level
+	 * down would leave the moved ones behind forever — and, worse, would be
+	 * *correct* often enough to look like it worked.
+	 *
+	 * {@see indexFilesByPenpotId()} is recursive too, as of §C6.20. It was not,
+	 * and this docblock used to say so — the two halves of one question
+	 * disagreeing about how hard to look is what produced silent duplicates.
 	 *
 	 * ## THE `+` IS FIRST-WINS, AND THAT IS THE SAFE DIRECTION HERE
 	 *
@@ -741,7 +745,14 @@ final class PullService {
 				}
 				// A plain subfolder is ordinary Nextcloud organisation Penpot has
 				// no concept of — the mirrors inside it are still ours.
-				$index += $this->indexFilesByPenpotId($node);
+				//
+				// `array_replace`, NOT `+=`. Array union is FIRST-wins, and this
+				// index is documented last-wins ({@see collectMirrors()}, which is
+				// deliberately the other way): the upsert wants the newest node to
+				// receive the write. Folding children in with `+=` would silently
+				// invert that for exactly the installs that matter — the ones
+				// carrying duplicates left by the bug this recursion fixes.
+				$index = array_replace($index, $this->indexFilesByPenpotId($node));
 				continue;
 			}
 			if (!$node instanceof File) {

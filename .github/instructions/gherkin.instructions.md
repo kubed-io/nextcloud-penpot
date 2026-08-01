@@ -1,0 +1,207 @@
+---
+description: 'Gherkin and Behat conventions for review — how a feature file must read, and how to tell whether it is actually tested'
+applyTo: "{features/**/*.feature,features/README.md,tests/integration/**}"
+---
+<!--
+  SPDX-FileCopyrightText: 2026 kubed-io
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+# Gherkin conventions — the spec, and whether it is real
+
+`features/*.feature` is this app's **specification**, written before the code and
+kept true after it. It is not a test-naming convention. Review it as
+documentation that happens to execute.
+
+**Read `features/README.md` first** — it is the authority on layout and tags, and
+this file is the review checklist that follows from it. Where the two disagree,
+`features/README.md` wins and this file is stale.
+
+## Where the binding lives — check this before saying anything about coverage
+
+A scenario is only real if a step definition matches every one of its lines.
+
+| What | Where |
+|---|---|
+| The scenarios | `features/*.feature` (repo root, deliberately — they are docs) |
+| The step definitions | `tests/integration/bootstrap/Steps/*.php` |
+| The context that composes them | `tests/integration/bootstrap/FeatureContext.php` |
+| Transports (occ, WebDAV) | `tests/integration/bootstrap/Support/` |
+| What CI actually runs | `tests/integration/behat.dist.yml` |
+
+`behat.dist.yml` filters `~@todo&&~@unbuilt&&~@blocked&&~@decision`, and CI runs
+`--strict` — so an **undefined step in an untagged scenario fails the build.**
+That is the safety net: a scenario with no status tag is claimed to be live, and
+CI enforces the claim.
+
+A new step definition belongs in the trait that owns its concern, and every trait
+must be `use`d in `FeatureContext`. **A new `*Steps.php` that nobody composed in
+is silently dead** — check for it.
+
+## The four status tags
+
+The single most useful question about a spec is *"what is built but untested?"*.
+These tags exist so it is a filter rather than an investigation.
+
+| Tag | Means | Who picks it up |
+|---|---|---|
+| *(none)* | Runs in CI. | — |
+| `@todo` | **The code exists; only the test is missing.** | Someone writing a test |
+| `@unbuilt` | A spec awaiting code. | Someone building the feature |
+| `@blocked` | Real behaviour the harness cannot reach. | Someone extending the harness |
+| `@decision` | Records a deliberate absence. No operation, ever. | Nobody |
+
+**`behat --tags @todo` is the work queue.** Flag anything that pollutes it:
+
+- A scenario tagged `@todo` whose feature has no code → it is `@unbuilt`.
+- A `@blocked` that does not **name the missing capability** → it is a `@todo`
+  nobody checked. The four that exist are: no browser, no logged-in session, no
+  groupfolders in the CI image, and no way to age a deletion past Penpot's
+  per-team delay.
+- A `@decision` on something with a real gesture. `@decision` is for the
+  *permanent absence of a capability* (*"There is no 'Sync to Penpot' button,
+  ever"*), **not** for *"nothing happened"* (*"Penpot is never contacted"*) —
+  that second kind is ordinary behaviour, testable by absence, and several run in
+  CI today. Read the `Then`: the outcome of an operation, or an absence of one?
+
+A `@todo` that fails because of a **defect** is legitimate — but it must say so
+in a comment, or it is indistinguishable from an unwritten one.
+
+## Community standards this project follows
+
+From [Cucumber's own guidance](https://cucumber.io/docs/bdd/better-gherkin/) —
+cite these when a scenario drifts:
+
+- **Describe behaviour, not implementation.** The test: *will this wording need
+  to change if the implementation does?* If yes, rewrite it.
+- **`Given` is a precondition, `When` is the action, `Then` is an observable
+  outcome.** Avoid user interaction in a `Given`.
+- **Assert on something observable**, not on internal state. Cucumber says
+  "resist the temptation to look in the database"; here that means **assert
+  through Penpot's own listing or over DAV, never only through this app**. A
+  scenario that asks the app whether the app did something proves only that the
+  app agrees with itself — that exact shape let §C6.9 and §C6.10 ship.
+- **Keywords are ignored when matching step definitions.** Two steps with the
+  same text are the same function whatever their keyword. This is why one
+  function may carry several phrasings, and why near-duplicate wordings are a
+  defect rather than a style choice.
+- **Backgrounds stay short and describe state, not who did what.**
+
+### Where this project deliberately differs, and why
+
+Do not "correct" these:
+
+- **Comments are long and carry the reasoning.** Most Gherkin is comment-light;
+  ours records *why* a rule exists, what was tried, and the saga section that
+  settled it. The prose is the point — it is the only place a decision's cost is
+  written down. Never suggest trimming a comment block for brevity.
+- **Backgrounds run to six lines, over the recommended four.** Every line is a
+  real configuration step against a live Nextcloud and a live Penpot; there is no
+  `Given I am logged in` shortcut to hide them behind.
+- **`Rule:` is not used, and this is verified, not preference.** Behat's parser
+  rejects the keyword (`Expected Step, but got text: "  Rule: …"`), and there is
+  no newer Behat to upgrade to. Business rules are comment banners
+  (`# ── RULE: … ──`). **Never suggest converting them to `Rule:` blocks.**
+
+## Layout — one behaviour, one file
+
+Feature files are organised by **behaviour**, never by the kind of thing acted
+on. Renaming a project folder is a *rename* and lives in `rename.feature`, next
+to renaming a file, so a reader comparing the two sees one table.
+
+This is the most valuable thing to catch in review, because the failure is
+silent. `project-folder.feature` once owned renaming, copying, moving *and*
+deleting a project folder — and had already drifted: `rename.feature` carried
+**live** coverage of the project-folder rename while `project-folder.feature`
+still called it unbuilt. Two files, one behaviour, and nobody reads two files to
+answer one question.
+
+**Flag a scenario that describes a behaviour another file owns.** The owners are
+listed in `features/README.md`.
+
+## The traps this repo has actually fallen into
+
+Each of these has cost a debugging session here. They are worth checking on every
+PR that touches a feature file.
+
+**A tag floating above a comment block.** Gherkin binds a tag to the next
+*scenario*, across any number of comment lines. A `@todo` placed above a banner
+silently excluded one scenario while four others ran undefined. **A status tag
+must be directly adjacent to its `Scenario:` line.**
+
+**A Background whose steps do not exist.** Harmless while every scenario in the
+file is tagged, and an instant `--strict` failure the moment one goes live. Two
+files carried fictional Backgrounds for months (`a Team Folder mapped to the
+Penpot team "Northwind"` — a step that had never been written). **If a PR
+promotes a scenario to live, verify the Background is real.**
+
+**A scenario borrowing another file's setup habits.** `reconcile.feature`
+deliberately maps nothing in its Background — every scenario names its own folder
+so one scenario's leftovers cannot become another's prune. `move.feature` maps a
+shared `Penpot` folder in its Background. Copying a scenario between them
+silently breaks it. **Check the file's own Background before assuming a path
+resolves.**
+
+**An assertion about the whole mapped folder inside a one-file scenario.** `the
+pull pruned nothing` is a claim about every design every other scenario ever left
+behind; it passed or failed on alphabetical neighbours and flapped for a session.
+**A scenario about one file asserts on that file.**
+
+**An absence assertion that passes for the wrong reason.** `occ penpot_sync:status`
+exits non-zero both for "no such node" and for "cannot resolve the sync actor".
+Asserting only the exit code makes the test go green precisely when its fixture
+breaks. **Absence assertions must match the specific failure.**
+
+**A `Then` that only asks this app.** See the observable-outcome rule above.
+
+## Scenario Outline: an input, or a different rule?
+
+`Examples` is right when the rows are **one rule over different inputs** and the
+outcome is identical for every row.
+
+It is wrong when the rows are **different rules sharing a shape**. Filing a draft
+and un-filing look like one outline over a direction column; they are the same
+rule read from opposite ends, and three separate bugs lived in that asymmetry.
+
+The test: can you write the rows as a list of *values*, or only as a list of
+*sentences*? Values → `Examples`. Sentences → separate scenarios.
+
+## Wording is an API
+
+Every step line is a function signature, so the vocabulary is deliberately small
+and parameterised:
+
+```gherkin
+Then the file "X" is in the Nextcloud trash
+Then the file "X" is not in the Nextcloud trash        # one step, optional negation
+Then Penpot project "P" holds a design named "D"
+Then Penpot project "P" holds no design named "D"      # same step
+```
+
+**Flag a new step phrasing that duplicates an existing one.** Two wordings for
+one idea are two functions to maintain and two ways for the same assertion to
+drift. Read `tests/integration/bootstrap/Steps/` before accepting a new one.
+
+The reverse is fine and intentional: one function may answer to several
+phrasings, because keywords are ignored in matching. `theAdminRunsAPull()` is
+`the admin runs a pull` where the run is the behaviour under test, `the team has
+been mirrored into Nextcloud` where a mirror merely has to exist first, and `the
+team is mirrored again` where an upstream change needs a sync to notice it. Same
+operation, three honest readings.
+
+**Setup says what IS TRUE, not who did what to make it true.** `the admin runs a
+pull` as a `Given` read as though an admin were permanently on call to sync
+before every gesture a user makes. That is not the system being described.
+
+## Tag axes other than status
+
+- **Origin** — `@in-nextcloud` / `@in-penpot`: where the action happened. The
+  payoff of a scenario is always what reached the *other* side.
+- **Channel** — `@gesture` (Files-app, driven over WebDAV) / `@occ` / `@admin` /
+  `@scheduled`.
+- **Backend** — `@team-folder` / `@plain-folder`: a dimension the suite is *run
+  across*, not a reason to write a scenario twice.
+
+`sync` vs `link` is **not** an axis. `@in-penpot` scenarios are mode-agnostic and
+should not mention mode at all; only `@in-nextcloud` scenarios branch, because a
+`link` is a read-only projection confined to its project. Flag a scenario written
+twice per mode when the outcome does not differ.
