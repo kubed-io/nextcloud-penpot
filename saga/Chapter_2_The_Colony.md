@@ -2629,3 +2629,118 @@ the opposite and rarer thing: a *new* capability that needed **no new rules at
 all** — just a marker on a root, after which four existing rules produced the
 whole feature. Worth noticing which kind you have, because the two are worked
 very differently.
+
+---
+
+### C6.22 — Who did this? Reads, writes, and the job that has no answer
+
+A question worth grounding rather than answering by instinct: when does this app
+act as the user, and when as the service account? The rule turns out to be one
+line, and most of the apparent complexity comes from conflating two different
+kinds of statement.
+
+    READS are always the service account.
+    WRITES attribute to the acting user when there is one.
+
+#### The reads half is a requirement, not a default
+
+Penpot has no admin scope. Every token sees exactly the teams its account
+belongs to (§6.12) — that is not a permission setting, it is the shape of the
+API. So the puller has to be an account that is a member of every mapped team,
+and that is the entire reason a service account exists at all.
+
+Which means using a personal token to read would not merely change a name in a
+history log. **It would change what is mirrored, per user** — two people with
+different Penpot memberships would produce two different folder trees for the
+same mapping. That is §6.16's rejected dual-pull-path and §6.18's
+shared-Team-Folder race, arriving by a different door.
+
+#### The writes half is safe precisely because it cannot widen anything
+
+A write always targets something the service account already mirrored. So
+swapping in the user's token changes who Penpot records as having done it and
+nothing else — no new visibility, no new reachable object. That is what makes it
+safe to be best-effort, and why `PersonalTokenService` returns `null` rather than
+throwing: attribution is a garnish on an action that must happen either way.
+
+#### "Can a move in a team folder be attributed to a user?" — yes, already
+
+This was the sharp version of the question, and the answer is better than
+expected: **every gesture already runs inside the acting user's own HTTP
+request.** Rename, move, copy, create, delete, restore and tag are all driven by
+Files events during a WebDAV or web-UI call, so `IUserSession` has the user and
+`tokenForActor()` finds their token with no extra machinery.
+
+There is no gap here. The gap people expect — "background work loses the user" —
+is real, but the app does almost none of its writing in the background.
+
+#### The pull has no acting user because nobody performed it
+
+This is worth stating as a fact about the *work* rather than about the harness. A
+scheduled pull reconciles what Penpot already says, on a timer. There is no user
+to attribute it to; picking one would be an invented answer to a question that
+has none, and attributing forty follow-renames to whoever happened to click
+"Sync" would make Penpot's history actively misleading.
+
+So the service account is the honest answer, not the fallback.
+
+#### But a background job *can* act as a user, and it is worth knowing how
+
+Because the interesting future question is not "can we?" — it is "when should
+we?". Nextcloud's answer is `IUserSession::setVolatileActiveUser(?IUser)`,
+`@since 29.0.0`: *"Temporarily sets the active user for this session without
+persisting it in the session storage."*
+
+Core uses it exactly this way, and its own comment is the useful part:
+
+    // Set an active user so that event listeners can correctly work
+    $this->session->setVolatileActiveUser($user);
+    $folder = $this->rootFolder->getUserFolder($user->getUID());
+    …
+    $this->setupManager->tearDown();   // per user, or the FS cache grows
+
+(`apps/files/lib/BackgroundJob/SanitizeFilenames.php`, verified in the live 33.0.4
+tree.) So a `QueuedJob` carrying a uid in its arguments can set the volatile user
+and everything downstream — including `tokenForActor()` — sees them.
+
+**When this app would want it:** a gesture that fans out. Dragging forty designs
+between projects is forty Penpot calls inside one request; queueing them with the
+uid would keep the request fast *and* keep the attribution. Nothing today needs
+it, and building the machinery before a gesture needs it would be scaffolding.
+Recorded so the answer is ready when one does.
+
+#### The finding: the promised fallback does not exist
+
+Chasing the rule turned up a gap between a docblock and its code.
+`PersonalTokenService` states that every caller "is expected to fall back to the
+service account and carry on — the user's rename must still happen, just
+attributed less precisely."
+
+The fallback that exists is **pre-flight**: `$token = $actorToken ?? $this->getToken()`.
+No token, service account. There is no **post-failure** retry. If Penpot rejects
+the user's token, the write is simply lost.
+
+And rejection is not exotic. A Nextcloud user need not have a Penpot account at
+all; if they do, they need not be a member of the Penpot team behind a shared
+Team Folder — the mapping only ever required the *service account* to be a
+member (§6.18). "The acting user's token cannot write here" is therefore an
+**ordinary state**, arguably the common one on any instance where Penpot
+membership is not managed alongside Nextcloud's.
+
+The trade is not close: losing a user's rename to protect the accuracy of a
+history entry is wrong in every case. But the retry has to be narrow —
+authorisation failures only. Retrying a *timeout* as the service account would
+double every outage and could apply a write twice.
+
+Three scenarios now specify it (`admin-connection.feature`), including the one
+that keeps it honest: report the degradation **once**, not on every gesture. A
+per-gesture warning for a routine state is how people learn to ignore warnings.
+
+#### The shape
+
+§C6.21 was a capability that needed no new rules. This is the inverse and the
+more common trap: a rule that was already **written down as though it were
+implemented**. The docblock was not aspirational when it was written — it
+described what callers should do — and then every caller did the easy half. A
+promise in prose with no test is indistinguishable from a promise kept, right up
+until someone's token expires.

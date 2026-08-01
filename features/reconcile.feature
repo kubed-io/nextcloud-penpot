@@ -512,6 +512,19 @@ Feature: Scheduled or manual pull from Penpot
     Given the "Northwind" mapping exists
     Then no "Sync to Penpot" action exists anywhere in the admin panel or CLI
 
+    # ── who the run acts as, and why it is nobody ───────────────────────────────
+    # A scheduled pull has NO ACTING USER, and that is a fact about the work
+    # rather than a limitation of the harness: nobody performed it. It reconciles
+    # what Penpot already says, on a timer. Attributing it to a user would be a
+    # fiction, and picking WHICH user would be an invented answer to a question
+    # with none.
+    #
+    # This is not the same as "a background job cannot act as a user". Nextcloud's
+    # `IUserSession::setVolatileActiveUser()` (NC 29+) exists precisely for that,
+    # and core uses it so "event listeners can correctly work" while a job walks
+    # one user's files. A job this app queued FROM a gesture could carry the uid
+    # and run as them. The pull is simply not that kind of job (saga §C6.22).
+
   @blocked
   Scenario: The pull always runs as the service account, never as a user
     Given two Nextcloud users both have personal Penpot tokens configured
@@ -520,3 +533,14 @@ Feature: Scheduled or manual pull from Penpot
     Then the pull uses the service-account token only
     And neither user's personal token is used for any read
     And the mapped folder is written by exactly one job, not once per user
+    # One puller, always (§6.18) — reads decide WHAT is mirrored, so a second
+    # reader with different visibility is a second, different mirror.
+
+  @admin @occ @unbuilt
+  Scenario: A pull started by an admin is still attributed to the service account
+    Given the admin has a personal Penpot token
+    When the admin starts a sync from the settings panel
+    Then the pull uses the service-account token, not the admin's
+    # Starting a run is not performing the changes it makes. The admin asked for
+    # a reconcile; Penpot's history should not read as though they renamed forty
+    # designs by hand.
