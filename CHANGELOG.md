@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A design's file now carries the design's own dates.** "Modified" shows when the design last changed in Penpot and "Created" when it was created there, instead of both showing when a sync happened to run — and a project folder carries its project's creation date. Sorting a mapped folder by date finally sorts by the designs.
 - **Turn any folder into a Penpot project by tagging it `penpot`** — and it takes the designs already inside it with it. Everything else in a mapped folder stays an ordinary folder.
 - **Every project folder now carries a visible `penpot` tag**, whether it came from Penpot or you opted it in, so you can spot and search for them in Files. Removing the tag never deletes the project.
 

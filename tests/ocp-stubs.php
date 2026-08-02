@@ -289,6 +289,20 @@ namespace OCP\Files {
 			// The prune's only removal, and the reason it is not destructive: on a
 			// user-visible node this is a move to the Nextcloud trash.
 			public function delete(): void;
+
+			/**
+			 * The clocks {@see OCA\PenpotSync\Service\MirrorTimes} reads and writes.
+			 * All four live on `FileInfo` upstream, which the real `Node` extends; this
+			 * stub has no FileInfo, so they are declared here — the same place in the
+			 * hierarchy. `touch(null)` means "now".
+			 */
+			public function getMTime(): int;
+
+			public function getCreationTime(): int;
+
+			public function getStorage(): \OCP\Files\Storage\IStorage;
+
+			public function touch($mtime = null): void;
 		}
 	}
 	// A folder the pull mirrors into: it lists children, checks/creates nodes,
@@ -512,6 +526,25 @@ namespace OCP\SystemTag {
 			public function getTags(): array {
 				return $this->tags;
 			}
+		}
+	}
+}
+
+namespace OCP\Files\Storage {
+	// The two hops {@see OCA\PenpotSync\Service\MirrorTimes} takes to set a creation
+	// time — there is no OCP setter for it, so the public cache API is the supported
+	// route (Node::getStorage -> IStorage::getCache -> ICache::update).
+	if (!interface_exists(IStorage::class, false)) {
+		interface IStorage {
+			public function getCache(string $path = '', ?IStorage $storage = null): \OCP\Files\Cache\ICache;
+		}
+	}
+}
+
+namespace OCP\Files\Cache {
+	if (!interface_exists(ICache::class, false)) {
+		interface ICache {
+			public function update($id, array $data);
 		}
 	}
 }

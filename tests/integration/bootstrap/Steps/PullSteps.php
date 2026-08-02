@@ -156,15 +156,15 @@ trait PullSteps {
 	}
 
 	/**
-	 * The idempotency guard the sibling app fails (§C6.19).
+	 * The idempotency guard both siblings once failed (§C6.19).
 	 *
-	 * `nextcloud-n8n` rewrites every mirrored file on every run, so a pull with
-	 * nothing changed upstream moves mtime and etag on all of them — which tells
-	 * every connected client to re-download the lot. This app avoids it via two
-	 * guards added for unrelated reasons (`storeLink()`'s early return on an
-	 * empty file, and `driftedOrMissing()`'s revision gate), and neither is
-	 * protected by any other scenario: making the write unconditional would
-	 * leave the rest of this suite green.
+	 * `nextcloud-n8n` and `nextcloud-grafana` each rewrote every mirrored file on
+	 * every run, so a pull with nothing changed upstream moved mtime and etag on all
+	 * of them — which tells every connected client to re-download the lot. Both are
+	 * fixed now; this app never had it, via two guards added for unrelated reasons
+	 * (`storeLink()`'s early return on an empty file, and `driftedOrMissing()`'s
+	 * revision gate), and neither is protected by any other scenario: making the
+	 * write unconditional would leave the rest of this suite green.
 	 *
 	 * Read over DAV rather than through the app deliberately — the question is
 	 * what a SYNC CLIENT would see, and the app's own view of a file cannot
@@ -203,6 +203,93 @@ trait PullSteps {
 		$out = $this->status($path);
 		$this->mustContain($out, 'Type: folder', $path);
 		$this->mustContain($out, 'penpot_team_id: ' . $this->pulledTeamId, $path);
+	}
+
+	/**
+	 * A project folder's creation date is its Penpot project's.
+	 *
+	 * Only the creation time — a folder's mtime is propagated by Nextcloud from its
+	 * children, so the app deliberately does not set it (§C6.24). Asserting one here
+	 * would be asserting core's propagation, not our behaviour.
+	 *
+	 * @Then /^the folder "([^"]*)" was created when its Penpot project was$/
+	 */
+	public function theFolderWasCreatedWhenItsProjectWas(string $path): void {
+		$name = basename($path);
+		$expected = null;
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			if (($project['name'] ?? null) === $name) {
+				$expected = self::penpotSecond($project['created-at'] ?? null);
+				break;
+			}
+		}
+		if ($expected === null) {
+			throw new \RuntimeException("no Penpot project named '{$name}' with a usable created-at");
+		}
+		$this->assertClock($path, 'creation_time', $expected, "the project folder's creation time");
+	}
+
+	/** @Then /^"([^"]*)" is dated when the design changed in Penpot$/ */
+	public function theDesignIsDatedWhenItChanged(string $path): void {
+		$file = $this->penpotFileRecordFor($path);
+		$this->assertClock($path, 'getlastmodified', self::penpotSecond($file['modified-at'] ?? null), "the design's modified-at");
+	}
+
+	/** @Then /^"([^"]*)" was created when the design was created in Penpot$/ */
+	public function theDesignWasCreatedWhenItWasCreated(string $path): void {
+		$file = $this->penpotFileRecordFor($path);
+		$this->assertClock($path, 'creation_time', self::penpotSecond($file['created-at'] ?? null), "the design's created-at");
+	}
+
+	/** The team this scenario's mapping points at — set by the pull, else resolved. */
+	private function pullTeamId(): string {
+		return $this->pulledTeamId !== '' ? $this->pulledTeamId : $this->firstVisibleTeamId();
+	}
+
+	/**
+	 * The Penpot file record behind a mirrored path, matched on the design name —
+	 * the mirror's basename minus `.penpot`.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function penpotFileRecordFor(string $path): array {
+		$design = preg_replace('/\.penpot$/', '', basename($path));
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => (string)($project['id'] ?? '')]) as $file) {
+				if (($file['name'] ?? null) === $design) {
+					return $file;
+				}
+			}
+		}
+		throw new \RuntimeException("no Penpot file named '{$design}' behind '{$path}'");
+	}
+
+	/**
+	 * Penpot sends epoch MILLISECONDS, as a string — not the ISO-8601 the n8n and
+	 * Grafana siblings use. Kept here as well as in the app because a test that
+	 * parsed it the siblings' way would agree with a broken implementation.
+	 */
+	private static function penpotSecond(mixed $value): ?int {
+		if (is_string($value) && ctype_digit($value)) {
+			$value = (int)$value;
+		}
+		return is_int($value) && $value > 0 ? intdiv($value, 1000) : null;
+	}
+
+	/** Compare one DAV clock on $path against $expected, or explain what it read. */
+	private function assertClock(string $path, string $property, ?int $expected, string $what): void {
+		if ($expected === null) {
+			throw new \RuntimeException("Penpot reported no usable timestamp for {$what} on '{$path}'");
+		}
+		$actual = $this->davTime($path, $property);
+		if ($actual !== $expected) {
+			throw new \RuntimeException(
+				"'{$path}' does not carry {$what}.\n"
+				. '  expected: ' . gmdate('c', $expected) . "\n"
+				. '  actual:   ' . ($actual === null ? 'unset' : gmdate('c', $actual)) . "\n"
+				. 'A mirror whose dates are the sync run\'s tells a user nothing about the design.',
+			);
+		}
 	}
 
 	/** @Then /^the folder "([^"]*)" carries a Penpot project id$/ */

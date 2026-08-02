@@ -198,50 +198,36 @@ Feature: A mirrored Penpot file is a first-class file type
     When a client tries to change "nc:metadata-penpot_id" via PROPPATCH
     Then the change is rejected — the sync engine owns this property
 
-    # ══ NEXTCLOUD'S OWN TIMESTAMPS, WHICH THIS APP DOES NOT SET ════════════════
+    # ══ NEXTCLOUD'S TIMESTAMPS ARE PENPOT'S NOW ═══════════════════════════════
     #
-    # A mirror carries two sets of dates and they mean different things:
+    # A mirror carries two sets of dates and they used to mean different things:
     #
     #   Nextcloud's `mtime` / `creation_time`   when the app last wrote the node
     #   Penpot's `created-at` / `modified-at`   when the DESIGN was last changed
     #
-    # Nothing maps the second onto the first today. `get-project-files` returns
-    # both for every design and the pull already reads `modified-at` — it just
-    # folds it into the opaque drift signal (§5.5) and throws the value away.
+    # The first is now stamped FROM the second, so sorting a mapped folder by date
+    # sorts by the designs rather than by sync activity (saga §C6.24).
     #
-    # So sorting a mapped folder by "Modified" in Files sorts by *sync activity*,
-    # and a `link` design that has not changed in a year shows the timestamp of
-    # the pull that first created it. That is defensible — the node really was
-    # written then — but it is not the question a user is asking when they sort
-    # a design folder by date.
+    # THERE ARE NO SCENARIOS FOR IT HERE, DELIBERATELY. A modification time is not
+    # a behaviour anyone performs — it is the shared RESULT of editing, moving,
+    # copying and renaming, each of which is already owned by its own feature file.
+    # A scenario asserting "the mtime moved" would be specifying Nextcloud, in the
+    # wrong file, with an invented actor. So the assertions ride the behaviours that
+    # cause them: a design changed in Penpot (`reconcile.feature`), and a mirror
+    # coming into existence (`reconcile.feature`).
     #
-    # THE CONSTRAINT THAT MAKES THIS SUBTLE (§C6.19). `mtime` is not decoration:
-    # it is half of what every desktop and mobile client uses to decide what to
-    # re-download. So "just set mtime from Penpot" must not become "write mtime
-    # on every pull" — see reconcile.feature, where an unchanged pull is required
-    # to move neither mtime nor etag. Any implementation has to set it exactly
-    # when the design's own timestamp changed, and never otherwise.
+    # This file keeps only what is genuinely about the FILE TYPE: which DAV
+    # properties exist and who may write them.
+    #
+    # THE CONSTRAINT THAT MADE IT SUBTLE (§C6.19) still holds and is now enforced
+    # in `reconcile.feature`: a pull that changes nothing must move neither mtime
+    # nor etag. `touch()` leaves a file's own etag alone but propagates a fresh one
+    # to its PARENT FOLDER — which is what sync clients poll — so an unconditional
+    # stamp would churn the folder on every tick. Every write is conditional.
+    #
+    # A PROJECT FOLDER TAKES ITS CREATION TIME ONLY. Core propagates a folder's
+    # mtime from its children, so stamping that would be a fight lost on every pull
+    # that writes any design — and a propagated mtime is better information anyway
+    # ("something in this project changed"), since Penpot's project `modified-at`
+    # only moves on a rename.
 
-  @in-penpot @unbuilt
-  Scenario: A mirror's modified time reflects when the design changed, not when we synced
-    Given a mirrored design whose Penpot "modified-at" is a week old
-    When the team is mirrored again
-    Then the file's Nextcloud modification time matches Penpot's "modified-at"
-    And it is not the time the pull ran
-
-  @in-penpot @unbuilt
-  Scenario: A mirror's creation time reflects when the design was created in Penpot
-    Given a design created in Penpot a month ago and mirrored today
-    Then the file's Nextcloud creation time matches Penpot's "created-at"
-    # Nextcloud keeps `creation_time` separately from `mtime` and exposes it over
-    # DAV, so this is a real field to fill rather than an approximation of one.
-
-  @in-penpot @todo
-  Scenario: Setting the times never makes an unchanged pull look like a change
-    Given a mirrored design whose Penpot timestamps have not moved
-    When the team is mirrored again
-    Then the file's mtime and etag are unchanged
-    # The trap this whole section has to avoid, and the reason it is specified
-    # before it is built: a naive implementation writes the timestamp every run,
-    # which is exactly the churn reconcile.feature forbids — and which the
-    # sibling app demonstrably has.

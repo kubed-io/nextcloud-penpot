@@ -119,12 +119,19 @@ Feature: Scheduled or manual pull from Penpot
     And the folder "Team Root" carries the team's Penpot id
 
   @admin @occ
-  Scenario: A pull mirrors a project as a folder carrying its project id
+  Scenario: A pull mirrors a project as a folder carrying its project id and its date
     Given the first visible team is mapped as a plain folder "Project Folders"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     Then the pull succeeds
     And the folder "Project Folders/Widgets" carries a Penpot project id
+    # END STATE, not a feature of its own — the mirror comes into existence here, so
+    # this is the one place its creation date is answerable. The folder takes its
+    # CREATION time only: Nextcloud propagates a folder's mtime from its children, so
+    # stamping that would be a fight lost on every pull that writes any design (and a
+    # propagated mtime says something more useful anyway — that the project's contents
+    # changed — since Penpot's project `modified-at` only moves on a rename).
+    And the folder "Project Folders/Widgets" was created when its Penpot project was
 
   @admin @occ
   Scenario: A second pull reconciles in place and does not duplicate the folder
@@ -351,6 +358,16 @@ Feature: Scheduled or manual pull from Penpot
     # 1 get-projects + 3 get-project-files = 4 calls for 50 files. This is the
     # property that makes the design scale (saga §6.22).
 
+  @in-penpot @occ
+  Scenario: A mirrored design carries the design's own dates, not the pull's
+    Given the first visible team is mapped as a plain folder "Design Dates"
+    And a mirrored design "Dated" in the project "Clocks"
+    Then "Design Dates/Clocks/Dated.penpot" is dated when the design changed in Penpot
+    And "Design Dates/Clocks/Dated.penpot" was created when the design was created in Penpot
+    # The behaviour is "a design exists in Penpot and is mirrored"; these two are its
+    # end state. A design gets BOTH clocks — unlike its project folder, a file's mtime
+    # is not propagated from anything, so there is nothing to fight.
+
   @admin @occ
   Scenario: An unchanged pull moves no file's mtime or etag
     Given the first visible team is mapped as a plain folder "Steady State"
@@ -358,15 +375,21 @@ Feature: Scheduled or manual pull from Penpot
     And I note the mtime and etag of "Steady State/Idempotent/Steady.penpot"
     When the team is mirrored again
     Then "Steady State/Idempotent/Steady.penpot" has the same mtime and etag
+    # Now also the guard on the timestamp feature itself (§C6.24): stamping a clock
+    # unconditionally would move both of these on every tick. `touch()` leaves a
+    # file's own etag alone but propagates a fresh one to the parent folder, which is
+    # what clients poll — so the stamp is conditional, and this scenario is what
+    # proves it stayed that way.
     # NOT A MICRO-OPTIMISATION — it is what stops every desktop and mobile client
     # re-downloading the whole mapped folder after every scheduled pull. mtime and
     # etag ARE the sync protocol, so rewriting a byte-identical file is a
     # broadcast to every client that something changed.
     #
-    # Measured on the sibling: `nextcloud-n8n` calls `putContent()` on every
-    # workflow on every run, unconditionally, and a pull with nothing changed
-    # upstream moves both (§C6.19). This app avoids it in two places, and BOTH
-    # are load-bearing rather than incidental:
+    # This app has always avoided it; BOTH siblings had to be fixed. `nextcloud-n8n`
+    # and `nextcloud-grafana` each called `putContent()` on every mirror on every run
+    # unconditionally, and a pull with nothing changed upstream moved both clocks on
+    # every file — measured live, then fixed in each (§C6.19, and their own sagas).
+    # Ours avoids it in two places, and BOTH are load-bearing rather than incidental:
     #   - `storeLink()` returns early on an already-empty file (§C6.6);
     #   - `driftedOrMissing()` gates the archive write on the revision signal.
     # A change to either that makes the write unconditional would pass every
