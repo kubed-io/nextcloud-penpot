@@ -1,81 +1,25 @@
-# THE LIVE HALF IS gestures.feature — copy in place, copy up to the team root,
-# and the copy-then-rename chain, driven over WebDAV against a real Penpot.
+# THE LIVE HALF is driven over WebDAV against a real Penpot: copy in place, copy
+# up to the team root, and the copy-then-rename chain.
 #
 # Copying a mirrored ".penpot" file. A copy in Nextcloud becomes a REAL new
 # design in Penpot — full parity with both siblings, which register a copy as a
 # new n8n workflow / Grafana dashboard for the same reason: a copy is a new
 # thing, and leaving it inert makes the file a lie about what it is.
 #
-# ── THIS FILE REVERSED A DECISION. READ WHY BEFORE REVERSING IT BACK ─────────
-#
-# An earlier version said, in its loudest scenario, "No copy, anywhere, ever
-# writes to Penpot", and filed the duplicate as "PROPOSED, NOT ADOPTED". The
-# argument was §6.1: a Ctrl+C is someone organising files, not authoring work,
-# and a Penpot design is a heavyweight object a team would see appear from
-# nowhere.
-#
-# That argument was overturned deliberately (saga §C6.8), on two grounds:
-#   1. §6.1 is about CONTENT never flowing back — the shape data of a design is
-#      never pushed, and still never is. Creating a *container* on an explicit
-#      user gesture is a different act, and it is the one both siblings make.
-#   2. The alternative was worse, not safer. An inert copy is a ".penpot" file
-#      that opens nothing and is indistinguishable from a real mirror — exactly
-#      the "quiet lie" prune.feature and restore.feature exist to prevent.
-#
-# The mechanism was then PROVEN live rather than assumed (§C6.8): duplicate-file
-# takes kebab `file-id` + optional `name` (≤250), honours the name, and returns
-# a full record. It has NO project parameter, so the duplicate always lands in
-# the SOURCE file's project.
-#
-# ── WHICH IS WHY ONE GESTURE IS TWO MECHANISMS ──────────────────────────────
-#
-# Where the copy LANDS decides how many calls it takes. Both are the same
-# feature; they differ only in what the nearest-ancestor walk (§6.29) returns:
-#
-#   lands in the SAME project   → duplicate-file                  (one call)
-#   lands in ANOTHER project    → duplicate-file + move-files     (two calls)
-#   lands outside every mapping → nothing is created at all
-#
-# move-files takes `project-id` + `ids` (a set) and answers 204 — including on a
-# just-created duplicate, confirmed live. Note this is a THIRD spelling beside
-# duplicate's `file-id` and delete's plain `id`: the client encodes per command.
-#
-# ── MODE DOES NOT MATTER HERE, AND THAT IS A PENPOT-ONLY PROPERTY ───────────
-#
-# The siblings copy by pushing the file's own JSON, so a copy of a pointer would
-# have nothing to push. `duplicate-file` copies the DESIGN, server-side, from an
-# id — no bytes travel. So a `link` file (zero bytes, §C6.6) duplicates exactly
-# as well as a `sync` file. Neither mode is a special case, and no export is
-# needed to copy.
-#
-# ── THE NAME COMES FROM THE COPY, NOT THE ORIGINAL ──────────────────────────
-#
-# Nextcloud names a copy itself ("My firsty (copy).penpot"). That name is the
-# user's stated intent, so it is what the new design is called — extension
-# stripped (§6.4), truncated to Penpot's 250-char limit. This is the one place a
-# name flows Nextcloud → Penpot at creation time rather than being followed.
-#
-# @todo — no lib/Listener/CopyListener exists yet.
+# Copying a PROJECT folder is copy-project.feature, and the answer there is the
+# opposite one — it is refused. That asymmetry is exactly why the two are
+# separate files rather than one with a branch in the middle.
 
-Feature: Copying a mirrored Penpot file creates a real copy in Penpot
+Feature: Copying a mirrored design
   As a Nextcloud user
-  I want copying a design file to give me a real, separate design
-  So that a duplicate is something I can open and work on, not a dead file
-
+  I want a copied design file to become a real new design in Penpot
+  So that duplicating work in Files duplicates it where the work actually lives
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
-
-    # ══ COPIED IN NEXTCLOUD ════════════════════════════════════════════════════
-    #
-    # Driven as real WebDAV COPYs against a real Penpot. Three bugs came out of the
-    # gap where these had no live test (§C6.8/§C6.9/§C6.10) — a param bug believed
-    # for an hour, a copy that silently failed to record its id and presented as a
-    # broken RENAME one gesture later, and a copy to the team root that did nothing
-    # at all in Penpot while its unit test passed against a mock.
 
   @in-nextcloud @gesture
   Scenario: Copying in place creates a second design in the same project
@@ -100,7 +44,7 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # No penpot_id on the source means there is nothing to duplicate, and no
     # mapped ancestor means there is nowhere to put it. Both checks matter: a
     # file can carry an id and still be outside every mapping (drag one out and
-    # it keeps its stamp), which is move.feature's "unmapped" state.
+    # it keeps its stamp), which is move-design.feature's "unmapped" state.
 
   # THE ONE THAT FAILED BY HAND. The team root has no project FOLDER above it, so
     # membership resolves to "no project" — which reads exactly like "outside every
@@ -297,34 +241,6 @@ Feature: Copying a mirrored Penpot file creates a real copy in Penpot
     # the same problem without leaving a dead file behind.
 
     # ── folders are still refused ─────────────────────────────────────────────
-
-  @todo
-  Scenario: Copying a project folder is refused, unlike copying a file
-    Given the Penpot project "My Stuff" is mirrored as a folder
-    When I try to copy that folder
-    Then the copy is refused with an explanation
-    And no new Penpot project is created
-    And no duplicate project folder is left behind
-    And copying an individual ".penpot" file remains unaffected
-    # DISABLED DELIBERATELY (saga §6.40), not merely unbuilt. Three reasons:
-    #  (1) the copy would carry the same project id, so two folders claim one
-    #      project — and every file in the copied tree would too;
-    #  (2) Nextcloud auto-increments a copy to "My Stuff (2)", which instantly
-    #      violates §6.36's names-always-match rule — and "fixing" it by rename
-    #      would rename the ORIGINAL Penpot project;
-    #  (3) on this cluster a single folder can also carry n8n and Grafana
-    #      mappings, so a folder copy asks three independent apps to agree on
-    #      what a duplicate means, with no coordination between them.
-
-  @in-nextcloud @gesture @todo
-  Scenario: Copying an ordinary folder inside a mapped folder is unaffected
-    Given a plain folder "Clients" inside the mapped folder with no Penpot metadata
-    When I copy it
-    Then the copy succeeds normally
-    And Penpot is never contacted
-    # Only folders carrying a project id are refused. A mapped folder has to stay
-    # usable as an ordinary folder, which is the same rule the tag opt-in rests
-    # on (project-folder.feature).
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Copying a design across two mappings makes a new design in the destination team

@@ -27,7 +27,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * A folder becomes a Penpot project — by opt-in (`project-folder.feature`).
+ * A folder becomes a Penpot project — by opt-in (`create-project.feature`).
  *
  * The asymmetry under test: every Penpot project becomes a folder automatically,
  * but a folder becomes a project ONLY when someone tags it. So the interesting
@@ -183,7 +183,7 @@ final class ProjectFolderServiceTest extends TestCase {
 	/**
 	 * The pull tags every folder it mirrors, so this is the COMMON path. A second
 	 * create would leave two folders claiming one project — the exact failure
-	 * `project-folder.feature` refuses folder copies to avoid.
+	 * `copy-project.feature` refuses folder copies to avoid.
 	 */
 	public function testAFolderThatIsAlreadyAProjectIsNotCreatedAgain(): void {
 		$this->folderMarkers[50] = new FolderMarkers(self::OTHER_PROJECT, '');

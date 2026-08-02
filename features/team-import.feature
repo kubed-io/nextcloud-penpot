@@ -123,7 +123,7 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     # §6.1", and a scenario that deliberately asserted nothing. All three are
     # settled: the tag is `penpot`, the fork closed the same way §6.33 closed for
     # files (creating a CONTAINER is not pushing CONTENT), and the behaviour is
-    # live in project-folder.feature.
+    # live in create-project.feature.
     #
     # It happens on the TAG EVENT, not on the next pull — the pull never
     # originates anything in Penpot, and making it the actor would have meant a
@@ -140,6 +140,6 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     Then that subfolder is ordinary tolerated content — nothing happens to it
     # The confirmed, locked tolerated-content rule (§6.13), unchanged by the tag.
     And the import surface names the "penpot" tag as the way to make one a project
-    # The behaviour itself is asserted in project-folder.feature, where it is
+    # The behaviour itself is asserted in create-project.feature, where it is
     # live. Duplicating the assertion here would be the two-files-one-behaviour
     # mistake features/README.md exists to prevent.

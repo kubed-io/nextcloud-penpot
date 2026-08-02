@@ -111,7 +111,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And the app offers to restore it into Penpot as a new file
     And nothing is sent to Penpot until the user confirms
     # Restore is never automatic and never silent, because a deleted Penpot file
-    # cannot come back at its original id (saga §6.20) — see restore.feature.
+    # cannot come back at its original id (saga §6.20) — see restore-design.feature.
 
     # ── the invariant ────────────────────────────────────────────────────────────
 

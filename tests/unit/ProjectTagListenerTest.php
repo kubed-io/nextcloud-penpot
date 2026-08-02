@@ -24,7 +24,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * The routing half of the opt-in (`project-folder.feature`).
+ * The routing half of the opt-in (`create-project.feature`).
  *
  * Small on purpose — {@see ProjectFolderServiceTest} covers what tagging DOES.
  * What only the listener can get wrong is which events it acts on at all: a tag

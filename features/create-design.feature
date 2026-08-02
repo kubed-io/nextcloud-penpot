@@ -31,7 +31,7 @@
 # that team's Drafts project in Penpot. This is where Nextcloud is more expressive
 # than Penpot: one flat Drafts bucket on their side can be any arrangement of
 # ordinary folders on ours. Filing the design later is just a drag into a project
-# folder (move.feature).
+# folder (move-design.feature).
 #
 # NOW EXERCISED LIVE (saga §C6.11). `create-file` was called against a running
 # instance and its schema read back:
@@ -149,7 +149,7 @@ Feature: Creating a new Penpot design from Nextcloud
     Then the design is moved from Drafts into the "My Stuff" project in Penpot
     And it keeps the id it was created with
     # The create/file split costs the user nothing: make it anywhere sensible,
-    # file it later with an ordinary drag (move.feature, saga §6.35).
+    # file it later with an ordinary drag (move-design.feature, saga §6.35).
 
   @blocked
   Scenario: The action is not offered where no team can be determined
@@ -213,3 +213,38 @@ Feature: Creating a new Penpot design from Nextcloud
     When I create a new design in the "My Stuff" folder
     Then the mirrored file is in "link" mode
     And no archive is stored for it until it is promoted to "sync"
+
+  # ── creating in a personal team ─────────────────────────────────────────────
+  # Same behaviour, different destination: the user's own Drafts rather than the
+  # team's. personal-projects.feature owns why that destination differs.
+
+  @unbuilt
+  Scenario: A design created in the user's own home lands in their personal Drafts
+    Given the user has set a valid personal Penpot token
+    When the user creates a new design file at the root of their home
+    Then the design is created in their personal team's "Drafts" project
+    And the file carries the new design's Penpot id
+    # THE WHOLE POINT OF THE IMPLICIT MAPPING. Without a team ancestor this file
+    # resolves to nothing and stays inert (create-design.feature's rule). With
+    # one it is the ordinary team-root case (§6.35) — same rule, new root.
+
+  @unbuilt
+  Scenario: A design created in a plain folder in the user's home also lands in personal Drafts
+    Given the user has set a valid personal Penpot token
+    And a plain folder "Sketchbook" in the user's home with no Penpot metadata
+    When the user creates a new design file inside "Sketchbook"
+    Then the design is created in their personal team's "Drafts" project
+    # Nearest-ancestor, unchanged: no project id on the way up, a team id at the
+    # root. Exactly what a plain folder under a mapped Team Folder does.
+
+    # ── crossing the boundary: personal ⇄ a shared team ─────────────────────────
+    # A user's home and a mapped Team Folder are two mappings to two different
+    # Penpot teams, so a drag between them is a REAL cross-team move — and a move
+    # is move-design.feature's, whatever the two ends happen to be. The scenarios live
+    # there, next to every other move, rather than here where a reader comparing
+    # "what happens when I drag a design" would have to find them.
+    #
+    # This file owns only the fact that makes them possible: the home root has a
+    # team ancestor because a token was set.
+
+    # ── modes and behaviour are identical to team projects ──────────────────────

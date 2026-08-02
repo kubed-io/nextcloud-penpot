@@ -20,8 +20,8 @@ use GuzzleHttp\Client;
  * Copy, move and rename are three of the app's write-back paths, and all three
  * are driven by events Nextcloud emits from its Files API. Nothing in `occ`
  * performs any of those gestures, so until now the suite could configure the app
- * and pull with it, but never *use* it: copy.feature, move.feature and
- * rename.feature were all @todo for want of a way to press the button, while the
+ * and pull with it, but never *use* it: copy-design.feature, move-design.feature and
+ * rename-design.feature were all @todo for want of a way to press the button, while the
  * code they describe shipped and was only ever exercised by hand.
  *
  * That gap has a cost on the record. A `move-files` bug was believed for an hour
@@ -82,7 +82,7 @@ trait WebDavTrait {
 	 * which only makes a top-level folder and registers it for teardown.
 	 *
 	 * This is the folder half of "+ New": a user making a subfolder inside a
-	 * mapped folder, which `project-folder.feature` requires to stay an ORDINARY
+	 * mapped folder, which `create-project.feature` requires to stay an ORDINARY
 	 * folder.
 	 */
 	private function davMkcol(string $path): void {

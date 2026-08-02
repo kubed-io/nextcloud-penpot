@@ -16,7 +16,7 @@ It does not answer *"what does the pull do?"*, because a user does not think in
 pulls.
 
 That distinction is the whole layout. Before it, finding "how does move work"
-meant reading `move.feature` for the Nextcloud half, `reconcile.feature` for the
+meant reading `move-design.feature` for the Nextcloud half, `reconcile.feature` for the
 Penpot half, and `gestures.feature` for the two that CI could actually prove.
 Three files, one behaviour, and no single place that told you the shape of it.
 
@@ -25,29 +25,29 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | File | Owns |
 |---|---|
 | `create-design.feature` | A design coming into existence, on either side |
-| `copy.feature` | Duplicating a design — and why a project FOLDER may not be copied |
-| `move.feature` | A design or project folder changing project, team, or Drafts state |
-| `rename.feature` | A design or project folder changing name, incl. both name guards |
-| `delete.feature` | Everything that removes a design or a project folder: the two trashes, the prune, the purge |
-| `restore.feature` | Everything that brings one back: both trashes, the archive |
-| `project-folder.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
+| `copy-design.feature` | Duplicating a design — and why a project FOLDER may not be copied |
+| `move-design.feature` | A design or project folder changing project, team, or Drafts state |
+| `rename-design.feature` | A design or project folder changing name, incl. both name guards |
+| `delete-design.feature` | Everything that removes a design or a project folder: the two trashes, the prune, the purge |
+| `restore-design.feature` | Everything that brings one back: both trashes, the archive |
+| `create-project.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
 | `set-mode.feature` / `sync-mode.feature` | `sync` ⇄ `link`, and what each mode means |
 | `ignore.feature` | Excluding a file from the sync |
 | `open-with.feature` / `file-type.feature` | The Files-app surface of a mirror |
 
-**The behaviour is the axis, not the kind of thing acted on.** `project-folder.feature`
+**The behaviour is the axis, not the kind of thing acted on.** `create-project.feature`
 used to own every verb a project folder could be on the receiving end of —
 renaming one, copying one, moving one, deleting one. That is the same mistake
 `gestures.feature` made in the other direction, and it cost the same thing:
 "what happens when I rename a project folder?" had two answers in two files, and
-the two had already drifted. `rename.feature` had *live* coverage of the
-project-folder rename while `project-folder.feature` still called it unbuilt;
-`move.feature` had all four project-folder move scenarios; `copy.feature` had the
+the two had already drifted. `rename-design.feature` had *live* coverage of the
+project-folder rename while `create-project.feature` still called it unbuilt;
+`move-design.feature` had all four project-folder move scenarios; `copy-design.feature` had the
 refusal plus a comment pointing back for reasons it could simply have stated.
 
 A project folder is not a separate universe. Renaming one is a RENAME, and it
 belongs beside the other rename where a reader comparing the two sees the whole
-table at once. What is left in `project-folder.feature` is the one thing no
+table at once. What is left in `create-project.feature` is the one thing no
 behaviour file can own: a folder's **identity** as a project — how it acquires
 one, and the marker that says so.
 
@@ -59,7 +59,7 @@ one, and the marker that says so.
 
 A scenario belongs in `reconcile.feature` only when it is about the RUN. "A
 design renamed in Penpot reaches Nextcloud" is a rename — it lives in
-`rename.feature`. "A pull that could not list one project prunes nothing" is
+`rename-design.feature`. "A pull that could not list one project prunes nothing" is
 about the run, and lives here.
 
 **Configuration files** — the admin and per-user surface: `admin-connection`,
@@ -263,6 +263,21 @@ Only end-of-line occurrences trigger it, and any of these clears it:
 Prefer whichever the sentence wanted anyway. **A step line is a function signature**,
 so changing one means changing its definition too — reword those rather than adding
 punctuation, and move the definition with it.
+
+
+### …and never start a token with an apostrophe
+
+Same class of bug, same file's grammar. `feature.tmLanguage.json` treats `'` as a
+string delimiter:
+
+```
+begin: (?<![a-zA-Z0-9"])'      end: '(?![a-zA-Z0-9"])
+```
+
+An apostrophe opens a string **unless it directly follows an alphanumeric or a
+double quote** — so `alex's` and `"alex"'s` are both fine, but `"alex" 's` opens
+a region that never closes and greys out the rest of the file. It turns up when a
+possessive gets separated from its noun while editing around a quoted parameter.
 
 ## Data tables: an input, or a different rule?
 

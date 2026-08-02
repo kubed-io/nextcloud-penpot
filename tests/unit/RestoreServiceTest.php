@@ -23,7 +23,7 @@ use Psr\Log\NullLogger;
 
 /**
  * Restore, in the three layers that decide what "restore" even means
- * (`delete.feature`, `restore.feature`).
+ * (`delete-design.feature`, `restore-design.feature`).
  *
  * ## THE TESTS THAT MATTER HERE ARE THE TWO LIES
  *
@@ -242,7 +242,7 @@ final class RestoreServiceTest extends TestCase {
 
 	/**
 	 * Past the grace window, or permanently deleted. Importing the archive is
-	 * `restore.feature`'s slice and does not exist — so nothing is sent, and the
+	 * `restore-design.feature`'s slice and does not exist — so nothing is sent, and the
 	 * one thing this must not do is call the restore command anyway on the chance
 	 * it works. §6.20: a purged id cannot be resurrected, tested directly.
 	 */

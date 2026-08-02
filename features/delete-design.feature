@@ -1,111 +1,38 @@
-# Deleting a mirrored design — TWO TRASHES THAT MIRROR EACH OTHER.
+# DELETING A DESIGN — both bins, both directions, and the one irreversible path.
+# Deleting a PROJECT (the folder) is delete-project.feature: one call, not one
+# per design, and a different set of guards.
 #
-# ## THIS FILE REVERSED ITS OWN RULE. READ WHY BEFORE REVERSING IT BACK.
+# ## TWO BINS, AND THEY ARE NOT SYMMETRIC (saga §C6.11)
 #
-# It used to open: "NEXTCLOUD-SIDE delete → the local mirror. Purely local,
-# ALWAYS. Penpot is never contacted." That was written under §6.34, which
-# believed Penpot's trash was unreachable by API and therefore that `delete-file`
-# was destructive. §6.52 disproved both halves, and §C6.11 re-confirmed them live:
-# `delete-file` is a SOFT delete into a real trash that keeps the design for ~7
-# days with its id, revision and history intact.
+# Nextcloud's trash and Penpot's trash are separate systems with separate
+# retentions. An ordinary delete is SOFT on both sides — recoverable, and
+# therefore safe to do without asking. Only emptying the Nextcloud trash reaches
+# `permanently-delete-team-files`, the single irreversible thing this app can
+# cause, and it is reached only by the single irreversible gesture Nextcloud
+# offers.
 #
-# Once that is true, "purely local" stops being the safe choice and starts being
-# the surprising one — a user who deletes a design in Nextcloud and finds it
-# still in Penpot has not been protected, they have been ignored.
+# THE GUARD ON THAT CALL IS THE ONLY SAFETY THERE IS: Penpot does not check its
+# own trash before permanently deleting, so the app reads the trash listing first
+# and passes only ids that are in it. A design someone restored in Penpot between
+# the two is therefore left alone.
 #
-# ## THE MAPPING: EACH GESTURE GETS THE OPERATION WITH THE SAME REVERSIBILITY
+# ## A LINK HAS NOTHING TO DELETE
 #
-# This is the rule the whole feature comes from, and it is the same one
-# nextcloud-n8n uses — with one difference that makes it fit BETTER here: n8n and
-# Grafana have no trash of their own, so their soft step has to invent one
-# (archive, untag). Penpot has a real trash, so the two sides line up exactly:
-#
-#   | Nextcloud gesture      | Penpot RPC                      | Reversible? |
-#   |------------------------|---------------------------------|-------------|
-#   | Delete (→ NC trash)    | delete-file (→ Penpot trash)    | yes, ~7d    |
-#   | Empty trash / purge    | permanently-delete-team-files   | NO          |
-#   | Restore from NC trash  | restore-deleted-team-files      | n/a — it IS the undo |
-#
-# ## ONE EVENT, TWO STEPS, TOLD APART BY PATH
-#
-# Nextcloud fires `BeforeNodeDeletedEvent` for BOTH steps. They are distinguished
-# by where the node lives when it fires (the n8n mechanism, ported):
-#
-#   <uid>/files/…                  → the first delete, on its way to the trash
-#   <uid>/files_trashbin/files/…   → the purge, the irreversible one
-#
-# ...EXCEPT THE SECOND ONE IS NOT AN EVENT AT ALL (saga §C6.13). Nextcloud fires
-# `BeforeNodeDeletedEvent` for the first delete and NOTHING TYPED for the purge —
-# the trashbin emits a legacy `\OCP\Trashbin` `preDelete` hook instead. The path
-# discrimination above is how the two are told apart in principle; in practice
-# they arrive through two different doors. Nothing a user sees changes, but a
-# reader looking for the purge in the delete listener will not find it there.
-#
-# A trash-BYPASSED delete (admin disabled the trash, or `X-NC-Skip-Trashbin`)
-# never produces the soft step. It is a known gap rather than a handled case:
-# there is no trash for the purge hook to fire from, so the design is left in
-# Penpot's trash and expires on Penpot's own schedule.
-#
-# ## THE PURGE GUARD, AND WHY IT IS NOT OPTIONAL (saga §C6.11)
-#
-# `permanently-delete-team-files` DOES NOT CHECK THAT THE FILE IS IN THE TRASH.
-# Proven live: a design that had been restored — live, listed in its project —
-# was destroyed by passing its id to that command. It is not "empty the trash",
-# it is "destroy these designs", and it has no safety of its own.
-#
-# So the ids handed to it may come from exactly one place: a fresh
-# `get-team-deleted-files` listing. Never from the mirror's metadata, never from
-# a user's selection, never from anything the app worked out for itself. If the
-# id is not in that listing, the purge does nothing — the design was already
-# purged, or someone restored it in Penpot's own UI, and either way destroying it
-# is not what the user asked for.
-#
-# ## RESTORE, AND WHY IT WAS ITS OWN SLICE
-#
-# It is now built (§C6.15), and the gap this header used to describe — restore
-# the mirror, and the next pull trashes it again because the design is still in
-# Penpot's trash — is closed. Two things made it worth a slice of its own rather
-# than a line in this one, and both are about the same command lying:
-#
-#   - `restore-deleted-team-files` answers 200 with an EMPTY SET for an id it did
-#     not restore (§C6.11). No error. So the `end` event's PAYLOAD — the ids
-#     actually restored — is the only honest answer, and the app compares it
-#     against what it asked for.
-#   - §6.49 once saw that event arrive while `deleted_at` was still set. It did
-#     not reproduce on 2.17.0; the confirming re-read stays anyway, because one
-#     non-reproduction does not disprove a race and the read costs one listing.
-#
-# A restore that reported success without restoring is worse than an error: the
-# user stops looking for the file.
-#
-# WHAT "RESTORE" MEANS DEPENDS ON WHAT SURVIVED (saga §6.52), and the app picks
-# the cheapest, most lossless layer that applies — never the other way round:
-#
-#   1. the design still exists in Penpot   → Penpot is not contacted at all
-#   2. it is in Penpot's trash (~7 days)   → restore-deleted-team-files, LOSSLESS
-#   3. it is gone for good                 → only the local archive is left, and
-#                                            importing it mints a NEW id (§6.20).
-#                                            NOT BUILT — see restore.feature.
-#
-# @todo — the scenarios here are the full specification; the live half runs in
-# gestures.feature, which drives the real DAV gestures against a real Penpot.
+# A `link` is zero bytes pointing at a design that lives elsewhere, so deleting
+# one is a DISMISSAL, not a deletion — it hides the pointer and leaves the design
+# untouched. That branch is here in full, because "delete" reads the same in the
+# Files app whichever mode the file is in.
 
-Feature: Deleting designs, locally and in Penpot
+Feature: Deleting a mirrored design
   As a Nextcloud user
-  I want local deletes to stay local and Penpot deletes to be recoverable
-  So that removing a file is never a surprise and never silently costs me work
-
+  I want deleting a design file to be soft on both sides
+  So that nothing is lost until I deliberately empty the trash
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
-
-    # ══ DELETED IN NEXTCLOUD ═══════════════════════════════════════════════════
-    #
-    # Driven as real WebDAV DELETEs against a real Penpot. The two gestures below
-    # are the two trashes, in order of reversibility.
 
   @in-nextcloud @gesture
   Scenario: Deleting a mirror moves the design into Penpot's trash
@@ -316,63 +243,6 @@ Feature: Deleting designs, locally and in Penpot
     # IS the team root (§6.35) — so this app cannot reach it by this gesture
     # anyway; the guard is stated so a future folder mode cannot back into it.
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Deleting a project folder deletes the project in Penpot
-    Given a mirrored design "Inside" in the project "Doomed"
-    When I delete the "Doomed" project folder
-    Then "delete-project" is called with that project's id
-    And Penpot no longer lists a project named "Doomed"
-    And the design "Inside" is in Penpot's trash
-    And the folder is recoverable from the Nextcloud trash
-    # The two trashes line up: Nextcloud's is reversible and so is Penpot's, on
-    # a comparable window. This is the same shape as deleting a single mirror
-    # (above) one level up the tree.
-
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Deleting a project folder does not need a per-design call
-    Given a mirrored project "Doomed" holding 3 designs
-    When I delete the "Doomed" project folder
-    Then "delete-file" is never called
-    And exactly one "delete-project" call is made
-    # Penpot cascades server-side, so mirroring its behaviour is ONE call, not
-    # N+1 — and doing it per-file would be worse than redundant: it would leave
-    # the project itself alive and empty if the last call failed.
-
-  @in-nextcloud @gesture @todo
-  Scenario: A plain folder inside a mapped folder deletes without touching Penpot
-    Given a plain folder "Just My Notes" inside the mapped folder
-    When I delete it
-    Then Penpot is never contacted
-    # Only a folder carrying `penpot_project_id` is a project. This is the same
-    # rule the tag opt-in rests on (project-folder.feature), stated for delete.
-
-  @in-nextcloud @gesture @unbuilt
-  Scenario: The team root is never deletable as a project
-    When I try to delete the mapped folder itself
-    Then "delete-project" is never called for the team's Drafts project
-    # Penpot answers `:non-deletable-project` for a team's default project. The
-    # team root carries `penpot_team_id`, not `penpot_project_id`, so it does not
-    # resolve as a project folder and never reaches the call.
-
-  @in-penpot @todo
-  Scenario: A project deleted in Penpot leaves no folder claiming its id
-    Given a mirrored design "Orphan" in the project "Deleted Upstream"
-    When the project is deleted in Penpot
-    And the team is mirrored again
-    Then the mirror of "Orphan" is in the Nextcloud trash
-    And the folder does not still carry the dead project's id
-    # THE GAP THE LIVE PROBE FOUND (§C6.19). The designs prune correctly, with
-    # rescue archives — but the FOLDER survives, still stamped with a project id
-    # that no longer resolves, still wearing the `penpot` tag. Anything dropped
-    # into it afterwards resolves to a project Penpot will refuse.
-    #
-    # `get-all-projects` filters deleted projects out, so the pull cannot tell
-    # "deleted" from "never existed" — which is exactly why the pull must not
-    # DELETE the folder either. Un-stamping it (and un-tagging it) turns it back
-    # into an ordinary folder, which is the truthful end state.
-
-    # ── the hard step: emptying the trash purges Penpot ───────────────────────
-
   @todo
   Scenario: Purging a mirror from the Nextcloud trash destroys the design
     Given a trashed ".penpot" file whose design is in Penpot's trash
@@ -520,14 +390,6 @@ Feature: Deleting designs, locally and in Penpot
     # Confirmed live: the first restore call returned "end" while deleted_at was
     # still set; a second call cleared it. A silent no-op is worse than an error.
 
-  @todo
-  Scenario: Restoring a design also restores its project if that was deleted too
-    Given a Penpot project that was deleted, containing a design
-    When the design is restored from Penpot's trash
-    Then its containing project is restored as well
-    And the project folder reappears on the next pull
-    # Penpot's restore clears deleted_at on the project as well as the file.
-
   @blocked
   Scenario: The app always offers Penpot's trash before an archive import
     Given an unmapped ".penpot" file whose design was deleted in Penpot
@@ -535,7 +397,7 @@ Feature: Deleting designs, locally and in Penpot
     When I ask to restore it
     Then the app restores it from Penpot's trash, not from the local archive
     And it explains that this restore loses nothing
-    # Import is the last resort, not the default (saga §6.52) — see restore.feature.
+    # Import is the last resort, not the default (saga §6.52) — see restore-design.feature.
 
     # ── the one irreversible act ────────────────────────────────────────────────
 

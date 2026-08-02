@@ -1,28 +1,30 @@
-# HOW A FOLDER BECOMES A PENPOT PROJECT, AND HOW YOU CAN TELL THAT IT IS ONE.
+# HOW A FOLDER BECOMES A PENPOT PROJECT — the creating half, from either side.
 #
-# ## WHAT THIS FILE OWNS — AND WHAT IT USED TO
+# ## WHAT THIS FILE OWNS
 #
-# It used to own every verb a project folder could be on the receiving end of:
-# renaming one, copying one, moving one, deleting one. That was the same mistake
-# `gestures.feature` made in the other direction — organising by the KIND OF
-# THING acted on instead of by the BEHAVIOUR — and it cost the same thing:
-# "what happens when I rename a project folder?" had two answers in two files,
-# and the two had already drifted. `rename.feature` had live coverage of the
-# project-folder rename while this file still called it unbuilt; `move.feature`
-# had all four project-folder move scenarios; `copy.feature` had the refusal and
-# a comment pointing back here for reasons this file no longer needed to hold.
+# A project's IDENTITY: how a folder acquires one, and the marker that says it
+# has. Every VERB a project can be on the receiving end of lives with the other
+# instances of that verb, so "what happens when I rename a project?" and "what
+# happens when I rename a design?" sit side by side rather than in two files:
 #
-# A project folder is not a separate universe. Renaming one is a RENAME, and it
-# belongs next to the other rename, where a reader comparing the two can see the
-# whole table at once (features/README.md).
+#   renaming a project   → rename-project.feature
+#   copying one          → copy-project.feature   (refused — and why)
+#   moving one           → move-project.feature
+#   deleting one         → delete-project.feature
+#   restoring one        → restore-project.feature
 #
-#   renaming a project folder  → rename.feature
-#   copying one                → copy.feature
-#   moving one                 → move.feature
-#   deleting one               → delete.feature
+# This file used to own all of those, which was the same mistake gestures.feature
+# made in the other direction — organising by the KIND OF THING acted on instead
+# of by the BEHAVIOUR — and it cost the same thing: "what happens when I rename a
+# project folder?" had two answers in two files, and the two had already drifted.
 #
-# What is left here is the one thing no other file can own: a folder's
-# IDENTITY as a project — how it acquires one, and the marker that says so.
+# It was called project-folder.feature until the design/project split, which is
+# when the last of those verbs moved out. The name followed the contents: what is
+# left is creation, so it sits beside create-design.feature where the two opt-in
+# models can be read together.
+#
+# A PERSONAL project is created the same way, by the same tag, in the user's own
+# home — personal-projects.feature owns only the who and the where.
 #
 # ## THE ASYMMETRY (saga §C6.18)
 #
@@ -34,7 +36,7 @@
 # exports, a subfolder of references. Mapped folders are real folders, and they
 # must behave like ordinary ones. Inferring intent from a folder's existence is
 # the kind of automatic behaviour this app has refused everywhere else (§6.33 on
-# creation, move.feature on drag-in).
+# creation, move-design.feature on drag-in).
 #
 # The opt-in is the `penpot` TAG. Assigning it says "make this a project", which
 # is a deliberate act with a name, exactly as "+ New → Penpot design" is for
@@ -109,7 +111,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     And Penpot holds a project named "Already Mine"
     # The common path, because the pull tags every folder it mirrors. A second
     # create here would leave two folders claiming one project — the exact
-    # ambiguity copy.feature refuses a folder copy to avoid.
+    # ambiguity copy-design.feature refuses a folder copy to avoid.
 
   @in-nextcloud @occ @todo
   Scenario: A folder tagged as a project must have a usable name first
@@ -147,7 +149,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     And the folder "Penpot/Keep Me" carries a Penpot project id
     # Untagging is unmapping, not deleting — the same rule as moving a design out
     # of a mapping (§6.23), and the same rule as deleting a project folder
-    # (delete.feature). Destroying a project because someone removed a label
+    # (delete-project.feature). Destroying a project because someone removed a label
     # would be the worst kind of surprise.
     #
     # The app does not subscribe to `TagUnassignedEvent` at all, so "Penpot is

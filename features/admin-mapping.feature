@@ -242,7 +242,7 @@ Feature: Admin configures team mappings
     Then Penpot is never contacted
     And the file is untracked, and no pull ever touches it
     # Having CREATE does not mean a landing file becomes a design. Deliberate
-    # creation is create-design.feature; a copy is copy.feature. Everything else
+    # creation is create-design.feature; a copy is copy-design.feature. Everything else
     # is just a file living in a folder.
 
   Scenario: A mapping defaults to a Team Folder with no groups

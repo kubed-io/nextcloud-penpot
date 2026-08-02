@@ -554,7 +554,7 @@ final class PullServiceTest extends TestCase {
 	 *
 	 * The upsert index used to read only a project folder's direct children while
 	 * the prune walked the whole tree (§C6.20). So a user files a design into
-	 * `wip/` — which move.feature explicitly allows, because Penpot has no
+	 * `wip/` — which move-design.feature explicitly allows, because Penpot has no
 	 * concept of subfolders — and the next pull cannot see it, creates a SECOND
 	 * mirror at the canonical path, and the prune then leaves both alone because
 	 * Penpot does still list that id. Two files, one design, forever, no

@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * Delete, in the two steps that mirror the two trashes (`delete.feature`).
+ * Delete, in the two steps that mirror the two trashes (`delete-design.feature`).
  *
  * The tests that matter here are the ones guarding the PURGE, because
  * `permanently-delete-team-files` has no safety of its own: it destroys whatever

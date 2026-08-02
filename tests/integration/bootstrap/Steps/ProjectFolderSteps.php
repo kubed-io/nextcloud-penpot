@@ -12,7 +12,7 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
 /**
  * The opt-in that makes a Nextcloud folder a Penpot project, and the tag that
  * marks every project folder whichever way round it came about
- * (`project-folder.feature`, saga §C6.18).
+ * (`create-project.feature`, saga §C6.18).
  *
  * ## THE ASYMMETRY THESE STEPS EXIST TO PROVE
  *

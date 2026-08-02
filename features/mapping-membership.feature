@@ -41,7 +41,7 @@
 #
 # MEMBERSHIP IS DERIVED, NEVER STORED ON THE FILE. No "penpot_mapping" key — the
 # folders already know, and a stored copy would have to be rewritten on every
-# move, which is exactly the drift an earlier move.feature tangled itself in.
+# move, which is exactly the drift an earlier move-design.feature tangled itself in.
 #
 # BUILT AND NOW LIVE. `MembershipResolver` has existed since Course 3 and every
 # other feature defers to it, but nothing in CI had ever asked it a question —
@@ -53,7 +53,7 @@
 # THE BACKGROUND WAS FICTION. It provisioned a Team Folder and mirrored a project
 # called "My Stuff", and none of those steps had ever existed — harmless while
 # the file was entirely @todo, an instant `--strict` failure the moment one
-# scenario went live. Same trap as project-folder.feature (§C6.18). It is now the
+# scenario went live. Same trap as create-project.feature (§C6.18). It is now the
 # standard Background: a PLAIN mapped folder, because Team Folder provisioning is
 # not covered by this suite (features/README.md).
 
@@ -120,7 +120,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     Then "Outside Everything/Loose.penpot" resolves to no Penpot mapping at all
     And the file "Outside Everything/Loose.penpot" carries no Penpot id
     # Untracked: no id, no mapping. A file that HAS an id and no mapping is the
-    # separate "unmapped" state — see move.feature.
+    # separate "unmapped" state — see move-design.feature.
 
     # ── the Drafts state: a team ancestor but no project ancestor ───────────────
     # Drafts is NEVER a folder (saga §6.35). It is the name Penpot gives to
@@ -175,7 +175,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     # Under free nesting a project folder is otherwise indistinguishable from an
     # ordinary folder someone named the same thing. Tag + matching name means a
     # tagged folder called "Acme" IS the Penpot project "Acme" — no ambiguity.
-    # The rename half of the invariant is rename.feature's, where it is live.
+    # The rename half of the invariant is rename-design.feature's, where it is live.
 
   @in-nextcloud @gesture
   Scenario: A plain folder inside a mapped folder is tolerated, not adopted
@@ -185,7 +185,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And Penpot holds no project named "Just Sitting Here"
     # This is the whole point of the tag: ordinary folders can live among project
     # folders without becoming projects. The opt-in that DOES make one a project
-    # is project-folder.feature's, and it is live there.
+    # is create-project.feature's, and it is live there.
 
   @in-nextcloud @occ
   Scenario: A folder opted in by tag resolves exactly like a mirrored one
@@ -193,7 +193,7 @@ Feature: Membership is the nearest ancestor folder carrying a Penpot id
     And the folder "Penpot/Opted In" has been tagged "penpot"
     When I create a new design file at "Penpot/Opted In/After The Tag.penpot"
     Then "Penpot/Opted In/After The Tag.penpot" resolves to the project "Opted In"
-    # The opt-in itself — what the tag DOES — is project-folder.feature's, and it
+    # The opt-in itself — what the tag DOES — is create-project.feature's, and it
     # is live there. This is only the half this file owns: once stamped, nothing
     # downstream can tell which direction the folder came from.
 

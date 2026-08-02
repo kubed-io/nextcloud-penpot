@@ -1,5 +1,7 @@
-# MOVING A DESIGN — every way it can change project, team, or Drafts state, from
-# either side.
+# MOVING A DESIGN — every way a design can change project, team, or Drafts state,
+# from either side. Moving a PROJECT (the folder) is move-project.feature: a
+# different object with a different rule, because a project folder's position is
+# constrained where a design's is not.
 #
 # This file used to be the Nextcloud half only: the Penpot half lived in
 # reconcile.feature and the two scenarios CI could prove lived in a third file
@@ -9,79 +11,26 @@
 # ## THE GUIDING PRINCIPLE: DON'T LOSE DATA
 #
 # A move never destroys bytes, never contacts Penpot destructively, and never
-# leaves a file in a state the user cannot get back out of.
+# leaves a file in a state the user cannot get back out of. The closing invariant
+# below is stated for files AND folders, and move-project.feature relies on it
+# rather than restating it.
 #
-# ## WHY MOVES ARE SIMPLE (saga §6.29)
+# ## NEXTCLOUD OWNS LAYOUT, PENPOT OWNS MEMBERSHIP (saga §6.29)
 #
-# A file's project is THE NEAREST ANCESTOR FOLDER carrying a project id. So a
-# move — up, down, sideways, into a plain folder, into a deeply nested one —
-# resolves exactly one way: look up from the destination. There is no "too deep"
-# case, no orphan state, no rule about levels.
-#
-#     NEXTCLOUD is authoritative for FOLDER LAYOUT.
-#     PENPOT is authoritative for PROJECT MEMBERSHIP — but a move CHANGES it.
-#
-# So a pull never drags files to fixed paths. Two kinds of move, both of which
-# stick:
-#   - within the same project (into a plain subfolder, or between two folders
-#     mapping to the same project) — purely local, Penpot never contacted;
-#   - into a folder mapping to a DIFFERENT project, or out to the team root —
-#     a real membership change, propagated via `move-files` (saga §6.35).
-#
-# An earlier draft had cross-project moves silently REVERT on the next pull. That
-# was coherent but useless — it made the obvious gesture a no-op that had to be
-# apologised for in the UI. `move-files` is one call, non-destructive, and
-# instantly reversible by dragging back, so the drag propagates instead.
-#
-# ## DRAFTS IS A STATE, NOT A FOLDER (saga §6.35)
-#
-# A file under a team but under no project folder is in that team's Drafts. So
-# dragging a file from the team root into a project folder FILES it, and dragging
-# it back out UN-files it. The gesture Nextcloud users already know is exactly the
-# Penpot operation.
-#
-# That boundary is also where three separate bugs lived (§C6.8/§C6.9/§C6.10), all
-# the same mistake: reading "no project ancestor" as "outside every mapping",
-# when it means Drafts — a real project. Every scenario that crosses it in either
-# direction is live below, deliberately, because project-to-project moves never
-# touch it and pass regardless.
-#
-# ## THE ONE HARD RULE (saga §6.30)
-#
-# A PROJECT FOLDER may not leave its team folder. Moving it out would mean either
-# reparenting the project in Penpot (a destructive cross-team mutation, confirmed
-# possible via `move-project` but far outside §6.1) or silently desyncing.
-# Refused with an explanation, never silently undone.
-#
-# ## BUILD STATE
-#
-# BUILT: `MoveGuardListener` refuses the two illegal moves before they happen,
-# and `MotionService` re-files a moved `sync` file with `move-files`. The three
-# live scenarios below drive real WebDAV MOVEs against a real Penpot.
-#
-# NOT BUILT, marked in place: the notification surface for a failed move, the
-# restore offer on move-in, and the personal-token attribution branch (which
-# needs a logged-in session the harness does not have).
+# A design may sit anywhere inside a folder that maps to its real project — the
+# pull only ensures membership, never a particular path. That is what makes a
+# plain subfolder a legitimate place to file work.
 
-Feature: Moving a design
+Feature: Moving a mirrored design
   As a Nextcloud user
-  I want to organise my files freely without risking the designs in Penpot
-  So that Nextcloud can be as tidy as I like while Penpot stays flat
-
+  I want moving a design file to re-file the design in Penpot
+  So that the folder I drag it into is the project it belongs to
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
-
-    # ══ MOVED IN NEXTCLOUD ═════════════════════════════════════════════════════
-
-    # ══ MOVED IN NEXTCLOUD ═════════════════════════════════════════════════════
-
-    # ── RULE: a move within one project is local — Penpot is never told ──────
-    # Nextcloud owns folder layout (§6.29). Sub-foldering a design changes nothing
-    # Penpot can even represent, so nothing is sent and nothing is undone.
 
   @in-nextcloud @gesture
   Scenario: Moving a file into a plain subfolder of its project keeps its project
@@ -174,7 +123,7 @@ Feature: Moving a design
     And the file becomes "unmapped" — this app stops mirroring it
     And the archive remains a valid, openable ".penpot" file on its own
     # The "zip in nextcloud only" state (§6.23) — the same state the ignore tag
-    # produces. Moving it back in offers a restore; see restore.feature.
+    # produces. Moving it back in offers a restore; see restore-design.feature.
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Moving an unmapped tracked file back under a project offers a restore
@@ -183,7 +132,7 @@ Feature: Moving a design
     Then the app offers to restore it into Penpot
     And nothing is sent to Penpot until the user confirms
     # Never automatic — a deleted Penpot file cannot come back at its original id
-    # (§6.20/§6.26). See restore.feature.
+    # (§6.20/§6.26). See restore-design.feature.
 
   @in-nextcloud @gesture
   Scenario: Moving a never-tracked ".penpot" file under a project creates nothing
@@ -314,52 +263,6 @@ Feature: Moving a design
     # The escape hatch every refusal above offers, exercised.
 
     # ── moving PROJECT FOLDERS: free inside the team, refused outside ─────────
-
-  @in-nextcloud @gesture @todo
-  Scenario: A project folder can be moved anywhere inside its team folder
-    Given a plain folder "Clients" inside the team folder
-    When I move a project folder into "Clients"
-    Then the move succeeds
-    And Penpot is never contacted
-    And files inside it still belong to the same project
-    And the folder still resolves to the same team, found further up
-    And a pull does not move the folder back
-    # Free organisation is the whole point of §6.29 — Penpot is flat, we needn't be.
-
-  @in-nextcloud @gesture
-  Scenario: A project folder cannot be moved out of its team folder
-    Given a mirrored project "Stays Inside"
-    When I try to move "Penpot/Stays Inside" to "Stays Inside"
-    Then the move is refused
-    And the folder "Penpot/Stays Inside" carries a Penpot project id
-    # The folder is still there, still stamped — the refusal happened BEFORE the
-    # move, which is the whole point of guarding on the `Before` event.
-
-  @in-nextcloud @gesture @todo
-  Scenario: The project-folder refusal explains why, and what to do instead
-    Given a mirrored project "Stays Inside"
-    When I try to move it outside its team folder
-    Then the refusal explains a project cannot leave its team from Nextcloud
-    And it explains that moving a project between teams must be done in Penpot
-    # Split from the scenario above, which proves the refusal HAPPENS; this one
-    # is about what it SAYS, and needs the exception body surfaced through DAV.
-    # Saga §6.30. Reparenting a project in Penpot (`move-project`) is real and
-    # confirmed, but it is a destructive cross-team mutation that changes who can
-    # see the work — far outside §6.1. Refuse loudly; never silently undo.
-
-  @in-nextcloud @gesture @unbuilt
-  Scenario: A project folder cannot be moved into a different team's folder
-    Given a second team folder mapped to another Penpot team
-    When I try to move a project folder into it
-    Then the move is refused with the same explanation
-    And neither team's mapping is modified
-
-    # ══ MOVED IN PENPOT ════════════════════════════════════════════════════════
-    #
-    # The same behaviour from the other end, and it arrives via a sync run rather
-    # than an event. Penpot is authoritative for project membership, so a design
-    # re-filed upstream relocates its mirror — it is not a conflict to resolve, it
-    # is the source of truth changing.
 
   @in-penpot @todo
   Scenario: A design moved to another project in Penpot relocates its mirror

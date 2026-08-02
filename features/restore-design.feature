@@ -1,96 +1,35 @@
-# Putting a design back INTO Penpot from its Nextcloud archive.
+# RESTORING A DESIGN — out of the Nextcloud trash, out of Penpot's trash, or out
+# of an archive when both are gone. Restoring a PROJECT is restore-project.feature.
 #
-# ONE OF THE APP'S FEW WRITE PATHS (saga §6.19), and a deliberate,
-# user-confirmed carve-out from §6.1's read-only stance on file CONTENT. It puts
-# back something that was taken out; it is not a sync channel.
+# ## THE ORDER IS THE FEATURE (saga §6.49/§C6.11)
 #
-# WHEN THIS PATH APPLIES — AND IT IS THE LAST RESORT (saga §6.52). Importing an
-# archive is what you do when NOTHING better is available. Three cheaper,
-# lossless options come first, and confusing them would be the worst failure in
-# this file:
+# The app always offers Penpot's own trash BEFORE an archive import, and the
+# difference is not cosmetic: a trash restore returns the SAME design — same id,
+# same revision, same history — while an import creates a new one that merely
+# looks like it. Only once Penpot's grace window has closed is an import the best
+# that remains, and the app says so rather than quietly producing a lookalike.
 #
-#   1. NEXTCLOUD TRASH — the local mirror was trashed but the design still exists
-#      in Penpot. Restore = pull it out of the trash. Nothing is sent to Penpot;
-#      the reconciler re-adopts it rather than duplicating (saga §6.37).
-#   2. PENPOT'S OWN TRASH (~7 days) — the design was deleted in Penpot.
-#      `restore-deleted-team-files` brings it back with its **id, revision and
-#      history** intact, verified live (saga §6.49). This is delete.feature's
-#      territory and is ALWAYS preferred over importing.
-#   3. THIS FILE — the grace window has closed, or the design was permanently
-#      deleted, and all we hold is a .penpot archive. Import is the only option
-#      left, and the only one that changes a design's identity.
+# ## A RESTORE IS CONFIRMED, NEVER ASSUMED
 #
-# WHY IMPORT CAN'T PRESERVE IDENTITY (saga §6.20): a purged Penpot file cannot be
-# resurrected at its original id. Tested directly — delete-file (204), then
-# import-binfile with that file-id returns `object-not-found`. `file-id` is an
-# "import into an EXISTING file" parameter, not a "create with this id" one.
-# There is no way to make Penpot accept an id we choose.
+# Penpot's success event is not proof: the restore is re-read from the same
+# listing the pull uses before it is reported as done. A restore that did not
+# actually happen must never be announced as one.
 #
-# THE MECHANISM IS REAL AND EXERCISED (saga §6.20). Three facts learned by
-# actually calling `import-binfile`, all of which shape this feature:
-#   1. It is SSE, like export — progress events, then end|error. The `end` event
-#      carries an ARRAY of resulting file id(s), Transit-tagged.
-#   2. Its params are KEBAB-CASE on the wire (`project-id`, `file-id`) — unlike
-#      export-binfile, which takes camelCase. Per-command fact, not a convention.
-#   3. Its `name` parameter is IGNORED. The imported file takes the name baked
-#      into the archive's manifest.json. So a restore that needs a specific name
-#      is import-binfile THEN rename-file — two calls, second can fail alone.
+# ## A LINK HAS NOTHING TO RESTORE INTO PENPOT
 #
-# BEST-EFFORT IS BETTER THAN IT SOUNDS, and the docs should say so plainly rather
-# than framing it as a consolation prize. Measured on a real export→import round
-# trip (saga §6.41):
-#
-#     comes back:  name, pages, shapes, assets, and even the revision number
-#     does not:    the file id (old deep links stay dead), the edit history
-#                  (0 file_change rows against the original's 5)
-#
-# Nobody loses design work. They lose undo-history and a URL. That is a
-# respectable outcome for a backup — it is simply not as good as layers 1 and 2,
-# so the app must check those first and say which one it used.
-#
-# SO RESTORE MEANS GENUINELY DIFFERENT THINGS depending on what survived, and
-# conflating them would be a lie to the user. That is why restore ALWAYS checks
-# the cheaper layers first, ALWAYS asks, and ALWAYS says which one it is doing.
-#
-# WHAT IS BUILT, AND WHAT THIS FILE IS STILL WAITING FOR (§C6.15). Layers 1 and 2
-# ship: taking a mirror out of the Nextcloud trash restores the design out of
-# Penpot's trash with it, losslessly, and does nothing at all when the design
-# never left. Their scenarios live in delete.feature, next to the delete they
-# undo. THIS file is layer 3 — the archive import — and only layer 3.
-#
-# Layer 3 is deliberately last, and not merely unfinished. It is the only restore
-# that CHANGES A DESIGN'S IDENTITY, so it cannot be a listener that fires on a
-# gesture the way the other two are: it needs a human to be told what they are
-# about to trade and to say yes. The app already reports the state that leads
-# here — "the design is gone from Penpot and this mirror is the only copy" — so
-# the missing piece is the confirmation surface and the import itself, not the
-# detection.
-#
-# @todo — the import, and the confirmation it requires, are not built.
+# Restoring a dismissed `link` un-hides a pointer. It never pushes anything back
+# into Penpot, in any circumstance.
 
-Feature: Restoring a design from its Nextcloud archive back into Penpot
+Feature: Restoring a mirrored design
   As a Nextcloud user
-  I want to put a design back into Penpot from the archive I kept
-  So that I can recover work — while understanding exactly what is and isn't recoverable
-
+  I want a restore to bring back the same design rather than a copy of it
+  So that undo means undo, with its id and history intact
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
     And the first visible team is mapped as a plain folder "Penpot"
-
-    # ══ RESTORED IN NEXTCLOUD ══════════════════════════════════════════════════
-    #
-    # Layers 1 and 2, driven live. Taking a mirror out of the Nextcloud trash takes
-    # the design out of Penpot's trash with it — losslessly, same id, revision and
-    # history — and does nothing at all when the design never left.
-    #
-    # Live rather than @todo for the reason §C6.11 exists: restore is the command
-    # that reports success without doing the work. Handed an id that is not in the
-    # trash it answers 200 with an EMPTY SET, and a mocked restore would return
-    # whatever the mock was told to. The assertion that matters — "and the design
-    # is back in its project" — can only come from Penpot.
 
   @in-nextcloud @gesture
   Scenario: Restoring a mirror brings its design back out of Penpot's trash
@@ -250,7 +189,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And the app makes clear this restore lost nothing
     # Layer 2 always beats layer 3 (saga §6.49/§6.52), and it is BUILT: the trash
     # listing is read before anything else is considered. Kept here as the rule
-    # this file must obey; its live scenarios are in delete.feature.
+    # this file must obey; its live scenarios are in delete-design.feature.
 
   @unbuilt
   Scenario: A mirror in the Nextcloud trash is restored locally, not re-imported
@@ -372,43 +311,6 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     # AND A PROJECT DELETED WHILE EMPTY CANNOT BE RESTORED THROUGH THE API AT
     # ALL — there is no file to carry it back. It simply expires.
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Restoring a project folder brings back the project and every design in it
-    Given a mirrored project "Doomed" holding 3 designs
-    And I deleted the "Doomed" project folder
-    When I restore the folder from the Nextcloud trash
-    Then "restore-deleted-team-files" is called once with all 3 design ids
-    And Penpot lists the project "Doomed" again
-    And all 3 designs are back in it
-    # ONE call with the whole set, not three calls. Penpot restores the project
-    # from any file in it, so three calls would restore the project on the first
-    # and then merely add files — but a partial failure would leave a project
-    # holding some of its designs, which is worse than either extreme.
-
-  @in-nextcloud @gesture @todo
-  Scenario: Restoring one design of a deleted project does not silently restore the rest
-    Given a Penpot project that was deleted with 2 designs in it
-    When only the first design is restored
-    Then the project exists again in Penpot
-    And the second design is still in Penpot's trash
-    # Confirmed live (§C6.19). Stated because it is genuinely surprising, and
-    # because a naive "restore the folder" that fired one call per file it
-    # happened to find in the Nextcloud trash would produce exactly this
-    # half-restored state without ever looking wrong.
-
-  @blocked
-  Scenario: A project deleted while empty cannot be restored, and the app says so
-    Given a project folder whose project was deleted with no designs in it
-    When I restore the folder from the Nextcloud trash
-    Then the folder comes back as an ordinary folder
-    And the app explains that an empty Penpot project cannot be restored
-    And it names the grace window after which the project is gone for good
-    # Penpot offers no `restore-project`, and there is no file to carry it back.
-    # Saying so is the whole behaviour — the alternative is a folder that looks
-    # restored and points at nothing.
-
-    # ── the layers restore does NOT use, and why it says so ───────────────────
-
   @todo
   Scenario: A design that never left Penpot is restored locally and nothing is sent
     Given a trashed ".penpot" file whose design still exists in Penpot
@@ -428,7 +330,7 @@ Feature: Restoring a design from its Nextcloud archive back into Penpot
     And the app reports that the design is gone and the mirror is now the only copy
     # Layer 3, and it is NOT BUILT: importing the archive would mint a NEW id
     # (§6.20 — a purged id cannot be resurrected, tested directly), so it is a
-    # user decision with real consequences, specified in restore.feature. The one
+    # user decision with real consequences, specified in restore-design.feature. The one
     # thing that must not happen is quietly doing nothing.
 
   @unbuilt
