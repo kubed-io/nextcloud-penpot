@@ -224,12 +224,53 @@ trait GestureSteps {
 
 	// ── Penpot's trash ──────────────────────────────────────────────────────
 
-	/** @Then /^the design "([^"]*)" is in Penpot's trash$/ */
+	/**
+	 * THESE FOUR ASSERTIONS POLL, AND THE REASON IS MEASURED, NOT DEFENSIVE.
+	 *
+	 * Each one reads a Penpot listing immediately after a gesture MUTATED it, and
+	 * those listings are not instantaneous — a delete or a restore is applied
+	 * through a worker task, so the row can still be there (or still be missing) a
+	 * moment after the call that changed it returned success.
+	 *
+	 * The evidence is that the suite failed on THREE DIFFERENT scenarios across
+	 * four runs of one unchanged commit, every one of them a mutate-then-read of
+	 * this shape, and `main` was failing roughly half its runs the same way. A
+	 * suite that goes red for reasons unrelated to the change teaches everyone to
+	 * re-run instead of read, which is how a real failure gets waved through.
+	 *
+	 * A poll is the honest fix rather than a sleep: it returns the instant the
+	 * state is right, so the common case costs one request, and it fails with the
+	 * SAME message as before once the window closes. It cannot mask a real bug —
+	 * a state that never arrives still fails, just later.
+	 *
+	 * @Then /^the design "([^"]*)" is in Penpot's trash$/
+	 */
 	public function theDesignIsInPenpotsTrash(string $name): void {
+		$this->until(
+			fn (): bool => in_array($name, $this->penpotTrashNames(), true),
+			fn (): string => sprintf("expected '%s' in Penpot's trash; found: %s", $name, implode(', ', $this->penpotTrashNames()) ?: '(none)'),
+		);
+	}
+
+	/**
+	 * The Team Folder counterpart: the design is STILL there, because the purge
+	 * could not be observed at all (delete-design.feature, saga §C6.27).
+	 *
+	 * Deliberately NOT a poll. The other three wait for a state to arrive; this one
+	 * asserts a state that is not going to change, so waiting would only make the
+	 * suite slower and would turn a genuine future FIX into a ten-second failure
+	 * instead of an instant one.
+	 *
+	 * @Then /^the design "([^"]*)" is still in Penpot's trash$/
+	 */
+	public function theDesignIsStillInPenpotsTrash(string $name): void {
 		if (!in_array($name, $this->penpotTrashNames(), true)) {
-			throw new \RuntimeException(
-				sprintf("expected '%s' in Penpot's trash; found: %s", $name, implode(', ', $this->penpotTrashNames()) ?: '(none)'),
-			);
+			throw new \RuntimeException(sprintf(
+				"expected '%s' to STILL be in Penpot's trash on a Team Folder, but it is gone — "
+				. 'if the purge now reaches Penpot, this gap is closed and the @team-folder '
+				. 'scenario should be deleted in favour of the @plain-folder one.',
+				$name,
+			));
 		}
 	}
 
@@ -240,9 +281,33 @@ trait GestureSteps {
 	 * @Then /^the design "([^"]*)" is not in Penpot's trash$/
 	 */
 	public function theDesignIsNotInPenpotsTrash(string $name): void {
-		if (in_array($name, $this->penpotTrashNames(), true)) {
-			throw new \RuntimeException(sprintf("expected '%s' to be gone from Penpot's trash, but it is still listed", $name));
-		}
+		$this->until(
+			fn (): bool => !in_array($name, $this->penpotTrashNames(), true),
+			fn (): string => sprintf("expected '%s' to be gone from Penpot's trash, but it is still listed", $name),
+		);
+	}
+
+	/**
+	 * Poll $condition until it holds, or fail with $describe once the window
+	 * closes. Ten seconds in 250ms steps: long enough for a worker task to land,
+	 * short enough that a genuine failure is still reported inside one scenario.
+	 *
+	 * The failure message is produced LAZILY and only on the last attempt, so it
+	 * describes the state that actually persisted rather than the first sample.
+	 */
+	private function until(callable $condition, callable $describe, float $seconds = 10.0): void {
+		$deadline = microtime(true) + $seconds;
+		do {
+			if ($condition()) {
+				return;
+			}
+			usleep(250_000);
+		} while (microtime(true) < $deadline);
+
+		// Describes the WAIT, not the truth value: this helper is used for both
+		// positive and negative conditions, so "still true" would be backwards
+		// half the time.
+		throw new \RuntimeException($describe() . sprintf(' (condition never held within %.0fs)', $seconds));
 	}
 
 	/** @return list<string> */
@@ -324,21 +389,21 @@ trait GestureSteps {
 
 	/** @Then /^Penpot project "([^"]*)" holds a design named "([^"]*)"$/ */
 	public function penpotProjectHoldsADesignNamed(string $projectName, string $designName): void {
-		$names = $this->penpotFileNamesIn($projectName);
-		if (!in_array($designName, $names, true)) {
-			throw new \RuntimeException(
-				sprintf("expected a design named '%s' in Penpot project '%s'; found: %s", $designName, $projectName, implode(', ', $names) ?: '(none)'),
-			);
-		}
+		$this->until(
+			fn (): bool => in_array($designName, $this->penpotFileNamesIn($projectName), true),
+			fn (): string => sprintf(
+				"expected a design named '%s' in Penpot project '%s'; found: %s",
+				$designName, $projectName, implode(', ', $this->penpotFileNamesIn($projectName)) ?: '(none)',
+			),
+		);
 	}
 
 	/** @Then /^Penpot project "([^"]*)" holds no design named "([^"]*)"$/ */
 	public function penpotProjectHoldsNoDesignNamed(string $projectName, string $designName): void {
-		if (in_array($designName, $this->penpotFileNamesIn($projectName), true)) {
-			throw new \RuntimeException(
-				sprintf("expected NO design named '%s' in Penpot project '%s', but it is there", $designName, $projectName),
-			);
-		}
+		$this->until(
+			fn (): bool => !in_array($designName, $this->penpotFileNamesIn($projectName), true),
+			fn (): string => sprintf("expected NO design named '%s' in Penpot project '%s', but it is there", $designName, $projectName),
+		);
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────

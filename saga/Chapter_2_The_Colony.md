@@ -2897,3 +2897,183 @@ old scenario stays visible in the history as what it was: a gap, not a decision.
 > it after was reading a decision you never made. And the whole answer was three
 > pages earlier in your own notebook — you'd measured it, written it up properly,
 > and then not gone back and fixed the menu."*
+
+---
+
+### C6.26 — Two axes, and they do opposite things
+
+Command's ask was blunt: *"long story short I want these integration tests to take
+way less time as each one takes like 10 min."* The answer turned out to need a
+measurement first, because the obvious split was the wrong one.
+
+#### The cost model decides how many legs are worth it
+
+| | measured on this repo |
+|---|---|
+| fixed setup (4 service containers + NC install + token mint) | **~95s** |
+| Behat itself | **~320s** for 97 live scenarios |
+
+`wall = 95 + 320/N`. So one leg is ~7m, three are ~3.4m, four ~2.9m, six ~2.5m.
+**Diminishing returns past four**, because the Penpot stack is paid N times. Four
+is the point where another leg buys 15 seconds and costs a whole stack.
+
+#### The axis is the FILENAME, and tags are the trap
+
+Tags looked like the obvious split — the suite is already tagged four ways. They
+are the wrong tool, and the reason is arithmetic rather than taste. Counted over
+the LIVE scenarios:
+
+| candidate | distribution | verdict |
+|---|---|---|
+| channel | `@gesture` 37 · `@occ` 19 · `@admin,@occ` 10 · **none 28** | 28 match nothing |
+| origin | `@in-nextcloud` 44 · `@in-penpot` 18 · **none 32** | worse |
+| filename | 30 files | exhaustive by construction |
+
+A tag partition **leaks**, and it leaks silently: a scenario matching no leg
+simply stops running and every leg still reports green. You could patch it with a
+negated catch-all (`~@gesture&&~@occ&&~@admin`), which then breaks the day
+somebody adds a tag — again silently. A path partition cannot leak, because
+`ls features/*.feature` minus the union must be empty, and that is one line to
+check. `bin/check-suites.sh` checks it, in the QUALITY workflow, so a partition
+error fails in seconds instead of after four stack boots.
+
+#### The two axes are not the same kind of thing
+
+This is the part worth carrying to the siblings:
+
+    suite    DIVIDES the scenarios — four legs, a quarter each, wall time drops
+    backend  REPEATS them — the same scenarios against a second storage backend
+
+Only the first makes anything faster. The second makes the run *mean more* at no
+wall-clock cost, because those legs are parallel too. And the reason `backend` is
+a matrix axis rather than a flag some step reads is that **the two halves have
+different dependencies**: a Team Folder is the groupfolders app, so the team legs
+install it and the plain legs do not. Different setup, not different data.
+
+`features/README.md` had already called the backend *"a dimension the suite is
+run across"* and named the bug that cost: the structural scenarios in
+reconcile.feature mapped a Team Folder and passed only because of where they sat
+in the run — moved later, the folder resolved to nothing at all. Team Folder
+provisioning had never actually been covered. More scenarios would not have found
+that. Running the existing ones against both backends does.
+
+The step said `mapped as a plain folder`, which was true of the only backend CI
+could reach and is a lie on half the legs now. It reads `mapped to the folder`,
+and the harness decides which — the Gherkin says nothing about the backend, which
+is exactly what makes it a dimension rather than a duplicated scenario.
+
+#### The flakiness was one shape, five times
+
+Four runs of one unchanged commit failed on THREE DIFFERENT scenarios, and `main`
+was failing roughly half its runs. Every one was the same shape: a gesture
+MUTATED Penpot, and the very next assertion read a Penpot listing back. Penpot
+applies deletes and restores through worker tasks, so the row can still be there —
+or still be missing — a moment after the call that changed it returned success.
+
+Six assertions now poll (`until()`, 10s in 250ms steps) instead of sampling once.
+A poll is the honest fix and a sleep is not: it returns the instant the state is
+right, so the common case costs one request, and it **fails with the same message
+as before** once the window closes. It cannot mask a real bug — a state that never
+arrives still fails, only later.
+
+Worth being blunt about why this mattered beyond tidiness: a suite that goes red
+half the time for reasons unrelated to the change teaches everybody to re-run
+instead of read. That is the same failure mode as the warnings §C6.23 was about,
+and it is how a genuine failure eventually gets waved through.
+
+#### What ports to the siblings
+
+All of it except the carve. `n8n_sync` and `grafana_sync` both have the same
+`use_team_folder` mapping option and the same never-tested groupfolders path, and
+both have feature files that partition cleanly by name. What each repo picks for
+itself is only the suite names — the matrix shape, the guard script, the backend
+axis and the poll are the house pattern now.
+
+> **Dr K, watching four pans go on at once:** *"You didn't make the cooking
+> faster. You stopped doing it one pan at a time — which is a different thing, and
+> the only one that was ever available. And the second row of pans doesn't cost
+> you anything, because the stove was already lit. Just don't let me catch you
+> counting a pan you never put on."*
+
+---
+
+### C6.27 — The second backend found two bugs on its first run
+
+§C6.26 added `backend` as a matrix axis on the argument that the groupfolders
+path had never been exercised. It paid for itself immediately, and in the most
+useful way: **`design/plain` passed and `design/team` failed on the same 32
+scenarios.** No new scenario was written to find either bug. The existing ones
+were pointed at the other backend, which is the entire case for the dimension.
+
+The failures were also diagnostic rather than mysterious, because the poll from
+§C6.26 was already in place: the purge and the restore both *succeeded in
+Nextcloud* — no step threw — and then the assertion that Penpot had changed
+waited the full ten seconds and failed. That rules out slowness and leaves only
+"the app never heard about it".
+
+#### Why it never heard about it: groupfolders is not files_trashbin
+
+Read from `custom_apps/groupfolders/lib/Trash/TrashBackend.php` rather than
+inferred. groupfolders registers its own `ITrashBackend`, and the two halves
+behave differently:
+
+| | what it emits | consequence |
+|---|---|---|
+| `restoreItem()` | the **legacy** hook `\OCA\Files_Trashbin\Trashbin` / `post_restore` | our listener is on the TYPED `NodeRestoredEvent`, so it never fired |
+| `removeItem()` | **nothing** — `$node->getStorage()->unlink()` and a cache remove | no entry point exists for ANY app to observe it |
+
+So one half was a wiring mismatch and the other is a hole in the platform.
+
+#### The restore half: fixed, and by a pattern already in the file
+
+`RestoreFromTrashListener` gained a `postRestore()` entry point and
+`Application::boot()` connects the legacy hook beside the purge hook it already
+connects — same guard flag, same reason (`connectHook` appends without
+de-duplication). The hook hands over a PATH rather than a node, so it resolves
+through the acting user's view.
+
+The bug it fixes is real and user-facing: on the backend shared teams actually
+use, restoring a mirror brought the file back in Nextcloud while the design
+stayed in Penpot's trash — and the next pull then pruned the file a second time.
+That is the exact gap `delete-design.feature` was written to close, closed on one
+backend only, and nothing had ever noticed.
+
+#### The purge half: not fixable from here, so it is TRACKED rather than hidden
+
+Command's ruling, and it is the right one:
+
+> *"this is an edge case and does deserve a tag like team-folder … we have to
+> track the specific scenario so we are not only aware but can solve it for that
+> case in a special way. Technically penpot will eventually delete its own trash
+> anyway so it self corrects itself in a way."*
+
+That last clause is what makes this an edge case rather than data loss, and it is
+worth stating precisely: the design is *already* in Penpot's trash from the
+ordinary delete, and that trash expires on its own — `deleted_at` is `now + 7d`
+(§C6.11). **The divergence is a window, not a permanent state.** What is lost is
+the immediacy, not the outcome.
+
+So it is written as TWO scenarios, one per backend, tagged `@plain-folder` and
+`@team-folder`, and each leg skips the other's. That is the same rule §C6.16
+already established — a backend that changes an OUTCOME earns its own scenario,
+because then the two would not be identical.
+
+The `@team-folder` one asserts the design is **still** in Penpot's trash, and
+deliberately does not poll: the other assertions wait for a state to arrive, this
+one asserts a state that will not change. Its failure message says what to do if
+it ever passes — delete it, the gap is closed.
+
+#### The cost of repeating a filter, and the guard for it
+
+A CLI `--tags` REPLACES behat's config filter rather than adding to it, so the
+workflow has to restate the status list in order to append the per-backend skip.
+Two copies of one fact drift; the only question is when. `bin/check-suites.sh`
+now asserts the two expressions are identical, and the failure mode it prevents is
+the silent kind: a leg quietly starting to run `@todo` scenarios, or quietly
+ceasing to run real ones.
+
+> **Dr K, reading the ticket:** *"You built the second row of pans to see whether
+> anything burned, and something was burning. That's not a setback, that's the
+> whole reason you built it. One you can fix; one is the oven's fault and you've
+> written which is which on the wall. And the burnt one puts itself out in a
+> week — say so, or the next cook will think it's worse than it is."*

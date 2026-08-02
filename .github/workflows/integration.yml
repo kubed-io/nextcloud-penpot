@@ -70,14 +70,42 @@ env:
 jobs:
 
   integration:
-    name: Integration Tests
+    name: Integration ${{ matrix.suite }} / ${{ matrix.backend }}
     runs-on: ubuntu-latest
 
+    # ── TWO AXES, AND THEY DO OPPOSITE THINGS ────────────────────────────────
+    #
+    #   suite    DIVIDES the scenarios. Four legs each run a quarter, in
+    #            parallel, so wall time drops.
+    #   backend  REPEATS them. Every behaviour is valid on both storage backends
+    #            (features/README.md has said so for a while), so this is a
+    #            dimension the suite is RUN across rather than written twice.
+    #
+    # Net effect measured on this repo: ~95s fixed setup + ~320s Behat, so one
+    # leg is ~7m and four are ~95+80 = ~3m — while the backend axis doubles
+    # coverage at no wall-clock cost, because those legs run in parallel too.
+    #
+    # WHY THE SUITE AXIS IS FILENAME-BASED, not tag-based: measured over the live
+    # scenarios, 28 carry no channel tag and 32 no origin tag, so a tag partition
+    # LEAKS — those scenarios would match no leg and silently stop running, and
+    # every leg would still be green. `bin/check-suites.sh` (quality workflow)
+    # enforces that features/ is partitioned exactly.
+    #
+    # fail-fast: false is load-bearing. With it on, one flaky leg cancels the
+    # others and you lose the signal from the legs that were fine.
     strategy:
       fail-fast: false
       matrix:
         # NC 33 is the app's max-version; SQLite is the fast integration path.
         server-versions: ['stable33']
+        suite: [admin, design, project, core]
+        backend: [plain, team]
+        exclude:
+        # The admin surface configures mappings; it never writes into one, so it
+        # cannot tell the two backends apart. Running it twice would buy a second
+        # Penpot stack and prove nothing.
+        - suite: admin
+          backend: team
 
     services:
       # ── Penpot stack ──────────────────────────────────────────────────────
@@ -224,6 +252,25 @@ jobs:
     # untested against a real Penpot. WebDAV is how a browser does it, and PHP's
     # built-in server is enough for DAV: no nginx, no fpm. Ported from
     # nextcloud-n8n, where this has been carrying a much deeper suite.
+    # ── THE ONLY THING THE BACKEND AXIS ACTUALLY CHANGES ─────────────────────
+    # A "team folder" is the groupfolders app. It is a separate Nextcloud app
+    # rather than core, so the team legs install it and the plain legs do not —
+    # which is the whole reason `backend` is a matrix axis rather than a flag the
+    # steps read: the two halves have different DEPENDENCIES, not just different
+    # data.
+    #
+    # Until now the groupfolders backend was never covered. features/README.md
+    # records what that cost: the structural scenarios in reconcile.feature
+    # mapped a Team Folder and passed only because of where they sat in the run —
+    # moved later, the folder resolved to nothing at all. More scenarios would
+    # not have caught that. Running the existing ones against both backends does.
+    - name: Install Team Folders (groupfolders)
+      if: matrix.backend == 'team'
+      run: |
+        ./occ app:install groupfolders
+        ./occ app:enable groupfolders
+        ./occ app:list | grep -i groupfolders
+
     - name: Start Nextcloud (php built-in server)
       run: |
         php -S localhost:8080 -t "$GITHUB_WORKSPACE" >/tmp/nc-web.log 2>&1 &
@@ -386,7 +433,27 @@ jobs:
         NC_ADMIN_PASS: ${{ env.NC_ADMIN_PASS }}
         PENPOT_URL: http://localhost:9001
         PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
-      run: vendor/bin/behat --config behat.dist.yml --strict
+        # Read by SetupTrait when it maps a team: 'team' asks for a groupfolders
+        # -backed mapping, 'plain' for an admin-owned folder. The scenarios say
+        # nothing about which — that is the point of it being an axis.
+        PENPOT_TEST_BACKEND: ${{ matrix.backend }}
+        # Bound here rather than interpolated into `run:` — a `${{ }}` inside a
+        # shell script is substituted BEFORE the shell sees it, which mixes
+        # templating with logic and is an injection seam. Read as plain $VARs.
+        SUITE: ${{ matrix.suite }}
+        BACKEND: ${{ matrix.backend }}
+      # ONE BEHAVIOUR REALLY DOES DIFFER BY BACKEND, so it is written as two
+      # scenarios and each leg skips the other's (delete-design.feature). Every
+      # other scenario is backend-agnostic and carries neither tag.
+      #
+      # The status filter is repeated from behat.dist.yml because a CLI --tags
+      # REPLACES the config filter rather than adding to it. bin/check-suites.sh
+      # asserts the two lists are identical, so they cannot drift apart silently.
+      run: |
+        if [ "$BACKEND" = team ]; then SKIP='~@plain-folder'; else SKIP='~@team-folder'; fi
+        vendor/bin/behat --config behat.dist.yml --strict \
+          --suite="$SUITE" \
+          --tags="~@todo&&~@unbuilt&&~@blocked&&~@decision&&$SKIP"
 
     # ── Diagnostics: what did the SERVER think? ──────────────────────────────
     # A failing Behat scenario reports what the ASSERTION saw and nothing about
@@ -406,6 +473,6 @@ jobs:
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
-        check_name: Integration test results
+        check_name: Integration results (${{ matrix.suite }}/${{ matrix.backend }})
         files: apps/${{ env.APP_ID }}/tests/integration/junit/*.xml
         comment_mode: always

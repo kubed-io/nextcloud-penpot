@@ -20,7 +20,7 @@ Feature: Copying a Penpot project folder
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
-    And the first visible team is mapped as a plain folder "Penpot"
+    And the first visible team is mapped to the folder "Penpot"
 
   @todo
   Scenario: Copying a project folder is refused, unlike copying a file

@@ -132,26 +132,62 @@ every gesture scenario lived away from the behaviour it demonstrated; as a tag,
 `behat --tags @gesture` gives the same collection back without splitting any
 feature. Nothing is lost and the scenarios sit next to their own kind.
 
-### Storage backend — a dimension to RUN, not to write twice
+### Storage backend — a DYNAMIC BACKGROUND, not a tag and not a table
 
-| Tag | Meaning |
+Every behaviour is valid on both a plain (admin-owned) folder and a Team Folder,
+and none of them has a different outcome. So the backend must be covered without
+being *written down twice*. Three ways were considered and only one survives:
+
+| | why not |
 |---|---|
-| `@team-folder` | Exercised against a groupfolders-backed mapping. |
-| `@plain-folder` | Exercised against a plain shared folder. |
+| duplicate each scenario, tagged `@team-folder` / `@plain-folder` | two identical blocks that prove nothing, ×97 |
+| a `Scenario Outline` with a two-row `Examples` table | the rows would have identical expectations — the same duplication, compressed — and it runs them **sequentially**, so it costs wall time instead of saving it |
+| **a dynamic Background** | ✓ |
 
-Every behaviour is valid on both backends, so duplicating scenarios per backend
-would produce two identical blocks and prove nothing. The backend is a
-**dimension the suite is run across**, which is what a tag is for.
+The Background is one line of Gherkin whose *meaning* is resolved per run:
 
-That is not theoretical: the structural scenarios in `reconcile.feature` mapped
-a Team Folder and passed only because of where they sat in the run. Moved, the
-folder resolved to nothing — Team Folder provisioning had never actually been
-covered. More scenarios would not have caught that; running the existing ones
-against both backends would.
+```gherkin
+  Background:
+    ...
+    And the first visible team is mapped to the folder "Penpot"
+```
 
-Where a backend genuinely changes an OUTCOME it earns its own scenario. There is
-one confirmed case (§C6.16): on a shared mapping a pruned mirror goes to the
-**owner's** trash, not the acting user's.
+`OccTrait::backendFlags()` reads `PENPOT_TEST_BACKEND` and maps either a plain
+folder or a groupfolders-backed one. The spec never mentions the backend, which
+is precisely what makes it a dimension rather than a claim — **a Background is
+setup, and setup is the harness's business.**
+
+The CI matrix then runs the whole suite once per backend, in parallel, so the
+second one costs no wall-clock time (saga §C6.26).
+
+**Why it cannot be an `Examples` table, concretely:** the difference is not a
+mapping flag, it is *whether the groupfolders app is installed on the server*. One
+Behat process runs against one Nextcloud, so a table would need groupfolders
+installed always — and the "plain" rows would then be exercising a plain folder
+**on a server that has groupfolders**, which is not what most deployments run. The
+matrix varies the SERVER; a table can only vary the mapping.
+
+That this was never covered is not theoretical: the structural scenarios in
+`reconcile.feature` mapped a Team Folder and passed only because of where they sat
+in the run. Moved, the folder resolved to nothing — Team Folder provisioning had
+never actually been covered. More scenarios would not have caught that; running
+the existing ones against both backends does.
+
+Where a backend genuinely changes an OUTCOME it earns its own scenario, because
+then the two rows would *not* be identical — and it carries `@plain-folder` or
+`@team-folder` so the other leg skips it. There are two confirmed cases:
+
+- **§C6.16** — on a shared mapping a pruned mirror goes to the **owner's** trash,
+  not the acting user's.
+- **§C6.27** — emptying a Team Folder's trash cannot reach Penpot at all.
+  groupfolders registers its own `ITrashBackend` whose `removeItem()` emits
+  nothing — no typed event, no legacy hook — so no app can observe it. It
+  self-corrects, because Penpot's own trash expires after 7 days, so the
+  divergence is a window rather than a permanent state.
+
+Both were found by RUNNING the suite across both backends, which is the argument
+for the dimension in one line: neither needed a new scenario to be discovered,
+only an existing one pointed at the other backend.
 
 ### `sync` vs `link` — a restriction in one direction, not an axis
 

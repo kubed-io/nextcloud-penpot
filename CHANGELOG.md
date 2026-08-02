@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Restoring a design from a Team Folder's trash now restores it in Penpot too.** On Team Folders the file came back in Nextcloud while the design stayed in Penpot's trash — and the next sync then removed the file again. Plain shared folders were never affected.
+- Integration tests now run against **both storage backends** (a plain shared folder and a Team Folder), where before only the plain one was ever exercised — so a bug that only shows up on groupfolders can no longer ship unnoticed.
 - **Deleting a project folder in your own personal space will delete that project in Penpot too**, exactly as it does for a team project. The specification previously claimed the opposite — that was the current gap written down as if it were the intent, and it is now recorded as the gap it is.
 - **A design you filed into a subfolder is no longer duplicated by the next sync.** Moving a mirror into a folder of your own inside its project used to leave a second copy of the same design behind on the following sync, and nothing ever cleaned it up.
 

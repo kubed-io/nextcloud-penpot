@@ -15,6 +15,9 @@ use OCA\PenpotSync\Service\RestoreService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
+use OCP\Files\IRootFolder;
+use OCP\IUser;
+use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -35,13 +38,27 @@ use Psr\Log\NullLogger;
 final class RestoreFromTrashListenerTest extends TestCase {
 	private RestoreService $restores;
 	private SyncGuard $guard;
+	private IRootFolder $rootFolder;
+	private IUserSession $userSession;
 	private RestoreFromTrashListener $listener;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->restores = $this->createMock(RestoreService::class);
 		$this->guard = new SyncGuard();
-		$this->listener = new RestoreFromTrashListener($this->restores, $this->guard, new NullLogger());
+		// Only the Team Folder path uses these two: that hook hands over a PATH
+		// rather than a node, so it has to resolve one (saga §C6.27). The
+		// typed-event tests leave them unconfigured, which is why postRestore()
+		// must bail safely on an unresolvable user or path.
+		$this->rootFolder = $this->createMock(IRootFolder::class);
+		$this->userSession = $this->createMock(IUserSession::class);
+		$this->listener = new RestoreFromTrashListener(
+			$this->restores,
+			$this->guard,
+			$this->rootFolder,
+			$this->userSession,
+			new NullLogger(),
+		);
 	}
 
 	public function testARestoredMirrorIsRouted(): void {
@@ -103,5 +120,68 @@ final class RestoreFromTrashListenerTest extends TestCase {
 		$event->method('getTarget')->willReturn($node);
 
 		return $event;
+	}
+
+	/**
+	 * ONE GESTURE, TWO DOORS, ONE RESTORE.
+	 *
+	 * On a plain folder files_trashbin dispatches the typed NodeRestoredEvent AND
+	 * emits the legacy `post_restore` hook. Connecting the hook for Team Folders
+	 * (saga §C6.27) therefore made the plain backend fire twice — which CI caught
+	 * as `design/plain` failing while `design/team` passed, the exact inverse of
+	 * the failure the hook was added to fix.
+	 *
+	 * `once()` is the whole assertion.
+	 */
+	public function testOneRestoreReachesPenpotOnceEvenIfBothDoorsOpen(): void {
+		$node = $this->createMock(File::class);
+		$node->method('getId')->willReturn(4242);
+		$node->method('getName')->willReturn('Design.penpot');
+
+		// The hook path must actually REACH the guard, or this test would pass
+		// without it — postRestore() bails early on an unresolvable user or path,
+		// so a bare stub would prove nothing. Wire the resolution through.
+		$user = $this->createStub(IUser::class);
+		$user->method('getUID')->willReturn('alex');
+		$this->userSession->method('getUser')->willReturn($user);
+		$home = $this->createStub(Folder::class);
+		$home->method('get')->willReturn($node);
+		$this->rootFolder->method('getUserFolder')->with('alex')->willReturn($home);
+
+		$this->restores->expects($this->once())->method('onRestored')->with($node);
+
+		// The stub NodeRestoredEvent's accessors throw by design, so the event is
+		// mocked here exactly as the tests above do it.
+		$event = $this->createMock(NodeRestoredEvent::class);
+		$event->method('getTarget')->willReturn($node);
+
+		// typed event first…
+		$this->listener->handle($event);
+		// …then the legacy hook for the SAME file, which must be a no-op.
+		$this->listener->postRestore(['filePath' => '/Penpot/Project/Design.penpot']);
+	}
+
+	/**
+	 * The other order, because which door opens first is not ours to rely on.
+	 */
+	public function testTheGuardHoldsWhicheverDoorOpensFirst(): void {
+		$node = $this->createMock(File::class);
+		$node->method('getId')->willReturn(4242);
+		$node->method('getName')->willReturn('Design.penpot');
+
+		$user = $this->createStub(IUser::class);
+		$user->method('getUID')->willReturn('alex');
+		$this->userSession->method('getUser')->willReturn($user);
+		$home = $this->createStub(Folder::class);
+		$home->method('get')->willReturn($node);
+		$this->rootFolder->method('getUserFolder')->willReturn($home);
+
+		$this->restores->expects($this->once())->method('onRestored')->with($node);
+
+		$event = $this->createMock(NodeRestoredEvent::class);
+		$event->method('getTarget')->willReturn($node);
+
+		$this->listener->postRestore(['filePath' => '/Penpot/Project/Design.penpot']);
+		$this->listener->handle($event);
 	}
 }
