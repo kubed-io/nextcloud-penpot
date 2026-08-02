@@ -254,14 +254,25 @@ trait PullSteps {
 	 */
 	private function penpotFileRecordFor(string $path): array {
 		$design = preg_replace('/\.penpot$/', '', basename($path));
+		// SCOPED TO THE PROJECT, not just the design name. A mirror's path is
+		// `<mapped folder>/<project>/<design>.penpot`, so the project is right there —
+		// and two projects in one team may hold designs with the same name. Matching on
+		// the name alone could read the wrong record and then either fail for a reason
+		// that has nothing to do with the mirror, or pass while validating a different
+		// design entirely.
+		$projectName = basename(dirname($path));
 		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			if (($project['name'] ?? null) !== $projectName) {
+				continue;
+			}
 			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => (string)($project['id'] ?? '')]) as $file) {
 				if (($file['name'] ?? null) === $design) {
 					return $file;
 				}
 			}
+			throw new \RuntimeException("Penpot project '{$projectName}' holds no design named '{$design}' (from '{$path}')");
 		}
-		throw new \RuntimeException("no Penpot file named '{$design}' behind '{$path}'");
+		throw new \RuntimeException("no Penpot project named '{$projectName}' behind '{$path}'");
 	}
 
 	/**

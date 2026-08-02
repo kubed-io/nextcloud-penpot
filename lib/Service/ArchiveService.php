@@ -170,13 +170,20 @@ final class ArchiveService {
 	 * still move its mtime and etag — which makes every desktop client re-sync
 	 * every `link` file after every pull. So an empty file is left strictly
 	 * alone.
+	 *
+	 * @return bool true when bytes were actually written — i.e. the file held
+	 *              something and was truncated. The caller needs this to know the
+	 *              node's mtime is now `now`, which is what decides whether its
+	 *              cached value is worth comparing against (§C6.24).
 	 */
-	public function storeLink(File $node): void {
+	public function storeLink(File $node): bool {
 		if ($node->getSize() === 0) {
-			return;
+			return false;
 		}
 
 		$node->putContent('');
+
+		return true;
 	}
 
 	/**

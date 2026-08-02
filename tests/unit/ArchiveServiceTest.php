@@ -131,7 +131,7 @@ final class ArchiveServiceTest extends TestCase {
 			$written = $body;
 		});
 
-		$this->archives->storeLink($file);
+		self::assertTrue($this->archives->storeLink($file), 'a truncation must report that it wrote');
 
 		self::assertSame('', $written);
 	}
@@ -146,7 +146,7 @@ final class ArchiveServiceTest extends TestCase {
 		$file->method('getSize')->willReturn(220);
 		$file->expects($this->once())->method('putContent')->with('');
 
-		$this->archives->storeLink($file);
+		self::assertTrue($this->archives->storeLink($file), 'a truncation must report that it wrote');
 	}
 
 	/**
@@ -161,7 +161,10 @@ final class ArchiveServiceTest extends TestCase {
 		$file->method('getSize')->willReturn(0);
 		$file->expects($this->never())->method('putContent');
 
-		$this->archives->storeLink($file);
+		// And it SAYS it did not write. The pull reads this to decide whether the
+		// node's mtime is `now` — a link that reported a write it never made would
+		// force a needless clock restamp on every pull (§C6.24).
+		self::assertFalse($this->archives->storeLink($file), 'an untouched link must report that it wrote nothing');
 	}
 
 	/** Emptying a file never contacts Penpot — that is what makes demotion free. */
