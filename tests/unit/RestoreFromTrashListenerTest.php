@@ -14,6 +14,8 @@ use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Service\RestoreService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
+use OCP\Files\IRootFolder;
+use OCP\IUserSession;
 use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -41,7 +43,16 @@ final class RestoreFromTrashListenerTest extends TestCase {
 		parent::setUp();
 		$this->restores = $this->createMock(RestoreService::class);
 		$this->guard = new SyncGuard();
-		$this->listener = new RestoreFromTrashListener($this->restores, $this->guard, new NullLogger());
+		// The last two are only reached by the Team Folder path, which resolves a
+		// PATH rather than receiving a node (saga §C6.27); the typed-event tests
+		// below never touch them.
+		$this->listener = new RestoreFromTrashListener(
+			$this->restores,
+			$this->guard,
+			$this->createStub(IRootFolder::class),
+			$this->createStub(IUserSession::class),
+			new NullLogger(),
+		);
 	}
 
 	public function testARestoredMirrorIsRouted(): void {

@@ -43,7 +43,15 @@ Feature: Deleting a mirrored design
     # Soft on both sides. Nothing here is irreversible, which is what makes it
     # safe to do without asking.
 
-  @in-nextcloud @gesture
+  # ── ONE BEHAVIOUR THAT REALLY DOES DIFFER BY BACKEND ────────────────────────
+  # Everything else in this suite is backend-agnostic, which is why the backend is
+  # a dimension the run varies rather than something the specs mention. This is
+  # the exception, and it earns two scenarios because the OUTCOMES differ — the
+  # same rule that gave §C6.16 its own scenario.
+  #
+  # Found by the backend matrix on its first run (saga §C6.27), not by review.
+
+  @in-nextcloud @gesture @plain-folder
   Scenario: Emptying the Nextcloud trash destroys the design in Penpot
     Given a mirrored design "Gone For Good" in the project "Purge Me"
     And I delete "Penpot/Purge Me/Gone For Good.penpot"
@@ -53,6 +61,35 @@ Feature: Deleting a mirrored design
     # irreversible gesture Nextcloud offers. permanently-delete-team-files does
     # NOT check the trash itself (§C6.11) — the app reads the listing first, and
     # that guard is the only safety there is.
+
+  @in-nextcloud @gesture @team-folder
+  Scenario: Emptying a Team Folder's trash cannot reach Penpot, and says nothing
+    Given a mirrored design "Gone For Good" in the project "Purge Me"
+    And I delete "Penpot/Purge Me/Gone For Good.penpot"
+    When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
+    Then the design "Gone For Good" is still in Penpot's trash
+    # NOT A DECISION — A GAP WE CANNOT CLOSE FROM HERE, recorded so it is tracked
+    # rather than rediscovered. groupfolders does not use files_trashbin: it
+    # registers its own ITrashBackend, and its removeItem() calls
+    # `$node->getStorage()->unlink()` and emits NOTHING — no typed event, no
+    # legacy hook. There is no entry point for any app to observe it, so the
+    # purge simply never reaches us.
+    #
+    # (Its restoreItem() DOES emit the legacy `post_restore` hook, which is why
+    # the restore half of this pair was fixable and this half is not.)
+    #
+    # IT SELF-CORRECTS, WHICH IS WHY THIS IS AN EDGE CASE RATHER THAN DATA LOSS.
+    # The design is already in Penpot's own trash from the ordinary delete, and
+    # that trash expires on its own — `deleted_at` is set to now + 7 days
+    # (§C6.11). So the divergence is a WINDOW, not a permanent state: the design
+    # outlives the Nextcloud file by up to a week and is then gone anyway. What is
+    # lost is the immediacy, not the outcome.
+    #
+    # SOLVING IT SPECIALLY, when we do: the candidates are an upstream hook in
+    # groupfolders, or a pull-side reconcile that notices a mirror is gone from
+    # both the folder AND the trash. The second is delicate — "absent" must not be
+    # confused with "never existed", the same trap §C6.11 hit with a deleted
+    # project's folder.
 
   @in-nextcloud @gesture
   Scenario: Deleting an untracked ".penpot" file leaves Penpot alone

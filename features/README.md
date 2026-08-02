@@ -174,9 +174,20 @@ never actually been covered. More scenarios would not have caught that; running
 the existing ones against both backends does.
 
 Where a backend genuinely changes an OUTCOME it earns its own scenario, because
-then the two rows would *not* be identical. There is one confirmed case (§C6.16):
-on a shared mapping a pruned mirror goes to the **owner's** trash, not the acting
-user's.
+then the two rows would *not* be identical — and it carries `@plain-folder` or
+`@team-folder` so the other leg skips it. There are two confirmed cases:
+
+- **§C6.16** — on a shared mapping a pruned mirror goes to the **owner's** trash,
+  not the acting user's.
+- **§C6.27** — emptying a Team Folder's trash cannot reach Penpot at all.
+  groupfolders registers its own `ITrashBackend` whose `removeItem()` emits
+  nothing — no typed event, no legacy hook — so no app can observe it. It
+  self-corrects, because Penpot's own trash expires after 7 days, so the
+  divergence is a window rather than a permanent state.
+
+Both were found by RUNNING the suite across both backends, which is the argument
+for the dimension in one line: neither needed a new scenario to be discovered,
+only an existing one pointed at the other backend.
 
 ### `sync` vs `link` — a restriction in one direction, not an axis
 

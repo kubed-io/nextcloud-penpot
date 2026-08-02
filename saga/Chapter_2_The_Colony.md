@@ -2994,3 +2994,86 @@ axis and the poll are the house pattern now.
 > the only one that was ever available. And the second row of pans doesn't cost
 > you anything, because the stove was already lit. Just don't let me catch you
 > counting a pan you never put on."*
+
+---
+
+### C6.27 — The second backend found two bugs on its first run
+
+§C6.26 added `backend` as a matrix axis on the argument that the groupfolders
+path had never been exercised. It paid for itself immediately, and in the most
+useful way: **`design/plain` passed and `design/team` failed on the same 32
+scenarios.** No new scenario was written to find either bug. The existing ones
+were pointed at the other backend, which is the entire case for the dimension.
+
+The failures were also diagnostic rather than mysterious, because the poll from
+§C6.26 was already in place: the purge and the restore both *succeeded in
+Nextcloud* — no step threw — and then the assertion that Penpot had changed
+waited the full ten seconds and failed. That rules out slowness and leaves only
+"the app never heard about it".
+
+#### Why it never heard about it: groupfolders is not files_trashbin
+
+Read from `custom_apps/groupfolders/lib/Trash/TrashBackend.php` rather than
+inferred. groupfolders registers its own `ITrashBackend`, and the two halves
+behave differently:
+
+| | what it emits | consequence |
+|---|---|---|
+| `restoreItem()` | the **legacy** hook `\OCA\Files_Trashbin\Trashbin` / `post_restore` | our listener is on the TYPED `NodeRestoredEvent`, so it never fired |
+| `removeItem()` | **nothing** — `$node->getStorage()->unlink()` and a cache remove | no entry point exists for ANY app to observe it |
+
+So one half was a wiring mismatch and the other is a hole in the platform.
+
+#### The restore half: fixed, and by a pattern already in the file
+
+`RestoreFromTrashListener` gained a `postRestore()` entry point and
+`Application::boot()` connects the legacy hook beside the purge hook it already
+connects — same guard flag, same reason (`connectHook` appends without
+de-duplication). The hook hands over a PATH rather than a node, so it resolves
+through the acting user's view.
+
+The bug it fixes is real and user-facing: on the backend shared teams actually
+use, restoring a mirror brought the file back in Nextcloud while the design
+stayed in Penpot's trash — and the next pull then pruned the file a second time.
+That is the exact gap `delete-design.feature` was written to close, closed on one
+backend only, and nothing had ever noticed.
+
+#### The purge half: not fixable from here, so it is TRACKED rather than hidden
+
+Command's ruling, and it is the right one:
+
+> *"this is an edge case and does deserve a tag like team-folder … we have to
+> track the specific scenario so we are not only aware but can solve it for that
+> case in a special way. Technically penpot will eventually delete its own trash
+> anyway so it self corrects itself in a way."*
+
+That last clause is what makes this an edge case rather than data loss, and it is
+worth stating precisely: the design is *already* in Penpot's trash from the
+ordinary delete, and that trash expires on its own — `deleted_at` is `now + 7d`
+(§C6.11). **The divergence is a window, not a permanent state.** What is lost is
+the immediacy, not the outcome.
+
+So it is written as TWO scenarios, one per backend, tagged `@plain-folder` and
+`@team-folder`, and each leg skips the other's. That is the same rule §C6.16
+already established — a backend that changes an OUTCOME earns its own scenario,
+because then the two would not be identical.
+
+The `@team-folder` one asserts the design is **still** in Penpot's trash, and
+deliberately does not poll: the other assertions wait for a state to arrive, this
+one asserts a state that will not change. Its failure message says what to do if
+it ever passes — delete it, the gap is closed.
+
+#### The cost of repeating a filter, and the guard for it
+
+A CLI `--tags` REPLACES behat's config filter rather than adding to it, so the
+workflow has to restate the status list in order to append the per-backend skip.
+Two copies of one fact drift; the only question is when. `bin/check-suites.sh`
+now asserts the two expressions are identical, and the failure mode it prevents is
+the silent kind: a leg quietly starting to run `@todo` scenarios, or quietly
+ceasing to run real ones.
+
+> **Dr K, reading the ticket:** *"You built the second row of pans to see whether
+> anything burned, and something was burning. That's not a setback, that's the
+> whole reason you built it. One you can fix; one is the oven's fault and you've
+> written which is which on the wall. And the burnt one puts itself out in a
+> week — say so, or the next cook will think it's worse than it is."*

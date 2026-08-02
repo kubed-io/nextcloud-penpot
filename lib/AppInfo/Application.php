@@ -204,6 +204,22 @@ final class Application extends App implements IBootstrap {
 			$purgeHook = $context->getAppContainer()->get(TrashPurgeHook::class);
 			/** @psalm-suppress DeprecatedMethod */
 			\OCP\Util::connectHook('\OCP\Trashbin', 'preDelete', $purgeHook, 'preDelete');
+
+			// RESTORING FROM A TEAM FOLDER'S TRASH ARRIVES BY A DIFFERENT DOOR.
+			// groupfolders does not use files_trashbin — it registers its own
+			// ITrashBackend, and restoreItem() emits the legacy
+			// `\OCA\Files_Trashbin\Trashbin` / `post_restore` hook rather than the
+			// typed NodeRestoredEvent registered above. Without this, restoring a
+			// mirror on the backend shared teams actually use reached Penpot not at
+			// all: the file came back while the design stayed in Penpot's trash, and
+			// the next pull pruned it again.
+			//
+			// Found by running the existing scenarios against both backends (saga
+			// §C6.26). Guarded by the same flag, for the same reason: connectHook
+			// appends without de-duplication.
+			$restoreHook = $context->getAppContainer()->get(RestoreFromTrashListener::class);
+			/** @psalm-suppress DeprecatedMethod */
+			\OCP\Util::connectHook('\OCA\Files_Trashbin\Trashbin', 'post_restore', $restoreHook, 'postRestore');
 		}
 	}
 }

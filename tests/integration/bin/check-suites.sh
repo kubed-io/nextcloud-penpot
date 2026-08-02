@@ -52,4 +52,19 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
+# ── the status filter must not drift between the config and the workflow ─────
+# A CLI `--tags` REPLACES behat.dist.yml's gherkin filter rather than adding to
+# it, so the integration workflow has to repeat the status list in order to append
+# the per-backend skip. Two copies of one fact drift; this is the check that says
+# when. Silent failure mode if they do: a leg quietly starts running @todo
+# scenarios, or quietly stops running real ones.
+workflow=.github/workflows/integration.yml
+config_tags=$(grep -oE "tags: '[^']+'" "$config" | head -1 | sed "s/tags: '//; s/'//")
+if ! grep -q -- "$config_tags" "$workflow"; then
+  echo "::error::the status tag filter has drifted."
+  echo "  behat.dist.yml : $config_tags"
+  echo "  $workflow does not contain that exact expression."
+  exit 1
+fi
+
 echo "ok: $(echo "$on_disk" | wc -l) feature files, each in exactly one suite"
