@@ -2744,3 +2744,94 @@ implemented**. The docblock was not aspirational when it was written — it
 described what callers should do — and then every caller did the easy half. A
 promise in prose with no test is indistinguishable from a promise kept, right up
 until someone's token expires.
+
+---
+
+### C6.24 — The clock the mirror was never wearing
+
+Both siblings shipped this first, which is unusual — the pattern all chapter has
+been us finding the trap and them porting the fix. Here it was the reverse, and the
+reason is instructive: **we had already written the spec for it and left it
+`@unbuilt`**, complete with the warning that made the siblings' work safe.
+
+> *a naive implementation writes the timestamp every run, which is exactly the churn
+> `reconcile.feature` forbids — and which the sibling app demonstrably has.*
+
+That note (in `file-type.feature`) was right about the danger, right about the
+sibling, and the thing that stopped n8n reintroducing churn through the front door.
+It just never got built here.
+
+#### What was wrong
+
+A mirror carried Nextcloud's clocks — *when the app wrote this node* — which is never
+the question a person sorting a folder of designs by date is asking. Worse for us
+than for either sibling: a `link` is zero bytes and is **never rewritten after
+birth** (§C6.6), so its date froze at whenever we first happened to see the design.
+
+#### What it cost: nothing, twice
+
+Both records already carry both clocks, and both listings already run every pull:
+
+| | carries | extra calls |
+|---|---|---|
+| file (`get-project-files`) | `created-at`, `modified-at` | **none** — `upsertMirrorFile` already reads `modified-at` into the drift signal and throws the value away |
+| project (`get-projects`) | `created-at`, `modified-at` | **none** — `getAllProjects()` already runs |
+
+No `link`-mode dilemma like Grafana's, where the pointer listing carries no
+timestamps and dating a link costs a request each. Ours were free on both sides.
+
+#### The format trap that would have shipped silently
+
+The siblings' sources send ISO-8601. **Penpot sends epoch milliseconds, as a
+string** — `"1785020723908"`. A ported `strtotime()` parser returns `false` on that,
+which becomes `null`, which means *"leave the clock alone"* — so a straight port
+would have set **nothing at all** and looked exactly like success. The parser is
+ours, and `MirrorTimesTest` asserts both directions: it reads Penpot's format, and it
+**rejects** the siblings'. Either test alone could be satisfied by the wrong parser;
+the pair cannot.
+
+#### The two clocks are not symmetric, and the folder is why
+
+Measured on the live instance rather than reasoned about:
+
+| | result |
+|---|---|
+| set a folder's `creation_time`, then write a design inside it | **survives** |
+| set a folder's `mtime`, then write a design inside it | **overwritten with `now`** |
+
+Nextcloud propagates a folder's mtime from its children. So a project folder takes
+its **creation time only**. Stamping its mtime would be a fight lost on every pull
+that writes any design — set, overwritten, set again — which is churn wearing the
+timestamp feature's clothes. And it would be *worse information*: a propagated mtime
+honestly says "something in this project changed", while Penpot's project
+`modified-at` only moves on a rename (measured: `created-at == modified-at` on an
+untouched project).
+
+Files have no such conflict. They get both.
+
+#### Where the scenarios went — and three of ours were retired
+
+None of this got a scenario of its own, and the three standalone `@unbuilt` ones we
+had been carrying were **retired rather than promoted**. A modification time is not a
+behaviour anyone performs; it is the shared *result* of editing, moving, copying and
+renaming, each already owned by its own feature file. Two of the three were end
+states of behaviours `reconcile.feature` already specs, so the assertions moved onto
+those. The third — *"setting the times never makes an unchanged pull look like a
+change"* — was never a timestamp scenario at all. It is the churn rule, and it was
+already live in `reconcile.feature` under its own name.
+
+Which means the note that guarded this feature for three apps has now been absorbed
+into the scenario it was really about.
+
+#### The correction we owed the siblings
+
+Two places in this repo still asserted, in present tense, that `nextcloud-n8n`
+rewrites every mirror on every run. True when written; fixed in both siblings today.
+A cross-repo claim in a comment is a claim with no test behind it, and it ages
+exactly as badly as the docblock §C6.23 was about.
+
+> **Dr K, turning the crate label over:** *"You wrote the warning, pinned it to the
+> wall, and then watched two other kitchens follow it while yours never did. That's
+> not humility, it's a note nobody read twice — including you. And the milliseconds:
+> you'd have copied their parser, set nothing at all, and the tests would have gone
+> green. Measure the thing you're certain about."*

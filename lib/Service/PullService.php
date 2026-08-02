@@ -105,6 +105,7 @@ final class PullService {
 		private readonly ArchiveService $archives,
 		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
+		private readonly MirrorTimes $times,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -201,7 +202,7 @@ final class PullService {
 							$complete = false;
 							continue;
 						}
-						$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName);
+						$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName, $project);
 						$folders++;
 					}
 
@@ -339,14 +340,26 @@ final class PullService {
 	 * folder whose tag someone removed gets it back on the next run, because the
 	 * project id — the thing that actually decides — never went anywhere.
 	 *
+	 * ## THE FOLDER GETS ITS CREATION TIME AND NOT ITS MTIME
+	 *
+	 * When the project was created in Penpot is a fact Nextcloud can never work out
+	 * for itself, and `creation_time` survives a child write — measured. A folder's
+	 * MTIME does not: core propagates it from the folder's children, so stamping it
+	 * would mean losing that fight on every pull that writes any design, forever. It
+	 * would also be worse information — a propagated mtime honestly says "something in
+	 * this project changed", while Penpot's project `modified-at` only moves on a
+	 * rename. See {@see MirrorTimes} for the measurements.
+	 *
 	 * @param array<string, Folder> $folderIndex penpot_project_id -> folder, built once by the caller
+	 * @param array<string, mixed> $project the Penpot project record (carries `created-at`)
 	 */
-	private function ensureProjectFolder(Folder $root, array $folderIndex, string $projectId, string $name): Folder {
+	private function ensureProjectFolder(Folder $root, array $folderIndex, string $projectId, string $name, array $project = []): Folder {
 		$existing = $folderIndex[$projectId] ?? null;
 		if ($existing !== null) {
 			$this->tryRename($existing, $root, $name);
 			$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
 			$this->tagProject($existing);
+			$this->times->apply($existing, null, MirrorTimes::parse($project['created-at'] ?? null));
 			return $existing;
 		}
 
@@ -356,6 +369,7 @@ final class PullService {
 		$folder = $adopt instanceof Folder ? $adopt : $root->newFolder($this->freeName($root, $name));
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
 		$this->tagProject($folder);
+		$this->times->apply($folder, null, MirrorTimes::parse($project['created-at'] ?? null));
 		return $folder;
 	}
 
@@ -437,9 +451,15 @@ final class PullService {
 			$stored = '';
 		}
 
+		// Tracks whether this pass put bytes on disk, which is the same question as
+		// "is the node's mtime `now`?" — and therefore whether comparing it against
+		// Penpot's clock would be comparing against a value we just invalidated
+		// ourselves. Creating the node counts: a fresh file is a write.
+		$wroteBytes = $existing === null;
+
 		$wantsArchive = $mode === Mapping::MODE_SYNC;
 		if (!$wantsArchive || $existing === null) {
-			$this->archives->storeLink($node);
+			$wroteBytes = $this->archives->storeLink($node) || $wroteBytes;
 		}
 
 		// `true` when the mirror is current and the revision stamp may advance.
@@ -448,6 +468,7 @@ final class PullService {
 			try {
 				$this->archives->storeArchive($node, $fileId);
 				$exported++;
+				$wroteBytes = true;
 			} catch (PenpotApiException $e) {
 				// ONE FILE'S EXPORT FAILING IS NOT A FAILED PULL. Everything else
 				// about this file — its name, its placement, its ids — reconciled
@@ -478,6 +499,17 @@ final class PullService {
 			$values[PenpotMetadata::KEY_REVISION] = $signal;
 		}
 		$this->metadata->writeFile($node->getId(), $values);
+
+		// The design's own clocks, last: the body, the metadata and the tags are all
+		// committed by now, so a clock that will not set costs nothing else. `$exported`
+		// having moved means storeArchive() just wrote, so the node's mtime is `now` and
+		// there is nothing meaningful to compare it against.
+		$this->times->apply(
+			$node,
+			MirrorTimes::parse($file['modified-at'] ?? null),
+			MirrorTimes::parse($file['created-at'] ?? null),
+			$wroteBytes,
+		);
 	}
 
 	/**

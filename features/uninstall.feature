@@ -42,7 +42,7 @@
 # system-cleanup leg stays unproven rather than unbuilt.
 #
 # ONE CHOICE WORTH READING BEFORE ASSERTING ON IT: the revert re-stamps `.penpot`
-# rows to `application/zip`, not `application/json`. Both siblings revert to JSON
+# rows to `application/zip`, not `application/json`. Both siblings revert to JSON,
 # because their mirrors always were JSON; ours are ZIP in `sync` mode and JSON in
 # `link` mode, and no extension-keyed mimetype can be right for both. `zip` is
 # what Penpot's own server calls the format (§6.4, confirmed live), so it is the

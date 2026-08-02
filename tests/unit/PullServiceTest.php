@@ -14,6 +14,7 @@ use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
+use OCA\PenpotSync\Service\MirrorTimes;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
@@ -57,6 +58,7 @@ final class PullServiceTest extends TestCase {
 	private StorageService $storage;
 	private ArchiveService $archives;
 	private ProjectTags $tags;
+	private MirrorTimes $times;
 	private PullService $pull;
 
 	/**
@@ -99,6 +101,8 @@ final class PullServiceTest extends TestCase {
 			fn (int $id): FolderMarkers => $this->folderMarkersById[$id] ?? new FolderMarkers('', ''),
 		);
 
+		$this->times = $this->createMock(MirrorTimes::class);
+
 		$this->pull = new PullService(
 			$this->mappings,
 			$this->client,
@@ -107,6 +111,10 @@ final class PullServiceTest extends TestCase {
 			$this->archives,
 			$this->tags,
 			new SyncGuard(),
+			// MirrorTimes reaches into the storage/cache stack, so it is mocked here
+			// and covered on its own in MirrorTimesTest — the pull only owes the field
+			// mapping and the "did we just write?" flag.
+			$this->times,
 			new NullLogger(),
 		);
 	}

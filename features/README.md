@@ -235,6 +235,35 @@ Business rules are therefore **comment banners** (`# ── RULE: … ──`). 
 nothing, read the same, and become real `Rule:` blocks the day Behat ships it —
 the groupings and the Backgrounds they would carry are already in place.
 
+## Never end a line with the bare word `json`
+
+Not a Gherkin rule — an **editor** one, and worth writing down because the symptom
+looks like a broken file rather than a broken highlighter.
+
+The VS Code `cucumberautocomplete` extension ships `syntaxes/json-embed.json`
+containing:
+
+```json
+"begin": "(json|JSON)\\s*$",
+```
+
+That was meant to anchor to a `"""json` doc-string delimiter, but it is not tied to
+the `"""` at all. So **any** line ending in the bare word opens an embedded-JSON
+region that nothing ever closes, and every line after it in the file renders as
+JSON — grey, unreadable, and with no error to explain why.
+
+Only end-of-line occurrences trigger it, and any of these clears it:
+
+| | |
+|---|---|
+| finish the sentence | `…and can always edit the JSON.` |
+| quote it as a value | `…defaulting to "json"` |
+| say what kind of thing | `…from the file's JSON body` |
+
+Prefer whichever the sentence wanted anyway. **A step line is a function signature**,
+so changing one means changing its definition too — reword those rather than adding
+punctuation, and move the definition with it.
+
 ## Data tables: an input, or a different rule?
 
 `Scenario Outline` + `Examples` is right when the rows are **one rule applied to
