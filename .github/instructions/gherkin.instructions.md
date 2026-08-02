@@ -105,13 +105,13 @@ Do not "correct" these:
 ## Layout — one behaviour, one file
 
 Feature files are organised by **behaviour**, never by the kind of thing acted
-on. Renaming a project folder is a *rename* and lives in `rename.feature`, next
+fullon. Renaming a project folder is a *rename* and lives in `rename-project.feature`, next
 to renaming a file, so a reader comparing the two sees one table.
 
 This is the most valuable thing to catch in review, because the failure is
-silent. `project-folder.feature` once owned renaming, copying, moving *and*
-deleting a project folder — and had already drifted: `rename.feature` carried
-**live** coverage of the project-folder rename while `project-folder.feature`
+silent. `create-project.feature` once owned renaming, copying, moving *and*
+deleting a project folder — and had already drifted: the old `rename.feature` carried
+**live** coverage of the project-folder rename while `create-project.feature`
 still called it unbuilt. Two files, one behaviour, and nobody reads two files to
 answer one question.
 
@@ -136,7 +136,7 @@ promotes a scenario to live, verify the Background is real.**
 
 **A scenario borrowing another file's setup habits.** `reconcile.feature`
 deliberately maps nothing in its Background — every scenario names its own folder
-so one scenario's leftovers cannot become another's prune. `move.feature` maps a
+so one scenario's leftovers cannot become another's prune. `move-design.feature` maps a
 shared `Penpot` folder in its Background. Copying a scenario between them
 silently breaks it. **Check the file's own Background before assuming a path
 resolves.**
@@ -152,6 +152,57 @@ Asserting only the exit code makes the test go green precisely when its fixture
 breaks. **Absence assertions must match the specific failure.**
 
 **A `Then` that only asks this app.** See the observable-outcome rule above.
+
+## Two characters that break the editor, and neither is a Gherkin rule
+
+Both are bugs in the VS Code `alexkrechik.cucumberautocomplete` grammar, not in
+Gherkin — but the symptom is a file that renders as unreadable grey from some
+point onward, with no error to explain it. Reviewers should flag these, because
+the author often cannot see what they did.
+
+### Never end a line with the bare word `json`
+
+`syntaxes/json-embed.json` contains:
+
+```json
+"begin": "(json|JSON)\\s*$",
+```
+
+That was meant to anchor to a `"""json` doc-string delimiter and is not tied to
+the `"""` at all, so **any** line ending in the bare word opens an embedded-JSON
+region that nothing closes. Only end-of-line occurrences trigger it. Fixes, in
+order of preference — pick whichever the sentence wanted anyway:
+
+| | |
+|---|---|
+| finish the sentence | `…and can always edit the JSON.` |
+| say what kind of thing | `…from the file's JSON body` |
+| quote it as a value | `…defaulting to "json"` |
+
+A **step line is a function signature**, so reword those rather than adding
+punctuation, and move the step definition with it.
+
+### Never start a token with an apostrophe
+
+`syntaxes/feature.tmLanguage.json` treats `'` as a string delimiter:
+
+```
+begin: (?<![a-zA-Z0-9"])'      end: '(?![a-zA-Z0-9"])
+```
+
+So an apostrophe opens a string **unless it directly follows an alphanumeric or a
+double quote**. That makes the ordinary cases safe and one case fatal:
+
+| | |
+|---|---|
+| `alex's token` | fine — `'` follows a letter, and no quote is involved |
+| `the token of "alex"` | fine — the possessive is rephrased away from the quote |
+| `"alex"'s token` | **breaks** — the closing `"` cannot close, because `"(?![a-zA-Z0-9'])` refuses to close in front of an apostrophe |
+| `"alex" 's token` | **breaks** — the lone `'` opens a region of its own |
+
+The last form turns up when a possessive gets separated from its noun, usually
+while editing around a quoted parameter. If a file suddenly goes grey partway
+down, look for a lone `'` before you look for anything else.
 
 ## Scenario Outline: an input, or a different rule?
 

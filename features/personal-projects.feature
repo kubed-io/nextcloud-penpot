@@ -1,68 +1,40 @@
-# Personal Penpot projects, mounted at the root of a user's Nextcloud home.
+# PERSONAL PROJECTS — the WHO and the WHERE, and nothing else.
 #
-# THE ONE PLACE THE PERSONAL TOKEN DOES REAL WORK (saga §6.31). Everywhere else
-# in this app the personal token only attributes writes (§6.18) — the service
-# account does all mirroring. Personal projects are the exception, and they have
-# to be, for a structural reason: the service account is not a member of anyone's
-# personal team and CANNOT BE. §6.12 confirmed no Penpot credential ever gets an
-# instance-wide view; a personal team is precisely the space nobody else is in.
+# ## WHAT THIS FILE OWNS, AFTER THE DESIGN/PROJECT SPLIT
 #
-# THE SHAPE:
-#   - Every Penpot account has a "Default" personal team, isDefault: true,
-#     auto-provisioned 12 MILLISECONDS after the account itself (saga §6.9 —
-#     measured, not assumed). It is not something a user made or can opt out of.
-#   - That team gets NO TEAM FOLDER. Wrapping a personal space in a groupfolders
-#     Team Folder — a SHARING primitive — would be actively wrong.
-#   - Its projects mount as folders AT THE ROOT OF THE USER'S HOME, each carrying
-#     its Penpot project id as metadata exactly like any other project folder.
-#   - From there everything is normal: files resolve by nearest ancestor (§6.29),
-#     and the user can move those folders anywhere in their home.
+# A personal project is a project. Creating, renaming, moving, copying and
+# deleting one behaves exactly as it does in a mapped team — so those scenarios
+# live with their verb (create-project.feature, rename-project.feature, and so
+# on), where a reader comparing the personal case against the team case sees both
+# answers in one table instead of hunting two files. That is the same rule the
+# whole `-design` / `-project` split rests on: organise by BEHAVIOUR, not by the
+# kind of thing acted on.
 #
-# THE EXCEPTION THIS CREATES, WRITTEN DOWN RATHER THAN DISCOVERED: a personal
-# project folder has NO TEAM-ID ANCESTOR. The naive implementation of §6.29
-# ("walk up for a team id; none found = broken") would treat every personal
-# project as an error. So resolution needs an explicit rule: no team ancestor +
-# a project id belonging to the acting user's personal team = a personal project,
-# and that is VALID.
+# What genuinely differs is not the behaviour but its two coordinates:
 #
-# THE HOME ROOT *IS* THE MAPPING (saga §C6.21). Setting a personal token does not
-# just enable a pull — it creates an implicit mapping, personal team → the user's
-# Nextcloud home root, with no admin involvement and nothing to configure.
+#   WHO    the user's OWN personal token, never the service account. No token,
+#          no personal projects at all — and clearing one stops the pull without
+#          deleting anything.
+#   WHERE  the user's home root, with NO team-folder ancestor. The personal team
+#          itself gets no folder, which is why the membership resolver has to
+#          cope with a project folder that has no team above it (saga §6.29).
 #
-#     admin maps a team    →  a folder, listed in the admin panel, visible
-#     user sets a token    →  their home root, IMPLICIT and invisible
+# Those two are what this file is for, plus the isolation that follows from them:
+# one user's personal projects never appear in another user's home.
 #
-# There is nothing for a user to see, decide, or name. The mapping exists exactly
-# because the token does, and it goes away when the token does. Showing it would
-# be offering a choice that has only one possible answer.
-#
-# WHAT IT BUYS, and the reason it is worth stating as a mapping rather than as a
-# pull: the home root gains a TEAM ANCESTOR. Without one, a `.penpot` a user
-# makes in their own home resolves to nothing and stays inert (the rule in
-# create-design.feature). With one, it lands in their personal team's Drafts,
-# exactly as a file at a mapped Team Folder root lands in that team's Drafts. One
-# rule (§6.29, §6.35), applied to a root that now has a marker.
-#
-# A KNOWN, ACCEPTED GAP: this is a SECOND PULL PATHWAY, which §6.18 deliberately
-# avoided for team content. It's safe here — a user's home folder has exactly one
-# writer by construction, so the shared-Team-Folder race §6.18 was protecting
-# against cannot occur. But it is extra machinery, and it should be built AFTER
-# the primary team pull works. Not day-one scope.
-#
-# NOT BUILT — no `lib/` code exists for any of it, which is why every scenario
-# here is `@unbuilt` rather than `@blocked`: the harness is not what is missing
-# (saga open question #28).
+# THE ONE PLACE THE PERSONAL CASE REALLY DIVERGES — deleting a personal project
+# folder does not touch Penpot — is stated in delete-project.feature, beside the
+# team answer it contradicts. A divergence hidden in a file nobody opens while
+# holding the question is a divergence nobody finds.
 
-Feature: Personal Penpot projects in the user's home folder
-  As an individual Nextcloud user
-  I want my own Penpot projects to appear in my home folder
-  So that my personal designs are backed up without needing a shared Team Folder
+Feature: Personal Penpot projects in a user's own home
+  As a Nextcloud user with my own Penpot token
+  I want my personal projects mirrored into my home, under my own credentials
+  So that my own work follows the same rules without being visible to anyone else
 
   Background:
     Given the app is installed and enabled
     And the admin has set the instance-wide Penpot base URL
-
-    # ── what appears, and what doesn't ───────────────────────────────────────────
 
   @unbuilt
   Scenario: A user's personal projects mount at their home root
@@ -91,19 +63,6 @@ Feature: Personal Penpot projects in the user's home folder
     And it resolves as a personal project, not as a broken mapping
     And a mirrored ".penpot" file inside it belongs to that project
     # The explicit exception to saga §6.29's team lookup.
-
-  @unbuilt
-  Scenario: A user can move their personal project folders anywhere in their home
-    Given a personal project folder "Sketches" at the user's home root
-    And a plain folder "Design" in the user's home
-    When the user moves "Sketches" into "Design"
-    Then the move succeeds
-    And files inside "Sketches" still belong to the "Sketches" project
-    And a pull does not move the folder back
-    # Same free-nesting rule as team projects (saga §6.29). There is no team
-    # folder to stay inside, so the §6.30 restriction has nothing to bite on.
-
-    # ── the credential boundary ──────────────────────────────────────────────────
 
   @unbuilt
   Scenario: Personal projects are pulled with the user's own token, never the service account
@@ -162,49 +121,3 @@ Feature: Personal Penpot projects in the user's home folder
     And a new ".penpot" file made there is inert, as it was before the token
     # The mapping is the token's shadow. It cannot outlive it, and nothing is
     # deleted when it goes (see the scenario above).
-
-  @unbuilt
-  Scenario: A design created in the user's own home lands in their personal Drafts
-    Given the user has set a valid personal Penpot token
-    When the user creates a new design file at the root of their home
-    Then the design is created in their personal team's "Drafts" project
-    And the file carries the new design's Penpot id
-    # THE WHOLE POINT OF THE IMPLICIT MAPPING. Without a team ancestor this file
-    # resolves to nothing and stays inert (create-design.feature's rule). With
-    # one it is the ordinary team-root case (§6.35) — same rule, new root.
-
-  @unbuilt
-  Scenario: A design created in a plain folder in the user's home also lands in personal Drafts
-    Given the user has set a valid personal Penpot token
-    And a plain folder "Sketchbook" in the user's home with no Penpot metadata
-    When the user creates a new design file inside "Sketchbook"
-    Then the design is created in their personal team's "Drafts" project
-    # Nearest-ancestor, unchanged: no project id on the way up, a team id at the
-    # root. Exactly what a plain folder under a mapped Team Folder does.
-
-    # ── crossing the boundary: personal ⇄ a shared team ─────────────────────────
-    # A user's home and a mapped Team Folder are two mappings to two different
-    # Penpot teams, so a drag between them is a REAL cross-team move — and a move
-    # is move.feature's, whatever the two ends happen to be. The scenarios live
-    # there, next to every other move, rather than here where a reader comparing
-    # "what happens when I drag a design" would have to find them.
-    #
-    # This file owns only the fact that makes them possible: the home root has a
-    # team ancestor because a token was set.
-
-    # ── modes and behaviour are identical to team projects ──────────────────────
-
-  @unbuilt
-  Scenario: Personal projects support the same link and sync modes
-    Given a personal project folder with mirrored files
-    Then each file is in "link" or "sync" mode exactly as a team file would be
-    And promoting or demoting a personal file behaves identically
-    # Nothing about personal projects changes the storage model (sync-mode.feature).
-
-  @unbuilt
-  Scenario: Deleting a personal project folder never touches Penpot
-    Given a personal project folder in the user's home
-    When the user deletes the folder
-    Then Penpot is never contacted
-    And the Penpot project and its designs are completely unaffected
-    And the folder is recoverable from the Nextcloud trash

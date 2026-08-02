@@ -88,7 +88,7 @@ Feature: Choosing whether a mirrored file stores its archive
     And it cannot be moved out of every mapping
     And it cannot be tagged as ignored
     And each refusal offers to promote it to "sync" mode first
-    # Detail lives in move.feature and ignore.feature; this is the summary of
+    # Detail lives in move-design.feature and ignore.feature; this is the summary of
     # what the mode actually costs you.
 
   @todo @admin @occ
@@ -205,3 +205,12 @@ Feature: Choosing whether a mirrored file stores its archive
     Then the file's modification time and etag are unchanged
     # Rewriting it would be a no-op in content and a very real one in metadata:
     # every desktop client would re-download every link file after every pull.
+
+  # ── personal projects are not a third mode ──────────────────────────────────
+
+  @unbuilt
+  Scenario: Personal projects support the same link and sync modes
+    Given a personal project folder with mirrored files
+    Then each file is in "link" or "sync" mode exactly as a team file would be
+    And promoting or demoting a personal file behaves identically
+    # Nothing about personal projects changes the storage model (sync-mode.feature).

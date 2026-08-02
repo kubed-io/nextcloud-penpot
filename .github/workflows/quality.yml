@@ -69,6 +69,13 @@ jobs:
     - name: Coding standard (php-cs-fixer)
       run: composer run cs:check
 
+    # The behat suites must partition features/ — a file in no suite would simply
+    # never run once the integration workflow selects suites per matrix leg, and
+    # every leg would still report green. Pure text check, so it belongs here
+    # (seconds) rather than in the integration job (a live Nextcloud + Penpot).
+    - name: Behat suites partition features/
+      run: bash tests/integration/bin/check-suites.sh
+
     # Guarded from the pre-code era; lib/ now exists, so this runs for real.
     - name: Static analysis (Psalm)
       if: hashFiles('lib/**') != ''

@@ -16,7 +16,7 @@ It does not answer *"what does the pull do?"*, because a user does not think in
 pulls.
 
 That distinction is the whole layout. Before it, finding "how does move work"
-meant reading `move.feature` for the Nextcloud half, `reconcile.feature` for the
+meant reading `move-design.feature` for the Nextcloud half, `reconcile.feature` for the
 Penpot half, and `gestures.feature` for the two that CI could actually prove.
 Three files, one behaviour, and no single place that told you the shape of it.
 
@@ -25,29 +25,65 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | File | Owns |
 |---|---|
 | `create-design.feature` | A design coming into existence, on either side |
-| `copy.feature` | Duplicating a design — and why a project FOLDER may not be copied |
-| `move.feature` | A design or project folder changing project, team, or Drafts state |
-| `rename.feature` | A design or project folder changing name, incl. both name guards |
-| `delete.feature` | Everything that removes a design or a project folder: the two trashes, the prune, the purge |
-| `restore.feature` | Everything that brings one back: both trashes, the archive |
-| `project-folder.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
+| `copy-design.feature` | Duplicating a design |
+| `move-design.feature` | A design changing project, team, or Drafts state |
+| `rename-design.feature` | A design changing name, either side, and the file-name guards |
+| `delete-design.feature` | Everything that removes a design: both trashes, the purge, link dismissal |
+| `restore-design.feature` | Everything that brings a design back: both trashes, the archive |
+| `create-project.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
+| `copy-project.feature` | Why copying a project is refused rather than half-done |
+| `move-project.feature` | Where a project folder may and may not be dragged |
+| `rename-project.feature` | A project changing name, and the project-name guards |
+| `delete-project.feature` | Deleting a project — one call, not one per design |
+| `restore-project.feature` | Bringing a project back whole, and the one case that cannot be |
+| `personal-projects.feature` | Only the WHO and WHERE of a personal team — every verb lives with its verb |
+| `reconcile.feature` | What a sync run does *as a run*: completeness, idempotency, what it reports |
+| `mapping-membership.feature` | Which files a mapping owns, and what "unmapped" means |
 | `set-mode.feature` / `sync-mode.feature` | `sync` ⇄ `link`, and what each mode means |
 | `ignore.feature` | Excluding a file from the sync |
 | `open-with.feature` / `file-type.feature` | The Files-app surface of a mirror |
+| `admin-*.feature` | Reaching Penpot at all, and configuring what is mapped |
 
-**The behaviour is the axis, not the kind of thing acted on.** `project-folder.feature`
+## The two nouns: a DESIGN and a PROJECT
+
+Six verbs, two nouns, twelve files. A design is a `.penpot` file; a project is a
+**folder**, because a folder is the only thing a Penpot project can be in
+Nextcloud.
+
+Every verb file names its noun, so "what happens when I rename X?" has one place
+to look, and the two answers sit side by side. They are genuinely different
+behaviours rather than one with a branch:
+
+| verb | design | project |
+|---|---|---|
+| copy | duplicates it in Penpot | **refused** — Penpot has no duplicate-project call |
+| move | anywhere its project reaches | pinned inside its team folder |
+| delete | one design | one call that takes the whole project with it |
+| restore | the same design, id intact | the project *and* everything in it, or not at all |
+
+A **personal** project is still a project: the verbs behave identically, so only
+the who (the user's own token) and the where (their home root) are special, and
+that is all `personal-projects.feature` keeps.
+
+Splitting them is also what makes the CI suites possible — the filename is the
+matrix axis (`tests/integration/behat.dist.yml`), because a **path partition
+cannot leak the way a tag partition does**: measured over the live scenarios, 28
+carry no channel tag and 32 no origin tag, so any tag split would silently stop
+running them.
+
+**The behaviour is the axis, not the kind of thing acted on.** `create-project.feature`
 used to own every verb a project folder could be on the receiving end of —
 renaming one, copying one, moving one, deleting one. That is the same mistake
 `gestures.feature` made in the other direction, and it cost the same thing:
 "what happens when I rename a project folder?" had two answers in two files, and
-the two had already drifted. `rename.feature` had *live* coverage of the
-project-folder rename while `project-folder.feature` still called it unbuilt;
-`move.feature` had all four project-folder move scenarios; `copy.feature` had the
+the two had already drifted. `rename-design.feature` had *live* coverage of the
+project-folder rename while `create-project.feature` still called it unbuilt;
+`move-design.feature` had all four project-folder move scenarios; `copy-design.feature` had the
 refusal plus a comment pointing back for reasons it could simply have stated.
 
 A project folder is not a separate universe. Renaming one is a RENAME, and it
 belongs beside the other rename where a reader comparing the two sees the whole
-table at once. What is left in `project-folder.feature` is the one thing no
+table at once. What is left in `create-project.feature` is the one thing no
 behaviour file can own: a folder's **identity** as a project — how it acquires
 one, and the marker that says so.
 
@@ -59,7 +95,7 @@ one, and the marker that says so.
 
 A scenario belongs in `reconcile.feature` only when it is about the RUN. "A
 design renamed in Penpot reaches Nextcloud" is a rename — it lives in
-`rename.feature`. "A pull that could not list one project prunes nothing" is
+`rename-design.feature`. "A pull that could not list one project prunes nothing" is
 about the run, and lives here.
 
 **Configuration files** — the admin and per-user surface: `admin-connection`,
@@ -263,6 +299,37 @@ Only end-of-line occurrences trigger it, and any of these clears it:
 Prefer whichever the sentence wanted anyway. **A step line is a function signature**,
 so changing one means changing its definition too — reword those rather than adding
 punctuation, and move the definition with it.
+
+
+### …and never start a token with an apostrophe
+
+Same class of bug, same file's grammar. `feature.tmLanguage.json` treats `'` as a
+string delimiter:
+
+```
+begin: (?<![a-zA-Z0-9"])'      end: '(?![a-zA-Z0-9"])
+```
+
+Two rules interact, and BOTH bite around a quoted step parameter:
+
+```
+"  begin: (?<![a-zA-Z0-9'])"      end: "(?![a-zA-Z0-9'])
+'  begin: (?<![a-zA-Z0-9"])'      end: '(?![a-zA-Z0-9"])
+```
+
+A `"` **cannot close** in front of an apostrophe, and a lone `'` **opens** a
+region of its own. So both of these leave a region open and grey out the rest of
+the file:
+
+| | |
+|---|---|
+| `alex's token` | fine — no quote involved |
+| `the token of "alex"` | fine — the possessive is rephrased away from the quote |
+| `"alex"'s token` | **breaks** — the closing `"` refuses to close before `'` |
+| `"alex" 's token` | **breaks** — the lone `'` opens its own region |
+
+The safe habit is simple: **never put an apostrophe next to a quoted parameter.**
+Rephrase the possessive instead.
 
 ## Data tables: an input, or a different rule?
 

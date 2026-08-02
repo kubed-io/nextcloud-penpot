@@ -41,7 +41,7 @@
 # one action, "Open in Penpot", as the default click. What is missing is a way to
 # RUN these scenarios: every one of them is a click or a context menu, and the
 # integration harness is occ-only with no browser driver (the same wall
-# rename.feature and admin-section.feature describe). @todo here means "not
+# rename-design.feature and admin-section.feature describe). @todo here means "not
 # executable from this file", not "unimplemented".
 #
 # WHAT IS ASSERTED INSTEAD, and where: tests/js/files-helpers.test.js covers the
@@ -136,7 +136,7 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     Then the app does not offer the file as a downloadable archive
     And it explains the file is a pointer, offering to switch it to "sync" mode
     # Handing a user an empty or placeholder file that looks like a design export
-    # would be the same kind of quiet lie restore.feature exists to avoid.
+    # would be the same kind of quiet lie restore-design.feature exists to avoid.
 
   @unbuilt
   Scenario: A file whose design was deleted in Penpot says so instead of dead-linking

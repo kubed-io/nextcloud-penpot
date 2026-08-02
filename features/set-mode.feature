@@ -65,7 +65,7 @@
 #
 # IF IMMUTABILITY IS WANTED INSTEAD, this is the file that changes: the lever
 # goes, the move guard loses the escape it offers, and every "promote to sync
-# first" refusal in move.feature needs a different answer. That is a design
+# first" refusal in move-design.feature needs a different answer. That is a design
 # decision, not a spec tidy-up.
 
 @sync-mode

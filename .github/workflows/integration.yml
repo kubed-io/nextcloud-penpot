@@ -220,7 +220,7 @@ jobs:
     # ── Serve: the occ-only scenarios need no HTTP, but copy/move/rename do.
     # Those three are driven by events Nextcloud emits from its Files API, and
     # nothing in `occ` performs a file-manager gesture — which is why
-    # copy/move/rename.feature sat @todo while the code they describe shipped
+    # copy/move/rename-*.feature sat @todo while the code they describe shipped
     # untested against a real Penpot. WebDAV is how a browser does it, and PHP's
     # built-in server is enough for DAV: no nginx, no fpm. Ported from
     # nextcloud-n8n, where this has been carrying a much deeper suite.

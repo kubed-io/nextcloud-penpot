@@ -25,7 +25,7 @@
 # just need to know when the name changes or it's moved."
 #
 # PENPOT IS AUTHORITATIVE for a mirrored file's name and project placement (saga
-# §6.22) — see move.feature. A pull restores both.
+# §6.22) — see move-design.feature. A pull restores both.
 #
 # EXPORT IS SSE (saga §5.1/§6.20): progress events, then end|error; the end event
 # carries a SEPARATE /assets/by-id/<uuid> URL requiring a SECOND authenticated
@@ -251,7 +251,7 @@ Feature: Scheduled or manual pull from Penpot
 
     # The Nextcloud→Penpot direction of project renaming, its name guard, and the
     # sanitisation case for Penpot names Nextcloud can't represent all live in
-    # project-folder.feature — it's a distinct flow from file rename (saga §6.39):
+    # create-project.feature — it's a distinct flow from file rename (saga §6.39):
     # different node type, different RPC, 204 with no body, and no extension to
     # handle.
 

@@ -20,7 +20,7 @@ use Psr\Log\NullLogger;
 
 /**
  * The routing half of delete: which of the two steps a `BeforeNodeDeletedEvent`
- * is (`delete.feature`).
+ * is (`delete-design.feature`).
  *
  * ## WHY THIS TEST EXISTS AT ALL
  *

@@ -29,18 +29,79 @@ default:
     filters:
       tags: '~@todo&&~@unbuilt&&~@blocked&&~@decision'
 
+  # FOUR SUITES, AND THEY ARE A PARTITION — every feature file belongs to exactly
+  # one. `bin/check-suites.sh` enforces that mechanically, because the failure
+  # mode of getting it wrong is SILENT: a file in no suite is simply never run,
+  # and a green build says so confidently.
+  #
+  # Running plain `behat` runs all four in sequence, which is exactly today's
+  # coverage — the suites are inert until something selects one. That is
+  # deliberate: it lets CI prove the partition covers everything BEFORE the
+  # workflow starts depending on it (`behat --suite=admin` per matrix leg).
+  #
+  # THE AXIS IS THE FILENAME, NOT A TAG. Tags looked like the obvious split and
+  # are the wrong tool here: measured over the live scenarios, 28 carry no
+  # channel tag and 32 no origin tag, so any tag partition leaks — those
+  # scenarios would match no leg and quietly stop running. A path partition
+  # cannot leak, because `ls features/*.feature` minus the union must be empty
+  # and that is one line to check.
+  #
+  #   admin    the settings panel and everything reached from it. Grouped because
+  #            admin work is a different SESSION from user work, not merely a
+  #            different tag — these never interleave with the gesture suites.
+  #   design   the six verbs, as they apply to a design (a .penpot file).
+  #   project  the same six verbs, as they apply to a project (a folder).
+  #   core     everything that is not a verb on one of those two nouns: the pull
+  #            itself, identity/membership, modes, and the app lifecycle.
   suites:
-    default:
+    admin:
       paths:
-        # Gherkin lives at the repo root (features/) so the human-readable use
-        # cases are prominent and linkable from docs; behat.dist.yml stays under
-        # tests/integration/ with the rest of the test plumbing.
-        - '%paths.base%/../../features'
-      contexts:
-        # Context class lives with the test code (tests/integration/bootstrap/),
-        # loaded via the integration composer autoload — features/ stays pure
-        # Gherkin.
-        - OCA\PenpotSync\Tests\Integration\FeatureContext
+      - '%paths.base%/../../features/admin-connection.feature'
+      - '%paths.base%/../../features/admin-mapping.feature'
+      - '%paths.base%/../../features/admin-section.feature'
+      - '%paths.base%/../../features/personal-settings.feature'
+      - '%paths.base%/../../features/remove-mapping.feature'
+      - '%paths.base%/../../features/team-import.feature'
+      # Context class lives with the test code (tests/integration/bootstrap/),
+      # loaded via the integration composer autoload — features/ stays pure Gherkin.
+      contexts: &contexts
+      - OCA\PenpotSync\Tests\Integration\FeatureContext
+
+    design:
+      paths:
+      - '%paths.base%/../../features/create-design.feature'
+      - '%paths.base%/../../features/copy-design.feature'
+      - '%paths.base%/../../features/delete-design.feature'
+      - '%paths.base%/../../features/move-design.feature'
+      - '%paths.base%/../../features/rename-design.feature'
+      - '%paths.base%/../../features/restore-design.feature'
+      contexts: *contexts
+
+    project:
+      paths:
+      - '%paths.base%/../../features/create-project.feature'
+      - '%paths.base%/../../features/copy-project.feature'
+      - '%paths.base%/../../features/delete-project.feature'
+      - '%paths.base%/../../features/move-project.feature'
+      - '%paths.base%/../../features/rename-project.feature'
+      - '%paths.base%/../../features/restore-project.feature'
+      - '%paths.base%/../../features/personal-projects.feature'
+      contexts: *contexts
+
+    core:
+      paths:
+      - '%paths.base%/../../features/reconcile.feature'
+      - '%paths.base%/../../features/mapping-membership.feature'
+      - '%paths.base%/../../features/file-type.feature'
+      - '%paths.base%/../../features/open-with.feature'
+      - '%paths.base%/../../features/set-mode.feature'
+      - '%paths.base%/../../features/sync-mode.feature'
+      - '%paths.base%/../../features/ignore.feature'
+      - '%paths.base%/../../features/purge.feature'
+      - '%paths.base%/../../features/errors.feature'
+      - '%paths.base%/../../features/lifecycle.feature'
+      - '%paths.base%/../../features/uninstall.feature'
+      contexts: *contexts
 
   formatters:
     # Human-readable progress in the log…

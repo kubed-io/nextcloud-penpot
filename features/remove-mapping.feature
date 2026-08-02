@@ -103,4 +103,4 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And "delete-file" is never called
     And no webhook, project, or design is deleted on the Penpot side
     # Penpot deletion only ever happens on an explicit "Delete in Penpot" action
-    # (delete.feature). Tearing down a mapping is a purely Nextcloud-side act.
+    # (delete-design.feature for a design, delete-project.feature for a project). Tearing down a mapping is a purely Nextcloud-side act.

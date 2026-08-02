@@ -25,7 +25,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * The move writeback (saga Ch2 Course 4, `move.feature`). These pin the one
+ * The move writeback (saga Ch2 Course 4, `move-design.feature`). These pin the one
  * decision that matters — *did the file's Penpot project actually change?* —
  * because everything destructive about a move in the siblings is absent here:
  * this service can only ever call `move-files`, and never deletes, creates or

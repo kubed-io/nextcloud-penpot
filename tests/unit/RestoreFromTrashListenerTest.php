@@ -19,7 +19,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * The routing half of restore (`delete.feature`).
+ * The routing half of restore (`delete-design.feature`).
  *
  * Small on purpose — the service tests cover what a restore DOES, and this
  * covers the two things only the listener can get wrong:

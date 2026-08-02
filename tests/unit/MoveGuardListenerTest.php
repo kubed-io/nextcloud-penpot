@@ -24,7 +24,7 @@ use OCP\Files\Node;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The two moves this app refuses (`move.feature`):
+ * The two moves this app refuses (`move-design.feature` / `move-project.feature`):
  *
  *   §6.30 — a project folder may not leave its team folder;
  *   §6.43 — a `link` file may not change project.

@@ -64,7 +64,7 @@ Feature: Personal Penpot access token settings
     Given user "dana" has set a personal Penpot token
     When user "alex" opens their own personal Penpot settings
     Then "alex" sees no token configured
-    And "alex" setting their own token never overwrites "dana"'s
+    And "alex" setting their own token never overwrites the token of "dana"
 
   @blocked
   Scenario: Testing the personal connection distinguishes unset from rejected

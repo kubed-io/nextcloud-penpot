@@ -10,8 +10,8 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
 /**
- * The file-manager gestures: COPY, MOVE and RENAME (`copy.feature`,
- * `move.feature`, `rename.feature`).
+ * The file-manager gestures: COPY, MOVE and RENAME (`copy-design.feature`,
+ * `move-design.feature`, `rename-design.feature`).
  *
  * ## THE THREE PATHS THAT SHIPPED WITHOUT A LIVE TEST
  *
@@ -305,7 +305,7 @@ trait GestureSteps {
 		if ($idA === $idB) {
 			throw new \RuntimeException(
 				"expected '{$a}' and '{$b}' to be different designs, but both carry {$idA}. "
-				. 'Two files claiming one design is the ambiguity copy.feature exists to prevent.',
+				. 'Two files claiming one design is the ambiguity copy-design.feature exists to prevent.',
 			);
 		}
 	}

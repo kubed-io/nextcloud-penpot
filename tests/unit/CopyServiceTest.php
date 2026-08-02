@@ -23,7 +23,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * Copy → a real new design in Penpot (`copy.feature`, saga §C6.8).
+ * Copy → a real new design in Penpot (`copy-design.feature`, saga §C6.8).
  *
  * The decision this service exists to make is *where the copy landed*, because
  * `duplicate-file` has no project parameter: the new design always appears in
