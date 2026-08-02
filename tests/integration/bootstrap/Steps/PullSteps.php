@@ -265,13 +265,28 @@ trait PullSteps {
 	}
 
 	/**
-	 * Penpot sends epoch MILLISECONDS, as a string — not the ISO-8601 the n8n and
-	 * Grafana siblings use. Kept here as well as in the app because a test that
-	 * parsed it the siblings' way would agree with a broken implementation.
+	 * A Penpot timestamp from the RAW RPC channel, as a Unix second.
+	 *
+	 * Two layers of encoding, and the second one cost a CI cycle. Penpot sends epoch
+	 * MILLISECONDS (not the ISO-8601 the n8n and Grafana siblings use) — and over this
+	 * channel they arrive **Transit-tagged**: `"~m1785467414002"`. {@see penpotRpcRead}
+	 * deliberately does not decode Transit, which was true and free right up until
+	 * something here wanted a value out of a response rather than just a status.
+	 *
+	 * The app sees the decoded form because {@see \OCA\PenpotSync\Service\Transit}
+	 * runs first; the test does not. Parsing is kept here rather than shared with the
+	 * app on purpose: a test that borrowed the app's parser would agree with a broken
+	 * implementation by construction.
 	 */
 	private static function penpotSecond(mixed $value): ?int {
-		if (is_string($value) && ctype_digit($value)) {
-			$value = (int)$value;
+		if (is_string($value)) {
+			// `~m` is Transit's instant tag; `~~` would be a literal `~`, which a
+			// timestamp never is, so a plain prefix strip is enough here.
+			$value = ltrim($value);
+			if (str_starts_with($value, '~m')) {
+				$value = substr($value, 2);
+			}
+			$value = ctype_digit($value) ? (int)$value : null;
 		}
 		return is_int($value) && $value > 0 ? intdiv($value, 1000) : null;
 	}
@@ -530,7 +545,9 @@ trait PullSteps {
 	/**
 	 * Post a command straight to Penpot's RPC bus with the minted service-account
 	 * token — the seed/assertion channel, bypassing the app. The Transit response
-	 * body is not decoded (nothing here needs it).
+	 * body is NOT decoded, so scalars arrive tagged: an instant reads
+	 * `"~m1785467414002"`, a uuid `"~u…"`. Callers that want a value rather than a
+	 * status have to strip the tag themselves — {@see penpotSecond} does.
 	 *
 	 * SUCCESS IS 200 **OR** 204, because Penpot's own answers disagree: the
 	 * creators return a body, `delete-file` returns nothing at all. Asserting 200
