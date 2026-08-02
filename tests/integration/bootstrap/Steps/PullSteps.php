@@ -50,15 +50,28 @@ trait PullSteps {
 	/** path -> the mtime/etag stamp noted before a pull. @var array<string, string> */
 	private array $notedStamps = [];
 
-	/** @Given /^the first visible team is mapped as a plain folder "([^"]*)"$/ */
+	/**
+	 * Map the first visible team to a folder, on WHICHEVER BACKEND this leg runs.
+	 *
+	 * The step deliberately does not say which. Every behaviour here is valid on
+	 * both a plain (admin-owned) folder and a Team Folder, so naming one in the
+	 * Gherkin would either duplicate every scenario or quietly cover only half of
+	 * what ships. {@see backendFlags()} reads the matrix leg instead.
+	 *
+	 * The old phrasing said "as a plain folder", which was true of the only
+	 * backend CI could reach and is now a lie on half the legs.
+	 *
+	 * @Given /^the first visible team is mapped to the folder "([^"]*)"$/
+	 */
 	public function theFirstVisibleTeamIsMappedAsAPlainFolder(string $folder): void {
 		$this->noPenpotTeamsAreMapped();
 		$this->pulledTeamId = $this->firstVisibleTeamId();
 
 		$res = $this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder=%s --no-team-folder',
+			'penpot_sync:add-mapping %s --folder=%s %s',
 			escapeshellarg($this->pulledTeamId),
 			escapeshellarg($folder),
+			$this->backendFlags(),
 		));
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("could not map the team as a plain folder:\n{$res['output']}");

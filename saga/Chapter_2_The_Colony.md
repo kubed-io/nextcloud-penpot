@@ -2897,3 +2897,100 @@ old scenario stays visible in the history as what it was: a gap, not a decision.
 > it after was reading a decision you never made. And the whole answer was three
 > pages earlier in your own notebook — you'd measured it, written it up properly,
 > and then not gone back and fixed the menu."*
+
+---
+
+### C6.26 — Two axes, and they do opposite things
+
+Command's ask was blunt: *"long story short I want these integration tests to take
+way less time as each one takes like 10 min."* The answer turned out to need a
+measurement first, because the obvious split was the wrong one.
+
+#### The cost model decides how many legs are worth it
+
+| | measured on this repo |
+|---|---|
+| fixed setup (4 service containers + NC install + token mint) | **~95s** |
+| Behat itself | **~320s** for 97 live scenarios |
+
+`wall = 95 + 320/N`. So one leg is ~7m, three are ~3.4m, four ~2.9m, six ~2.5m.
+**Diminishing returns past four**, because the Penpot stack is paid N times. Four
+is the point where another leg buys 15 seconds and costs a whole stack.
+
+#### The axis is the FILENAME, and tags are the trap
+
+Tags looked like the obvious split — the suite is already tagged four ways. They
+are the wrong tool, and the reason is arithmetic rather than taste. Counted over
+the LIVE scenarios:
+
+| candidate | distribution | verdict |
+|---|---|---|
+| channel | `@gesture` 37 · `@occ` 19 · `@admin,@occ` 10 · **none 28** | 28 match nothing |
+| origin | `@in-nextcloud` 44 · `@in-penpot` 18 · **none 32** | worse |
+| filename | 30 files | exhaustive by construction |
+
+A tag partition **leaks**, and it leaks silently: a scenario matching no leg
+simply stops running and every leg still reports green. You could patch it with a
+negated catch-all (`~@gesture&&~@occ&&~@admin`), which then breaks the day
+somebody adds a tag — again silently. A path partition cannot leak, because
+`ls features/*.feature` minus the union must be empty, and that is one line to
+check. `bin/check-suites.sh` checks it, in the QUALITY workflow, so a partition
+error fails in seconds instead of after four stack boots.
+
+#### The two axes are not the same kind of thing
+
+This is the part worth carrying to the siblings:
+
+    suite    DIVIDES the scenarios — four legs, a quarter each, wall time drops
+    backend  REPEATS them — the same scenarios against a second storage backend
+
+Only the first makes anything faster. The second makes the run *mean more* at no
+wall-clock cost, because those legs are parallel too. And the reason `backend` is
+a matrix axis rather than a flag some step reads is that **the two halves have
+different dependencies**: a Team Folder is the groupfolders app, so the team legs
+install it and the plain legs do not. Different setup, not different data.
+
+`features/README.md` had already called the backend *"a dimension the suite is
+run across"* and named the bug that cost: the structural scenarios in
+reconcile.feature mapped a Team Folder and passed only because of where they sat
+in the run — moved later, the folder resolved to nothing at all. Team Folder
+provisioning had never actually been covered. More scenarios would not have found
+that. Running the existing ones against both backends does.
+
+The step said `mapped as a plain folder`, which was true of the only backend CI
+could reach and is a lie on half the legs now. It reads `mapped to the folder`,
+and the harness decides which — the Gherkin says nothing about the backend, which
+is exactly what makes it a dimension rather than a duplicated scenario.
+
+#### The flakiness was one shape, five times
+
+Four runs of one unchanged commit failed on THREE DIFFERENT scenarios, and `main`
+was failing roughly half its runs. Every one was the same shape: a gesture
+MUTATED Penpot, and the very next assertion read a Penpot listing back. Penpot
+applies deletes and restores through worker tasks, so the row can still be there —
+or still be missing — a moment after the call that changed it returned success.
+
+Six assertions now poll (`until()`, 10s in 250ms steps) instead of sampling once.
+A poll is the honest fix and a sleep is not: it returns the instant the state is
+right, so the common case costs one request, and it **fails with the same message
+as before** once the window closes. It cannot mask a real bug — a state that never
+arrives still fails, only later.
+
+Worth being blunt about why this mattered beyond tidiness: a suite that goes red
+half the time for reasons unrelated to the change teaches everybody to re-run
+instead of read. That is the same failure mode as the warnings §C6.23 was about,
+and it is how a genuine failure eventually gets waved through.
+
+#### What ports to the siblings
+
+All of it except the carve. `n8n_sync` and `grafana_sync` both have the same
+`use_team_folder` mapping option and the same never-tested groupfolders path, and
+both have feature files that partition cleanly by name. What each repo picks for
+itself is only the suite names — the matrix shape, the guard script, the backend
+axis and the poll are the house pattern now.
+
+> **Dr K, watching four pans go on at once:** *"You didn't make the cooking
+> faster. You stopped doing it one pan at a time — which is a different thing, and
+> the only one that was ever available. And the second row of pans doesn't cost
+> you anything, because the stove was already lit. Just don't let me catch you
+> counting a pan you never put on."*

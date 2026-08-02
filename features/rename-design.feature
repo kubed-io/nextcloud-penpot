@@ -40,7 +40,7 @@ Feature: Renaming a mirrored Penpot design
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And no Penpot teams are mapped
-    And the first visible team is mapped as a plain folder "Penpot"
+    And the first visible team is mapped to the folder "Penpot"
 
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot

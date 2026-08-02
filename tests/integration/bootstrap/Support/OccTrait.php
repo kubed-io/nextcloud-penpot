@@ -32,4 +32,32 @@ trait OccTrait {
 		$this->lastOutput = implode("\n", $output);
 		return ['exit' => $exit, 'output' => $this->lastOutput];
 	}
+
+	/**
+	 * The storage-backend flags for `add-mapping`, chosen by the matrix leg.
+	 *
+	 * ## WHY THIS IS AN ENV VAR AND NOT A STEP PARAMETER
+	 *
+	 * Every behaviour in this suite is valid on BOTH backends, so writing each
+	 * scenario twice would produce two identical blocks and prove nothing
+	 * (features/README.md). The backend is a dimension the suite is RUN across —
+	 * so the Gherkin says nothing about it, and the harness reads which leg it is
+	 * in.
+	 *
+	 * A Team Folder shared with NO GROUP is invisible to everyone, and the app
+	 * skips such a mapping with a warning rather than creating dead storage — so
+	 * the team backend must name a group the acting user is in. `admin` is the
+	 * one the CI admin always has.
+	 *
+	 * Defaults to the plain backend, so a local `behat` run with nothing set
+	 * behaves exactly as it did before the matrix existed.
+	 */
+	private function backendFlags(): string {
+		return $this->isTeamFolderBackend() ? '--groups=admin' : '--no-team-folder';
+	}
+
+	/** True when this leg is exercising the groupfolders-backed backend. */
+	private function isTeamFolderBackend(): bool {
+		return getenv('PENPOT_TEST_BACKEND') === 'team';
+	}
 }

@@ -106,23 +106,30 @@ trait ProjectFolderSteps {
 
 	// ── what PENPOT actually holds ──────────────────────────────────────────
 
-	/** @Then /^Penpot holds a project named "([^"]*)"$/ */
+	/**
+	 * Both of these POLL — same reasoning as the trash assertions in
+	 * {@see GestureSteps::until()}: a tag gesture creates or removes the project
+	 * through Penpot, and the listing that proves it is not instantaneous.
+	 *
+	 * @Then /^Penpot holds a project named "([^"]*)"$/
+	 */
 	public function penpotHoldsAProjectNamed(string $name): void {
-		$names = $this->penpotProjectNames();
-		if (!in_array($name, $names, true)) {
-			throw new \RuntimeException(sprintf(
+		$this->until(
+			fn (): bool => in_array($name, $this->penpotProjectNames(), true),
+			fn (): string => sprintf(
 				"expected a Penpot project named '%s'; found: %s",
 				$name,
-				implode(', ', $names) ?: '(none)',
-			));
-		}
+				implode(', ', $this->penpotProjectNames()) ?: '(none)',
+			),
+		);
 	}
 
 	/** @Then /^Penpot holds no project named "([^"]*)"$/ */
 	public function penpotHoldsNoProjectNamed(string $name): void {
-		if (in_array($name, $this->penpotProjectNames(), true)) {
-			throw new \RuntimeException("expected NO Penpot project named '{$name}', but it is there");
-		}
+		$this->until(
+			fn (): bool => !in_array($name, $this->penpotProjectNames(), true),
+			fn (): string => "expected NO Penpot project named '{$name}', but it is there",
+		);
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────
