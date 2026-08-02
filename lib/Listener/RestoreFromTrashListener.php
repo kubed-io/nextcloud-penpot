@@ -50,6 +50,19 @@ use Psr\Log\LoggerInterface;
  * @implements IEventListener<NodeRestoredEvent>
  */
 final class RestoreFromTrashListener implements IEventListener {
+	/**
+	 * File ids already restored in THIS request.
+	 *
+	 * On a plain folder both doors open: files_trashbin dispatches the typed
+	 * NodeRestoredEvent AND emits the legacy `post_restore` hook, so without this
+	 * one gesture would reach Penpot twice. On a Team Folder only the hook fires.
+	 * Recording in both paths and skipping a repeat makes the pair idempotent
+	 * regardless of which arrives first — and the order is not ours to rely on.
+	 *
+	 * @var array<int, true>
+	 */
+	private array $restored = [];
+
 	public function __construct(
 		private RestoreService $restores,
 		private SyncGuard $guard,
@@ -59,6 +72,20 @@ final class RestoreFromTrashListener implements IEventListener {
 		private IUserSession $userSession,
 		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * True when this file was already restored in this request — and records it
+	 * when it was not. See {@see $restored} for why one gesture can arrive twice.
+	 */
+	private function alreadyRestored(File $node): bool {
+		$id = $node->getId();
+		if (isset($this->restored[$id])) {
+			return true;
+		}
+		$this->restored[$id] = true;
+
+		return false;
 	}
 
 	/**
@@ -96,7 +123,7 @@ final class RestoreFromTrashListener implements IEventListener {
 				return;
 			}
 			$node = $this->rootFolder->getUserFolder($uid)->get(ltrim($path, '/'));
-			if ($node instanceof File) {
+			if ($node instanceof File && !$this->alreadyRestored($node)) {
 				$this->restores->onRestored($node);
 			}
 		} catch (\Throwable $e) {
@@ -127,6 +154,10 @@ final class RestoreFromTrashListener implements IEventListener {
 			return;
 		}
 		if (!str_ends_with($node->getName(), PullService::EXTENSION)) {
+			return;
+		}
+
+		if ($this->alreadyRestored($node)) {
 			return;
 		}
 

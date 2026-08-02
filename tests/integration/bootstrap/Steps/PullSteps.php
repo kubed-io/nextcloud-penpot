@@ -63,7 +63,7 @@ trait PullSteps {
 	 *
 	 * @Given /^the first visible team is mapped to the folder "([^"]*)"$/
 	 */
-	public function theFirstVisibleTeamIsMappedAsAPlainFolder(string $folder): void {
+	public function theFirstVisibleTeamIsMappedToAFolder(string $folder): void {
 		$this->noPenpotTeamsAreMapped();
 		$this->pulledTeamId = $this->firstVisibleTeamId();
 

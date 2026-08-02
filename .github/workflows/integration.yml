@@ -437,6 +437,11 @@ jobs:
         # -backed mapping, 'plain' for an admin-owned folder. The scenarios say
         # nothing about which — that is the point of it being an axis.
         PENPOT_TEST_BACKEND: ${{ matrix.backend }}
+        # Bound here rather than interpolated into `run:` — a `${{ }}` inside a
+        # shell script is substituted BEFORE the shell sees it, which mixes
+        # templating with logic and is an injection seam. Read as plain $VARs.
+        SUITE: ${{ matrix.suite }}
+        BACKEND: ${{ matrix.backend }}
       # ONE BEHAVIOUR REALLY DOES DIFFER BY BACKEND, so it is written as two
       # scenarios and each leg skips the other's (delete-design.feature). Every
       # other scenario is backend-agnostic and carries neither tag.
@@ -445,9 +450,9 @@ jobs:
       # REPLACES the config filter rather than adding to it. bin/check-suites.sh
       # asserts the two lists are identical, so they cannot drift apart silently.
       run: |
-        if [ "${{ matrix.backend }}" = team ]; then SKIP='~@plain-folder'; else SKIP='~@team-folder'; fi
+        if [ "$BACKEND" = team ]; then SKIP='~@plain-folder'; else SKIP='~@team-folder'; fi
         vendor/bin/behat --config behat.dist.yml --strict \
-          --suite=${{ matrix.suite }} \
+          --suite="$SUITE" \
           --tags="~@todo&&~@unbuilt&&~@blocked&&~@decision&&$SKIP"
 
     # ── Diagnostics: what did the SERVER think? ──────────────────────────────

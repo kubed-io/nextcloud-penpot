@@ -304,7 +304,10 @@ trait GestureSteps {
 			usleep(250_000);
 		} while (microtime(true) < $deadline);
 
-		throw new \RuntimeException($describe() . sprintf(' (still true after %.0fs)', $seconds));
+		// Describes the WAIT, not the truth value: this helper is used for both
+		// positive and negative conditions, so "still true" would be backwards
+		// half the time.
+		throw new \RuntimeException($describe() . sprintf(' (condition never held within %.0fs)', $seconds));
 	}
 
 	/** @return list<string> */

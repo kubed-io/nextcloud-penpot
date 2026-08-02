@@ -14,9 +14,9 @@ use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Service\RestoreService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUserSession;
-use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -114,5 +114,29 @@ final class RestoreFromTrashListenerTest extends TestCase {
 		$event->method('getTarget')->willReturn($node);
 
 		return $event;
+	}
+
+	/**
+	 * ONE GESTURE, TWO DOORS, ONE RESTORE.
+	 *
+	 * On a plain folder files_trashbin dispatches the typed NodeRestoredEvent AND
+	 * emits the legacy `post_restore` hook. Connecting the hook for Team Folders
+	 * (saga §C6.27) therefore made the plain backend fire twice — which CI caught
+	 * as `design/plain` failing while `design/team` passed, the exact inverse of
+	 * the failure the hook was added to fix.
+	 *
+	 * `once()` is the whole assertion.
+	 */
+	public function testOneRestoreReachesPenpotOnceEvenIfBothDoorsOpen(): void {
+		$node = $this->createMock(File::class);
+		$node->method('getId')->willReturn(4242);
+		$node->method('getName')->willReturn('Design.penpot');
+
+		$this->restores->expects($this->once())->method('onRestored')->with($node);
+
+		// typed event first…
+		$this->listener->handle(new NodeRestoredEvent($this->createStub(Folder::class), $node));
+		// …then the legacy hook for the same file, which must be a no-op.
+		$this->listener->postRestore(['filePath' => '/Penpot/Project/Design.penpot']);
 	}
 }
