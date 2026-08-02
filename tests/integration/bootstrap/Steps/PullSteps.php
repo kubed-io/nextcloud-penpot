@@ -219,7 +219,7 @@ trait PullSteps {
 		$expected = null;
 		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
 			if (($project['name'] ?? null) === $name) {
-				$expected = self::penpotSecond($project['created-at'] ?? null);
+				$expected = self::penpotSecond($project['createdAt'] ?? null);
 				break;
 			}
 		}
@@ -232,13 +232,13 @@ trait PullSteps {
 	/** @Then /^"([^"]*)" is dated when the design changed in Penpot$/ */
 	public function theDesignIsDatedWhenItChanged(string $path): void {
 		$file = $this->penpotFileRecordFor($path);
-		$this->assertClock($path, 'getlastmodified', self::penpotSecond($file['modified-at'] ?? null), "the design's modified-at");
+		$this->assertClock($path, 'getlastmodified', self::penpotSecond($file['modifiedAt'] ?? null), "the design's modified-at");
 	}
 
 	/** @Then /^"([^"]*)" was created when the design was created in Penpot$/ */
 	public function theDesignWasCreatedWhenItWasCreated(string $path): void {
 		$file = $this->penpotFileRecordFor($path);
-		$this->assertClock($path, 'creation_time', self::penpotSecond($file['created-at'] ?? null), "the design's created-at");
+		$this->assertClock($path, 'creation_time', self::penpotSecond($file['createdAt'] ?? null), "the design's created-at");
 	}
 
 	/** The team this scenario's mapping points at — set by the pull, else resolved. */
@@ -278,28 +278,30 @@ trait PullSteps {
 	/**
 	 * A Penpot timestamp from the RAW RPC channel, as a Unix second.
 	 *
-	 * Two layers of encoding, and the second one cost a CI cycle. Penpot sends epoch
-	 * MILLISECONDS (not the ISO-8601 the n8n and Grafana siblings use) — and over this
-	 * channel they arrive **Transit-tagged**: `"~m1785467414002"`. {@see penpotRpcRead}
-	 * deliberately does not decode Transit, which was true and free right up until
-	 * something here wanted a value out of a response rather than just a status.
+	 * ## THE SAME FIELD HAS TWO WIRE FORMATS, AND WHICH ONE YOU GET IS NEGOTIATED
 	 *
-	 * The app sees the decoded form because {@see \OCA\PenpotSync\Service\Transit}
-	 * runs first; the test does not. Parsing is kept here rather than shared with the
-	 * app on purpose: a test that borrowed the app's parser would agree with a broken
-	 * implementation by construction.
+	 * Confirmed by dumping both responses rather than reasoning about them, because
+	 * two successive guesses here were wrong:
+	 *
+	 *   the app  (Transit)  `modified-at`  "1785467414002"              epoch millis
+	 *   this test (JSON)    `modifiedAt`   "2026-08-01T01:55:42.434Z"   ISO-8601
+	 *
+	 * {@see penpotRpcRead} asks for `application/json`, so Penpot answers in camelCase
+	 * with ISO strings; {@see \OCA\PenpotSync\Service\PenpotClient} asks for Transit
+	 * and gets kebab-case with epoch millis. Neither is more correct — but a test that
+	 * assumes the app's shape reads absent keys and reports "no timestamp" for records
+	 * it actually found, which is exactly how this failed twice.
+	 *
+	 * So the app parses millis ({@see \OCA\PenpotSync\Service\MirrorTimes::parse})
+	 * and this parses ISO, and the duplication is load-bearing rather than sloppy: a
+	 * test sharing the app's parser could not have caught the app using the wrong one.
 	 */
 	private static function penpotSecond(mixed $value): ?int {
-		if (is_string($value)) {
-			// `~m` is Transit's instant tag; `~~` would be a literal `~`, which a
-			// timestamp never is, so a plain prefix strip is enough here.
-			$value = ltrim($value);
-			if (str_starts_with($value, '~m')) {
-				$value = substr($value, 2);
-			}
-			$value = ctype_digit($value) ? (int)$value : null;
+		if (!is_string($value) || trim($value) === '') {
+			return null;
 		}
-		return is_int($value) && $value > 0 ? intdiv($value, 1000) : null;
+		$ts = strtotime(trim($value));
+		return $ts === false ? null : $ts;
 	}
 
 	/** Compare one DAV clock on $path against $expected, or explain what it read. */
@@ -556,9 +558,11 @@ trait PullSteps {
 	/**
 	 * Post a command straight to Penpot's RPC bus with the minted service-account
 	 * token — the seed/assertion channel, bypassing the app. The Transit response
-	 * body is NOT decoded, so scalars arrive tagged: an instant reads
-	 * `"~m1785467414002"`, a uuid `"~u…"`. Callers that want a value rather than a
-	 * status have to strip the tag themselves — {@see penpotSecond} does.
+	 * body is NOT decoded — and because this asks for `application/json` rather than
+	 * Transit, Penpot answers in a DIFFERENT SHAPE from the one the app sees:
+	 * camelCase keys (`modifiedAt`, not `modified-at`) carrying ISO-8601 strings, not
+	 * the epoch millis the Transit channel returns. Read a value out of here and you
+	 * are reading Penpot's JSON dialect, not the app's.
 	 *
 	 * SUCCESS IS 200 **OR** 204, because Penpot's own answers disagree: the
 	 * creators return a body, `delete-file` returns nothing at all. Asserting 200
