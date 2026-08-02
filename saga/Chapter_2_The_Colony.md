@@ -2835,3 +2835,65 @@ exactly as badly as the docblock §C6.23 was about.
 > not humility, it's a note nobody read twice — including you. And the milliseconds:
 > you'd have copied their parser, set nothing at all, and the tests would have gone
 > green. Measure the thing you're certain about."*
+
+---
+
+### C6.25 — "Later" became "never", and the spec said so out loud
+
+The design/project split turned up a scenario nobody had re-read since it was
+written:
+
+> **Scenario: Deleting a personal project folder never touches Penpot**
+
+Command caught it in review, and the objection was the premise of the whole app:
+
+> *"the whole point of the extension is to be a mirror … if you delete a tagged
+> folder then the corresponding project is removed in penpot as well. This is a
+> full mirror to get full parity as if I'm fully using penpot from nextcloud."*
+
+That is right, and the spec was not describing a rule. **It was describing the
+current defect as though it were the intent.** §C6.11 had already measured what
+actually happens — deleting a project folder reaches Penpot *not at all*, for two
+stacked reasons — and somewhere between "we will deal with this later" and
+writing it down, later became never.
+
+The tell is the wording. A real rule says what the system does *and why the
+alternative is wrong*. This one said "never touches Penpot" with no reason
+attached, because there wasn't one — only an unimplemented path.
+
+#### The evidence was already in the chapter, which is the uncomfortable part
+
+None of this needed new research. §C6.11 had measured all of it live:
+
+| | measured |
+|---|---|
+| `delete-project {id}` | HTTP 204, and **entirely soft** — sets `deleted_at` to `now + 7 days` and a worker cascades the same timestamp to every file |
+| restore | there is **no `restore-project` RPC**; a project returns only as a *side effect* of restoring one of its files |
+| delete vs restore | **delete cascades, restore does not** — deleting a project holding two designs and restoring one brought back the project and that design, leaving the other in the trash |
+| an empty project | has no file to carry it back, so it cannot be restored at all — it expires |
+
+So the grace window lines up with the Nextcloud trash almost exactly: soft on
+both sides, recoverable on both sides, for roughly the same week. That is not an
+obstacle to mirroring the delete — it is the thing that *makes it safe*, and it
+had been sitting in the chapter the whole time under a heading about something
+else.
+
+**Where the app can do better than Penpot.** Because restore does not cascade,
+"restore the project folder" has to mean "restore every design that was in it, in
+ONE call". Penpot has no operation for that; Nextcloud knows which designs were
+in the folder. The extension can therefore offer a project restore that Penpot's
+own UI cannot — which is precisely the kind of thing a mirror is for, and it is
+now specified in `restore-project.feature` rather than left implicit.
+
+#### What changed
+
+`delete-project.feature` carries the correction at the top, with the measurements
+inline, and the personal scenario now says the same thing as the team one —
+because a personal project *is* a project, and only the credential differs. The
+old scenario stays visible in the history as what it was: a gap, not a decision.
+
+> **Dr K, reading the old ticket back:** *"You wrote 'we don't do that' on a line
+> that meant 'we haven't done that yet', and then filed it. Every cook who read
+> it after was reading a decision you never made. And the whole answer was three
+> pages earlier in your own notebook — you'd measured it, written it up properly,
+> and then not gone back and fixed the menu."*

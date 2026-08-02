@@ -14,6 +14,43 @@
 #
 # The design-side rules about the two bins, the permanent-delete guard, and link
 # dismissal all live in delete-design.feature and are not restated here.
+#
+# ## A CORRECTION THIS FILE EXISTS TO CARRY (saga §C6.25)
+#
+# This spec used to say "deleting a personal project folder never touches
+# Penpot". That was not a rule — it was the CURRENT DEFECT written up as one.
+# Deleting a project folder reaches Penpot **not at all** today, for two stacked
+# reasons (DeleteListener bails on anything that is not a File, and Nextcloud
+# fires BeforeNodeDeletedEvent for the folder ONLY, with no per-child event), and
+# the folder then comes back on the next pull — which reads as the app undoing
+# the user's deletion. Somewhere between "we will deal with this later" and the
+# spec, later became never.
+#
+# The mirror's whole premise is parity: a folder the user tagged into existence
+# is one they can delete the same way, in a personal team exactly as in a mapped
+# one. Only the credential differs.
+#
+# ## WHAT PENPOT ACTUALLY DOES, measured (saga §C6.11)
+#
+#   delete-project {id}   → HTTP 204, and it is ENTIRELY SOFT. Sets
+#                           project.deleted_at to now + deletion-delay (7 days by
+#                           default) and a worker cascades the SAME future
+#                           timestamp to every file in it.
+#   restore               → there is NO restore-project RPC. A project returns
+#                           only as a SIDE EFFECT of restoring one of its files.
+#   an EMPTY project      → has no file to carry it back, so it cannot be
+#                           restored through the API at all. It expires.
+#
+# DELETE CASCADES; RESTORE DOES NOT — measured by deleting a project holding two
+# designs and restoring only one: the project came back, that design came back,
+# the other stayed in the trash. So "restore the project folder" has to mean
+# "restore every design that was in it, in ONE call" — not for tidiness, but
+# because a per-file loop that failed halfway would leave a project holding some
+# of its designs and no signal that anything was wrong.
+#
+# THE GRACE WINDOW LINES UP WITH THE NEXTCLOUD TRASH almost exactly, which is
+# what makes the mirror honest: soft on both sides, recoverable on both sides,
+# for roughly the same week. restore-project.feature owns the other half.
 
 Feature: Deleting a Penpot project folder
   As a Nextcloud user
@@ -91,16 +128,20 @@ Feature: Deleting a Penpot project folder
     And the project folder reappears on the next pull
     # Penpot's restore clears deleted_at on the project as well as the file.
 
-  # ── the same gesture in a personal team, and it does NOT mean the same ──────
-  # The one place the personal case genuinely diverges, which is exactly why it
-  # belongs beside the team-project answer rather than in a file of its own: a
-  # reader asking "what does deleting a project folder do?" needs both answers
-  # in one place.
+  # ── the same gesture in a personal team, and it means the SAME thing ────────
+  # A personal project is a project. The who and the where differ; the rule does
+  # not. This is stated explicitly because the spec previously claimed the
+  # opposite — see the correction note at the top of this file.
 
-  @unbuilt
-  Scenario: Deleting a personal project folder never touches Penpot
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Deleting a personal project folder deletes that project in Penpot
     Given a personal project folder in the user's home
     When the user deletes the folder
-    Then Penpot is never contacted
-    And the Penpot project and its designs are completely unaffected
+    Then the project is deleted in Penpot under the user's own token
+    And its designs go to Penpot's trash with it
     And the folder is recoverable from the Nextcloud trash
+    # SAME RULE AS A TEAM PROJECT, different credential. A personal project is
+    # not a read-only view of Penpot — the whole point of the mirror is parity,
+    # so a folder the user tagged into existence is one they can delete the same
+    # way. The user's own token performs it, because the service account cannot
+    # see their personal team at all (personal-projects.feature).

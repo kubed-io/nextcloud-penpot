@@ -105,7 +105,7 @@ Do not "correct" these:
 ## Layout — one behaviour, one file
 
 Feature files are organised by **behaviour**, never by the kind of thing acted
-on. Renaming a project folder is a *rename* and lives in `rename-project.feature`, next
+fullon. Renaming a project folder is a *rename* and lives in `rename-project.feature`, next
 to renaming a file, so a reader comparing the two sees one table.
 
 This is the most valuable thing to catch in review, because the failure is
@@ -195,9 +195,10 @@ double quote**. That makes the ordinary cases safe and one case fatal:
 
 | | |
 |---|---|
-| `alex's token` | fine — `'` follows `x` |
-| `"alex"'s token` | fine — `'` follows `"` |
-| `"alex" 's token` | **breaks** — `'` follows a space, opens a region that never closes |
+| `alex's token` | fine — `'` follows a letter, and no quote is involved |
+| `the token of "alex"` | fine — the possessive is rephrased away from the quote |
+| `"alex"'s token` | **breaks** — the closing `"` cannot close, because `"(?![a-zA-Z0-9'])` refuses to close in front of an apostrophe |
+| `"alex" 's token` | **breaks** — the lone `'` opens a region of its own |
 
 The last form turns up when a possessive gets separated from its noun, usually
 while editing around a quoted parameter. If a file suddenly goes grey partway
