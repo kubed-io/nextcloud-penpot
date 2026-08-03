@@ -3164,3 +3164,106 @@ angle. A test is a claim about the system. This one made a claim nobody had
 decided was true, and because it passed — an uninvolved file being uninvolved
 passes trivially — it looked like evidence for a feature that was never built.
 
+### §C6.28 — `reconcile.feature` was never a feature
+
+Thirty-four scenarios describing a machine. The reconciler is what carries every
+`from Penpot` change into Nextcloud; it is the mechanism behind the behaviours,
+not one of them. Written as a feature it did what a misplaced abstraction always
+does — it grew, because everything the machine touches looks like it belongs to
+it, and nothing in the file's own terms says otherwise.
+
+The symptoms were all in the inventory before anyone read a line of prose. Of
+thirty-four scenarios, three were behaviours. Ten were RULES. Thirteen restated a
+verb another file already owns. One asserted a feature that does not exist. Half
+the file could not be built, and the reason they were blocked is that they were
+never behaviours — an unbuildable scenario is usually a scenario about the wrong
+thing.
+
+#### The three that are real, and their two actors
+
+The behaviour is **sync now**, and who or what triggers it:
+
+| actor | behaviour |
+|-------|-----------|
+| admin | sync now on ONE mapping — a synchronous pull of that team |
+| admin | sync all now — the background job |
+| time  | the schedule's first run, with nobody asking |
+
+Everything the old file said about mirroring roots, projects and files is the
+OUTCOME of those, not separate scenarios. A first sync is genuinely its own
+situation — whatever put the designs in Penpot before this app existed is out of
+scope, so "existing designs arrive for the first time" is a real, independent
+thing to describe, and it only needs one or two designs to describe it.
+
+`sync-now.feature` replaces `reconcile.feature`. Scenarios 1, 2 and 8 of the old
+file become its assertions.
+
+#### Redundant with the file that owns the verb (13)
+
+    rename                #11 #22   -> rename-project / rename-design
+    move                  #9 #23 #24 -> move-design / move-project
+    trash and re-adopt    #13 #14 #29 -> restore-design
+    prune and snapshot    #25 #26 #27 -> delete-design
+    Drafts at the root    #15       -> mapping-membership
+    modes                 #16 #17 #18 -> set-mode / sync-mode
+
+"A rename in Penpot renames the mirrored file" is a rename. That it arrives via
+the reconciler is HOW it arrives. Renaming has its own file, covered every which
+way, and a second copy of the claim under the machine's name is a duplicate that
+drifts.
+
+#### Rules, not behaviours (10)
+
+    #3 #12    a second pull creates no duplicates
+    #4 #19    an unchanged pull prunes nothing and costs no exports
+    #21       an unchanged pull moves no mtime or etag
+    #30       never prune on a failed or incomplete listing
+    #32       there is no push counterpart          (@decision)
+    #33 #34   the pull always runs as the service account
+
+These are invariants the CODE owes, and a Gherkin scenario is a poor way to hold
+one. "The pull always runs as the service account, never as a user" describes an
+implementation guarantee with no actor and no gesture; nobody does it. It belongs
+in prose beside the code and in a unit test that fails when it stops being true.
+
+That is the honest home for most of this group. Idempotence, no-churn, and
+"never prune on an incomplete listing" are all cheap and exact as unit tests and
+vague and expensive as scenarios — #21 in particular is the anti-churn guard from
+§5.11, which a unit test pins precisely and an integration scenario only gestures
+at.
+
+#### Asserting a feature that does not exist (1)
+
+`An ignored file is skipped by the pull, not pruned` — there is no per-file ignore
+in this app. It is the same assumption the untracked-restore scenario smuggled in,
+and it goes where that one went: the `penpot:ignore` open question, not a test.
+
+#### The one that moves house (1)
+
+`A snapshot that cannot be taken is reported, not faked` is an error-reporting
+behaviour and belongs in `errors.feature`.
+
+#### Sync now for a USER, and the mappings we are not building
+
+A per-user sync-now is the same behaviour with a different token. The scope
+differs — what that token can see in Penpot, and what that user can see in
+Nextcloud — but the END STATE does not, and a scenario that differs only in scope
+is the same scenario. The one genuine difference is that the personal team
+mapping is AUTOMATIC, so the user's sync-now button is scoped to exactly one
+folder and needs no mapping card at all.
+
+Per-user team mappings are explicitly OUT OF SCOPE, recorded as a `@decision`
+rather than left ambiguous. No feature file has ever asked for them, and letting
+users author mappings breeds edge cases faster than anything else on the table:
+two users mapping one team, a user mapping a team the service account cannot see,
+what happens to their folders when the admin removes the mapping underneath them.
+The personal team mapping stays automatic and singular.
+
+#### The rule this leaves behind
+
+**A mechanism does not get a feature file.** It gets a name in the prose of the
+behaviours it serves. When a file starts collecting scenarios because they all
+happen to travel through the same code, that is the signal — the question to ask
+is "who does this, and what do they get", and if the answer is "nobody, it is
+just true", it is a rule and belongs where rules live.
+
