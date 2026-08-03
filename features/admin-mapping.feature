@@ -80,15 +80,6 @@ Feature: Admin configures team mappings
 
     # notes: AGENTS.md#a-value-the-app-cannot-honour-is-refused-and-says-why
 
-    # notes: AGENTS.md#a-pull-re-asserts-the-folders-group-rights
-
-  @todo
-  Scenario: A pull re-asserts the folder's group rights
-    Given a folder mapped to the Penpot team "Northwind"
-    And its group rights have been changed by hand
-    When the pull runs
-    Then the mapping's groups hold read, update, create and delete again
-
   Scenario: A team id that resolves to nothing cannot be mapped
     Given no Penpot teams are mapped
     When the admin tries to map the team id "11111111-2222-3333-4444-555555555555"

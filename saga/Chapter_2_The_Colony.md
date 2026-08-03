@@ -3532,3 +3532,63 @@ It also draws a line worth keeping: the command records the groups; the SHARE on
 the provisioned folder is re-asserted by `ensureRoot()` on the next sync, exactly
 as §C6.32 arranged. Two events, and the scenario stops at the one the admin gets
 an answer about.
+
+### §C6.34 — The folder owns its groups; the mapping should not
+
+`admin-mapping.feature` carried this:
+
+```gherkin
+  @todo
+  Scenario: A pull re-asserts the folder's group rights
+    Given its group rights have been changed by hand
+    When the pull runs
+    Then the mapping's groups hold read, update, create and delete again
+```
+
+with a note saying hand-editing the share "is not a supported way to restrict a
+mapped folder — remove the group from the mapping instead". That is backwards.
+An admin editing the groups on a Team Folder, or on the plain folder's share, is
+doing an ordinary and legitimate thing with their own Nextcloud. Reverting it on
+the next pull is the app fighting its user.
+
+**The folder is the source of truth.** A mapping should not carry a second copy
+of the answer, because a second copy is a thing that can disagree — and when it
+does, the pull silently picks the copy the admin did not touch.
+
+`occ penpot_sync:set-groups` keeps its place, but its job changes from "record
+groups on the mapping" to "apply groups to the folder". It stays worth having
+for the reason it was written: it does the right thing on either backend, so
+nobody has to know that groupfolders takes a group ASSIGNMENT and a plain folder
+takes a group SHARE. A helper for a job you may equally do by hand.
+
+#### What this costs, which is why it is not in this PR
+
+The scenario is deleted here — it describes behaviour we no longer want, and a
+`@todo` for the wrong thing is worse than nothing. The implementation is a
+source-of-truth change and wants its own review:
+
+- **`Mapping`** drops `ncGroups` — constructor, `fromArray()`, `toArray()`,
+  `withNcGroups()`. The persisted JSON keeps the key harmlessly on old rows; it
+  simply stops being read, which is correct, because the folder already knows.
+- **`StorageService::ensureRoot()`** currently APPLIES `$mapping->ncGroups` every
+  time it runs. Groups become an optional argument applied only when explicitly
+  passed. *That removal is the feature* — it is what makes a hand edit survive.
+- **a read path per backend**: `TeamFolderService::appliedGroups()` exists and is
+  private; the plain side reads `IShareManager::getSharesBy()`, which
+  `ensureRoot()` already walks.
+- **three commands** — `add-mapping --groups`, `set-groups`, and `list-mappings`,
+  which prints a column it would no longer have — and `MappingController`'s
+  create, index and update.
+- **three test files**, including the eight-row group outline, whose assertion
+  reads `nc_groups` off `list-mappings` and must read the FOLDER instead. That
+  makes it a stronger test: it would stop trusting our own record of what we did
+  and go look.
+
+No UI work: the admin panel never exposed groups.
+
+#### The rule
+
+**Do not store what you can read.** A cache of someone else's state needs a
+reason, an invalidation story, and a rule for who wins a disagreement. `nc_folder`
+earns its place — the admin chose it and nothing else records that choice.
+`nc_groups` never did: Nextcloud already knows who a folder is shared with.

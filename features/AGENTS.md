@@ -282,35 +282,26 @@ nextcloud-grafana, so an admin configuring all three does the same thing each
 time. They PERSIST today and are honoured when the pull provisions the folder
 (Course 3) — the same "saved now, applied later" state Grafana ships them in.
 
-### A pull re-asserts the folder's group rights
+### Groups are the FOLDER's, not the mapping's
 
-── what a mapped folder LETS YOU DO (saga §C6.8) ─────────────────────────
+A scenario here used to say a pull re-asserts the mapped folder's group rights,
+so that a permissions correction reached folders that already existed and
+hand-editing the share was explicitly not supported.
 
-A mapped folder is an ORDINARY Nextcloud folder that happens to be mirrored.
-Its groups get read, write, create and delete — the same surface any other
-folder grants, and the same surface both siblings grant.
+That is now the opposite of the intent. An admin editing the groups on a Team
+Folder, or on the plain folder's share, is doing a legitimate thing and the app
+must not undo it on the next pass. The folder is the source of truth; a mapping
+should not carry a second copy of the answer to diverge from.
 
-AN EARLIER BUILD WITHHELD CREATE AND DELETE to express "the mirror is
-read-only" (§6.1). That was the wrong tool, and the damage was invisible from
-the code: Nextcloud hides the "+ New" button entirely on a folder with no
-CREATE, so mapped folders silently behaved unlike every other folder in the
-instance — no new file, no new subfolder, no paste. It also made three BUILT
-features unreachable:
+`occ penpot_sync:set-groups` stays as the convenience it is — one command that
+does the right thing on either backend, so nobody has to remember the difference
+between assigning a groupfolders group and creating a group share. It is a
+helper for a job you may equally do by hand.
 
-  - free nesting (§6.29), the app's most load-bearing rule, whose entire
-    point is that a user may group mirrors into plain subfolders of their own;
-  - the move write-back, since a cross-folder move needs DELETE on the source;
-  - "a mapped folder stays usable as an ordinary folder", which the prune
-    relies on when it leaves unstamped files alone.
-
-§6.1 still holds absolutely — it is enforced by there being no content push,
-not by a permission bit. Withholding CREATE stopped no write to Penpot; it
-only stopped the user from using their own files.
-
-This is what lets a permissions correction reach folders that already
-exist: neither backend needs a migration, because both re-assert on every
-pass. It also means hand-editing the share is not a supported way to
-restrict a mapped folder — remove the group from the mapping instead.
+NOT YET IMPLEMENTED. The model still stores `nc_groups` and `StorageService`
+still applies it on every `ensureRoot()`. Making the folder authoritative means
+dropping the field, applying groups only when explicitly asked, and reading them
+back from each backend — see the saga for the shape.
 
 ### A team id that resolves to nothing cannot be mapped
 
