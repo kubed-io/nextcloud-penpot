@@ -44,34 +44,42 @@ trait MappingSteps {
 		}
 	}
 
-	/** @When the admin maps the first team the service account can see */
-	public function theAdminMapsTheFirstVisibleTeam(): void {
-		$teamId = $this->firstVisibleTeamId();
-
-		$res = $this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
-
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("add-mapping failed for {$teamId}:\n{$res['output']}");
-		}
+	/**
+	 * Map a named team, naming no folder — the case where the folder name is left
+	 * to default to the team's own.
+	 *
+	 * DOES NOT THROW ON FAILURE, and neither does any other `When` here. Half these
+	 * scenarios are asserting a REFUSAL, so the outcome belongs to the `Then` that
+	 * follows; a step that threw first would make "the mapping is rejected"
+	 * unreachable. `$this->lastExit` and `$this->lastOutput` carry the verdict.
+	 *
+	 * @When /^the admin maps the Penpot team "([^"]*)"$/
+	 */
+	public function theAdminMapsThePenpotTeam(string $team): void {
+		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($this->teamNamed($team)));
 	}
 
-	/** @When /^the admin tries to map the Penpot team "([^"]*)"$/ */
-	public function theAdminTriesToMapTheTeam(string $teamId): void {
+	/**
+	 * Map by RAW ID, for the ids that resolve to nothing.
+	 *
+	 * The one step here that does not take a NAME, and deliberately so: it exists
+	 * to hand `add-mapping` something no lookup could have produced. Naming it
+	 * "team id" rather than "Penpot team" keeps it from reading like the named
+	 * steps above, which seed the team they name.
+	 *
+	 * @When /^the admin tries to map the team id "([^"]*)"$/
+	 */
+	public function theAdminTriesToMapTheTeamId(string $teamId): void {
 		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
 	}
 
-	/** @When /^the admin tries to map the first visible team with folder mode "([^"]*)"$/ */
-	public function theAdminTriesToMapTheFirstVisibleTeamWithFolderMode(string $folderMode): void {
+	/** @When /^the admin tries to map the team "([^"]*)" with folder mode "([^"]*)"$/ */
+	public function theAdminTriesToMapTheTeamWithFolderMode(string $team, string $folderMode): void {
 		$this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder-mode=%s',
-			escapeshellarg($this->firstVisibleTeamId()),
+			escapeshellarg($this->teamNamed($team)),
 			escapeshellarg($folderMode),
 		));
-	}
-
-	/** @When the admin maps the same team again */
-	public function theAdminMapsTheSameTeamAgain(): void {
-		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($this->firstVisibleTeamId()));
 	}
 
 	/** @Then /^there (?:is|are) exactly (\d+) configured team mappings?$/ */
@@ -97,15 +105,6 @@ trait MappingSteps {
 		if (!str_contains(strtolower($this->lastOutput), strtolower($needle))) {
 			throw new \RuntimeException("expected the message to mention '{$needle}', got:\n" . $this->lastOutput);
 		}
-	}
-
-	/** @When /^the admin maps the first visible team into the folder "([^"]*)"$/ */
-	public function theAdminMapsTheFirstVisibleTeamIntoTheFolder(string $folder): void {
-		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder=%s',
-			escapeshellarg($this->firstVisibleTeamId()),
-			escapeshellarg($folder),
-		));
 	}
 
 	/**
@@ -145,16 +144,6 @@ trait MappingSteps {
 		}
 	}
 
-	/** @Given /^the first visible team is mapped into the folder "([^"]*)"$/ */
-	public function theFirstVisibleTeamIsMappedIntoTheFolder(string $folder): void {
-		$this->noPenpotTeamsAreMapped();
-		$this->theAdminMapsTheFirstVisibleTeamIntoTheFolder($folder);
-
-		if ($this->lastExit !== 0) {
-			throw new \RuntimeException("could not map the team into {$folder}:\n" . $this->lastOutput);
-		}
-	}
-
 	/** @When /^the admin maps another team into the folder "([^"]*)"$/ */
 	public function theAdminMapsAnotherTeamIntoTheFolder(string $folder): void {
 		$mapped = $this->mappings();
@@ -175,11 +164,11 @@ trait MappingSteps {
 		throw new \RuntimeException('needs a second visible Penpot team, found only one');
 	}
 
-	/** @When /^the admin maps the first visible team shared with the group "([^"]*)"$/ */
-	public function theAdminMapsTheFirstVisibleTeamSharedWith(string $groups): void {
+	/** @When /^the admin maps the team "([^"]*)" shared with the group "([^"]*)"$/ */
+	public function theAdminMapsTheTeamSharedWith(string $team, string $groups): void {
 		$this->occ(sprintf(
 			'penpot_sync:add-mapping %s --groups=%s',
-			escapeshellarg($this->firstVisibleTeamId()),
+			escapeshellarg($this->teamNamed($team)),
 			escapeshellarg($groups),
 		));
 	}
@@ -253,19 +242,6 @@ trait MappingSteps {
 		}
 	}
 
-	/** @Then the mapping records the team name from Penpot */
-	public function theMappingRecordsTheTeamName(): void {
-		$mappings = $this->mappings();
-		$name = $mappings[0]['team_name'] ?? '';
-
-		// The name is server-authoritative (§6.13): the app must have read it
-		// back from Penpot rather than storing whatever the caller supplied —
-		// and `add-mapping` never takes a name at all.
-		if (!is_string($name) || $name === '') {
-			throw new \RuntimeException("expected the mapping to carry a team name from Penpot, got:\n" . $this->lastOutput);
-		}
-	}
-
 	/**
 	 * Held across steps because `$this->lastOutput` is shared and every later
 	 * step clobbers it — the assertion below runs after a `list-mappings` call
@@ -299,11 +275,6 @@ trait MappingSteps {
 				"expected the removal to state that nothing was deleted, got:\n" . $this->removalOutput,
 			);
 		}
-	}
-
-	/** @Then the service account can see at least one Penpot team */
-	public function theServiceAccountCanSeeATeam(): void {
-		$this->firstVisibleTeamId();
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────

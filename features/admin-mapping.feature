@@ -26,10 +26,15 @@
 # the invite up front makes that visible, instead of silently creating a mapping
 # that pulls nothing forever.
 #
-# MAPPED-FOLDER NAMING IS SERVER-AUTHORITATIVE (saga §6.13 point 3): the folder
-# name tracks Penpot's team name via the pull. This keeps two Nextcloud setups
-# mapping the same Penpot team recognizably in sync by name, not just by hidden
-# id.
+# A MAPPING HOLDS TWO NAMES, AND NEITHER IS THE OTHER (saga §C6.29). The Penpot
+# TEAM NAME is server-authoritative — read back from Penpot on every pull, never
+# supplied by the admin (§6.13 point 3). The NEXTCLOUD FOLDER NAME is the admin's,
+# and defaults to the team's name only because that is the useful default. They
+# may differ, and a rename on the Penpot side does not move the admin's folder.
+#
+# An earlier draft of this header said the folder name "tracks Penpot's team name
+# via the pull". That was one name for a two-name object, and the scenarios below
+# now contradict it outright.
 #
 # MODE IS A MAPPING DEFAULT, NOT A MAPPING PROPERTY (saga §6.22): a mapping
 # carries the default mode its files get ("link" unless set otherwise), but any
@@ -57,16 +62,20 @@ Feature: Admin configures team mappings
     # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
     # These drive the same MappingService the settings panel calls, over occ.
 
-  Scenario: A team the service account can see can be mapped
+  Scenario: A Penpot team can be mapped
     Given no Penpot teams are mapped
-    And the service account can see at least one Penpot team
-    When the admin maps the first team the service account can see
+    And a Penpot team named "Northwind" exists
+    When the admin maps the Penpot team "Northwind"
     Then there is exactly 1 configured team mapping
-    And the mapping records the team name from Penpot
+    And the mapping records the Penpot team "Northwind"
+    # The team name is read back from Penpot — `add-mapping` never takes one, so
+    # a mapping that knows the team is called "Northwind" learned it from the
+    # server (§6.13).
 
   Scenario: A new mapping defaults to link mode and nested folders
     Given no Penpot teams are mapped
-    When the admin maps the first team the service account can see
+    And a Penpot team named "Northwind" exists
+    When the admin maps the Penpot team "Northwind"
     Then the mapping's default mode is "link"
     And the mapping's folder mode is "nested"
 
@@ -87,7 +96,8 @@ Feature: Admin configures team mappings
 
   Scenario: A mapped folder defaults to the Penpot team's name
     Given no Penpot teams are mapped
-    When the admin maps the first team the service account can see
+    And a Penpot team named "Northwind" exists
+    When the admin maps the Penpot team "Northwind"
     Then the mapping's Nextcloud folder is named after the Penpot team
 
   Scenario Outline: The admin may name the Nextcloud folder whatever they like
@@ -122,7 +132,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: Renaming the team in Penpot does not rename the admin's folder
-    Given the first visible team is mapped into the folder "Design Files"
+    Given a Penpot team named "Northwind" is mapped to the folder "Design Files"
     When the team is renamed in Penpot
     And the pull runs
     Then the mapping's Nextcloud folder is still "Design Files"
@@ -132,7 +142,7 @@ Feature: Admin configures team mappings
 
   @todo
   Scenario: Two mappings cannot target the same Nextcloud folder
-    Given the first visible team is mapped into the folder "Designs"
+    Given a Penpot team named "Northwind" is mapped to the folder "Designs"
     When the admin maps another team into the folder "Designs"
     Then the mapping is rejected
     And the refusal explains "already used"
@@ -141,7 +151,8 @@ Feature: Admin configures team mappings
 
   Scenario: A Nextcloud folder name is a single folder, not a path
     Given no Penpot teams are mapped
-    When the admin maps the first visible team into the folder "teams/design"
+    And a Penpot team named "Northwind" exists
+    When the admin maps the team "Northwind" into the folder "teams/design"
     Then the mapping is rejected
     And the refusal explains "single folder name"
     # Everything below the team folder is created by the pull from Penpot's own
@@ -156,50 +167,9 @@ Feature: Admin configures team mappings
 
   Scenario: A mapping records the Nextcloud groups its folder is shared with
     Given no Penpot teams are mapped
-    When the admin maps the first visible team shared with the group "admin"
+    And a Penpot team named "Northwind" exists
+    When the admin maps the team "Northwind" shared with the group "admin"
     Then the mapping's groups are "admin"
-
-    # ── syncing ONE mapping, from its own card ────────────────────────────────
-    #
-    # The granular twin of the section-wide "Sync from Penpot" button, and
-    # deliberately the opposite shape: SYNCHRONOUS and scoped to one mapping.
-    #
-    # The admin is looking at that card and waiting for an answer about that team.
-    # One team is a bounded amount of work — usually a handful of files, and no
-    # exports at all for a `link` mapping (§5.5) — so queuing it would replace a
-    # short wait with a spinner and a poll. The bulk button is async precisely
-    # because it is NOT bounded: it walks every mapping and can export archives.
-
-  @blocked
-  Scenario: A mapping card can sync just its own team
-    Given two Penpot teams are mapped
-    When the admin clicks "Sync now" on the first mapping's card
-    Then only that team is pulled
-    And the second mapping's folder is untouched
-    And the result is reported on that card when it finishes
-
-  @blocked
-  Scenario: A per-mapping sync is synchronous
-    Given a Penpot team is mapped
-    When the admin clicks "Sync now" on its card
-    Then the answer comes back in the same request
-    And no background job is queued
-    # Fast feedback on a bounded set. The bulk button is the one that queues.
-
-  @blocked
-  Scenario: A per-mapping sync reports its failure on the card
-    Given a Penpot team is mapped and Penpot cannot be reached
-    When the admin clicks "Sync now" on its card
-    Then the card reports the failure and why
-    And the other mappings are unaffected
-
-  @blocked
-  Scenario: Syncing one mapping records the run like any other
-    Given a Penpot team is mapped
-    When the admin clicks "Sync now" on its card
-    Then the run appears in the same last-run record the bulk sync uses
-    # One record for every trigger, or "when did this last sync?" has three
-    # different answers depending on which button was pressed.
 
     # ── what a mapped folder LETS YOU DO (saga §C6.8) ─────────────────────────
     #
@@ -240,12 +210,6 @@ Feature: Admin configures team mappings
     # Unlike the siblings, the grant is mode-independent: penpot's link/sync is a
     # per-file archive choice, not a folder-wide read-vs-write stance.
 
-  @blocked
-  Scenario: Both storage backends grant the same surface
-    Given one mapping using a Team Folder and one using a plain shared folder
-    Then the content groups hold the same rights on both
-    # A user should not be able to tell which backend answered (§14.1).
-
   @todo
   Scenario: A pull re-asserts the folder's group rights
     Given a folder mapped to the Penpot team "Northwind"
@@ -257,51 +221,44 @@ Feature: Admin configures team mappings
     # pass. It also means hand-editing the share is not a supported way to
     # restrict a mapped folder — remove the group from the mapping instead.
 
-  @todo
-  Scenario: Creating a file in a mapped folder never writes to Penpot by itself
-    Given a folder mapped to the Penpot team "Northwind"
-    When a user creates an ordinary file there
-    Then Penpot is never contacted
-    And the file is untracked, and no pull ever touches it
-    # Having CREATE does not mean a landing file becomes a design. Deliberate
-    # creation is create-design.feature; a copy is copy-design.feature. Everything else
-    # is just a file living in a folder.
-
   Scenario: A mapping defaults to a Team Folder with no groups
     Given no Penpot teams are mapped
-    When the admin maps the first team the service account can see
+    And a Penpot team named "Northwind" exists
+    When the admin maps the Penpot team "Northwind"
     Then the mapping uses a Team Folder
     And the mapping has no groups
     # groupfolders is the preferred backend in all three apps, so an omitted flag
     # means "use a Team Folder". Groups start empty and are opt-in.
 
-  @todo
-  Scenario: A mapping can use a plain shared folder instead of a Team Folder
-    When the admin maps a team with Team Folder turned off
-    Then the mapping records that it uses a plain shared folder
-    And the folder is shared to the mapping's groups when the pull provisions it
-    # The value persists today; the provisioning that acts on it is Course 3.
-
-  Scenario: A team the service account cannot see cannot be mapped
+  Scenario: A team id that resolves to nothing cannot be mapped
     Given no Penpot teams are mapped
-    When the admin tries to map the Penpot team "11111111-2222-3333-4444-555555555555"
+    When the admin tries to map the team id "11111111-2222-3333-4444-555555555555"
     Then the mapping is rejected
     And the refusal explains "not visible to the service account"
     And there are exactly 0 configured team mappings
-    # Better an honest refusal now than a mapping that silently pulls nothing.
-    # Penpot offers NO instance-wide view (§6.12), so this is Penpot's model
-    # surfacing, not a rule this app invented.
+    # Better an honest refusal than a mapping that silently pulls nothing.
+    #
+    # AND THIS IS THE WHOLE OF IT. There used to be a second scenario here for a
+    # team that EXISTS but has not invited the service account. From this side of
+    # the wire the two are one case: `get-teams` is membership-scoped (§6.12), so
+    # a team we were never invited to is a team that is not there. Testing the
+    # difference would be testing Penpot's own permission model, which is not
+    # ours to prove — the token works or nothing in this suite runs at all.
 
   Scenario: A Penpot team may only be mapped once
-    Given no Penpot teams are mapped
-    When the admin maps the first team the service account can see
-    And the admin maps the same team again
+    Given a Penpot team named "Northwind" is mapped to the folder "Design Files"
+    When the admin maps the team "Northwind" into the folder "Design Files"
     Then the mapping is rejected
     And there is exactly 1 configured team mapping
+    # The pre-state is a mapping that already exists, so the scenario opens where
+    # the interesting part starts. It used to map twice inside the `When` block,
+    # which put half the setup in the behaviour and needed a "the same team
+    # again" step to refer back to a team it had never named.
 
   Scenario: Folder mode "keyed" is refused, because it is designed but not built
     Given no Penpot teams are mapped
-    When the admin tries to map the first visible team with folder mode "keyed"
+    And a Penpot team named "Northwind" exists
+    When the admin tries to map the team "Northwind" with folder mode "keyed"
     Then the mapping is rejected
     And the refusal explains "not implemented"
     # Accepting it and behaving as "nested" would be a silent lie the admin could
@@ -309,7 +266,8 @@ Feature: Admin configures team mappings
 
   Scenario: Removing a mapping deletes nothing
     Given no Penpot teams are mapped
-    When the admin maps the first team the service account can see
+    And a Penpot team named "Northwind" exists
+    When the admin maps the Penpot team "Northwind"
     And the admin removes that mapping
     Then there are exactly 0 configured team mappings
     And removing it reported that nothing was deleted
@@ -318,32 +276,41 @@ Feature: Admin configures team mappings
     # (remove-mapping.feature) — until then the safe behaviour is to leave them
     # and say so.
 
-    # ── the core mapping action ──────────────────────────────────────────────────
+    # ── what mapping PROVISIONS ─────────────────────────────────────────────────
+    #
+    # THE ONE PLACE IN THIS SUITE WHERE THE BACKEND IS THE SUBJECT. Everywhere
+    # else it is a matrix dimension the spec never mentions (features/README.md),
+    # because everywhere else it cannot change the outcome. Here it IS the
+    # outcome: the admin picked a kind of folder and a folder of that kind has to
+    # appear. So the admin leg runs on a runner WITH groupfolders installed and
+    # each scenario asks for its kind by name, instead of inheriting whichever
+    # kind the leg was configured for.
+    #
+    # MAPPING PROVISIONS; IT DOES NOT MIRROR. This scenario used to run on past a
+    # second `When the pull runs` and assert the project subfolders too, which
+    # made a mapping look like it pulls. It does not — the folder appears when the
+    # mapping is made, and everything inside it appears when a sync runs. What is
+    # in there afterwards is sync-now.feature's to state.
 
   @blocked
-  Scenario: Mapping a Penpot team provisions a Team Folder and mirrors its projects
-    Given the service account has been invited as "viewer" on the Penpot team "Northwind"
+  Scenario: Mapping a team provisions a Team Folder
+    Given no Penpot teams are mapped
+    And a Penpot team named "Northwind" exists
     When the admin maps the Penpot team "Northwind"
-    Then a Team Folder is provisioned for "Northwind"
-    And the Team Folder carries the Penpot team id as folder metadata
-    When the pull runs
-    Then each of "Northwind"'s Penpot projects appears as a direct subfolder
-    And each project folder carries its Penpot project id as folder metadata
-    And each project folder carries the app's project tag
-    And the pull creates them one level inside the Team Folder
-    # Where the pull PUTS them initially. Users may then move them anywhere
-    # within the Team Folder (saga §6.29) — but not out of it (saga §6.30).
+    Then a Team Folder named "Northwind" is provisioned
+    And it carries the Penpot team id as folder metadata
 
-    # The precondition that makes the single-puller model work (saga §6.18).
   @blocked
-  Scenario: A team the service account cannot see cannot be mapped
-    Given the Penpot team "Private Team" is visible to a user's personal token
-    But the service account has not been invited to "Private Team"
-    When the admin tries to map "Private Team"
-    Then the mapping is refused
-    And the refusal explains the service account must be invited as "viewer" first
-    And no Team Folder is provisioned
-    # Better an honest refusal now than a mapping that silently pulls nothing.
+  Scenario: Mapping a team with Team Folders turned off provisions a plain shared folder
+    Given no Penpot teams are mapped
+    And a Penpot team named "Northwind" exists
+    When the admin maps the Penpot team "Northwind" with Team Folders turned off
+    Then a plain Nextcloud folder named "Northwind" is provisioned
+    And it carries the Penpot team id as folder metadata
+    And it is shared with the mapping's groups
+    # Folder metadata works identically on both (saga §6.21, confirmed live on a
+    # real production Team Folder), so the two differ in SHARING, not in mapping
+    # mechanism — which is what lets every other scenario ignore the difference.
 
   @decision
   Scenario: There is no project-level mapping to configure
@@ -369,12 +336,12 @@ Feature: Admin configures team mappings
   Scenario: Mapping a team without groupfolders installed falls back to a plain shared folder
     Given the "groupfolders" app is not installed
     When the admin maps the Penpot team "Northwind"
-    Then a plain Nextcloud folder is provisioned and shared to the mapped group
-    And the folder carries the Penpot team id as folder metadata, exactly as a Team Folder would
-    And the mapping behaves the same for pull purposes as a Team Folder mapping
-    # Folder metadata works identically on both (saga §6.21, confirmed live on a
-    # real production Team Folder) — the fallback is a sharing difference, not a
-    # mapping-mechanism difference.
+    Then a plain Nextcloud folder named "Northwind" is provisioned
+    And the mapping is not refused for wanting a Team Folder
+    # A DIFFERENT PRECONDITION from "Team Folders turned off" above: there the
+    # admin chose, here the choice was unavailable. What must not happen is a
+    # refusal — the same "optional dependency" precedent both sibling apps'
+    # TeamFolderService.php already set.
 
     # ── naming, mode, and duplicate prevention ───────────────────────────────────
 
@@ -521,10 +488,3 @@ Feature: Admin configures team mappings
     # no feature file of its own and several open questions (inferred-folder
     # ownership, key collisions, what a move out of the team means). Do not
     # implement against this scenario.
-
-  @todo
-  Scenario: A Penpot team may only be mapped once
-    Given the Penpot team "Northwind" is already mapped
-    When the admin tries to map the Penpot team "Northwind" again
-    Then the mapping is rejected
-    And there is still exactly 1 configured team mapping

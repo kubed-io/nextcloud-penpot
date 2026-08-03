@@ -3329,3 +3329,68 @@ dance required.
 The scenarios that use it are the ones *about* mapping, asserting on what the
 service account can and cannot see; a helper that quietly invented a team would
 make those assertions vacuous.
+
+### §C6.30 — What a mapping feature is not about
+
+`admin-mapping.feature` had accumulated eight scenarios that were not about
+mapping. They came off in four groups, and the groups are the reusable part.
+
+**Someone else's behaviour.** Four scenarios described syncing a single mapping
+from its card: that it syncs only its own team, that it answers synchronously,
+that a failure is reported on the card, that the run is recorded like any other.
+Every one of them is a **sync**, described from the place the button happens to
+sit. They belong to `sync-now.feature`, which already has both actors (§C6.28).
+
+Two of them were not behaviours at all. "A per-mapping sync is synchronous" is an
+implementation detail — sync or queued, the admin asks and gets an answer, and
+nothing an admin can observe distinguishes them except latency. "Reports its
+failure on the card" is an **end state wearing a UI**: what is owed is that a sync
+reports its result, and the card is one place that result gets displayed.
+
+**A dimension, written down as a claim.** "Both storage backends grant the same
+surface" asserted the thing the CI matrix already establishes by running the whole
+suite twice (§C6.26). A scenario that restates the harness proves nothing and
+rots the moment the harness changes. The rule stands: the backend is invisible to
+the spec, and only a scenario that finds a genuine DIFFERENCE earns a mention.
+
+**Not our software.** "Creating a file in a mapped folder never writes to Penpot
+by itself" tests that Nextcloud can make a file. And the invite scenario — a team
+the service account has not been invited to — tests Penpot's permission model. On
+this side of the wire an uninvited team and a nonexistent one are the same case,
+because `get-teams` is membership-scoped (§6.12): the id resolves to nothing
+either way. One scenario covers it, and it is honest about being an id that
+resolves to nothing.
+
+**Two of the same.** Two scenarios named "A Penpot team may only be mapped once",
+one live and one `@todo`. The live one is now the DRY shape, and it is the shape
+worth copying:
+
+```gherkin
+  Given a Penpot team named "Northwind" is mapped to the folder "Design Files"
+  When the admin maps the team "Northwind" into the folder "Design Files"
+  Then the mapping is rejected
+```
+
+The old one mapped twice inside the `When` block — half the setup living in the
+behaviour, and a "the admin maps the same team again" step that referred back to a
+team the scenario had never named. Given-as-pre-state and a named subject removed
+the need for a step whose only job was to remember something.
+
+#### Where the backend stops being invisible
+
+Every other suite treats the storage backend as a matrix dimension the spec must
+not mention. `admin-mapping.feature` is the exception, and the exception has a
+rule: **the backend is invisible except where it is the outcome.** "Mapping a team
+provisions a Team Folder" and "…with Team Folders turned off provisions a plain
+folder" are two things an admin chooses between, so both must be askable in one
+run. That needs groupfolders installed and a scenario that names the kind it
+wants.
+
+So the admin leg's `exclude` flipped: it drops `plain` and keeps `team`. It still
+runs once — the cost is unchanged — but on the leg where both halves can be
+asked. On the `plain` leg the Team Folder half was untestable.
+
+The same scenario also stopped mirroring. It ran on past a second `When the pull
+runs` to assert project subfolders, which made a mapping look like it pulls. It
+does not: the folder appears when the mapping is made, and what lands inside it is
+`sync-now.feature`'s to state.

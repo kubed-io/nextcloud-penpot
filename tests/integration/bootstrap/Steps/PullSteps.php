@@ -105,12 +105,38 @@ trait PullSteps {
 	 *
 	 * Creating it is the service account's own doing, so it is a member and the
 	 * team is visible to `get-teams` — which is what mapping is gated on (§6.18).
-	 * That is why this can seed a team while `firstVisibleTeamId()`, used by the
-	 * scenarios ABOUT mapping, deliberately still cannot: those assert on what the
-	 * service account can see, and a helper that quietly invents a team would make
-	 * the assertion vacuous.
+	 * No invite dance is needed to satisfy the gate, because the seeder is already
+	 * on the inside of it.
+	 *
+	 * {@see firstVisibleTeamId()} survives alongside this for the steps that never
+	 * named a team at all — seeding a project into "that team", and finding *a
+	 * second* team to collide a folder name with.
 	 */
 	private function teamNamed(string $name): string {
+		$id = $this->visibleTeamIdNamed($name);
+		if ($id !== null) {
+			return $id;
+		}
+
+		$this->penpotRpc('create-team', ['name' => $name]);
+
+		$id = $this->visibleTeamIdNamed($name);
+		if ($id === null) {
+			throw new \RuntimeException("created the team \"{$name}\" but it is not visible:\n" . $this->lastOutput);
+		}
+
+		return $id;
+	}
+
+	/**
+	 * The id of a visible team with this name, or null if there is none.
+	 *
+	 * A FAILED `list-teams` IS NOT "NO SUCH TEAM". Parsing the output regardless of
+	 * the exit code would turn a broken connection into "created the team but it is
+	 * not visible" — a message pointing at the wrong half of the system, with the
+	 * real error nowhere in it. Whatever went wrong, the command already said so.
+	 */
+	private function visibleTeamIdNamed(string $name): ?string {
 		$res = $this->occ('penpot_sync:list-teams');
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("list-teams failed:\n{$res['output']}");
@@ -124,17 +150,7 @@ trait PullSteps {
 			}
 		}
 
-		$this->penpotRpc('create-team', ['name' => $name]);
-
-		$res = $this->occ('penpot_sync:list-teams');
-		foreach (explode("\n", $res['output']) as $line) {
-			if (preg_match('/^([0-9a-f-]{36})\s+(.+?)\s+(?:yes|-)\s*$/i', trim($line), $m) === 1
-				&& $m[2] === $name) {
-				return $m[1];
-			}
-		}
-
-		throw new \RuntimeException("created the team \"{$name}\" but it is not visible:\n{$res['output']}");
+		return null;
 	}
 
 	/** @Given /^a Penpot project named "([^"]*)" exists in that team$/ */
