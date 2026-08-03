@@ -107,7 +107,13 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
-	/** @When /^I upload a ".penpot" archive at "([^"]*)"$/ */
+	/**
+	 * The gesture, and its past tense for scenarios that merely need the file to
+	 * be there before the behaviour starts. See {@see iDelete()}.
+	 *
+	 * @When /^I upload a ".penpot" archive at "([^"]*)"$/
+	 * @Given /^an uploaded ".penpot" archive at "([^"]*)"$/
+	 */
 	public function iUploadAnArchiveAt(string $path): void {
 		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the
 		// only thing the upload-vs-create guard looks at.
@@ -117,7 +123,19 @@ trait GestureSteps {
 
 	// ── delete ──────────────────────────────────────────────────────────────
 
-	/** @When /^I delete "([^"]*)"$/ */
+	/**
+	 * The gesture — and, in the past tense, the PRE-STATE for anything that starts
+	 * from a trashed file.
+	 *
+	 * A scenario about restoring does not want "And I delete …" in its Given
+	 * block: the delete is not something the reader is being shown, it is how the
+	 * precondition came to be true. "… is in the trash" says what is true before
+	 * the behaviour and leaves the mechanism here, which is the same reason the
+	 * setup pull lives in {@see PullSteps} rather than in the Gherkin.
+	 *
+	 * @When /^I delete "([^"]*)"$/
+	 * @Given /^"([^"]*)" is in the trash$/
+	 */
 	public function iDelete(string $path): void {
 		$this->davDelete($path);
 		$this->gestureTarget = $path;
