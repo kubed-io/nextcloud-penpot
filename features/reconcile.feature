@@ -86,7 +86,6 @@ Feature: Scheduled or manual pull from Penpot
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And no Penpot teams are mapped
 
     # ══ WHAT A RUN PRODUCES ════════════════════════════════════════════════════
     #
@@ -113,14 +112,14 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: A pull mirrors a mapped team's root folder and stamps its team id
-    Given the first visible team is mapped to the folder "Team Root"
+    Given a Penpot team is mapped to the folder "Team Root"
     When the admin runs a pull
     Then the pull succeeds
     And the folder "Team Root" carries the team's Penpot id
 
   @admin @occ
   Scenario: A pull mirrors a project as a folder carrying its project id and its date
-    Given the first visible team is mapped to the folder "Project Folders"
+    Given a Penpot team is mapped to the folder "Project Folders"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     Then the pull succeeds
@@ -135,7 +134,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: A second pull reconciles in place and does not duplicate the folder
-    Given the first visible team is mapped to the folder "Twice Pulled"
+    Given a Penpot team is mapped to the folder "Twice Pulled"
     And a Penpot project named "Widgets" exists in that team
     When the admin runs a pull
     And the team has been mirrored into Nextcloud
@@ -154,7 +153,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: A pull that changed nothing prunes nothing
-    Given the first visible team is mapped to the folder "Quiet Pull"
+    Given a Penpot team is mapped to the folder "Quiet Pull"
     And a Penpot project named "Untouched" exists in that team
     And a Penpot file named "Poster" exists in the project "Untouched"
     When the admin runs a pull
@@ -360,7 +359,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A mirrored design carries the design's own dates, not the pull's
-    Given the first visible team is mapped to the folder "Design Dates"
+    Given a Penpot team is mapped to the folder "Design Dates"
     And a mirrored design "Dated" in the project "Clocks"
     Then "Design Dates/Clocks/Dated.penpot" is dated when the design changed in Penpot
     And "Design Dates/Clocks/Dated.penpot" was created when the design was created in Penpot
@@ -370,7 +369,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @admin @occ
   Scenario: An unchanged pull moves no file's mtime or etag
-    Given the first visible team is mapped to the folder "Steady State"
+    Given a Penpot team is mapped to the folder "Steady State"
     And a mirrored design "Steady" in the project "Idempotent"
     And I note the mtime and etag of "Steady State/Idempotent/Steady.penpot"
     When the team is mirrored again
@@ -431,7 +430,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A pull prunes a mirrored file whose Penpot file no longer exists
-    Given the first visible team is mapped to the folder "Prune Target"
+    Given a Penpot team is mapped to the folder "Prune Target"
     And a mirrored design "Doomed" in the project "Prune Me"
     When the design "Doomed" is deleted in Penpot
     And the admin runs a pull
@@ -449,7 +448,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A link file gets a final snapshot before being pruned
-    Given the first visible team is mapped to the folder "Snapshot Target"
+    Given a Penpot team is mapped to the folder "Snapshot Target"
     And a mirrored design "Rescued" in the project "Snapshot Me"
     When the design "Rescued" is deleted in Penpot
     And the admin runs a pull
@@ -462,7 +461,7 @@ Feature: Scheduled or manual pull from Penpot
 
   @in-penpot @occ
   Scenario: A sync file needs no snapshot, it already has one
-    Given the first visible team is mapped to the folder "Kept Target"
+    Given a Penpot team is mapped to the folder "Kept Target"
     And a mirrored design "Already Kept" in the project "Has Archive"
     And "Kept Target/Has Archive/Already Kept.penpot" is a "sync" design
     When the design "Already Kept" is deleted in Penpot

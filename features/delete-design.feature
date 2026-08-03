@@ -31,8 +31,7 @@ Feature: Deleting a mirrored design
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And no Penpot teams are mapped
-    And the first visible team is mapped to the folder "Penpot"
+    And a Penpot team is mapped to the folder "Penpot"
 
   @in-nextcloud @gesture
   Scenario: Deleting a mirror moves the design into Penpot's trash
