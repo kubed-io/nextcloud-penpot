@@ -76,6 +76,14 @@ jobs:
     - name: Behat suites partition features/
       run: bash tests/integration/bin/check-suites.sh
 
+    # Same argument, one step further: a step renamed in a .feature file without
+    # its definition is an undefined step, and --strict turns that into a failure
+    # MINUTES into a leg that first booted Nextcloud, Postgres, Valkey and two
+    # Penpot containers — times seven legs. Nothing about the question needs a
+    # running anything, so it is answered here in a second.
+    - name: Behat step definitions resolve
+      run: bash tests/integration/bin/check-step-definitions.sh
+
     # Guarded from the pre-code era; lib/ now exists, so this runs for real.
     - name: Static analysis (Psalm)
       if: hashFiles('lib/**') != ''
