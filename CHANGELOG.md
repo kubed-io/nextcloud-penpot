@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Documentation: the sync behaviour is now described as "sync now" by the admin or the schedule, rather than as the internal reconciler.
+- Documentation: a mapped folder's name and its Penpot team's name are now shown as the two independent names they are — a folder need not be called what the team is called.
 - A design restored from the trash now stays restored in Penpot, instead of occasionally sliding back into Penpot's trash and being removed again by the next sync.
 - The integration suite's published results now cover every leg of the test matrix; a failing leg could previously be hidden by a passing one and the run reported as green.
 - **Restoring a design from a Team Folder's trash now restores it in Penpot too.** On Team Folders the file came back in Nextcloud while the design stayed in Penpot's trash — and the next sync then removed the file again. Plain shared folders were never affected.

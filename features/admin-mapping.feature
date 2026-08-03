@@ -90,13 +90,35 @@ Feature: Admin configures team mappings
     When the admin maps the first team the service account can see
     Then the mapping's Nextcloud folder is named after the Penpot team
 
-  Scenario: The admin may name the Nextcloud folder whatever they like
+  Scenario Outline: The admin may name the Nextcloud folder whatever they like
     Given no Penpot teams are mapped
-    When the admin maps the first visible team into the folder "Design Files"
-    Then the mapping's Nextcloud folder is "Design Files"
-    And the mapping still records the Penpot team's own name separately
-    # Both are kept: the folder name is what gets created, the team name is what
-    # the admin page shows so the pairing is legible at a glance.
+    And a Penpot team named "<team>" exists
+    When the admin maps the team "<team>" into the folder "<folder>"
+    Then the mapping's Nextcloud folder is "<folder>"
+    And the mapping records the Penpot team "<team>"
+
+    Examples: the two names are independent
+      | team      | folder       |
+      | Northwind | Northwind    |
+      | Northwind | Design Files |
+
+    # BOTH NAMES ARE KEPT, AND NEITHER CONSTRAINS THE OTHER. The folder name is
+    # what gets created; the team name is what the admin page shows, so the
+    # pairing stays legible at a glance.
+    #
+    # The two rows are the whole point. Matching names are the ordinary case and
+    # look like a rule — so the second row states outright that they may differ,
+    # and the app behaves identically either way. A mapping is a row holding a
+    # team id and a folder name, and nothing in it makes the names one name.
+    #
+    # A PROJECT HAS NO SECOND NAME, and could not have one: there is no
+    # per-project mapping row to remember a pairing in (saga §6.24). A project
+    # folder's NAME is the only thing tying it to its Penpot project, so the two
+    # are pinned equal in both directions (§6.36) — rename the folder and the
+    # project is renamed to match, rename the project and the pull renames the
+    # folder (rename-project.feature). A project rename is never REFUSED; it is
+    # propagated, which is how the single name is kept single. The asymmetry with
+    # a team is structural, not a style choice.
 
   @todo
   Scenario: Renaming the team in Penpot does not rename the admin's folder

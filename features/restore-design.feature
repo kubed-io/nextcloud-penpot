@@ -28,7 +28,7 @@ Feature: Restoring a mirrored design
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And a Penpot team is mapped to the folder "Penpot"
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 
   @in-nextcloud @gesture
   Scenario: Restoring a design brings back the file and its design together

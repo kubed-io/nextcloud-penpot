@@ -149,7 +149,7 @@ The Background is one line of Gherkin whose *meaning* is resolved per run:
 ```gherkin
   Background:
     ...
-    And the first visible team is mapped to the folder "Penpot"
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 ```
 
 `OccTrait::backendFlags()` reads `PENPOT_TEST_BACKEND` and maps either a plain

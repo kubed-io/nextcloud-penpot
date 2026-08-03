@@ -102,7 +102,7 @@ Feature: A mirrored Penpot file is a first-class file type
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And a Penpot team is mapped to the folder "Penpot"
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
     And the team has been mirrored into Nextcloud
 
   @in-penpot @occ

@@ -51,15 +51,27 @@ trait PullSteps {
 	private array $notedStamps = [];
 
 	/**
-	 * Map the first visible team to a folder, on WHICHEVER BACKEND this leg runs.
+	 * Map a NAMED team to a NAMED folder, on WHICHEVER BACKEND this leg runs.
 	 *
-	 * The step deliberately does not say which. Every behaviour here is valid on
-	 * both a plain (admin-owned) folder and a Team Folder, so naming one in the
-	 * Gherkin would either duplicate every scenario or quietly cover only half of
-	 * what ships. {@see backendFlags()} reads the matrix leg instead.
+	 * TWO NAMES, BECAUSE THERE ARE TWO NAMES. A mapping is a row holding a team id
+	 * and a folder name; nothing in it requires the two to read alike. The earlier
+	 * phrasing ("a Penpot team is mapped to the folder …") could not say so — it
+	 * named one side and left the other to the fixture, so every scenario built on
+	 * it was silently a same-instance-team scenario. Carrying both lets a scenario
+	 * state which team it means, and lets an Examples table put the same-name and
+	 * different-name cases side by side (see admin-mapping.feature).
 	 *
-	 * The old phrasing said "as a plain folder", which was true of the only
-	 * backend CI could reach and is now a lie on half the legs.
+	 * PROJECTS HAVE NO SECOND NAME. Only a team gets this freedom, and the reason
+	 * is structural rather than stylistic: a team has a mapping row to remember the
+	 * pairing in, a project has none. A project folder's NAME is the only thing
+	 * tying it to its Penpot project, so the two are pinned equal in both
+	 * directions (saga §6.36): a rename on either side PROPAGATES to the other
+	 * rather than producing a second name (rename-project.feature).
+	 *
+	 * The step deliberately does not say which BACKEND. Every behaviour here is
+	 * valid on both a plain (admin-owned) folder and a Team Folder, so naming one
+	 * in the Gherkin would either duplicate every scenario or quietly cover only
+	 * half of what ships. {@see backendFlags()} reads the matrix leg instead.
 	 *
 	 * ONE ATOMIC PRE-STATE, AND IT ALREADY RESETS. The Background used to say "no
 	 * Penpot teams are mapped" and then map one on the next line — a statement
@@ -67,15 +79,11 @@ trait PullSteps {
 	 * calls noPenpotTeamsAreMapped() itself. A Background is pre-state: it says how
 	 * the world IS so the scenario is doable, not what was done to get there.
 	 *
-	 * "the first visible team" also leaked the fixture into the spec. Which team it
-	 * is has never mattered to a single scenario; that a team IS mapped is the
-	 * whole precondition.
-	 *
-	 * @Given /^a Penpot team is mapped to the folder "([^"]*)"$/
+	 * @Given /^a Penpot team named "([^"]*)" is mapped to the folder "([^"]*)"$/
 	 */
-	public function theFirstVisibleTeamIsMappedToAFolder(string $folder): void {
+	public function aPenpotTeamNamedIsMappedToTheFolder(string $team, string $folder): void {
 		$this->noPenpotTeamsAreMapped();
-		$this->pulledTeamId = $this->firstVisibleTeamId();
+		$this->pulledTeamId = $this->teamNamed($team);
 
 		$res = $this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder=%s %s',
@@ -84,8 +92,49 @@ trait PullSteps {
 			$this->backendFlags(),
 		));
 		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not map the team as a plain folder:\n{$res['output']}");
+			throw new \RuntimeException("could not map \"{$team}\" to the folder \"{$folder}\":\n{$res['output']}");
 		}
+	}
+
+	/**
+	 * The id of the team with this name, creating it in Penpot if it is not there.
+	 *
+	 * FIND-OR-CREATE, NOT CREATE. A leg runs many scenarios against one Penpot, and
+	 * they mostly name the same team; making a fresh one each time would leave a
+	 * drift of near-identical teams and slow every scenario down for nothing.
+	 *
+	 * Creating it is the service account's own doing, so it is a member and the
+	 * team is visible to `get-teams` — which is what mapping is gated on (§6.18).
+	 * That is why this can seed a team while `firstVisibleTeamId()`, used by the
+	 * scenarios ABOUT mapping, deliberately still cannot: those assert on what the
+	 * service account can see, and a helper that quietly invents a team would make
+	 * the assertion vacuous.
+	 */
+	private function teamNamed(string $name): string {
+		$res = $this->occ('penpot_sync:list-teams');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("list-teams failed:\n{$res['output']}");
+		}
+
+		// `%-38s %-28s %s` — id, name, then "yes" or "-" for whether it is mapped.
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^([0-9a-f-]{36})\s+(.+?)\s+(?:yes|-)\s*$/i', trim($line), $m) === 1
+				&& $m[2] === $name) {
+				return $m[1];
+			}
+		}
+
+		$this->penpotRpc('create-team', ['name' => $name]);
+
+		$res = $this->occ('penpot_sync:list-teams');
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^([0-9a-f-]{36})\s+(.+?)\s+(?:yes|-)\s*$/i', trim($line), $m) === 1
+				&& $m[2] === $name) {
+				return $m[1];
+			}
+		}
+
+		throw new \RuntimeException("created the team \"{$name}\" but it is not visible:\n{$res['output']}");
 	}
 
 	/** @Given /^a Penpot project named "([^"]*)" exists in that team$/ */

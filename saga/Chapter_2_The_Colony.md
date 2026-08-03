@@ -3267,3 +3267,65 @@ happen to travel through the same code, that is the signal — the question to a
 is "who does this, and what do they get", and if the answer is "nobody, it is
 just true", it is a rule and belongs where rules live.
 
+
+### §C6.29 — Two names for a team, one name for a project
+
+The Background every behaviour file leans on said this:
+
+```gherkin
+    And a Penpot team is mapped to the folder "Penpot"
+```
+
+One name for a two-name object. A mapping is a row holding a **team id** and an
+**nc_folder**, and §6.13 settled long ago that the folder name is the admin's
+choice with the team's name merely its default. The step could not say so — it
+named the destination and let the fixture supply the source, which is how "the
+first visible team" got into the spec in the first place. Every scenario built on
+it was quietly a *whatever-team-CI-happens-to-have* scenario.
+
+The step now carries both:
+
+```gherkin
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
+```
+
+and `admin-mapping.feature` states the independence outright, with the two cases
+side by side rather than as prose:
+
+| team | folder |
+|---|---|
+| Northwind | Northwind |
+| Northwind | Design Files |
+
+The first row is the ordinary case and, left alone, reads like a rule. The second
+is the one that says it is not one.
+
+#### Why a team gets two names and a project cannot
+
+This is the asymmetry, and it is **structural, not stylistic**:
+
+- A **team** has a mapping row. There is somewhere to remember that "Northwind"
+  lives in "Design Files", so the two names may differ, and the mapping still
+  resolves because it is keyed on the team **id**.
+- A **project** has no mapping row at all (§6.24 — a mapping is a team, that is
+  the whole object). The project folder's **name** is the only thing tying it to
+  its Penpot project. Give it a second name and nothing on either side can pair
+  them again.
+
+So project names are pinned equal in both directions (§6.36) — and *pinned* is
+the right word, not *frozen*. A rename is never refused; it **propagates**:
+rename the folder and the app calls `rename-project`, rename the project in
+Penpot and the pull renames the folder. That is how the single name is kept
+single. `rename-project.feature` is where both directions live.
+
+#### What the fixture had to grow
+
+Naming a team means the fixture has to be able to produce one, so `teamNamed()`
+does find-or-create over Penpot's own `create-team` RPC. Creating it makes the
+service account a member, which is what mapping is gated on (§6.18) — no invite
+dance required.
+
+`firstVisibleTeamId()` deliberately keeps its old behaviour and does **not** seed.
+The scenarios that use it are the ones *about* mapping, asserting on what the
+service account can and cannot see; a helper that quietly invented a team would
+make those assertions vacuous.

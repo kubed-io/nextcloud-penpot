@@ -19,7 +19,7 @@ Feature: Copying a Penpot project folder
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And a Penpot team is mapped to the folder "Penpot"
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 
   @todo
   Scenario: Copying a project folder is refused, unlike copying a file

@@ -108,6 +108,43 @@ trait MappingSteps {
 		));
 	}
 
+	/**
+	 * Seed the team a scenario names, so the scenario can say which team it means
+	 * instead of inheriting whichever one the instance happens to have.
+	 *
+	 * @Given /^a Penpot team named "([^"]*)" exists$/
+	 */
+	public function aPenpotTeamNamedExists(string $team): void {
+		$this->teamNamed($team);
+	}
+
+	/** @When /^the admin maps the team "([^"]*)" into the folder "([^"]*)"$/ */
+	public function theAdminMapsTheTeamIntoTheFolder(string $team, string $folder): void {
+		$this->occ(sprintf(
+			'penpot_sync:add-mapping %s --folder=%s',
+			escapeshellarg($this->teamNamed($team)),
+			escapeshellarg($folder),
+		));
+	}
+
+	/**
+	 * The team name the mapping kept, by name.
+	 *
+	 * Distinct from "records the team's own name separately", which asserts only
+	 * that the two names DIFFER — a check that cannot run on the same-name row of
+	 * an Examples table, and that would pass on any non-empty string. This one
+	 * names the team it expects, so it holds on both rows and pins the value.
+	 *
+	 * @Then /^the mapping records the Penpot team "([^"]*)"$/
+	 */
+	public function theMappingRecordsThePenpotTeam(string $expected): void {
+		$actual = (string)($this->firstMapping()['team_name'] ?? '');
+
+		if ($actual !== $expected) {
+			throw new \RuntimeException("expected the mapping to record the team '{$expected}', got '{$actual}'");
+		}
+	}
+
 	/** @Given /^the first visible team is mapped into the folder "([^"]*)"$/ */
 	public function theFirstVisibleTeamIsMappedIntoTheFolder(string $folder): void {
 		$this->noPenpotTeamsAreMapped();
@@ -172,23 +209,6 @@ trait MappingSteps {
 	/** @Then /^the mapping's Nextcloud folder is still "([^"]*)"$/ */
 	public function theMappingsFolderIsStill(string $expected): void {
 		$this->theMappingsFolderIs($expected);
-	}
-
-	/** @Then the mapping still records the Penpot team's own name separately */
-	public function theMappingStillRecordsTheTeamName(): void {
-		$mapping = $this->firstMapping();
-		$teamName = (string)($mapping['team_name'] ?? '');
-
-		if ($teamName === '') {
-			throw new \RuntimeException("the mapping lost the Penpot team name:\n" . $this->lastOutput);
-		}
-
-		if ($teamName === (string)($mapping['nc_folder'] ?? '')) {
-			throw new \RuntimeException(
-				'this scenario needs a folder name that differs from the team name, '
-				. 'otherwise it proves nothing',
-			);
-		}
 	}
 
 	/** @Then /^the mapping's groups are "([^"]*)"$/ */
