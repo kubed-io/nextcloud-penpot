@@ -247,51 +247,22 @@ Feature: Admin configures team mappings
     # (remove-mapping.feature) — until then the safe behaviour is to leave them
     # and say so.
 
-    # ── what actually gets built ────────────────────────────────────────────────
+    # ── the folder itself ───────────────────────────────────────────────────────
     #
-    # THE ONE PLACE IN THIS SUITE WHERE THE BACKEND IS THE SUBJECT. Everywhere
-    # else it is a matrix dimension the spec never mentions (features/README.md),
-    # because everywhere else it cannot change the outcome. Here it IS the
-    # outcome: the admin picked a kind of folder and a folder of that kind has to
-    # appear. The admin leg installs groupfolders for exactly this reason, so both
-    # rows are reachable in one run (§C6.30).
+    # THERE IS NO SCENARIO HERE, AND THAT IS THE POINT. "A mapped folder exists"
+    # is not something an admin does — it is what a mapping IS. Saving one builds
+    # the folder (§C6.32), so a scenario asserting the folder appeared would be
+    # asserting that `add-mapping` did its own job, one step removed.
     #
-    # THE MAPPING DOES NOT BUILD IT — THE SYNC DOES. `add-mapping` records a
-    # choice and touches no storage; {@see PullService} calls `ensureRoot` on its
-    # first pass. So the `When` is the sync, and what this scenario adds over
-    # sync-now.feature is WHICH KIND appeared, which is the mapping's decision.
+    # It used to be `Mapping a Penpot team provisions a Team Folder and mirrors
+    # its projects`, which was two claims and both belonged elsewhere: the mirror
+    # is sync-now.feature's, and the folder is now a postcondition of creating the
+    # mapping at all. A briefly-live version asserted it after a pull, which only
+    # documented the OLD timing — that the folder did not appear until a sync ran.
     #
-    # From WebDAV the two are indistinguishable — that is §14.1, and it is a
-    # feature. So the assertion asks groupfolders whether it owns the mount point,
-    # rather than looking at the folder and hoping.
-
-  Scenario Outline: The first sync builds the kind of folder the mapping asked for
-    Given no Penpot teams are mapped
-    And a Penpot team named "Northwind" exists
-    And the admin maps "Northwind" with:
-      | folder  | <folder>  |
-      | storage | <storage> |
-      | groups  | admin     |
-    When the admin runs a pull
-    Then a <kind> named "<folder>" exists
-
-    Examples: opted in, and left alone
-      | folder          | storage     | kind                |
-      | Northwind Team  | team folder | Team Folder         |
-      | Northwind Plain |             | plain shared folder |
-
-    # EACH ROW OWNS ITS FOLDER NAME, and that is not cosmetic. Removing a mapping
-    # deletes nothing (see below, and saga Course 5) — so a Team Folder provisioned
-    # by one row is STILL MOUNTED when the next row runs, and a second row reusing
-    # the name would find the previous row's folder and report the wrong backend.
-    # The first version of this scenario did exactly that and failed on the plain
-    # row with "'Northwind' is a Team Folder, but the mapping never asked for one",
-    # which is the assertion working: the folder really was the wrong kind.
-    #
-    # `groups` is set on both rows because a Team Folder shared with no group is
-    # invisible to everyone, including the admin — the folder would exist and the
-    # assertion would still fail. It is fixture, not a claim; the groups a mapping
-    # carries are the outline above's business.
+    # ensureRoot() is idempotent and PullService still calls it every pass, so a
+    # folder deleted by hand comes back. That is repair, not a feature: nobody
+    # asked for it and nobody watches it happen.
 
   @decision
   Scenario: There is no project-level mapping to configure
@@ -301,30 +272,6 @@ Feature: Admin configures team mappings
     And project subfolders exist only because the pull created them
 
     # ── permissions and fallback ─────────────────────────────────────────────────
-
-    # Team Folders are admin-configured by default (groupfolders' own documentation
-    # and this cluster's live config, checked directly — no delegation configured).
-  @blocked
-  Scenario: Mapping a team into a Team Folder requires Team Folder creation rights
-    Given the acting Nextcloud user does not hold Team Folder admin or delegated rights
-    When that user tries to map a Penpot team to a new Team Folder
-    Then the action is refused or requires an admin-side step
-    And the refusal explains that Team Folder creation is admin-configured by default
-
-    # The fallback tier — same "optional dependency" precedent both sibling apps'
-    # TeamFolderService.php already establish, mirrored here for the team level.
-  @blocked
-  Scenario: Mapping a team without groupfolders installed falls back to a plain shared folder
-    Given the "groupfolders" app is not installed
-    When the admin maps the Penpot team "Northwind"
-    Then a plain Nextcloud folder named "Northwind" is provisioned
-    And the mapping is not refused for wanting a Team Folder
-    # A DIFFERENT PRECONDITION from "Team Folders turned off" above: there the
-    # admin chose, here the choice was unavailable. What must not happen is a
-    # refusal — the same "optional dependency" precedent both sibling apps'
-    # TeamFolderService.php already set.
-
-    # ── naming, mode, and duplicate prevention ───────────────────────────────────
 
   @todo
   Scenario: Project folder names always match their Penpot projects

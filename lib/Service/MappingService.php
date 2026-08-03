@@ -55,6 +55,7 @@ final class MappingService {
 	public function __construct(
 		private readonly IAppConfig $config,
 		private readonly PenpotClient $client,
+		private readonly StorageService $storage,
 	) {
 	}
 
@@ -188,9 +189,32 @@ final class MappingService {
 
 		$this->assertFolderUnique($mapping->ncFolder, null);
 
+		// THE FOLDER IS WHAT A MAPPING IS. Refuse before persisting if the chosen
+		// backend cannot be built — a mapping whose destination can never exist is
+		// a row that does nothing but produce failures on every later pull. The
+		// common case is `--team-folder` on an instance without groupfolders.
+		if (!$this->storage->isAvailable($mapping)) {
+			throw new \InvalidArgumentException(
+				'This mapping asks for a Team Folder, but the groupfolders app is not '
+				. 'installed or not available. Install it, or leave the Team Folder '
+				. 'option off to use a plain shared folder.',
+			);
+		}
+
 		$all = $this->list();
 		$all[] = $mapping;
 		$this->persist($all);
+
+		// PROVISION NOW, NOT ON THE FIRST SYNC. A mapping IS a folder — the admin
+		// pressed save and expects to see it, not to wait for a schedule they did
+		// not set. It used to appear only when PullService called ensureRoot on its
+		// first pass, which made a fresh mapping look broken for up to an hour.
+		//
+		// ensureRoot() is IDEMPOTENT and PullService still calls it every run, so
+		// the sync stays the safety net: a folder deleted by hand comes back on the
+		// next pass rather than staying gone. Same function, two callers, one for
+		// promptness and one for repair.
+		$this->storage->ensureRoot($mapping);
 
 		return $mapping;
 	}

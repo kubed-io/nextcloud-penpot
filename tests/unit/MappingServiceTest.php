@@ -13,6 +13,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
+use OCA\PenpotSync\Service\StorageService;
 use OCP\IAppConfig;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
@@ -42,6 +43,18 @@ final class MappingServiceTest extends TestCase {
 	/** @var PenpotClient&Stub */
 	private PenpotClient $client;
 
+	/**
+	 * Provisioning is StorageService's, and it is stubbed AVAILABLE here.
+	 *
+	 * `add()` now builds the folder as well as saving the row (§C6.32), so every
+	 * test in this file would otherwise need a filesystem. What the folder ends up
+	 * being is StorageService's own concern and the integration suite's to prove;
+	 * these tests are about the store's RULES.
+	 *
+	 * @var StorageService&Stub
+	 */
+	private StorageService $storage;
+
 	protected function setUp(): void {
 		parent::setUp();
 
@@ -63,6 +76,9 @@ final class MappingServiceTest extends TestCase {
 			},
 		);
 
+		$this->storage = $this->createStub(StorageService::class);
+		$this->storage->method('isAvailable')->willReturn(true);
+
 		$this->client = $this->createStub(PenpotClient::class);
 		$this->client->method('getTeams')->willReturn([
 			['id' => self::TEAM_ID, 'name' => 'Northwind'],
@@ -74,7 +90,7 @@ final class MappingServiceTest extends TestCase {
 		// A fresh instance per call, because the service memoises the parsed list
 		// for the request — reusing one would hide persistence bugs behind the
 		// cache.
-		return new MappingService($this->config, $this->client);
+		return new MappingService($this->config, $this->client, $this->storage);
 	}
 
 	public function testAddsAVisibleTeam(): void {
@@ -146,7 +162,7 @@ final class MappingServiceTest extends TestCase {
 
 		$this->expectException(PenpotApiException::class);
 
-		(new MappingService($this->config, $client))
+		(new MappingService($this->config, $client, $this->storage))
 			->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 	}
 
@@ -291,7 +307,7 @@ final class MappingServiceTest extends TestCase {
 			['id' => self::TEAM_ID, 'name' => 'Design/Brand'],
 		]);
 
-		$service = new MappingService($this->config, $client);
+		$service = new MappingService($this->config, $client, $this->storage);
 		$saved = $service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
 		self::assertStringNotContainsString('/', $saved->ncFolder);
@@ -299,7 +315,7 @@ final class MappingServiceTest extends TestCase {
 
 		// The real point: it must still be readable back. A stored row that
 		// fromArray() rejects would silently disappear from list().
-		self::assertCount(1, (new MappingService($this->config, $client))->list());
+		self::assertCount(1, (new MappingService($this->config, $client, $this->storage))->list());
 	}
 
 	public function testAnExplicitFolderNameSurvivesTheLookup(): void {

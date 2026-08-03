@@ -275,54 +275,6 @@ trait MappingSteps {
 		$this->theMappingsFolderIs($expected);
 	}
 
-	/**
-	 * The mapped folder EXISTS, and is the kind the mapping asked for.
-	 *
-	 * WHY THIS CAN RUN AT ALL: the admin leg installs groupfolders (§C6.30), so
-	 * both kinds are reachable in one run and a scenario can name the one it
-	 * wants. On a leg without it, the Team Folder half is untestable and the
-	 * scenario could only ever have been `@blocked`.
-	 *
-	 * The two are told apart by ASKING GROUPFOLDERS, not by looking at the folder:
-	 * from WebDAV a Team Folder and a plain folder are both just a folder, which
-	 * is the whole point of §14.1 — a user cannot tell which one answered.
-	 *
-	 * @Then /^a (Team Folder|plain shared folder) named "([^"]*)" exists$/
-	 */
-	public function aFolderOfKindNamedExists(string $kind, string $name): void {
-		if (!$this->davExists($name)) {
-			throw new \RuntimeException("expected a folder named '{$name}', found none");
-		}
-
-		$listed = $this->isAGroupFolder($name);
-
-		if ($kind === 'Team Folder' && !$listed) {
-			throw new \RuntimeException("'{$name}' exists but groupfolders does not know it — it is a plain folder");
-		}
-
-		if ($kind === 'plain shared folder' && $listed) {
-			throw new \RuntimeException("'{$name}' is a Team Folder, but the mapping never asked for one");
-		}
-	}
-
-	/** Does groupfolders own a mount point by this name? */
-	private function isAGroupFolder(string $mountPoint): bool {
-		$res = $this->occ('groupfolders:list --output=json');
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("groupfolders:list failed — is the app installed on this leg?\n{$res['output']}");
-		}
-
-		$decoded = json_decode($res['output'], true);
-		foreach (is_array($decoded) ? $decoded : [] as $folder) {
-			$listedAs = $folder['mount_point'] ?? $folder['mountPoint'] ?? null;
-			if (is_array($folder) && $listedAs === $mountPoint) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	/** @Then the mapping's default mode is "link" */
 	public function theMappingsDefaultModeIsLink(): void {
 		$mappings = $this->mappings();

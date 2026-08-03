@@ -3443,3 +3443,54 @@ The scenario that had been asserting the old default was not wrong to exist — 
 was the only thing in the suite that stated what an unconfigured admin gets. It
 just stated the wrong answer, in a place where nothing made the answer look odd.
 A table of defaults does.
+
+### §C6.32 — A mapping is a folder, so making one makes the folder
+
+`add-mapping` wrote a row and touched no storage. The folder appeared later, when
+`PullService` called `ensureRoot()` on its first pass — which on a default
+schedule could be an hour after the admin pressed save. For that hour the mapping
+was real and its destination was not, and the only way to tell the difference
+from "broken" was to know the implementation.
+
+`MappingService::add()` now calls the same `ensureRoot()` itself. Not a new
+function — **the same one**, still idempotent, still called by every pull. Two
+callers, two different jobs:
+
+- **`add()` — promptness.** The admin asked for a folder; the folder exists when
+  the call returns.
+- **the pull — repair.** Someone deleted it by hand, or a migration lost it. The
+  next pass puts it back, silently, because nobody asked for that and nobody is
+  watching it happen.
+
+`add()` also now refuses up front when `isAvailable()` says the chosen backend
+cannot be built — the realistic case being `--team-folder` on an instance without
+groupfolders. Saving that row created a mapping that could only ever fail, once
+per sync, forever. The refusal names the fix.
+
+#### The scenario this DELETED
+
+There was a scenario asserting the folder appeared, and after the change it could
+not survive in any form:
+
+```gherkin
+  Scenario Outline: The first sync builds the kind of folder the mapping asked for
+```
+
+It had been live for exactly one CI run, and re-reading it after the fix showed
+what it really documented: **the old timing.** Its `When` was a pull, so the only
+thing it pinned was that the folder did *not* exist until a sync ran — the very
+behaviour being removed. Rewriting the `When` to be `add-mapping` would not have
+saved it either, because then it asserts that creating a mapping created the
+mapping's folder, which is not a behaviour but a definition.
+
+So the section holds a comment and no scenario. That is the same rule §C6.30
+found from the other direction: **a mechanism does not get a feature file**, and
+now — an end state does not get a scenario. What an admin DOES is map a team.
+That the folder is there afterwards is what "mapped" means.
+
+The run that scenario got was not wasted. It failed on its second row with
+`'Northwind' is a Team Folder, but the mapping never asked for one`, which is a
+true fact about the system worth keeping: **removing a mapping deletes nothing**,
+so a Team Folder outlives the mapping that made it, and a later mapping reusing
+that name inherits a folder of the wrong kind. That is Course 5's open question
+in miniature, and it now has a live reproduction rather than a paragraph.
