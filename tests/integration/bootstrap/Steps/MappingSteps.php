@@ -101,14 +101,24 @@ trait MappingSteps {
 	}
 
 	/**
-	 * Seed the team a scenario names, so the scenario can say which team it means
-	 * instead of inheriting whichever one the instance happens to have.
+	 * The team a scenario names, whether or not it was already there.
+	 *
+	 * Seeding it here is what lets a scenario say which team it means instead of
+	 * inheriting whichever one the instance happens to have. It also REMEMBERS the
+	 * team, so the steps that follow can say "it" rather than repeating the name
+	 * — which is the whole reason this is a precondition of its own rather than
+	 * the first clause of a longer sentence.
 	 *
 	 * @Given /^a Penpot team named "([^"]*)" exists$/
 	 */
 	public function aPenpotTeamNamedExists(string $team): void {
-		$this->teamNamed($team);
+		$this->namedTeamId = $this->teamNamed($team);
+		$this->namedTeam = $team;
 	}
+
+	/** The team the scenario last named, and its Penpot id. */
+	private string $namedTeam = '';
+	private string $namedTeamId = '';
 
 	/** @When /^the admin maps the team "([^"]*)" into the folder "([^"]*)"$/ */
 	public function theAdminMapsTheTeamIntoTheFolder(string $team, string $folder): void {
@@ -280,7 +290,13 @@ trait MappingSteps {
 	}
 
 	/**
-	 * Map a team onto a NAMED BACKEND, with a starting set of groups.
+	 * Map the team the scenario just named onto a NAMED BACKEND.
+	 *
+	 * Says "it" because the team is already established — see
+	 * {@see aPenpotTeamNamedExists()}. Three short preconditions that each mean one
+	 * thing beat one sentence that means three: every clause here is a sentence the
+	 * suite can use on its own, and a scenario that wants a different starting
+	 * point changes one line instead of needing its own compound step.
 	 *
 	 * Does not read {@see backendFlags()} — this is the one place the scenario
 	 * chooses the backend rather than inheriting the leg's, because the backend is
@@ -292,21 +308,49 @@ trait MappingSteps {
 	 * name would inherit a folder of the wrong kind (§C6.32). Rows of the same kind
 	 * DO share a folder, which is safe — ensureRoot() is idempotent.
 	 *
-	 * @Given /^a Penpot team named "([^"]*)" is mapped to a (Team Folder|plain folder), shared with "([^"]*)"$/
+	 * @Given /^it is mapped to a (Team Folder|plain folder)$/
 	 */
-	public function aTeamIsMappedToABackendSharedWith(string $team, string $kind, string $groups): void {
-		$this->noPenpotTeamsAreMapped();
+	public function itIsMappedToA(string $kind): void {
+		if ($this->namedTeamId === '') {
+			throw new \RuntimeException('no team has been named yet — say which team is mapped first');
+		}
 
 		$res = $this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder=%s --groups=%s %s',
-			escapeshellarg($this->teamNamed($team)),
+			'penpot_sync:add-mapping %s --folder=%s %s',
+			escapeshellarg($this->namedTeamId),
 			escapeshellarg($kind === 'Team Folder' ? 'Groups On A Team Folder' : 'Groups On A Plain Folder'),
-			escapeshellarg($groups),
 			$kind === 'Team Folder' ? '--team-folder' : '',
 		));
 
 		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not map \"{$team}\" onto a {$kind}:\n{$res['output']}");
+			throw new \RuntimeException("could not map \"{$this->namedTeam}\" onto a {$kind}:\n{$res['output']}");
+		}
+	}
+
+	/**
+	 * The starting sharing, as a precondition rather than an argument.
+	 *
+	 * Runs the same `set-groups` the `When` below does, and that is deliberate:
+	 * this is the state a scenario needs to START in, and there is exactly one
+	 * mechanism for reaching it. Making the seed a distinct code path — the flag on
+	 * `add-mapping` — would mean the precondition and the action could disagree
+	 * about what "shared with these" does, which is precisely the disagreement the
+	 * scenario exists to catch.
+	 *
+	 * It throws where the `When` reports, because a fixture that did not take is
+	 * not a result to assert on.
+	 *
+	 * @Given /^shared with "([^"]*)"$/
+	 */
+	public function sharedWith(string $groups): void {
+		$res = $this->occ(sprintf(
+			'penpot_sync:set-groups %s %s',
+			escapeshellarg((string)($this->firstMapping()['id'] ?? '')),
+			escapeshellarg($groups),
+		));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not share the mapped folder with \"{$groups}\":\n{$res['output']}");
 		}
 	}
 

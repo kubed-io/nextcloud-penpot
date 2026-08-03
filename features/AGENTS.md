@@ -439,6 +439,24 @@ having: an empty set is easy to treat as "nothing was sent, keep what is
 there", and on a Team Folder it is also the set that makes the folder
 invisible to everyone.
 
+FOUR PRECONDITIONS THAT EACH MEAN ONE THING. This used to open with a single
+compound Given — "a Penpot team named X is mapped to a <folder type>, shared
+with Y" — which said three things in one sentence and could therefore be
+reused for none of them. Split, every line is a sentence the suite already
+had or can now use anywhere: the team exists, it is mapped to a kind of
+folder, it is shared with a set. A scenario wanting a different starting
+point edits one line instead of needing a compound step of its own.
+
+"it" carries the team forward, which is what makes the split readable rather
+than repetitive — the name is stated once, where it is established.
+
+AND THE SEED USES THE SAME COMMAND THE `When` DOES. `shared with` runs
+`set-groups`, not `add-mapping --groups`. Deliberate: a precondition reached
+by a different code path from the action could disagree with it about what
+"shared with these" means, which is exactly the disagreement this scenario is
+here to catch. It throws where the `When` reports, because a fixture that did
+not take is not a result to assert on.
+
 Each folder type maps into its own folder, chosen by the step from the type.
 Two rows of the SAME type reuse one folder, which is fine because ensureRoot()
 is idempotent — but a Team Folder and a plain folder must never share a name,

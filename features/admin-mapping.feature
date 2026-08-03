@@ -47,7 +47,10 @@ Feature: Admin configures team mappings
 
   # notes: AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
   Scenario Outline: The groups a mapped folder is shared with can be changed
-    Given a Penpot team named "Northwind" is mapped to a <folder type>, shared with "design,admin"
+    Given no Penpot teams are mapped
+    And a Penpot team named "Northwind" exists
+    And it is mapped to a <folder type>
+    And shared with "design,admin"
     When the admin changes that mapping's groups to "<groups>"
     Then the mapping's groups are "<groups>"
 
