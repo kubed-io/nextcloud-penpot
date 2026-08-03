@@ -23,7 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`occ penpot_sync:set-groups`** changes the groups a mapped folder is shared with — the one field a mapping lets you edit, previously reachable only from the admin panel.
+- **A mapped folder now appears the moment you save the mapping**, instead of only when the first sync runs — which could be up to an hour later, and made a fresh mapping look broken. A sync still re-creates it if it goes missing.
+- A mapping that asks for a Team Folder is now **refused up front** when the `groupfolders` app is not available, rather than being saved and failing on every sync afterwards.
+- **BREAKING:** a new mapping now defaults to a **plain shared folder** instead of a Team Folder. Team Folders come from the optional `groupfolders` app, so the old default asked for a backend that is absent on a stock Nextcloud and could not be provisioned there. Pass `--team-folder` (or tick the box) to get one; existing mappings are unchanged.
 - Documentation: the sync behaviour is now described as "sync now" by the admin or the schedule, rather than as the internal reconciler.
+- Documentation: a mapped folder's name and its Penpot team's name are now shown as the two independent names they are — a folder need not be called what the team is called.
 - A design restored from the trash now stays restored in Penpot, instead of occasionally sliding back into Penpot's trash and being removed again by the next sync.
 - The integration suite's published results now cover every leg of the test matrix; a failing leg could previously be hidden by a passing one and the run reported as green.
 - **Restoring a design from a Team Folder's trash now restores it in Penpot too.** On Team Folders the file came back in Nextcloud while the design stayed in Penpot's trash — and the next sync then removed the file again. Plain shared folders were never affected.

@@ -8,6 +8,19 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 These are the app's specification, written before the code and kept true after
 it. This file is the map: what belongs where, and what the tags mean.
 
+## Two documents, and which one you want
+
+| | |
+|---|---|
+| **README.md** (this file) | How the suite is ORGANISED — which file owns which behaviour, what each tag means, which scenarios CI runs, how the backends are covered. Read it to find your way around. |
+| **[AGENTS.md](AGENTS.md)** | WHY each scenario is the way it is — the decision it encodes, what it replaced, what was deliberately left out. One section per feature file, and every `.feature` links to its section on line 1. |
+
+The split exists because Gherkin is meant to be read as specification. A scenario
+should be legible at a glance and a comment should add scope or a caveat, not
+carry an essay — so the essays live in `AGENTS.md` and the feature files point at
+them. If you change a behaviour, change its note in the same commit: a note
+describing the old behaviour is worse than no note.
+
 ## The organising rule: a feature is a BEHAVIOUR, not a mechanism
 
 A feature file answers *"what happens when someone moves a design?"* — every way
@@ -37,7 +50,6 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | `delete-project.feature` | Deleting a project — one call, not one per design |
 | `restore-project.feature` | Bringing a project back whole, and the one case that cannot be |
 | `personal-projects.feature` | Only the WHO and WHERE of a personal team — every verb lives with its verb |
-| `reconcile.feature` | What a sync run does *as a run*: completeness, idempotency, what it reports |
 | `mapping-membership.feature` | Which files a mapping owns, and what "unmapped" means |
 | `set-mode.feature` / `sync-mode.feature` | `sync` ⇄ `link`, and what each mode means |
 | `ignore.feature` | Excluding a file from the sync |
@@ -87,16 +99,19 @@ table at once. What is left in `create-project.feature` is the one thing no
 behaviour file can own: a folder's **identity** as a project — how it acquires
 one, and the marker that says so.
 
-**Mechanism files** — the sync run itself, whose actor is an admin or the clock:
+**The sync itself** — whose actors are an admin and the clock:
 
 | File | Owns |
 |---|---|
-| `reconcile.feature` | What a sync run does *as a run*: completeness, idempotency, ordering, refusing to prune on a short listing, what it reports, and who can start one |
+| `sync-now.feature` | Someone asking for a sync, and the schedule doing it unasked: what one run covers, that a second changes nothing, and what it reports |
 
-A scenario belongs in `reconcile.feature` only when it is about the RUN. "A
+A scenario belongs in `sync-now.feature` only when someone ASKED for a sync. "A
 design renamed in Penpot reaches Nextcloud" is a rename — it lives in
-`rename-design.feature`. "A pull that could not list one project prunes nothing" is
-about the run, and lives here.
+`rename-design.feature`, where the sync is how the news travels, not the point.
+
+This file used to be `reconcile.feature`, named after the code that runs it. That
+was a mechanism wearing a feature file, and it collected 34 scenarios that mostly
+belonged to the behaviours they travelled through — see AGENTS.md.
 
 **Configuration files** — the admin and per-user surface: `admin-connection`,
 `admin-mapping`, `admin-section`, `personal-settings`, `remove-mapping`,
@@ -149,7 +164,7 @@ The Background is one line of Gherkin whose *meaning* is resolved per run:
 ```gherkin
   Background:
     ...
-    And the first visible team is mapped to the folder "Penpot"
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 ```
 
 `OccTrait::backendFlags()` reads `PENPOT_TEST_BACKEND` and maps either a plain

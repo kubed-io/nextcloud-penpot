@@ -1,37 +1,4 @@
-# The per-Nextcloud-user personal Penpot token page — genuinely NEW territory for
-# this app family. Neither n8n nor Grafana has a per-user settings precedent:
-# both store one admin-wide credential (IAppConfig, `sensitive`) and only read
-# IUserSession inside listeners to know who's acting.
-#
-# WHAT THIS PAGE IS FOR, PRECISELY (saga §6.18): attribution. Nothing else.
-#
-# It is NOT how the app reads Penpot — the service account does all mirroring,
-# always (admin-connection.feature). It is NOT required for anything to work. It
-# exists so that when a human renames or restores a design from Nextcloud, Penpot
-# records THAT HUMAN as having done it, rather than recording every action by
-# every user as "nextcloud" forever. Penpot's file history is append-only from
-# our side: a change attributed to a robot can never be re-attributed later.
-#
-# THIS IS A SMALL SURFACE BY DESIGN. Command's own observation — "renaming
-# deleting and moving is really the only thing we could do from nextcloud as an
-# action" — is what makes the whole model affordable. The complete list of writes
-# is short and every entry is either non-destructive or explicitly confirmed by
-# a human (saga §6.19): moving a file between projects, creating a design,
-# restoring one, renaming a project folder, and deleting in Penpot. Exactly ONE
-# RPC in the whole app destroys anything (`delete-file`), and it is only ever
-# reached through a confirmed user action. A token used at that few call sites
-# doesn't need elaborate machinery.
-#
-# WHAT'S STILL OPEN (saga open question #9): only the storage mechanism. The
-# presumed answer is IConfig::setUserValue with the sensitive flag — the
-# user-scoped analogue of both siblings' AppConfig pattern — but it isn't built.
-# The scenarios below describe OBSERVABLE behaviour and don't assume a class.
-#
-# THE 1:1 ASSUMPTION (saga §6.9): one Nextcloud user, one Penpot account, one
-# token. Stated as the assumed default, not enforced.
-#
-# @todo — no lib/Settings/PersonalSettings.php exists yet; this is a brand-new
-# settings surface, not a port from either sibling.
+# Notes, decisions and history for this feature: AGENTS.md#personal-settings
 
 Feature: Personal Penpot access token settings
   As an individual Nextcloud user
@@ -83,10 +50,7 @@ Feature: Personal Penpot access token settings
     Then no personal token remains stored for that user
     And their mapped folders keep pulling normally, as the service account
     And their future write actions are attributed to the service account
-    # Contrast with an earlier draft, which said mapped folders "stop pulling
-    # until a token is set again." That was written under the superseded
-    # per-user-pull model (saga §6.9) — the pull never used personal tokens in
-    # the final design, so clearing one cannot affect it.
+    # notes: AGENTS.md#clearing-a-personal-token-degrades-attribution-but-breaks-nothing
 
   @blocked
   Scenario: An expired personal token falls back rather than failing the action
@@ -120,6 +84,4 @@ Feature: Personal Penpot access token settings
     Given the personal-settings page description
     Then it documents the 1:1 (one Nextcloud user, one Penpot account) assumption
     And it does not attempt to prevent two Nextcloud users from pasting the same token
-    # Sharing one Penpot login across Nextcloud users isn't precluded by anything
-    # the app enforces — it just defeats the page's only purpose, since both
-    # users' changes would then be attributed identically.
+    # notes: AGENTS.md#the-app-assumes-one-nextcloud-user-maps-to-one-penpot-account

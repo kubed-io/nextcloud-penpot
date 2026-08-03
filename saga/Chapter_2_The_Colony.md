@@ -3267,3 +3267,328 @@ happen to travel through the same code, that is the signal — the question to a
 is "who does this, and what do they get", and if the answer is "nobody, it is
 just true", it is a rule and belongs where rules live.
 
+
+### §C6.29 — Two names for a team, one name for a project
+
+The Background every behaviour file leans on said this:
+
+```gherkin
+    And a Penpot team is mapped to the folder "Penpot"
+```
+
+One name for a two-name object. A mapping is a row holding a **team id** and an
+**nc_folder**, and §6.13 settled long ago that the folder name is the admin's
+choice with the team's name merely its default. The step could not say so — it
+named the destination and let the fixture supply the source, which is how "the
+first visible team" got into the spec in the first place. Every scenario built on
+it was quietly a *whatever-team-CI-happens-to-have* scenario.
+
+The step now carries both:
+
+```gherkin
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
+```
+
+and `admin-mapping.feature` states the independence outright, with the two cases
+side by side rather than as prose:
+
+| team | folder |
+|---|---|
+| Northwind | Northwind |
+| Northwind | Design Files |
+
+The first row is the ordinary case and, left alone, reads like a rule. The second
+is the one that says it is not one.
+
+#### Why a team gets two names and a project cannot
+
+This is the asymmetry, and it is **structural, not stylistic**:
+
+- A **team** has a mapping row. There is somewhere to remember that "Northwind"
+  lives in "Design Files", so the two names may differ, and the mapping still
+  resolves because it is keyed on the team **id**.
+- A **project** has no mapping row at all (§6.24 — a mapping is a team, that is
+  the whole object). The project folder's **name** is the only thing tying it to
+  its Penpot project. Give it a second name and nothing on either side can pair
+  them again.
+
+So project names are pinned equal in both directions (§6.36) — and *pinned* is
+the right word, not *frozen*. A rename is never refused; it **propagates**:
+rename the folder and the app calls `rename-project`, rename the project in
+Penpot and the pull renames the folder. That is how the single name is kept
+single. `rename-project.feature` is where both directions live.
+
+#### What the fixture had to grow
+
+Naming a team means the fixture has to be able to produce one, so `teamNamed()`
+does find-or-create over Penpot's own `create-team` RPC. Creating it makes the
+service account a member, which is what mapping is gated on (§6.18) — no invite
+dance required.
+
+`firstVisibleTeamId()` deliberately keeps its old behaviour and does **not** seed.
+The scenarios that use it are the ones *about* mapping, asserting on what the
+service account can and cannot see; a helper that quietly invented a team would
+make those assertions vacuous.
+
+### §C6.30 — What a mapping feature is not about
+
+`admin-mapping.feature` had accumulated eight scenarios that were not about
+mapping. They came off in four groups, and the groups are the reusable part.
+
+**Someone else's behaviour.** Four scenarios described syncing a single mapping
+from its card: that it syncs only its own team, that it answers synchronously,
+that a failure is reported on the card, that the run is recorded like any other.
+Every one of them is a **sync**, described from the place the button happens to
+sit. They belong to `sync-now.feature`, which already has both actors (§C6.28).
+
+Two of them were not behaviours at all. "A per-mapping sync is synchronous" is an
+implementation detail — sync or queued, the admin asks and gets an answer, and
+nothing an admin can observe distinguishes them except latency. "Reports its
+failure on the card" is an **end state wearing a UI**: what is owed is that a sync
+reports its result, and the card is one place that result gets displayed.
+
+**A dimension, written down as a claim.** "Both storage backends grant the same
+surface" asserted the thing the CI matrix already establishes by running the whole
+suite twice (§C6.26). A scenario that restates the harness proves nothing and
+rots the moment the harness changes. The rule stands: the backend is invisible to
+the spec, and only a scenario that finds a genuine DIFFERENCE earns a mention.
+
+**Not our software.** "Creating a file in a mapped folder never writes to Penpot
+by itself" tests that Nextcloud can make a file. And the invite scenario — a team
+the service account has not been invited to — tests Penpot's permission model. On
+this side of the wire an uninvited team and a nonexistent one are the same case,
+because `get-teams` is membership-scoped (§6.12): the id resolves to nothing
+either way. One scenario covers it, and it is honest about being an id that
+resolves to nothing.
+
+**Two of the same.** Two scenarios named "A Penpot team may only be mapped once",
+one live and one `@todo`. The live one is now the DRY shape, and it is the shape
+worth copying:
+
+```gherkin
+  Given a Penpot team named "Northwind" is mapped to the folder "Design Files"
+  When the admin maps the team "Northwind" into the folder "Design Files"
+  Then the mapping is rejected
+```
+
+The old one mapped twice inside the `When` block — half the setup living in the
+behaviour, and a "the admin maps the same team again" step that referred back to a
+team the scenario had never named. Given-as-pre-state and a named subject removed
+the need for a step whose only job was to remember something.
+
+#### Where the backend stops being invisible
+
+Every other suite treats the storage backend as a matrix dimension the spec must
+not mention. `admin-mapping.feature` is the exception, and the exception has a
+rule: **the backend is invisible except where it is the outcome.** "Mapping a team
+provisions a Team Folder" and "…with Team Folders turned off provisions a plain
+folder" are two things an admin chooses between, so both must be askable in one
+run. That needs groupfolders installed and a scenario that names the kind it
+wants.
+
+So the admin leg's `exclude` flipped: it drops `plain` and keeps `team`. It still
+runs once — the cost is unchanged — but on the leg where both halves can be
+asked. On the `plain` leg the Team Folder half was untestable.
+
+The same scenario also stopped mirroring. It ran on past a second `When the pull
+runs` to assert project subfolders, which made a mapping look like it pulls. It
+does not: the folder appears when the mapping is made, and what lands inside it is
+`sync-now.feature`'s to state.
+
+### §C6.31 — A form is not a set of behaviours, and a default has to work
+
+Two findings from one reading of `admin-mapping.feature`, and the second is a
+product bug the first uncovered.
+
+#### Options are rows
+
+Five scenarios sat here mapping a team and reading one field back each: the
+default mode, the folder mode, the folder name, the groups, the Team Folder flag.
+Read together they made picking `sync` look like a different BEHAVIOUR from
+picking `link`. It is not. Nothing an admin picks changes what creating a mapping
+does, and none of the values can even be OBSERVED until something later acts on
+one — the mode decides whether a file's bytes are held, the groups and the
+storage flag decide what the pull provisions, the folder mode decides how project
+names become paths.
+
+So they became an `Examples` table over one behaviour — *creating a mapping saves
+the option the admin chose* — with a defaults block and a per-option block. The
+step takes the CHOICE in the spec's words ("the mode \"sync\"") and translates it
+to a flag, so the Gherkin never grows a `--`.
+
+The refusals collapsed the same way, and the split between the two tables is the
+useful part: **a refused OPTION** (a path where a folder name goes, `keyed`) sits
+in one table, and refusals about the **TEAM** (not there, already mapped) stay
+separate, because no option would have changed them.
+
+#### The default asked for an app that might not be installed
+
+Writing the defaults down in one column made it obvious: `use_team_folder`
+defaulted to **true**. Team Folders are the `groupfolders` app — optional, absent
+on a stock Nextcloud. So the default mapping, the one an admin gets by naming a
+team and nothing else, asked for a backend `StorageService::canProvision()` then
+refuses. A default that fails on an unconfigured instance is not a default.
+
+It is now **false**, and the flag inverted: `--no-team-folder` became
+`--team-folder`, an opt-in. The plain shared folder is core, always present, and
+carries the same folder metadata a Team Folder would (§6.21) — the difference is
+sharing, not mechanism, which is exactly why every other scenario can ignore it.
+
+This diverges from the sibling apps' "prefer groupfolders" wording, and the
+divergence is the lesson: **"prefer X when available" and "assume X when nobody
+said" are different sentences.** The siblings meant the first. This app had
+implemented the second.
+
+The scenario that had been asserting the old default was not wrong to exist — it
+was the only thing in the suite that stated what an unconfigured admin gets. It
+just stated the wrong answer, in a place where nothing made the answer look odd.
+A table of defaults does.
+
+### §C6.32 — A mapping is a folder, so making one makes the folder
+
+`add-mapping` wrote a row and touched no storage. The folder appeared later, when
+`PullService` called `ensureRoot()` on its first pass — which on a default
+schedule could be an hour after the admin pressed save. For that hour the mapping
+was real and its destination was not, and the only way to tell the difference
+from "broken" was to know the implementation.
+
+`MappingService::add()` now calls the same `ensureRoot()` itself. Not a new
+function — **the same one**, still idempotent, still called by every pull. Two
+callers, two different jobs:
+
+- **`add()` — promptness.** The admin asked for a folder; the folder exists when
+  the call returns.
+- **the pull — repair.** Someone deleted it by hand, or a migration lost it. The
+  next pass puts it back, silently, because nobody asked for that and nobody is
+  watching it happen.
+
+`add()` also now refuses up front when `isAvailable()` says the chosen backend
+cannot be built — the realistic case being `--team-folder` on an instance without
+groupfolders. Saving that row created a mapping that could only ever fail, once
+per sync, forever. The refusal names the fix.
+
+#### The scenario this DELETED
+
+There was a scenario asserting the folder appeared, and after the change it could
+not survive in any form:
+
+```gherkin
+  Scenario Outline: The first sync builds the kind of folder the mapping asked for
+```
+
+It had been live for exactly one CI run, and re-reading it after the fix showed
+what it really documented: **the old timing.** Its `When` was a pull, so the only
+thing it pinned was that the folder did *not* exist until a sync ran — the very
+behaviour being removed. Rewriting the `When` to be `add-mapping` would not have
+saved it either, because then it asserts that creating a mapping created the
+mapping's folder, which is not a behaviour but a definition.
+
+So the section holds a comment and no scenario. That is the same rule §C6.30
+found from the other direction: **a mechanism does not get a feature file**, and
+now — an end state does not get a scenario. What an admin DOES is map a team.
+That the folder is there afterwards is what "mapped" means.
+
+The run that scenario got was not wasted. It failed on its second row with
+`'Northwind' is a Team Folder, but the mapping never asked for one`, which is a
+true fact about the system worth keeping: **removing a mapping deletes nothing**,
+so a Team Folder outlives the mapping that made it, and a later mapping reusing
+that name inherits a folder of the wrong kind. That is Course 5's open question
+in miniature, and it now has a live reproduction rather than a paragraph.
+
+### §C6.33 — Immutability belongs in the signature, not in five guards
+
+`MappingService::update()` took a whole `Mapping` and refused five fields:
+the team, the Nextcloud folder, the Team Folder flag, `mode`, `folder_mode`.
+Four scenarios in `admin-mapping.feature` described those refusals, and five unit
+tests exercised them.
+
+None of it was reachable. There is no `occ` command that edits a mapping, and the
+one HTTP endpoint — `MappingController::update()` — accepts `ncGroups` and
+rebuilds every other field FROM STORAGE before calling the service. It could not
+have moved a locked field if it tried. The guards were a lock on a door with no
+handle, and the scenarios described a refusal no caller could provoke.
+
+The method is now `updateGroups(string $id, array|string $ncGroups)`. Immutability
+stopped being something the code checks and became something the API cannot say.
+Nothing refuses a folder change because nothing can request one.
+
+What went with it: five unit tests (replaced by one asserting a group change moves
+nothing else), the "blank folder on update means keep it" test — a rule about a
+parameter that no longer exists — and four `@todo` scenarios, replaced by a
+comment stating why the fields are locked and where that reason lives.
+
+**A refusal only earns a scenario when someone can provoke it.** The refusals that
+survive in this file — a nonexistent team id, a folder name with a `/`, `keyed`,
+a team already mapped — are all things an admin can genuinely type.
+
+#### The one edit, and the command it needed
+
+The single mutable field had no CLI at all: groups could be changed from the admin
+panel and nowhere else, so the scenario for it had been `@todo` since it was
+written. `occ penpot_sync:set-groups <id> <groups>` closes that, and the scenario
+runs.
+
+It also draws a line worth keeping: the command records the groups; the SHARE on
+the provisioned folder is re-asserted by `ensureRoot()` on the next sync, exactly
+as §C6.32 arranged. Two events, and the scenario stops at the one the admin gets
+an answer about.
+
+### §C6.34 — The folder owns its groups; the mapping should not
+
+`admin-mapping.feature` carried this:
+
+```gherkin
+  @todo
+  Scenario: A pull re-asserts the folder's group rights
+    Given its group rights have been changed by hand
+    When the pull runs
+    Then the mapping's groups hold read, update, create and delete again
+```
+
+with a note saying hand-editing the share "is not a supported way to restrict a
+mapped folder — remove the group from the mapping instead". That is backwards.
+An admin editing the groups on a Team Folder, or on the plain folder's share, is
+doing an ordinary and legitimate thing with their own Nextcloud. Reverting it on
+the next pull is the app fighting its user.
+
+**The folder is the source of truth.** A mapping should not carry a second copy
+of the answer, because a second copy is a thing that can disagree — and when it
+does, the pull silently picks the copy the admin did not touch.
+
+`occ penpot_sync:set-groups` keeps its place, but its job changes from "record
+groups on the mapping" to "apply groups to the folder". It stays worth having
+for the reason it was written: it does the right thing on either backend, so
+nobody has to know that groupfolders takes a group ASSIGNMENT and a plain folder
+takes a group SHARE. A helper for a job you may equally do by hand.
+
+#### What this costs, which is why it is not in this PR
+
+The scenario is deleted here — it describes behaviour we no longer want, and a
+`@todo` for the wrong thing is worse than nothing. The implementation is a
+source-of-truth change and wants its own review:
+
+- **`Mapping`** drops `ncGroups` — constructor, `fromArray()`, `toArray()`,
+  `withNcGroups()`. The persisted JSON keeps the key harmlessly on old rows; it
+  simply stops being read, which is correct, because the folder already knows.
+- **`StorageService::ensureRoot()`** currently APPLIES `$mapping->ncGroups` every
+  time it runs. Groups become an optional argument applied only when explicitly
+  passed. *That removal is the feature* — it is what makes a hand edit survive.
+- **a read path per backend**: `TeamFolderService::appliedGroups()` exists and is
+  private; the plain side reads `IShareManager::getSharesBy()`, which
+  `ensureRoot()` already walks.
+- **three commands** — `add-mapping --groups`, `set-groups`, and `list-mappings`,
+  which prints a column it would no longer have — and `MappingController`'s
+  create, index and update.
+- **three test files**, including the eight-row group outline, whose assertion
+  reads `nc_groups` off `list-mappings` and must read the FOLDER instead. That
+  makes it a stronger test: it would stop trusting our own record of what we did
+  and go look.
+
+No UI work: the admin panel never exposed groups.
+
+#### The rule
+
+**Do not store what you can read.** A cache of someone else's state needs a
+reason, an invalidation story, and a rule for who wins a disagreement. `nc_folder`
+earns its place — the admin chose it and nothing else records that choice.
+`nc_groups` never did: Nextcloud already knows who a folder is shared with.

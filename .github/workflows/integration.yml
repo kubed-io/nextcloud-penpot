@@ -101,11 +101,20 @@ jobs:
         suite: [admin, design, project, core]
         backend: [plain, team]
         exclude:
-        # The admin surface configures mappings; it never writes into one, so it
-        # cannot tell the two backends apart. Running it twice would buy a second
-        # Penpot stack and prove nothing.
+        # The admin surface configures mappings; it never writes INTO one, so
+        # running it on both backends would buy a second Penpot stack and prove
+        # nothing. It runs once — and it runs on the `team` leg, because that is
+        # the one with groupfolders installed.
+        #
+        # WHICH LEG IT KEEPS IS THE POINT. For every other suite the backend is a
+        # dimension the spec must not mention. For this one it is the SUBJECT:
+        # "mapping a team provisions a Team Folder" and "…with Team Folders turned
+        # off provisions a plain folder" are two outcomes an admin chooses between,
+        # so both have to be askable in the same run. That needs groupfolders
+        # present and a scenario that names the kind it wants — not a leg that
+        # decides for it. On the `plain` leg the Team Folder half is untestable.
         - suite: admin
-          backend: team
+          backend: plain
 
     services:
       # ── Penpot stack ──────────────────────────────────────────────────────

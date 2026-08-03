@@ -1,29 +1,4 @@
-# Failure behaviour. Neither sibling app needed a file like this; this one does,
-# because Penpot's transport has more ways to fail than a plain JSON REST call.
-#
-# THE GOVERNING RULE, FROM COMMAND (saga §6.25): DON'T LOSE DATA. A remote
-# failure must never destroy local state. Every scenario below is an application
-# of that one rule.
-#
-# WHY THERE ARE MORE FAILURE SURFACES HERE (all confirmed live, saga §5.1/§6.20):
-#   1. export-binfile and import-binfile are BOTH SSE — a stream of progress
-#      events, then `end` or `error`.
-#   2. HTTP 200 DOES NOT MEAN SUCCESS. An `event: error` arrives inside a 200
-#      response — witnessed directly when importing into a deleted file id. The
-#      status code lies; the stream is the truth.
-#   3. The payload is TRANSIT-JSON even when Accept: application/json is sent
-#      (`~:type`, `~u<uuid>`, `~#uri`), so errors must be decoded, not string-matched.
-#   4. Fetching the actual bytes is a SECOND authenticated request to an asset URL
-#      that 401s without the token.
-#   5. A restore is TWO calls (import, then rename) because import ignores the
-#      `name` param — so it has a genuine partial-success state.
-#
-# THE MOST DANGEROUS OPERATION IN THE APP IS PRUNING. A failed listing looks
-# exactly like "every file was deleted." Getting this wrong deletes a user's
-# backups because a token expired. It has its own scenarios below, and the answer
-# is always the same: no clean listing, no pruning.
-#
-# @todo — no lib/Service/ exists yet.
+# Notes, decisions and history for this feature: AGENTS.md#errors
 
 Feature: Failures never cost the user data
   As a Nextcloud admin
@@ -168,11 +143,7 @@ Feature: Failures never cost the user data
     When the pull lists the team's projects
     Then it confirms each project's existence before acting on it
     And a project that "get-projects" lists but that no longer exists is not mirrored
-    # Confirmed live on Penpot 2.17.0: "get-projects" does NOT filter deleted_at,
-    # while "get-all-projects" does, "get-project" 404s, and "get-project-files"
-    # returns []. Files filter correctly everywhere — the bug is specific to the
-    # projects listing. Trusting it would resurrect deleted project folders on
-    # every pull.
+    # notes: AGENTS.md#the-pull-does-not-trust-get-projects-alone-about-which-projects-exist
 
   @blocked
   Scenario: A design deleted in Penpot can still be rescued inside the grace window
@@ -181,12 +152,7 @@ Feature: Failures never cost the user data
     And the pull notices within Penpot's ~7-day grace window
     Then the app can still export the design's archive
     And the user is offered a real ".penpot" file to keep
-    # Confirmed live (saga §6.42): "export-binfile" still exports a soft-deleted
-    # file — 6496 real bytes from a file deleted moments earlier — even though it
-    # 404s on get-file and is invisible to every listing. This turns the one
-    # genuinely unrecoverable case (a link file whose design is deleted) into a
-    # best-effort-restorable one. Whether this runs automatically or is offered
-    # is undecided — saga open question #38.
+    # notes: AGENTS.md#a-design-deleted-in-penpot-can-still-be-rescued-inside-the-grace-window
 
     # ── write failures ───────────────────────────────────────────────────────────
 

@@ -1,30 +1,4 @@
-# The user-set ignore marker — "stop mirroring this file, but keep it."
-#
-# THE INSIGHT (saga §6.23): "tagged ignore" and "moved out of a mapped folder"
-# are THE SAME STATE reached two different ways. Both mean: the archive is in
-# Nextcloud, and this app is no longer mirroring it. Command put it exactly
-# right — "adding a special ignore tag would simply treat it like it was
-# unmapped … this just means the penpot file is on nxt but taken out of penpot."
-# One state, one implementation, two entrances.
-#
-# "TAKEN OUT OF PENPOT" MEANS THE MIRRORING ENDS, NOT THE DESIGN DIES. Ignoring
-# a file NEVER deletes anything in Penpot. Saga §6.1 is intact: this app has no
-# destructive remote path at all. If the user wants the design gone from Penpot,
-# they delete it in Penpot — this app will not do it for them, ever.
-#
-# IGNORE IS ONLY MEANINGFUL ON "sync" (Command's call, saga §6.23). A "link" file
-# holds no archive — only a pointer. Ignoring one leaves an orphaned pointer with
-# no content and no purpose, so it's refused with an offer to promote to "sync"
-# first. This is the one place the two modes behave genuinely differently for a
-# user action, and the reason is concrete: there's nothing to keep.
-#
-# THIS IS A TAG, NOT METADATA, AND THAT'S DELIBERATE. The mapping uses folder
-# metadata because it's machine state (saga §6.21). The ignore marker is a
-# HUMAN decision that a human needs to see and toggle in the Files app — being
-# visible is the entire point. Same split both siblings use: Grafana's
-# `grafana:ignore` is explicitly separate from its auto-managed ownership pills.
-#
-# @todo — no lib/Service/ exists yet.
+# Notes, decisions and history for this feature: AGENTS.md#ignore
 
 Feature: Ignoring a mirrored file stops mirroring without losing it
   As a Nextcloud user

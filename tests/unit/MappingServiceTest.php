@@ -13,6 +13,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
+use OCA\PenpotSync\Service\StorageService;
 use OCP\IAppConfig;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
@@ -42,6 +43,18 @@ final class MappingServiceTest extends TestCase {
 	/** @var PenpotClient&Stub */
 	private PenpotClient $client;
 
+	/**
+	 * Provisioning is StorageService's, and it is stubbed AVAILABLE here.
+	 *
+	 * `add()` now builds the folder as well as saving the row (§C6.32), so every
+	 * test in this file would otherwise need a filesystem. What the folder ends up
+	 * being is StorageService's own concern and the integration suite's to prove;
+	 * these tests are about the store's RULES.
+	 *
+	 * @var StorageService&Stub
+	 */
+	private StorageService $storage;
+
 	protected function setUp(): void {
 		parent::setUp();
 
@@ -63,6 +76,9 @@ final class MappingServiceTest extends TestCase {
 			},
 		);
 
+		$this->storage = $this->createStub(StorageService::class);
+		$this->storage->method('isAvailable')->willReturn(true);
+
 		$this->client = $this->createStub(PenpotClient::class);
 		$this->client->method('getTeams')->willReturn([
 			['id' => self::TEAM_ID, 'name' => 'Northwind'],
@@ -74,7 +90,7 @@ final class MappingServiceTest extends TestCase {
 		// A fresh instance per call, because the service memoises the parsed list
 		// for the request — reusing one would hide persistence bugs behind the
 		// cache.
-		return new MappingService($this->config, $this->client);
+		return new MappingService($this->config, $this->client, $this->storage);
 	}
 
 	public function testAddsAVisibleTeam(): void {
@@ -146,126 +162,79 @@ final class MappingServiceTest extends TestCase {
 
 		$this->expectException(PenpotApiException::class);
 
-		(new MappingService($this->config, $client))
+		(new MappingService($this->config, $client, $this->storage))
 			->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 	}
 
 	/**
-	 * Groups are the one thing an update may change — the same "everything else
-	 * stays editable" line Grafana draws, minus the fields whose meaning differs
-	 * here.
+	 * A mapping that could not be provisioned must not be saved.
+	 *
+	 * `add()` establishes "the folder exists when this returns" (§C6.32), so the
+	 * order matters: provisioning runs BEFORE the write. If it throws — no sync
+	 * actor, the name already taken by a file — the failure leaves nothing behind
+	 * rather than a row claiming a folder that was never built.
+	 */
+	public function testAMappingWhoseFolderCannotBeBuiltIsNotSaved(): void {
+		$storage = $this->createStub(StorageService::class);
+		$storage->method('isAvailable')->willReturn(true);
+		$storage->method('ensureRoot')->willThrowException(new \RuntimeException('no sync actor'));
+
+		$service = new MappingService($this->config, $this->client, $storage);
+
+		try {
+			$service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+			self::fail('expected the provisioning failure to surface');
+		} catch (\RuntimeException $e) {
+			self::assertSame('no sync actor', $e->getMessage());
+		}
+
+		self::assertSame([], (new MappingService($this->config, $this->client, $storage))->list());
+	}
+
+	/**
+	 * Groups are the ONE thing a mapping may change, and now the only thing the
+	 * API can express (§C6.33).
+	 *
+	 * Five tests used to live here, one per immutable field, each handing
+	 * `update()` a whole mapping with one field moved and asserting a refusal.
+	 * They tested a door with no handle: the sole caller rebuilds every other
+	 * field from storage and could not have moved one. `updateGroups()` takes
+	 * groups, so immutability is now a fact about the signature — there is
+	 * nothing left to refuse, and nothing left to test.
 	 */
 	public function testUpdatesTheGroups(): void {
 		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
-		$updated = $this->service()->update($saved->id, new Mapping(
-			$saved->id,
-			$saved->teamId,
-			$saved->teamName,
-			$saved->ncFolder,
-			['design'],
-			$saved->useTeamFolder,
-			$saved->mode,
-			$saved->folderMode,
-		));
+		$updated = $this->service()->updateGroups($saved->id, ['design']);
 
 		self::assertSame(['design'], $updated->ncGroups);
 		self::assertSame(['design'], $this->service()->getById($saved->id)?->ncGroups);
 	}
 
-	/**
-	 * link ⇄ sync is IMMUTABLE here, unlike Grafana's `mode`, because the axis
-	 * means something different (saga §6.22): it decides whether we hold the
-	 * bytes. sync→link would delete every downloaded archive under the mapping;
-	 * link→sync would export every file at once. Per-FILE promotion is the
-	 * supported path, because it can ask first.
-	 */
-	public function testModeIsImmutable(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+	/** Everything else the mapping carries survives a group change untouched. */
+	public function testUpdatingGroupsChangesNothingElse(): void {
+		$saved = $this->service()->add(Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'nc_folder' => 'Design Files',
+			'use_team_folder' => true,
+			'mode' => Mapping::MODE_SYNC,
+		]));
 
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('cannot be changed');
+		$updated = $this->service()->updateGroups($saved->id, 'design, admin');
 
-		$this->service()->update($saved->id, new Mapping(
-			$saved->id,
-			$saved->teamId,
-			$saved->teamName,
-			$saved->ncFolder,
-			$saved->ncGroups,
-			$saved->useTeamFolder,
-			Mapping::MODE_SYNC,
-			$saved->folderMode,
-		));
+		self::assertSame(['design', 'admin'], $updated->ncGroups);
+		self::assertSame($saved->teamId, $updated->teamId);
+		self::assertSame('Design Files', $updated->ncFolder);
+		self::assertTrue($updated->useTeamFolder);
+		self::assertSame(Mapping::MODE_SYNC, $updated->mode);
+		self::assertSame($saved->folderMode, $updated->folderMode);
 	}
 
-	/** Re-pointing it would have to move the whole mirrored tree. Grafana locks it too. */
-	public function testTheFolderIsImmutable(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-
+	public function testUpdatingAnUnknownMappingIsRefused(): void {
 		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('cannot be changed');
+		$this->expectExceptionMessage('No mapping with id');
 
-		$this->service()->update($saved->id, $saved->withNcFolder('Design Files'));
-	}
-
-	/** Switching backend would have to migrate the folder and all its shares. */
-	public function testTheTeamFolderFlagIsImmutable(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('cannot be changed');
-
-		$this->service()->update($saved->id, new Mapping(
-			$saved->id,
-			$saved->teamId,
-			$saved->teamName,
-			$saved->ncFolder,
-			$saved->ncGroups,
-			!$saved->useTeamFolder,
-			$saved->mode,
-			$saved->folderMode,
-		));
-	}
-
-	/**
-	 * §6.53. Flipping this live would restructure every folder under the mapping
-	 * AND rewrite every project name in Penpot — a two-sided destructive
-	 * migration behind a dropdown.
-	 */
-	public function testFolderModeIsImmutable(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('cannot be changed');
-
-		$this->service()->update($saved->id, new Mapping(
-			$saved->id,
-			$saved->teamId,
-			$saved->teamName,
-			$saved->ncFolder,
-			$saved->ncGroups,
-			$saved->useTeamFolder,
-			$saved->mode,
-			Mapping::FOLDER_MODE_KEYED,
-		));
-	}
-
-	public function testTheTeamIsImmutable(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('cannot be changed');
-
-		$this->service()->update($saved->id, new Mapping(
-			$saved->id,
-			self::OTHER_TEAM_ID,
-			$saved->teamName,
-			$saved->ncFolder,
-			$saved->ncGroups,
-			$saved->useTeamFolder,
-			$saved->mode,
-			$saved->folderMode,
-		));
+		$this->service()->updateGroups('no-such-id', ['design']);
 	}
 
 	/**
@@ -291,7 +260,7 @@ final class MappingServiceTest extends TestCase {
 			['id' => self::TEAM_ID, 'name' => 'Design/Brand'],
 		]);
 
-		$service = new MappingService($this->config, $client);
+		$service = new MappingService($this->config, $client, $this->storage);
 		$saved = $service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
 		self::assertStringNotContainsString('/', $saved->ncFolder);
@@ -299,7 +268,7 @@ final class MappingServiceTest extends TestCase {
 
 		// The real point: it must still be readable back. A stored row that
 		// fromArray() rejects would silently disappear from list().
-		self::assertCount(1, (new MappingService($this->config, $client))->list());
+		self::assertCount(1, (new MappingService($this->config, $client, $this->storage))->list());
 	}
 
 	public function testAnExplicitFolderNameSurvivesTheLookup(): void {
@@ -348,29 +317,6 @@ final class MappingServiceTest extends TestCase {
 			'team_id' => self::OTHER_TEAM_ID,
 			'nc_folder' => 'designs',
 		]));
-	}
-
-	/**
-	 * Blank on update means "keep what is there", not "clear it" — so a caller
-	 * that omits the folder is not asking to change it, and must not trip the
-	 * immutability check.
-	 */
-	public function testABlankFolderOnUpdateIsNotAChange(): void {
-		$saved = $this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-
-		$updated = $this->service()->update($saved->id, new Mapping(
-			$saved->id,
-			$saved->teamId,
-			$saved->teamName,
-			'',
-			['design'],
-			$saved->useTeamFolder,
-			$saved->mode,
-			$saved->folderMode,
-		));
-
-		self::assertSame('Northwind', $updated->ncFolder);
-		self::assertSame(['design'], $updated->ncGroups);
 	}
 
 	public function testGroupsAndTeamFolderPersist(): void {

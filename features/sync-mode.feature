@@ -1,47 +1,4 @@
-# The per-file "do we store the bytes?" choice.
-#
-# THE AXIS IS BACK, MEANING SOMETHING NEW (saga §6.22). Chapter 1 §6.1 removed
-# the sync/link axis because read-only means there's only one write direction.
-# That reasoning was right about WRITES and wrong about WEIGHT. In both sibling
-# apps the axis means "which direction do edits flow." Here it means only:
-#
-#     link  — a pointer. No archive stored. Never calls export-binfile.
-#     sync  — a real backup. The .penpot archive is downloaded and stored.
-#
-# NEITHER MODE EVER PUSHES CONTENT. Saga §6.1's read-only lock is untouched by
-# this feature — "sync" here does NOT mean "two-way", it means "we keep the
-# bytes." A sync file is still a read-only mirror.
-#
-# WHY THIS MATTERS: a .penpot export is a full ZIP with embedded binaries, not a
-# JSON diff (saga Course 2). Mirroring every file in a large team as a stored
-# archive would be expensive and mostly pointless — most designs don't need a
-# backup in Nextcloud, they need to be findable and clickable. Command's framing:
-# "links would be lightweight and never backed up in nxt, then we simply make the
-# sync for our important files."
-#
-# LINK IS THE DEFAULT, and that is a deliberate safety property as much as a
-# performance one: the expensive, bandwidth-consuming path is opt-in, so a
-# newly-mapped team with 500 files costs a listing, not 500 exports.
-#
-# THE DEMOTION IS THE DANGEROUS DIRECTION: sync → link DELETES a stored archive.
-# That's local data the user may be relying on as a backup, so it is confirmed,
-# and it is the only operation in this file that can lose bytes.
-#
-# BUILD STATE (Course 4, the sync slice). THE ENGINE IS BUILT AND PROVEN ON THE
-# WIRE: `PenpotClient::exportBinfile` performs the real two-step export (an SSE
-# stream, then a second authenticated GET for the ZIP it names — saga §5.1–§5.4,
-# §C4.8), `ArchiveService` stores the result, `PullService` re-exports only on
-# drift or a missing archive, and `occ penpot_sync:set-mode` is the per-file
-# promote/demote.
-#
-# The half of this file CI can prove today has moved to **set-mode.feature**,
-# where it runs live: a promotion is asserted to leave real ZIP bytes on disk,
-# and a team of links is asserted to cost exactly zero exports.
-#
-# WHAT STAYS @todo HERE is everything that needs a surface the app does not have
-# yet — the Files-app mode indicator and switcher, the ignore tag's interaction
-# with demotion, and re-deriving files from a changed mapping default. The
-# scenarios below remain the specification those will be built against.
+# Notes, decisions and history for this feature: AGENTS.md#sync-mode
 
 Feature: Choosing whether a mirrored file stores its archive
   As a Nextcloud user
@@ -175,18 +132,13 @@ Feature: Choosing whether a mirrored file stores its archive
     Given a mirrored ".penpot" file in "link" mode
     Then the file is zero bytes
     And "occ penpot_sync:status" reports its content as "empty"
-    # Everything identifying the file — id, revision, mode, team — is metadata.
-    # A body would be a second copy of the same facts, free to drift from the
-    # first, which is exactly what the drift signal's two halves once did.
+    # notes: AGENTS.md#a-link-file-holds-nothing-at-all
 
   @todo @admin @occ
   Scenario: A link is never a small placeholder archive
     Given a mirrored ".penpot" file in "link" mode
     Then it is not a ZIP, empty or otherwise
-    # A ZIP with any entry starts with the same magic bytes a real export does,
-    # so the app could no longer tell a pointer from a backup. That would
-    # silently disable the prune's final snapshot, make a demotion ask to delete
-    # an archive that does not exist, and report "archive" in status.
+    # notes: AGENTS.md#a-link-is-never-a-small-placeholder-archive
 
   @todo @admin @occ
   Scenario: A leftover body from an older version is truncated by the next pull
@@ -194,9 +146,7 @@ Feature: Choosing whether a mirrored file stores its archive
     When the pull runs
     Then the file is emptied
     And "occ penpot_sync:status" reported it as "pointer" until that happened
-    # The migration needs no repair step and no version check: the pull already
-    # calls the same code path on every link. "pointer" is a real third state
-    # meaning "an old body, not yet truncated".
+    # notes: AGENTS.md#a-leftover-body-from-an-older-version-is-truncated-by-the-next-pull
 
   @todo @admin @occ
   Scenario: An already-empty link is left strictly alone

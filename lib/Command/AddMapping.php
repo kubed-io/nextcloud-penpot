@@ -64,10 +64,11 @@ final class AddMapping extends Command {
 				'',
 			)
 			->addOption(
-				'no-team-folder',
+				'team-folder',
 				null,
 				InputOption::VALUE_NONE,
-				'Use a plain shared folder instead of a groupfolders Team Folder.',
+				'Use a groupfolders Team Folder. Requires the groupfolders app; '
+				. 'without this flag a plain shared folder is used.',
 			)
 			->addOption(
 				'mode',
@@ -94,7 +95,7 @@ final class AddMapping extends Command {
 				// A comma-separated string is accepted verbatim by the model's
 				// group normaliser, so the CLI needs no parsing of its own.
 				'nc_groups' => (string)$input->getOption('groups'),
-				'use_team_folder' => !$input->getOption('no-team-folder'),
+				'use_team_folder' => (bool)$input->getOption('team-folder'),
 				'mode' => (string)$input->getOption('mode'),
 				'folder_mode' => (string)$input->getOption('folder-mode'),
 			]);

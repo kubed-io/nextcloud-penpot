@@ -86,7 +86,7 @@ final class MappingController extends Controller {
 		string $teamId,
 		string $ncFolder = '',
 		array $ncGroups = [],
-		bool $useTeamFolder = true,
+		bool $useTeamFolder = false,
 		string $mode = Mapping::MODE_LINK,
 		string $folderMode = Mapping::FOLDER_MODE_NESTED,
 	): JSONResponse {
@@ -116,10 +116,12 @@ final class MappingController extends Controller {
 	 * shared with.
 	 *
 	 * Everything else is immutable once created: the team, the Nextcloud folder,
-	 * the Team Folder flag, `mode`, and `folder_mode`. {@see MappingService::update()}
-	 * gives the reason for each. Changing one means removing the mapping and
-	 * adding it again, which makes the migration cost visible instead of hiding
-	 * it behind a dropdown.
+	 * the Team Folder flag, `mode`, and `folder_mode`. That is not enforced here —
+	 * it is enforced by {@see MappingService::updateGroups()} taking GROUPS, so no
+	 * caller can express a change to anything else. Its docblock gives the reason
+	 * each field is locked. Changing one means removing the mapping and adding it
+	 * again, which makes the migration cost visible instead of hiding it behind a
+	 * dropdown.
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function update(string $id, array $ncGroups = []): JSONResponse {
@@ -130,21 +132,12 @@ final class MappingController extends Controller {
 		}
 
 		try {
-			// Only the groups are taken from the request. Every other field is
-			// carried over from the stored mapping, so this endpoint CANNOT trip
-			// the service's immutability checks with an omitted parameter's
-			// default — a caller that sends nothing changes nothing, which is the
-			// right behaviour for a PUT that only owns one field.
-			$updated = $this->service->update($id, Mapping::fromArray([
-				'id' => $existing->id,
-				'team_id' => $existing->teamId,
-				'team_name' => $existing->teamName,
-				'nc_folder' => $existing->ncFolder,
-				'nc_groups' => $ncGroups,
-				'use_team_folder' => $existing->useTeamFolder,
-				'mode' => $existing->mode,
-				'folder_mode' => $existing->folderMode,
-			]));
+			// Groups are the whole of what this endpoint owns, and now the whole of
+			// what the service will accept. It used to rebuild the entire mapping
+			// from storage so an omitted parameter could not trip an immutability
+			// check — a careful workaround for an API that should never have taken
+			// the other fields in the first place.
+			$updated = $this->service->updateGroups($id, $ncGroups);
 		} catch (\InvalidArgumentException $e) {
 			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_UNPROCESSABLE_ENTITY);
 		}

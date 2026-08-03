@@ -1,17 +1,4 @@
-# MOVING A PROJECT — the folder, and the one rule that makes it different from
-# moving a design: a project folder's POSITION is constrained where a design's is
-# not. Moving a design is move-design.feature.
-#
-# WHY A PROJECT FOLDER IS PINNED TO ITS TEAM FOLDER. A project belongs to exactly
-# one Penpot team, and the team folder IS that team in Nextcloud. Dragging the
-# folder out of it would assert a membership Penpot has no way to represent — so
-# it is refused, visibly, with the alternative spelled out. Inside its own team
-# folder the user may put it wherever they like: Nextcloud owns layout, Penpot
-# owns membership (saga §6.29/§6.30).
-#
-# THE INVARIANT THAT COVERS BOTH FILES lives in move-design.feature — "no move,
-# of any file or folder, ever deletes anything in Penpot" — and is not restated
-# here, because one copy of a rule is the point of splitting these.
+# Notes, decisions and history for this feature: AGENTS.md#move-project
 
 Feature: Moving a Penpot project folder
   As a Nextcloud user
@@ -21,7 +8,7 @@ Feature: Moving a Penpot project folder
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And a Penpot team is mapped to the folder "Penpot"
+    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 
   @in-nextcloud @gesture @todo
   Scenario: A project folder can be moved anywhere inside its team folder
@@ -49,11 +36,7 @@ Feature: Moving a Penpot project folder
     When I try to move it outside its team folder
     Then the refusal explains a project cannot leave its team from Nextcloud
     And it explains that moving a project between teams must be done in Penpot
-    # Split from the scenario above, which proves the refusal HAPPENS; this one
-    # is about what it SAYS, and needs the exception body surfaced through DAV.
-    # Saga §6.30. Reparenting a project in Penpot (`move-project`) is real and
-    # confirmed, but it is a destructive cross-team mutation that changes who can
-    # see the work — far outside §6.1. Refuse loudly; never silently undo.
+    # notes: AGENTS.md#the-project-folder-refusal-explains-why-and-what-to-do-instead
 
   @in-nextcloud @gesture @unbuilt
   Scenario: A project folder cannot be moved into a different team's folder
@@ -62,17 +45,9 @@ Feature: Moving a Penpot project folder
     Then the move is refused with the same explanation
     And neither team's mapping is modified
 
-    # ══ MOVED IN PENPOT ════════════════════════════════════════════════════════
-    #
-    # The same behaviour from the other end, and it arrives via a sync run rather
-    # than an event. Penpot is authoritative for project membership, so a design
-    # re-filed upstream relocates its mirror — it is not a conflict to resolve, it
-    # is the source of truth changing.
+    # notes: AGENTS.md#a-project-folder-cannot-be-moved-into-a-different-teams-folder
 
-  # ── the same rule in a personal team ────────────────────────────────────────
-  # A personal project is a project. The WHO (the user's own token) and the WHERE
-  # (their home root, no team-folder ancestor) differ; the rule does not — see
-  # personal-projects.feature for what actually is special about them.
+  # notes: AGENTS.md#a-user-can-move-their-personal-project-folders-anywhere-in-their-home
 
   @unbuilt
   Scenario: A user can move their personal project folders anywhere in their home

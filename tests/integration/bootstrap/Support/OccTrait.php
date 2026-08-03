@@ -53,7 +53,7 @@ trait OccTrait {
 	 * behaves exactly as it did before the matrix existed.
 	 */
 	private function backendFlags(): string {
-		return $this->isTeamFolderBackend() ? '--groups=admin' : '--no-team-folder';
+		return $this->isTeamFolderBackend() ? '--team-folder --groups=admin' : '';
 	}
 
 	/** True when this leg is exercising the groupfolders-backed backend. */

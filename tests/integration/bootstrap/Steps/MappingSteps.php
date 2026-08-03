@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
+use Behat\Gherkin\Node\TableNode;
+
 /**
  * Team-mapping steps, driven over `occ` against a real Nextcloud and a real
  * Penpot.
@@ -44,34 +46,33 @@ trait MappingSteps {
 		}
 	}
 
-	/** @When the admin maps the first team the service account can see */
-	public function theAdminMapsTheFirstVisibleTeam(): void {
-		$teamId = $this->firstVisibleTeamId();
-
-		$res = $this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
-
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("add-mapping failed for {$teamId}:\n{$res['output']}");
-		}
+	/**
+	 * Map a named team, naming no folder — the case where the folder name is left
+	 * to default to the team's own.
+	 *
+	 * DOES NOT THROW ON FAILURE, and neither does any other `When` here. Half these
+	 * scenarios are asserting a REFUSAL, so the outcome belongs to the `Then` that
+	 * follows; a step that threw first would make "the mapping is rejected"
+	 * unreachable. `$this->lastExit` and `$this->lastOutput` carry the verdict.
+	 *
+	 * @When /^the admin maps the Penpot team "([^"]*)"$/
+	 */
+	public function theAdminMapsThePenpotTeam(string $team): void {
+		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($this->teamNamed($team)));
 	}
 
-	/** @When /^the admin tries to map the Penpot team "([^"]*)"$/ */
-	public function theAdminTriesToMapTheTeam(string $teamId): void {
+	/**
+	 * Map by RAW ID, for the ids that resolve to nothing.
+	 *
+	 * The one step here that does not take a NAME, and deliberately so: it exists
+	 * to hand `add-mapping` something no lookup could have produced. Naming it
+	 * "team id" rather than "Penpot team" keeps it from reading like the named
+	 * steps above, which seed the team they name.
+	 *
+	 * @When /^the admin tries to map the team id "([^"]*)"$/
+	 */
+	public function theAdminTriesToMapTheTeamId(string $teamId): void {
 		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
-	}
-
-	/** @When /^the admin tries to map the first visible team with folder mode "([^"]*)"$/ */
-	public function theAdminTriesToMapTheFirstVisibleTeamWithFolderMode(string $folderMode): void {
-		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder-mode=%s',
-			escapeshellarg($this->firstVisibleTeamId()),
-			escapeshellarg($folderMode),
-		));
-	}
-
-	/** @When the admin maps the same team again */
-	public function theAdminMapsTheSameTeamAgain(): void {
-		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($this->firstVisibleTeamId()));
 	}
 
 	/** @Then /^there (?:is|are) exactly (\d+) configured team mappings?$/ */
@@ -99,23 +100,145 @@ trait MappingSteps {
 		}
 	}
 
-	/** @When /^the admin maps the first visible team into the folder "([^"]*)"$/ */
-	public function theAdminMapsTheFirstVisibleTeamIntoTheFolder(string $folder): void {
+	/**
+	 * Seed the team a scenario names, so the scenario can say which team it means
+	 * instead of inheriting whichever one the instance happens to have.
+	 *
+	 * @Given /^a Penpot team named "([^"]*)" exists$/
+	 */
+	public function aPenpotTeamNamedExists(string $team): void {
+		$this->teamNamed($team);
+	}
+
+	/** @When /^the admin maps the team "([^"]*)" into the folder "([^"]*)"$/ */
+	public function theAdminMapsTheTeamIntoTheFolder(string $team, string $folder): void {
 		$this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder=%s',
-			escapeshellarg($this->firstVisibleTeamId()),
+			escapeshellarg($this->teamNamed($team)),
 			escapeshellarg($folder),
 		));
 	}
 
-	/** @Given /^the first visible team is mapped into the folder "([^"]*)"$/ */
-	public function theFirstVisibleTeamIsMappedIntoTheFolder(string $folder): void {
-		$this->noPenpotTeamsAreMapped();
-		$this->theAdminMapsTheFirstVisibleTeamIntoTheFolder($folder);
+	/**
+	 * The defaults the form applies to whatever the admin left alone.
+	 *
+	 * DECLARED IN THE SPEC, NOT IN HERE. Five scenarios used to assert one default
+	 * each, and one of them was wrong for as long as it took someone to notice
+	 * (§C6.31). Written down as a table they are read as a set, and a change to one
+	 * is a one-word diff in the feature file instead of a new scenario title.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $formDefaults = [];
 
-		if ($this->lastExit !== 0) {
-			throw new \RuntimeException("could not map the team into {$folder}:\n" . $this->lastOutput);
+	/** What the admin actually typed. @var array<string, string> */
+	private array $submittedForm = [];
+
+	/** @Given an unset field on the mapping form defaults to: */
+	public function anUnsetFieldOnTheMappingFormDefaultsTo(TableNode $defaults): void {
+		$this->formDefaults = $defaults->getRowsHash();
+	}
+
+	/**
+	 * Fill in the mapping form and submit it.
+	 *
+	 * A BLANK CELL IS AN UNTOUCHED FIELD, not an empty value — it produces no flag
+	 * at all, which is the only way a row can exercise a DEFAULT. Behat substitutes
+	 * Examples placeholders inside a step's table argument exactly as it does in the
+	 * step text, so one table serves every row.
+	 *
+	 * Does not throw on a non-zero exit: half the rows using this step expect a
+	 * refusal, and that verdict belongs to the `Then`.
+	 *
+	 * @When /^the admin maps "([^"]*)" with:$/
+	 */
+	public function theAdminMapsWith(string $team, TableNode $form): void {
+		$this->submittedForm = $form->getRowsHash();
+
+		$flags = [];
+		foreach ($this->submittedForm as $field => $value) {
+			$value = trim($value);
+			if ($value !== '') {
+				$flags[] = $this->flagFor($field, $value);
+			}
 		}
+
+		$this->occ(sprintf(
+			'penpot_sync:add-mapping %s %s',
+			escapeshellarg($this->teamNamed($team)),
+			implode(' ', $flags),
+		));
+	}
+
+	/**
+	 * EVERY FIELD, EVERY ROW — including the ones this row did not touch.
+	 *
+	 * A row that sets the mode is also proving it did not disturb the folder. The
+	 * drafts this replaced asserted only the field under test, so nothing in the
+	 * suite would have caught one option quietly overwriting another.
+	 *
+	 * @Then the mapping matches the form, unset fields at their defaults
+	 */
+	public function theMappingMatchesTheForm(): void {
+		// Exit code FIRST: reading the mapping runs `list-mappings`, which replaces
+		// the output a refusal would have been explained in.
+		if ($this->lastExit !== 0) {
+			throw new \RuntimeException("expected the mapping to be created, it was refused:\n" . $this->lastOutput);
+		}
+
+		if ($this->formDefaults === []) {
+			throw new \RuntimeException('no form defaults were declared; the assertion would check nothing');
+		}
+
+		$mapping = $this->firstMapping();
+
+		foreach ($this->formDefaults as $field => $default) {
+			$typed = trim($this->submittedForm[$field] ?? '');
+			$expected = $typed === '' ? trim($default) : $typed;
+			$actual = $this->settingOf($mapping, $field);
+
+			if ($actual !== $expected) {
+				throw new \RuntimeException(sprintf(
+					"expected the mapping's %s to be '%s'%s, got '%s'",
+					$field,
+					$expected,
+					$typed === '' ? ' (the default, the field was left unset)' : '',
+					$actual,
+				));
+			}
+		}
+	}
+
+	/** The CLI flag one filled-in field comes down to. */
+	private function flagFor(string $field, string $value): string {
+		return match ($field) {
+			'folder' => '--folder=' . escapeshellarg($value),
+			'mode' => '--mode=' . escapeshellarg($value),
+			'folder mode' => '--folder-mode=' . escapeshellarg($value),
+			'groups' => '--groups=' . escapeshellarg($value),
+			// The only storage worth a flag is the one you opt into; the plain
+			// shared folder IS the absence of it (§C6.31).
+			'storage' => $value === 'team folder' ? '--team-folder' : '',
+			default => throw new \RuntimeException("the mapping form has no field called \"{$field}\""),
+		};
+	}
+
+	/**
+	 * One saved setting, under the name the FORM calls it.
+	 *
+	 * @param array<string, mixed> $mapping
+	 */
+	private function settingOf(array $mapping, string $field): string {
+		$groups = $mapping['nc_groups'] ?? [];
+
+		return match ($field) {
+			'folder' => (string)($mapping['nc_folder'] ?? ''),
+			'mode' => (string)($mapping['mode'] ?? ''),
+			'folder mode' => (string)($mapping['folder_mode'] ?? ''),
+			'groups' => is_array($groups) ? implode(',', $groups) : '',
+			'storage' => ($mapping['use_team_folder'] ?? null) === true ? 'team folder' : 'plain shared folder',
+			default => throw new \RuntimeException("the mapping form has no field called \"{$field}\""),
+		};
 	}
 
 	/** @When /^the admin maps another team into the folder "([^"]*)"$/ */
@@ -138,28 +261,6 @@ trait MappingSteps {
 		throw new \RuntimeException('needs a second visible Penpot team, found only one');
 	}
 
-	/** @When /^the admin maps the first visible team shared with the group "([^"]*)"$/ */
-	public function theAdminMapsTheFirstVisibleTeamSharedWith(string $groups): void {
-		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s --groups=%s',
-			escapeshellarg($this->firstVisibleTeamId()),
-			escapeshellarg($groups),
-		));
-	}
-
-	/** @Then the mapping's Nextcloud folder is named after the Penpot team */
-	public function theFolderIsNamedAfterTheTeam(): void {
-		$mapping = $this->firstMapping();
-		$teamName = (string)($mapping['team_name'] ?? '');
-		$ncFolder = (string)($mapping['nc_folder'] ?? '');
-
-		if ($teamName === '' || $ncFolder !== $teamName) {
-			throw new \RuntimeException(
-				"expected the folder to default to the team name '{$teamName}', got '{$ncFolder}'",
-			);
-		}
-	}
-
 	/** @Then /^the mapping's Nextcloud folder is "([^"]*)"$/ */
 	public function theMappingsFolderIs(string $expected): void {
 		$actual = (string)($this->firstMapping()['nc_folder'] ?? '');
@@ -174,44 +275,57 @@ trait MappingSteps {
 		$this->theMappingsFolderIs($expected);
 	}
 
-	/** @Then the mapping still records the Penpot team's own name separately */
-	public function theMappingStillRecordsTheTeamName(): void {
-		$mapping = $this->firstMapping();
-		$teamName = (string)($mapping['team_name'] ?? '');
+	/**
+	 * Map a team onto a NAMED BACKEND, with a starting set of groups.
+	 *
+	 * Does not read {@see backendFlags()} — this is the one place the scenario
+	 * chooses the backend rather than inheriting the leg's, because the backend is
+	 * what it is testing. The admin leg installs groupfolders so both are reachable.
+	 *
+	 * The folder name comes from the KIND, so a Team Folder and a plain folder can
+	 * never collide on one name. They must not: removing a mapping deletes nothing,
+	 * so a folder outlives the mapping that made it and a later mapping reusing the
+	 * name would inherit a folder of the wrong kind (§C6.32). Rows of the same kind
+	 * DO share a folder, which is safe — ensureRoot() is idempotent.
+	 *
+	 * @Given /^a Penpot team named "([^"]*)" is mapped to a (Team Folder|plain folder), shared with "([^"]*)"$/
+	 */
+	public function aTeamIsMappedToABackendSharedWith(string $team, string $kind, string $groups): void {
+		$this->noPenpotTeamsAreMapped();
 
-		if ($teamName === '') {
-			throw new \RuntimeException("the mapping lost the Penpot team name:\n" . $this->lastOutput);
+		$res = $this->occ(sprintf(
+			'penpot_sync:add-mapping %s --folder=%s --groups=%s %s',
+			escapeshellarg($this->teamNamed($team)),
+			escapeshellarg($kind === 'Team Folder' ? 'Groups On A Team Folder' : 'Groups On A Plain Folder'),
+			escapeshellarg($groups),
+			$kind === 'Team Folder' ? '--team-folder' : '',
+		));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not map \"{$team}\" onto a {$kind}:\n{$res['output']}");
 		}
+	}
 
-		if ($teamName === (string)($mapping['nc_folder'] ?? '')) {
-			throw new \RuntimeException(
-				'this scenario needs a folder name that differs from the team name, '
-				. 'otherwise it proves nothing',
-			);
+	/** @When /^the admin changes that mapping's groups to "([^"]*)"$/ */
+	public function theAdminChangesThatMappingsGroupsTo(string $groups): void {
+		$res = $this->occ(sprintf(
+			'penpot_sync:set-groups %s %s',
+			escapeshellarg($this->firstMapping()['id'] ?? ''),
+			escapeshellarg($groups),
+		));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not change the groups:\n{$res['output']}");
 		}
 	}
 
 	/** @Then /^the mapping's groups are "([^"]*)"$/ */
 	public function theMappingsGroupsAre(string $expected): void {
-		$actual = $this->firstMapping()['nc_groups'] ?? [];
-		$actual = is_array($actual) ? implode(',', $actual) : '';
+		$groups = $this->firstMapping()['nc_groups'] ?? [];
+		$actual = is_array($groups) ? implode(',', $groups) : '';
 
 		if ($actual !== $expected) {
 			throw new \RuntimeException("expected the groups to be '{$expected}', got '{$actual}'");
-		}
-	}
-
-	/** @Then the mapping uses a Team Folder */
-	public function theMappingUsesATeamFolder(): void {
-		if (($this->firstMapping()['use_team_folder'] ?? null) !== true) {
-			throw new \RuntimeException("expected the mapping to use a Team Folder:\n" . $this->lastOutput);
-		}
-	}
-
-	/** @Then the mapping has no groups */
-	public function theMappingHasNoGroups(): void {
-		if (($this->firstMapping()['nc_groups'] ?? []) !== []) {
-			throw new \RuntimeException("expected no groups:\n" . $this->lastOutput);
 		}
 	}
 
@@ -230,19 +344,6 @@ trait MappingSteps {
 
 		if ($mappings === [] || ($mappings[0]['folder_mode'] ?? null) !== 'nested') {
 			throw new \RuntimeException("expected a mapping with folder_mode=nested, got:\n" . $this->lastOutput);
-		}
-	}
-
-	/** @Then the mapping records the team name from Penpot */
-	public function theMappingRecordsTheTeamName(): void {
-		$mappings = $this->mappings();
-		$name = $mappings[0]['team_name'] ?? '';
-
-		// The name is server-authoritative (§6.13): the app must have read it
-		// back from Penpot rather than storing whatever the caller supplied —
-		// and `add-mapping` never takes a name at all.
-		if (!is_string($name) || $name === '') {
-			throw new \RuntimeException("expected the mapping to carry a team name from Penpot, got:\n" . $this->lastOutput);
 		}
 	}
 
@@ -279,11 +380,6 @@ trait MappingSteps {
 				"expected the removal to state that nothing was deleted, got:\n" . $this->removalOutput,
 			);
 		}
-	}
-
-	/** @Then the service account can see at least one Penpot team */
-	public function theServiceAccountCanSeeATeam(): void {
-		$this->firstVisibleTeamId();
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────

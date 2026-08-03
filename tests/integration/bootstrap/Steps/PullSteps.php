@@ -35,10 +35,9 @@ use GuzzleHttp\Client;
  *
  * ## PLAIN FOLDER, NOT A TEAM FOLDER
  *
- * The CI Nextcloud has no groupfolders app, so mappings here use
- * `--no-team-folder` — the admin-owned backend {@see \OCA\PenpotSync\Service\StorageService}
- * builds. The groupfolders backend is out of scope for this suite until the CI
- * image ships it.
+ * The `plain` legs take the DEFAULT backend — a plain shared folder, which is
+ * core and always present. The `team` legs install groupfolders and ask for a
+ * Team Folder explicitly with `--team-folder`. {@see OccTrait::backendFlags()}.
  *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}; reuses
  * the occ transport and the team helpers from the other traits.
@@ -51,15 +50,27 @@ trait PullSteps {
 	private array $notedStamps = [];
 
 	/**
-	 * Map the first visible team to a folder, on WHICHEVER BACKEND this leg runs.
+	 * Map a NAMED team to a NAMED folder, on WHICHEVER BACKEND this leg runs.
 	 *
-	 * The step deliberately does not say which. Every behaviour here is valid on
-	 * both a plain (admin-owned) folder and a Team Folder, so naming one in the
-	 * Gherkin would either duplicate every scenario or quietly cover only half of
-	 * what ships. {@see backendFlags()} reads the matrix leg instead.
+	 * TWO NAMES, BECAUSE THERE ARE TWO NAMES. A mapping is a row holding a team id
+	 * and a folder name; nothing in it requires the two to read alike. The earlier
+	 * phrasing ("a Penpot team is mapped to the folder …") could not say so — it
+	 * named one side and left the other to the fixture, so every scenario built on
+	 * it was silently a same-instance-team scenario. Carrying both lets a scenario
+	 * state which team it means, and lets an Examples table put the same-name and
+	 * different-name cases side by side (see admin-mapping.feature).
 	 *
-	 * The old phrasing said "as a plain folder", which was true of the only
-	 * backend CI could reach and is now a lie on half the legs.
+	 * PROJECTS HAVE NO SECOND NAME. Only a team gets this freedom, and the reason
+	 * is structural rather than stylistic: a team has a mapping row to remember the
+	 * pairing in, a project has none. A project folder's NAME is the only thing
+	 * tying it to its Penpot project, so the two are pinned equal in both
+	 * directions (saga §6.36): a rename on either side PROPAGATES to the other
+	 * rather than producing a second name (rename-project.feature).
+	 *
+	 * The step deliberately does not say which BACKEND. Every behaviour here is
+	 * valid on both a plain (admin-owned) folder and a Team Folder, so naming one
+	 * in the Gherkin would either duplicate every scenario or quietly cover only
+	 * half of what ships. {@see backendFlags()} reads the matrix leg instead.
 	 *
 	 * ONE ATOMIC PRE-STATE, AND IT ALREADY RESETS. The Background used to say "no
 	 * Penpot teams are mapped" and then map one on the next line — a statement
@@ -67,15 +78,11 @@ trait PullSteps {
 	 * calls noPenpotTeamsAreMapped() itself. A Background is pre-state: it says how
 	 * the world IS so the scenario is doable, not what was done to get there.
 	 *
-	 * "the first visible team" also leaked the fixture into the spec. Which team it
-	 * is has never mattered to a single scenario; that a team IS mapped is the
-	 * whole precondition.
-	 *
-	 * @Given /^a Penpot team is mapped to the folder "([^"]*)"$/
+	 * @Given /^a Penpot team named "([^"]*)" is mapped to the folder "([^"]*)"$/
 	 */
-	public function theFirstVisibleTeamIsMappedToAFolder(string $folder): void {
+	public function aPenpotTeamNamedIsMappedToTheFolder(string $team, string $folder): void {
 		$this->noPenpotTeamsAreMapped();
-		$this->pulledTeamId = $this->firstVisibleTeamId();
+		$this->pulledTeamId = $this->teamNamed($team);
 
 		$res = $this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder=%s %s',
@@ -84,8 +91,65 @@ trait PullSteps {
 			$this->backendFlags(),
 		));
 		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not map the team as a plain folder:\n{$res['output']}");
+			throw new \RuntimeException("could not map \"{$team}\" to the folder \"{$folder}\":\n{$res['output']}");
 		}
+	}
+
+	/**
+	 * The id of the team with this name, creating it in Penpot if it is not there.
+	 *
+	 * FIND-OR-CREATE, NOT CREATE. A leg runs many scenarios against one Penpot, and
+	 * they mostly name the same team; making a fresh one each time would leave a
+	 * drift of near-identical teams and slow every scenario down for nothing.
+	 *
+	 * Creating it is the service account's own doing, so it is a member and the
+	 * team is visible to `get-teams` — which is what mapping is gated on (§6.18).
+	 * No invite dance is needed to satisfy the gate, because the seeder is already
+	 * on the inside of it.
+	 *
+	 * {@see firstVisibleTeamId()} survives alongside this for the steps that never
+	 * named a team at all — seeding a project into "that team", and finding *a
+	 * second* team to collide a folder name with.
+	 */
+	private function teamNamed(string $name): string {
+		$id = $this->visibleTeamIdNamed($name);
+		if ($id !== null) {
+			return $id;
+		}
+
+		$this->penpotRpc('create-team', ['name' => $name]);
+
+		$id = $this->visibleTeamIdNamed($name);
+		if ($id === null) {
+			throw new \RuntimeException("created the team \"{$name}\" but it is not visible:\n" . $this->lastOutput);
+		}
+
+		return $id;
+	}
+
+	/**
+	 * The id of a visible team with this name, or null if there is none.
+	 *
+	 * A FAILED `list-teams` IS NOT "NO SUCH TEAM". Parsing the output regardless of
+	 * the exit code would turn a broken connection into "created the team but it is
+	 * not visible" — a message pointing at the wrong half of the system, with the
+	 * real error nowhere in it. Whatever went wrong, the command already said so.
+	 */
+	private function visibleTeamIdNamed(string $name): ?string {
+		$res = $this->occ('penpot_sync:list-teams');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("list-teams failed:\n{$res['output']}");
+		}
+
+		// `%-38s %-28s %s` — id, name, then "yes" or "-" for whether it is mapped.
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^([0-9a-f-]{36})\s+(.+?)\s+(?:yes|-)\s*$/i', trim($line), $m) === 1
+				&& $m[2] === $name) {
+				return $m[1];
+			}
+		}
+
+		return null;
 	}
 
 	/** @Given /^a Penpot project named "([^"]*)" exists in that team$/ */

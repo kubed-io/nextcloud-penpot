@@ -154,14 +154,24 @@ final class Mapping implements JsonSerializable {
 
 		// Which Nextcloud groups the mapped folder is shared with, and whether it
 		// is an ownerless Team Folder (groupfolders) or a plain shared folder.
-		// Both carry the same meaning and defaults as in the sibling apps, so an
-		// admin configuring all three does the same thing each time.
 		$ncGroups = self::normaliseGroups($data['nc_groups'] ?? []);
 
-		// Default true: groupfolders is the preferred path in both siblings, and
-		// an omitted flag means "use a Team Folder".
-		$useTeamFolder = !array_key_exists('use_team_folder', $data)
-			|| filter_var($data['use_team_folder'], FILTER_VALIDATE_BOOLEAN);
+		// DEFAULT FALSE, BECAUSE A DEFAULT HAS TO WORK EVERYWHERE.
+		//
+		// groupfolders is an OPTIONAL app. Defaulting to it meant the default
+		// mapping — the one an admin gets by naming a team and nothing else —
+		// asked for a backend that is simply absent on a stock Nextcloud, and
+		// StorageService then refuses to provision it. A default that fails on an
+		// unconfigured instance is not a default.
+		//
+		// The plain shared folder is core, always present, and carries the same
+		// folder metadata a Team Folder would (§6.21); the Team Folder is the
+		// upgrade an admin opts into once groupfolders is installed. This
+		// deliberately diverges from the siblings' "prefer groupfolders" wording,
+		// which says what to use when it IS available — not what to assume when
+		// nobody said anything.
+		$useTeamFolder = array_key_exists('use_team_folder', $data)
+			&& filter_var($data['use_team_folder'], FILTER_VALIDATE_BOOLEAN);
 
 		// Both default rather than being required: the overwhelmingly common
 		// `occ` call names a team and nothing else, and every default here is
@@ -234,6 +244,16 @@ final class Mapping implements JsonSerializable {
 	 */
 	public function withTeamName(string $teamName): self {
 		return new self($this->id, $this->teamId, trim($teamName), $this->ncFolder, $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);
+	}
+
+	/**
+	 * A copy with the shared groups replaced — the only field a mapping may change
+	 * after it is created ({@see MappingService::updateGroups()}).
+	 *
+	 * @param array<array-key, mixed>|string $ncGroups
+	 */
+	public function withNcGroups(array|string $ncGroups): self {
+		return new self($this->id, $this->teamId, $this->teamName, $this->ncFolder, self::normaliseGroups($ncGroups), $this->useTeamFolder, $this->mode, $this->folderMode);
 	}
 
 	/** A copy with the Nextcloud folder name replaced. */

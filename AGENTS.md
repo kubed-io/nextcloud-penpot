@@ -411,10 +411,24 @@ rather than re-explaining the flow each session.
 The sibling apps follow one repeatable shape for a feature PR — spec, code,
 tests, docs, changelog — described in full in
 [nextcloud-grafana/AGENTS.md § Shape of a feature change](https://github.com/kubed-io/nextcloud-grafana/blob/main/AGENTS.md).
-This repo has a full `features/` (Gherkin) spec but no `tests/` directory yet, so
-that shape isn't executable here today — every `.feature` is tagged `@todo` and
-skipped. **The specs are the requirements**: read the relevant `.feature` before
-writing code for that area, and update it in the same PR if behaviour changes.
+That shape IS executable here now, and the `.feature` files are the top of it.
+`tests/unit` runs under PHPUnit and `tests/integration` under Behat, the latter
+against a real Nextcloud and a real Penpot across a seven-leg matrix. Scenarios
+tagged `@todo`, `@unbuilt`, `@blocked` or `@decision` are specification with no
+implementation yet and are excluded from the run; everything untagged is live and
+must stay green.
+
+**The specs are the requirements**: read the relevant `.feature` before writing
+code for that area, and update it in the same PR if behaviour changes. Two
+documents sit beside them and both are worth knowing:
+
+- [`features/README.md`](features/README.md) — how the suite is organised: which
+  file owns which behaviour, what the tags mean, how the backends are covered.
+- [`features/AGENTS.md`](features/AGENTS.md) — WHY each scenario is the way it
+  is, one section per feature file. The feature files stay legible by keeping
+  their reasoning here and linking to it; if you change a behaviour, change its
+  note in the same commit.
+
 Don't invent a different process without checking whether the saga has already
 settled on this one.
 
