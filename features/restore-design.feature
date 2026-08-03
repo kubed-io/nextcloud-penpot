@@ -59,28 +59,33 @@ Feature: Restoring a mirrored design
     # then broke again the moment the feature files were reordered. A scenario
     # about one file asserts on that file.
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: A pull after a restore does not trash the mirror a second time
     Given a mirrored design "Round Trip" in the project "Stay Put"
     And I delete "Penpot/Stay Put/Round Trip.penpot"
     When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
     And the team has been mirrored into Nextcloud
     Then the file "Penpot/Stay Put/Round Trip.penpot" is not in the Nextcloud trash
-    # @todo BECAUSE IT FAILS, NOT BECAUSE IT IS UNWRITTEN — the one @todo in this
-    # suite that marks a defect rather than a gap.
+    # WAS @todo, AND THE SCENARIO ABOVE WAS QUIETLY THE SAME DEFECT.
     #
-    # The restore logs success having CONFIRMED the design is back in its
-    # project's listing (§C6.15), and the pull one second later does not see it
-    # there and trashes the mirror again. Two `get-project-files` calls for the
-    # same project, seconds apart, disagreeing.
+    # This one was tagged as a known failure: the restore confirmed the design was
+    # back in its project's listing, and the pull seconds later did not see it and
+    # trashed the mirror again. Two `get-project-files` calls for one project,
+    # seconds apart, disagreeing.
     #
-    # It hid for a whole session behind "the pull pruned nothing", which asks
-    # about the entire mapped folder and so flapped with the suite's ordering
-    # rather than reporting a fact. Asked precisely, it fails every time — which
-    # is the first time this has been reproducible enough to chase.
+    # The note here used to claim the scenario above kept "the two claims that DO
+    # hold". That was wrong, and tagging only this one hid it: trashing the mirror
+    # a second time IS a delete, so it takes the design back into Penpot's trash
+    # with it. "The design is really back in Penpot" cannot survive a pull that
+    # re-trashes the mirror. One root cause, two scenarios, one tag — so the suite
+    # went red on the untagged half and looked like a new bug.
     #
-    # The scenario above keeps the two claims that DO hold: the mirror keeps its
-    # id (so no duplicate appears) and the design really is back in Penpot.
+    # The cause is now measured rather than described: `delete-file` lands
+    # ASYNCHRONOUSLY, a beat after it answers. A restore inside that beat is
+    # confirmed against a listing the pending delete has not reached, then
+    # overwritten by it. The remedy is to require the restore to STAY confirmed —
+    # see RestoreService::staysListed(). Both scenarios pass on that fix, which is
+    # the evidence that they were always one defect.
 
   @in-nextcloud @gesture
   Scenario: Restoring an untracked ".penpot" file never contacts Penpot
@@ -266,6 +271,7 @@ Feature: Restoring a mirrored design
     Given a trashed ".penpot" file whose design is in Penpot's trash
     When the restore reports the design's id as restored
     Then the app checks the design is back in its project's listing
+    And it checks again, once an in-flight delete has had time to land
     And a design that is not there yet is restored a second time
     And a design still missing after that is reported as a failure
     # NOT "is it out of the trash?", which sounds equivalent and is not. Penpot's

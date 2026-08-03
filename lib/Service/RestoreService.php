@@ -79,12 +79,25 @@ use Psr\Log\LoggerInterface;
  * restore to "stay consistent" would be strictly worse.
  */
 final class RestoreService {
+	/**
+	 * How long a confirmed restore must survive before it is believed.
+	 *
+	 * Measured, not guessed: in the failing CI runs the delete landed between one
+	 * and two seconds after `delete-file` answered. {@see staysListed()}.
+	 */
+	private const SETTLE_MICROSECONDS = 2_500_000;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
 		private readonly PersonalTokenService $personalTokens,
 		private readonly LoggerInterface $logger,
+		// Injectable ONLY so the unit tests need not pay it. The settle is a real
+		// wait on a real Penpot; a suite whose Penpot is a mock has nothing to wait
+		// for. Nextcloud's container falls back to this default, so it needs no
+		// registration — and nothing in production should pass anything else.
+		private readonly int $settleMicroseconds = self::SETTLE_MICROSECONDS,
 	) {
 	}
 
@@ -174,7 +187,7 @@ final class RestoreService {
 			return;
 		}
 
-		if ($this->isListedAgain($node, $teamId, $penpotId)) {
+		if ($this->staysListed($node, $teamId, $penpotId)) {
 			$this->logger->info('penpot_sync restore: brought a design back out of Penpot\'s trash, losslessly', [
 				'app' => Application::APP_ID,
 				'penpot_id' => $penpotId,
@@ -199,7 +212,7 @@ final class RestoreService {
 		// over again — the exact bug this slice was built to close.
 		$this->client->restoreDeletedFiles($teamId, [$penpotId], $actor);
 
-		if ($this->isListedAgain($node, $teamId, $penpotId)) {
+		if ($this->staysListed($node, $teamId, $penpotId)) {
 			$this->logger->info('penpot_sync restore: the design came back on a second call (saga §6.49)', [
 				'app' => Application::APP_ID,
 				'penpot_id' => $penpotId,
@@ -242,6 +255,49 @@ final class RestoreService {
 	 * root is in that team's **Drafts** — a real project with no folder of its
 	 * own (§6.35) — so its id is read off the team's default project.
 	 */
+	/**
+	 * Listed — and STILL listed once Penpot has stopped changing its mind.
+	 *
+	 * ## ONE CONFIRMATION WAS NOT A CONFIRMATION (§C6.15, finally explained)
+	 *
+	 * {@see isListedAgain()} answers "is it back *now*", and the pull one second
+	 * later kept disagreeing with it: two `get-project-files` calls for the same
+	 * project, seconds apart, returning different answers. That was recorded as an
+	 * unexplained defect and tagged `@todo` in `restore-design.feature`.
+	 *
+	 * The RPC trace explains it. `delete-file` does not finish when it answers —
+	 * Penpot lands the deletion asynchronously, a beat later. A restore issued
+	 * inside that beat is confirmed against a listing the pending delete has not
+	 * reached yet, and is then overwritten by it. The design goes back into the
+	 * trash after we reported it restored, and the next pull, seeing a design
+	 * Penpot no longer names, trashes the mirror all over again.
+	 *
+	 * It also explains why the sibling scenario passed while this one failed: that
+	 * one happened to need a second restore call, which landed AFTER the delete had
+	 * settled and therefore stuck. The bug was never about the second call — it was
+	 * about WHEN the last call lands, which is why "call twice" fixed it by
+	 * accident and only sometimes.
+	 *
+	 * So the question is not "is it listed" but "is it listed and does it stay
+	 * listed", and the caller retries the restore when it does not. This is the
+	 * same discipline as the rest of the class — success is not proof of success —
+	 * applied to a write that can be undone by something already in flight.
+	 */
+	private function staysListed(File $node, string $teamId, string $penpotId): bool {
+		if (!$this->isListedAgain($node, $teamId, $penpotId)) {
+			return false;
+		}
+
+		// Long enough for an in-flight `delete-file` to land, short enough to sit in
+		// a restore gesture: this runs in the WebDAV request that took the file out
+		// of the trash, and only ever when a design really was restored.
+		if ($this->settleMicroseconds > 0) {
+			usleep($this->settleMicroseconds);
+		}
+
+		return $this->isListedAgain($node, $teamId, $penpotId);
+	}
+
 	private function isListedAgain(File $node, string $teamId, string $penpotId): bool {
 		$projectId = $this->projectFor($node, $teamId);
 		if ($projectId === null) {
