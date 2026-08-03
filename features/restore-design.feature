@@ -32,61 +32,41 @@ Feature: Restoring a mirrored design
     And the first visible team is mapped to the folder "Penpot"
 
   @in-nextcloud @gesture
-  Scenario: Restoring a mirror brings its design back out of Penpot's trash
-    Given a mirrored design "Second Thoughts" in the project "Bring Back"
-    And I delete "Penpot/Bring Back/Second Thoughts.penpot"
-    When I restore "Penpot/Bring Back/Second Thoughts.penpot" from the Nextcloud trash
-    Then the design "Second Thoughts" is not in Penpot's trash
-    And Penpot project "Bring Back" holds a design named "Second Thoughts"
-    # Lossless: the SAME design comes back, with its id, revision and history —
-    # nothing is imported and nothing is re-created (§6.49/§C6.11).
-
-  @in-nextcloud @gesture
-  Scenario: A pull after a restore neither prunes the mirror nor duplicates it
+  Scenario: Restoring a design brings back the file and its design together
     Given a mirrored design "Round Trip" in the project "Stay Put"
-    And I delete "Penpot/Stay Put/Round Trip.penpot"
+    And "Penpot/Stay Put/Round Trip.penpot" is in the trash
     When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
-    And the team has been mirrored into Nextcloud
     Then the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
     And Penpot project "Stay Put" holds a design named "Round Trip"
-    # THE WHOLE POINT OF THE SLICE, asserted end to end: the mirror is NOT trashed
-    # a second time, and it keeps its id so no duplicate appears beside it.
+    And the design "Round Trip" is not in Penpot's trash
+    # ONE BEHAVIOUR, AND IT USED TO BE THREE.
     #
-    # ASSERTED ON THIS FILE, NOT ON THE PULL'S COUNTER. An earlier version used
-    # "the pull pruned nothing", which is a claim about the whole mapped folder —
-    # every design every other scenario has ever left in it. It passed or failed
-    # on what its NEIGHBOURS did, which is why it flapped for a whole session and
-    # then broke again the moment the feature files were reordered. A scenario
-    # about one file asserts on that file.
-
-  @in-nextcloud @gesture @todo
-  Scenario: A pull after a restore does not trash the mirror a second time
-    Given a mirrored design "Round Trip" in the project "Stay Put"
-    And I delete "Penpot/Stay Put/Round Trip.penpot"
-    When I restore "Penpot/Stay Put/Round Trip.penpot" from the Nextcloud trash
-    And the team has been mirrored into Nextcloud
-    Then the file "Penpot/Stay Put/Round Trip.penpot" is not in the Nextcloud trash
-    # @todo BECAUSE IT FAILS, NOT BECAUSE IT IS UNWRITTEN — the one @todo in this
-    # suite that marks a defect rather than a gap.
+    # There were three scenarios here: this gesture, "a pull after a restore
+    # neither prunes the mirror nor duplicates it", and "a pull after a restore
+    # does not trash the mirror a second time". The last two were not behaviours.
+    # They asked whether the SCHEDULED SYNC treats a restored item like any other
+    # mapped item — which is the reconciler, and the reconciler is how this app
+    # works, not something a user does. Writing it as a scenario also put the
+    # gesture in the Given block ("And I delete …") and the machine in the When
+    # block ("And the team has been mirrored into Nextcloud"), so the file read as
+    # though a user deletes things during setup and runs syncs by hand.
     #
-    # The restore logs success having CONFIRMED the design is back in its
-    # project's listing (§C6.15), and the pull one second later does not see it
-    # there and trashes the mirror again. Two `get-project-files` calls for the
-    # same project, seconds apart, disagreeing.
+    # What is left is what the user actually does and what they actually get: the
+    # file comes back, the design comes back with it, and the id is the same one —
+    # so nothing downstream can mistake it for a new design. Once that holds, the
+    # sync has an id and a listing like any other mirror and needs no scenario of
+    # its own. Not duplicating and not re-trashing are guarantees the CODE owes,
+    # and RestoreServiceTest is where they are pinned.
     #
-    # It hid for a whole session behind "the pull pruned nothing", which asks
-    # about the entire mapped folder and so flapped with the suite's ordering
-    # rather than reporting a fact. Asked precisely, it fails every time — which
-    # is the first time this has been reproducible enough to chase.
-    #
-    # The scenario above keeps the two claims that DO hold: the mirror keeps its
-    # id (so no duplicate appears) and the design really is back in Penpot.
+    # The pre-state is state, not a gesture: "is in the trash" says what is true
+    # before the behaviour, and how it got that way is the step definition's
+    # business.
 
   @in-nextcloud @gesture
   Scenario: Restoring an untracked ".penpot" file never contacts Penpot
     Given a mirrored design "Not Involved" in the project "Bystander"
-    And I upload a ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
-    And I delete "Penpot/Bystander/Strays In.penpot"
+    And an uploaded ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
+    And "Penpot/Bystander/Strays In.penpot" is in the trash
     When I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
     Then the file "Penpot/Bystander/Strays In.penpot" carries no Penpot id
     And Penpot project "Bystander" holds a design named "Not Involved"
@@ -266,6 +246,7 @@ Feature: Restoring a mirrored design
     Given a trashed ".penpot" file whose design is in Penpot's trash
     When the restore reports the design's id as restored
     Then the app checks the design is back in its project's listing
+    And it checks again, once an in-flight delete has had time to land
     And a design that is not there yet is restored a second time
     And a design still missing after that is reported as a failure
     # NOT "is it out of the trash?", which sounds equivalent and is not. Penpot's

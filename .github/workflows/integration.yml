@@ -503,12 +503,41 @@ jobs:
       contents: read
 
     steps:
+    # NO `merge-multiple`, AND THAT IS THE WHOLE FIX.
+    #
+    # Behat names its report after the SUITE, not the leg — every leg writes
+    # `<suite>.xml`. `merge-multiple: true` flattens all seven artifacts into one
+    # directory, so `design/plain` and `design/team` both land on `design.xml` and
+    # the second download silently overwrites the first. Measured on the run that
+    # introduced this job: 7 artifacts in, 4 files out, 173 tests reported as 97.
+    #
+    # Worse than losing half the results, WHICH half is download-order dependent.
+    # That run reported `97 tests, 97 passed, 0 failed` while `design / team` was
+    # red — a green report over a red matrix, which is the one failure mode a
+    # reporter must never have.
+    #
+    # Left off, each artifact lands in `junit/<artifact-name>/`, the names are
+    # unique by construction, and the glob below picks up all seven.
     - name: Download every leg's results
       uses: actions/download-artifact@v8
       with:
         path: junit
         pattern: junit-*
-        merge-multiple: true
+
+    # The guard, because the failure above was SILENT — the report looked healthy
+    # and simply described a different, smaller run. One leg uploads exactly one
+    # suite report, so any collision shows up as fewer files than directories.
+    - name: Every leg is present
+      run: |
+        dirs=$(find junit -mindepth 1 -maxdepth 1 -type d | wc -l)
+        files=$(find junit -name '*.xml' | wc -l)
+        echo "legs: $dirs, reports: $files"
+        find junit -name '*.xml' | sort
+        if [ "$dirs" -eq 0 ]; then echo "::error::no leg uploaded a report"; exit 1; fi
+        if [ "$dirs" -ne "$files" ]; then
+          echo "::error::$dirs legs but $files reports — results are being overwritten"
+          exit 1
+        fi
 
     - name: Publish integration results
       uses: EnricoMi/publish-unit-test-result-action@v2

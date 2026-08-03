@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The integration suite's published results now cover every leg of the test matrix; a failing leg could previously be hidden by a passing one and the run reported as green.
 - **Restoring a design from a Team Folder's trash now restores it in Penpot too.** On Team Folders the file came back in Nextcloud while the design stayed in Penpot's trash — and the next sync then removed the file again. Plain shared folders were never affected.
 - Integration tests now run against **both storage backends** (a plain shared folder and a Team Folder), where before only the plain one was ever exercised — so a bug that only shows up on groupfolders can no longer ship unnoticed.
 - **Deleting a project folder in your own personal space will delete that project in Penpot too**, exactly as it does for a team project. The specification previously claimed the opposite — that was the current gap written down as if it were the intent, and it is now recorded as the gap it is.

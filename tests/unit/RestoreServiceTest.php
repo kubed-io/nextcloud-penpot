@@ -76,6 +76,9 @@ final class RestoreServiceTest extends TestCase {
 			$this->resolver,
 			$tokens,
 			new NullLogger(),
+			// No settle: Penpot is a mock here, so there is no in-flight delete to
+			// wait on and the wait would only make the suite slower.
+			settleMicroseconds: 0,
 		);
 	}
 
@@ -111,13 +114,52 @@ final class RestoreServiceTest extends TestCase {
 		$this->givenInPenpotTrash();
 		// Not in the project yet, and there after the second call — the window
 		// §6.49 describes, reproduced in miniature.
-		$this->client->method('getProjectFiles')->willReturnOnConsecutiveCalls([], [['id' => self::PENPOT_ID]]);
+		// THREE values, because a confirmation is now two reads: absent on the first
+		// call, then present on both reads of the second confirmation. A two-value
+		// stub would hand the settle re-read an empty array — the default for the
+		// return type — and this test would fail as though the fix were broken.
+		$this->client->method('getProjectFiles')->willReturnOnConsecutiveCalls(
+			[],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+		);
 
 		// ONE configuration, expectation and return together: stubbing the same
 		// method twice leaves which rule supplies the value up to PHPUnit's
 		// matcher order, and a second rule with no `willReturn` hands back the
 		// return type's default — an empty array here, which this service reads as
 		// "restored nothing" and would make the test pass for the wrong reason.
+		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles')
+			->willReturn([self::PENPOT_ID]);
+
+		$this->restores->onRestored($this->file());
+	}
+
+	/**
+	 * THE BUG THE INTEGRATION SUITE FOUND, in miniature.
+	 *
+	 * `delete-file` lands asynchronously, a beat after it answers. A restore issued
+	 * inside that beat is confirmed against a listing the pending delete has not
+	 * reached — and is then overwritten by it. So the design is listed, and a
+	 * moment later it is not, and the next pull trashes the mirror all over again.
+	 *
+	 * A service that asks once cannot tell that from a real restore. This test
+	 * fails against exactly that service: the first read says yes, and only the
+	 * re-read after the settle catches the design going back into the trash.
+	 */
+	public function testARestoreUndoneByAnInFlightDeleteIsIssuedAgain(): void {
+		$this->givenStamped();
+		$this->givenResolvesToProject();
+		$this->givenInPenpotTrash();
+		// Listed, then gone — the in-flight delete landing between the two reads.
+		// Then listed and still listed, because the second restore lands after it.
+		$this->client->method('getProjectFiles')->willReturnOnConsecutiveCalls(
+			[['id' => self::PENPOT_ID]],
+			[],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+		);
+
 		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles')
 			->willReturn([self::PENPOT_ID]);
 
@@ -137,7 +179,8 @@ final class RestoreServiceTest extends TestCase {
 		]);
 		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
 
-		$this->client->expects($this->once())->method('getProjectFiles')
+		// Twice, not once: the listing is read, then re-read after the settle.
+		$this->client->expects($this->exactly(2))->method('getProjectFiles')
 			->with(self::DRAFTS)
 			->willReturn([['id' => self::PENPOT_ID]]);
 
