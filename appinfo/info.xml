@@ -114,6 +114,7 @@ this app integrates with.
     <command>OCA\PenpotSync\Command\AddMapping</command>
     <command>OCA\PenpotSync\Command\ListMappings</command>
     <command>OCA\PenpotSync\Command\RemoveMapping</command>
+    <command>OCA\PenpotSync\Command\SetGroups</command>
     <command>OCA\PenpotSync\Command\Sync</command>
     <command>OCA\PenpotSync\Command\Status</command>
     <command>OCA\PenpotSync\Command\SetMode</command>

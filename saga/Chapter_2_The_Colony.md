@@ -3494,3 +3494,41 @@ true fact about the system worth keeping: **removing a mapping deletes nothing**
 so a Team Folder outlives the mapping that made it, and a later mapping reusing
 that name inherits a folder of the wrong kind. That is Course 5's open question
 in miniature, and it now has a live reproduction rather than a paragraph.
+
+### §C6.33 — Immutability belongs in the signature, not in five guards
+
+`MappingService::update()` took a whole `Mapping` and refused five fields:
+the team, the Nextcloud folder, the Team Folder flag, `mode`, `folder_mode`.
+Four scenarios in `admin-mapping.feature` described those refusals, and five unit
+tests exercised them.
+
+None of it was reachable. There is no `occ` command that edits a mapping, and the
+one HTTP endpoint — `MappingController::update()` — accepts `ncGroups` and
+rebuilds every other field FROM STORAGE before calling the service. It could not
+have moved a locked field if it tried. The guards were a lock on a door with no
+handle, and the scenarios described a refusal no caller could provoke.
+
+The method is now `updateGroups(string $id, array|string $ncGroups)`. Immutability
+stopped being something the code checks and became something the API cannot say.
+Nothing refuses a folder change because nothing can request one.
+
+What went with it: five unit tests (replaced by one asserting a group change moves
+nothing else), the "blank folder on update means keep it" test — a rule about a
+parameter that no longer exists — and four `@todo` scenarios, replaced by a
+comment stating why the fields are locked and where that reason lives.
+
+**A refusal only earns a scenario when someone can provoke it.** The refusals that
+survive in this file — a nonexistent team id, a folder name with a `/`, `keyed`,
+a team already mapped — are all things an admin can genuinely type.
+
+#### The one edit, and the command it needed
+
+The single mutable field had no CLI at all: groups could be changed from the admin
+panel and nowhere else, so the scenario for it had been `@todo` since it was
+written. `occ penpot_sync:set-groups <id> <groups>` closes that, and the scenario
+runs.
+
+It also draws a line worth keeping: the command records the groups; the SHARE on
+the provisioned folder is re-asserted by `ensureRoot()` on the next sync, exactly
+as §C6.32 arranged. Two events, and the scenario stops at the one the admin gets
+an answer about.

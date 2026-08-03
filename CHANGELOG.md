@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`occ penpot_sync:set-groups`** changes the groups a mapped folder is shared with — the one field a mapping lets you edit, previously reachable only from the admin panel.
 - **A mapped folder now appears the moment you save the mapping**, instead of only when the first sync runs — which could be up to an hour later, and made a fresh mapping look broken. A sync still re-creates it if it goes missing.
 - A mapping that asks for a Team Folder is now **refused up front** when the `groupfolders` app is not available, rather than being saved and failing on every sync afterwards.
 - **BREAKING:** a new mapping now defaults to a **plain shared folder** instead of a Team Folder. Team Folders come from the optional `groupfolders` app, so the old default asked for a backend that is absent on a stock Nextcloud and could not be provisioned there. Pass `--team-folder` (or tick the box) to get one; existing mappings are unchanged.

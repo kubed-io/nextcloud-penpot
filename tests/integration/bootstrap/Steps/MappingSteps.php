@@ -275,6 +275,29 @@ trait MappingSteps {
 		$this->theMappingsFolderIs($expected);
 	}
 
+	/** @When /^the admin changes that mapping's groups to "([^"]*)"$/ */
+	public function theAdminChangesThatMappingsGroupsTo(string $groups): void {
+		$res = $this->occ(sprintf(
+			'penpot_sync:set-groups %s %s',
+			escapeshellarg($this->firstMapping()['id'] ?? ''),
+			escapeshellarg($groups),
+		));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not change the groups:\n{$res['output']}");
+		}
+	}
+
+	/** @Then /^the mapping's groups are "([^"]*)"$/ */
+	public function theMappingsGroupsAre(string $expected): void {
+		$groups = $this->firstMapping()['nc_groups'] ?? [];
+		$actual = is_array($groups) ? implode(',', $groups) : '';
+
+		if ($actual !== $expected) {
+			throw new \RuntimeException("expected the groups to be '{$expected}', got '{$actual}'");
+		}
+	}
+
 	/** @Then the mapping's default mode is "link" */
 	public function theMappingsDefaultModeIsLink(): void {
 		$mappings = $this->mappings();

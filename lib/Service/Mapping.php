@@ -246,6 +246,16 @@ final class Mapping implements JsonSerializable {
 		return new self($this->id, $this->teamId, trim($teamName), $this->ncFolder, $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);
 	}
 
+	/**
+	 * A copy with the shared groups replaced — the only field a mapping may change
+	 * after it is created ({@see MappingService::updateGroups()}).
+	 *
+	 * @param list<string>|string $ncGroups
+	 */
+	public function withNcGroups(array|string $ncGroups): self {
+		return new self($this->id, $this->teamId, $this->teamName, $this->ncFolder, self::normaliseGroups($ncGroups), $this->useTeamFolder, $this->mode, $this->folderMode);
+	}
+
 	/** A copy with the Nextcloud folder name replaced. */
 	public function withNcFolder(string $ncFolder): self {
 		return new self($this->id, $this->teamId, $this->teamName, self::normaliseFolder($ncFolder), $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);

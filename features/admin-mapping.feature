@@ -310,62 +310,41 @@ Feature: Admin configures team mappings
     # deliberately so: a team folder is a mount point the admin chose to create,
     # a project folder is a mirror of a Penpot object.
 
-  @unbuilt
-  Scenario: The folder mode cannot be changed after the mapping is created
-    Given the Penpot team "Northwind" is mapped with folder mode "nested"
-    When the admin tries to change that mapping's folder mode to "keyed"
-    Then the change is rejected as immutable
-    And the rejection explains the mapping must be removed and re-added
+    # ── what can be changed, which is one thing ─────────────────────────────────
+    #
+    # THERE IS NO EDIT, SO THERE IS NOTHING TO REFUSE. Four scenarios used to sit
+    # here — the folder mode, the Nextcloud folder, the Team Folder flag and the
+    # default mode, each saying "the admin tries to change it and is told no".
+    # None of them was reachable. There is no occ command that edits a mapping,
+    # and the one HTTP endpoint takes `ncGroups` and nothing else; the service
+    # signature is `updateGroups(id, groups)` (§C6.33), so a change to any other
+    # field cannot be EXPRESSED, let alone refused.
+    #
+    # A scenario for a refusal that no caller can provoke is a scenario about an
+    # error message. Immutability is a fact about the API's shape, and the place
+    # to state it is where the shape is — MappingService::updateGroups()'s
+    # docblock carries the reason for each locked field, and MappingServiceTest
+    # pins that a group change moves nothing else.
+    #
+    # WHY THESE FIELDS ARE LOCKED, in one line: changing any of them would force a
+    # LIVE MIGRATION of already-mirrored content — moving the whole tree,
+    # re-stamping every file, migrating a provisioned folder and its shares,
+    # rewriting every project name in Penpot, or deleting every downloaded archive
+    # at once. Removing the mapping and adding it again makes that cost visible
+    # instead of hiding it behind a dropdown, which is the same line
+    # nextcloud-grafana draws.
 
-    # ── what else is immutable, and why ─────────────────────────────────────────
-    # The same principle nextcloud-grafana settles on: a field is immutable when
-    # changing it would force a LIVE MIGRATION of already-mirrored content. Delete
-    # and re-add makes that cost visible instead of hiding it behind a dropdown.
-    # Grafana locks its Grafana folder, its Nextcloud folder, its Team Folder flag
-    # and its subfolder-sync flag for exactly this reason; the corresponding fields
-    # are locked here.
-
-  @todo
-  Scenario: The Nextcloud folder cannot be changed after the mapping is created
-    Given the Penpot team "Northwind" is mapped into the folder "Design Files"
-    When the admin tries to rename that mapping's Nextcloud folder
-    Then the change is rejected as immutable
-    # Re-pointing it would have to move the whole mirrored tree and re-stamp
-    # every file's metadata.
-
-  @todo
-  Scenario: The Team Folder setting cannot be changed after the mapping is created
-    Given the Penpot team "Northwind" is mapped using a Team Folder
-    When the admin tries to switch that mapping to a plain shared folder
-    Then the change is rejected as immutable
-    # Switching the storage backend would have to migrate the provisioned folder
-    # and all of its shares. Both siblings lock this.
-
-  @todo
-  Scenario: The default mode cannot be changed after the mapping is created
-    Given the Penpot team "Northwind" is mapped with default mode "link"
-    When the admin tries to change that mapping's default mode to "sync"
-    Then the change is rejected as immutable
-    And the rejection points at per-file promotion instead
-    # THIS IS WHERE THIS APP DIVERGES FROM GRAFANA, which leaves its `mode`
-    # editable. The axis means something different here (saga §6.22): there it
-    # decides which way edits flow, here it decides whether we HOLD THE BYTES.
-    # sync→link would delete every downloaded .penpot archive under the mapping;
-    # link→sync would trigger a full export of every file at once. Promoting or
-    # demoting an individual file is the supported path (sync-mode.feature)
-    # precisely because it is the one that can ask before destroying an archive.
-
-  @todo
   Scenario: The groups a mapped folder is shared with can be changed
-    Given the Penpot team "Northwind" is mapped
-    When the admin changes that mapping's groups
-    Then the change is accepted
-    # Re-sharing a folder is not a migration — it is the one field that moves no
-    # content. Same "everything else stays editable" line Grafana draws.
-    # Flipping it live would restructure every folder under the mapping AND
-    # rewrite every project name in Penpot — a bulk, two-sided, destructive
-    # migration behind a dropdown. Same immutability precedent both sibling apps
-    # already set for a mapping's structural fields.
+    Given a Penpot team named "Northwind" is mapped to the folder "Northwind Shared"
+    When the admin changes that mapping's groups to "design,admin"
+    Then the mapping's groups are "design,admin"
+    # THE ONE EDIT, and it is the one that moves no content — re-sharing a folder
+    # is not a migration. Everything else about a mapping is settled when it is
+    # created.
+    #
+    # The MAPPING is what changes here. Re-sharing the provisioned folder is
+    # ensureRoot()'s, re-asserted on every sync, which is why this scenario stops
+    # at what the admin actually gets an answer about.
 
   @unbuilt
   Scenario: A team can be mapped in keyed mode
