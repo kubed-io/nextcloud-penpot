@@ -264,6 +264,18 @@ It keeps `backendFlags()` — those files inherit the matrix leg's backend rathe
 than choosing one, which is exactly the difference that makes it a separate
 sentence rather than an alias.
 
+AND ONE ACTION TO MATCH. Creating a mapping is a single `When` — "the admin
+maps it with:" and a table. Saving the form, being refused because the folder
+is taken, and being refused because the team is already mapped are the SAME
+action against three different pre-states, so they share the sentence and
+differ in their `Given` and their `Then`. A draft had a second sentence, "the
+admin maps it into the folder X", which was this one with a single field and no
+table — a subset again, the same mistake the pre-state sentences had made.
+
+That symmetry is what makes the file readable end to end: one way to describe a
+mapping, one way to create one, and every scenario is a pre-state and an
+outcome.
+
 GROUPS HAVE TO EXIST FIRST. `the Nextcloud groups "design,sales" exist` is a
 precondition and not a detail: only `admin` exists on a fresh instance, and a
 group that does not exist cannot be shared with. See

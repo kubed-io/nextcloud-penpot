@@ -82,13 +82,13 @@ Feature: Admin configures team mappings
       | Groups On A Plain Folder | plain shared folder | sales              |
       | Groups On A Plain Folder | plain shared folder |                    |
 
-  @todo
   Scenario: Two mappings cannot target the same Nextcloud folder
     Given a mapping with the following values:
       | team   | Northwind |
       | folder | Designs   |
     And a Penpot team named "Bundt Cake" exists
-    When the admin maps it into the folder "Designs"
+    When the admin maps it with:
+      | folder | Designs |
     Then the mapping is rejected
     And the refusal explains "already used"
     # Two teams mirroring into one folder would interleave their project
@@ -114,7 +114,8 @@ Feature: Admin configures team mappings
     Given a mapping with the following values:
       | team   | Northwind    |
       | folder | Design Files |
-    When the admin maps it into the folder "Design Files"
+    When the admin maps it with:
+      | folder | Design Files |
     Then the mapping is rejected
     And there is exactly 1 configured team mapping
     # The SAME team, mapped again — no second team is named, so "it" is still

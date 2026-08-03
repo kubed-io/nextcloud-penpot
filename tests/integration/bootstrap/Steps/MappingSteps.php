@@ -125,19 +125,6 @@ trait MappingSteps {
 	}
 
 	/**
-	 * Map whichever team was named last, into a folder the scenario picks.
-	 *
-	 * @When /^the admin maps it into the folder "([^"]*)"$/
-	 */
-	public function theAdminMapsItIntoTheFolder(string $folder): void {
-		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder=%s',
-			escapeshellarg($this->theNamedTeam()),
-			escapeshellarg($folder),
-		));
-	}
-
-	/**
 	 * A whole mapping, stated as the state it is rather than the steps that reach
 	 * it — the one pre-state sentence every scenario in admin-mapping.feature
 	 * starts from.
@@ -257,8 +244,15 @@ trait MappingSteps {
 	 * Examples placeholders inside a step's table argument exactly as it does in the
 	 * step text, so one table serves every row.
 	 *
-	 * Does not throw on a non-zero exit: half the rows using this step expect a
-	 * refusal, and that verdict belongs to the `Then`.
+	 * THE ONLY WAY A MAPPING IS CREATED IN THIS FILE. Saving the form, being
+	 * refused because the folder is taken, and being refused because the team is
+	 * already mapped are ONE action against three pre-states — so they are one
+	 * `When`, and the scenarios differ in their `Given` and their `Then`. An
+	 * earlier draft had a second sentence, "the admin maps it into the folder X",
+	 * which was this step with one field and no table.
+	 *
+	 * Does not throw on a non-zero exit: two of the three scenarios using it expect
+	 * a refusal, and that verdict belongs to the `Then`.
 	 *
 	 * @When /^the admin maps it with:$/
 	 */
