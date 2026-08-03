@@ -53,6 +53,28 @@ use Psr\Log\LoggerInterface;
  * actor's home, which mounts it — no `OC_Util` dance (that is only needed for the
  * groupfolders mount, and lives in {@see TeamFolderService}). Mirrors
  * nextcloud-grafana's admin-owned branch, which is integration-green as-is.
+ *
+ * ## THE FOLDER OWNS ITS GROUPS (§C6.35)
+ *
+ * This service is the ONLY place that knows which groups a mapped folder is
+ * shared with. {@see Mapping} does not carry them and nothing persists them: the
+ * groupfolders assignment table and the share table are already the record, and
+ * a copy in appconfig would be a second answer that goes stale the moment an
+ * admin re-shares the folder in the Files UI — which they are entitled to do.
+ *
+ * That makes the group argument to {@see ensureRoot()} meaningfully **optional**,
+ * and the distinction is the whole design:
+ *
+ *   - `ensureRoot($mapping)` — *the folder must exist.* Says nothing about
+ *     sharing, so it changes nothing about sharing. This is what every pull
+ *     calls, which is why a hand-edited share survives a sync instead of being
+ *     reverted by the next pass.
+ *   - `ensureRoot($mapping, $groups)` — *the folder must exist and be shared with
+ *     exactly these.* Only an explicit admin action (create, or `set-groups` /
+ *     the panel's PUT) passes this, and it prunes as well as adds, because
+ *     "shared with exactly these" is what the admin asked for.
+ *
+ * {@see groupsOf()} reads the answer back out of whichever backend holds it.
  */
 final class StorageService {
 	/** Built-in group whose first member is the default sync actor. */
@@ -119,12 +141,20 @@ final class StorageService {
 
 	/**
 	 * Ensure the mapping's root folder exists and return it, writable by the
-	 * sync actor. Idempotent: an existing folder is returned as-is, and its group
-	 * shares / permissions are re-asserted.
+	 * sync actor. Idempotent: an existing folder is returned as-is.
+	 *
+	 * Pass `$groups` ONLY when an admin explicitly said what the folder should be
+	 * shared with — it is then applied exactly, pruning groups not listed. Leave
+	 * it null (every pull does) and the folder's existing sharing is left alone.
+	 * See the class docblock for why that asymmetry is the point.
+	 *
+	 * @param array<array-key, mixed>|string|null $groups
 	 *
 	 * @throws \RuntimeException when the backend is unavailable, the actor is unresolvable, the mapping has no folder name, or the name collides with a non-folder node
 	 */
-	public function ensureRoot(Mapping $mapping): Folder {
+	public function ensureRoot(Mapping $mapping, array|string|null $groups = null): Folder {
+		$wanted = $groups === null ? null : self::normaliseGroups($groups);
+
 		if ($mapping->useTeamFolder) {
 			if (!$this->teamFolders->isAvailable()) {
 				throw new \RuntimeException(
@@ -132,7 +162,7 @@ final class StorageService {
 				);
 			}
 			$name = $this->folderName($mapping);
-			$this->teamFolders->ensure($name, $mapping->ncGroups);
+			$this->teamFolders->ensure($name, $wanted);
 			return $this->teamFolders->getWritableFolder($name);
 		}
 
@@ -149,8 +179,76 @@ final class StorageService {
 			}
 			$folder = $node;
 		}
-		$this->syncGroupShares($folder, $uid, $mapping);
+		if ($wanted !== null) {
+			$this->syncGroupShares($folder, $uid, $wanted);
+		}
 		return $folder;
+	}
+
+	/**
+	 * The groups the mapping's folder is currently shared with — read from the
+	 * folder, which is the only record there is (§C6.35).
+	 *
+	 * Answers `[]` for a mapping whose folder does not exist rather than throwing:
+	 * every caller is rendering a list, and "no folder" is not more informative to
+	 * an admin than "no groups" when the row next to it already shows the folder.
+	 *
+	 * @return list<string>
+	 */
+	public function groupsOf(Mapping $mapping): array {
+		try {
+			if ($mapping->useTeamFolder) {
+				return $this->teamFolders->isAvailable()
+					? $this->teamFolders->contentGroups($this->folderName($mapping))
+					: [];
+			}
+
+			$folder = $this->findRoot($mapping);
+
+			return $folder === null ? [] : $this->sharedGroups($folder, $this->resolveActorUid());
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync: could not read the mapped folder\'s groups', [
+				'app' => Application::APP_ID,
+				'mapping' => $mapping->id,
+				'exception' => $e,
+			]);
+
+			return [];
+		}
+	}
+
+	/**
+	 * Group ids: non-empty trimmed strings, de-duplicated, re-indexed. Tolerates
+	 * a comma-separated string from a form field, or the untyped array a request
+	 * hands a controller.
+	 *
+	 * Lives here, not on {@see Mapping}, because this is where groups live now —
+	 * and it stays a single definition so `occ`, the panel and the pull cannot
+	 * disagree about what a group list is. Identical to both siblings'
+	 * normaliser.
+	 *
+	 * @return list<string>
+	 */
+	public static function normaliseGroups(mixed $value): array {
+		if (is_string($value)) {
+			$value = $value === '' ? [] : explode(',', $value);
+		}
+
+		if (!is_array($value)) {
+			return [];
+		}
+
+		$out = [];
+
+		foreach ($value as $g) {
+			$g = trim((string)$g);
+
+			if ($g !== '' && !in_array($g, $out, true)) {
+				$out[] = $g;
+			}
+		}
+
+		return $out;
 	}
 
 	/**
@@ -199,19 +297,49 @@ final class StorageService {
 	}
 
 	/**
-	 * Ensure the admin-owned folder is shared with each of the mapping's groups
-	 * at the read + rename level. Idempotent: creates missing group shares, fixes
-	 * permissions on existing ones. Does NOT remove shares to groups no longer
-	 * listed (a removed group's share is left for the admin to clean up, so a
-	 * manual share is never clobbered) — same conservative choice as the siblings.
+	 * Share the admin-owned folder with EXACTLY $wanted: create what is missing,
+	 * fix permissions on what is there, and delete the shares for groups that are
+	 * not.
+	 *
+	 * ## IT PRUNES NOW, AND THAT IS THE POINT (§C6.35)
+	 *
+	 * It used to leave a dropped group's share in place — "so a manual share is
+	 * never clobbered". That was defensible only while this ran on every pull with
+	 * a stored list: pruning would have meant a sync silently revoking access an
+	 * admin granted by hand. But it also meant `set-groups` could add and never
+	 * remove, so the one editable thing about a mapping was write-only.
+	 *
+	 * Now that the pull passes no groups at all, this method runs only when
+	 * someone explicitly said what the sharing should be — and "shared with these"
+	 * has to mean "and not the others", or the mapping's groups could never be
+	 * narrowed. A hand-made share is still safe: nothing removes it unless an
+	 * admin submits a set that omits it.
+	 *
+	 * @param list<string> $wanted
 	 */
-	private function syncGroupShares(Folder $folder, string $ownerUid, Mapping $mapping): void {
+	private function syncGroupShares(Folder $folder, string $ownerUid, array $wanted): void {
 		$existing = [];
 		foreach ($this->shareManager->getSharesBy($ownerUid, IShare::TYPE_GROUP, $folder, false, -1, 0) as $share) {
 			$existing[$share->getSharedWith()] = $share;
 		}
 
-		foreach ($mapping->ncGroups as $gid) {
+		foreach ($existing as $gid => $share) {
+			if (in_array((string)$gid, $wanted, true)) {
+				continue;
+			}
+			try {
+				$this->shareManager->deleteShare($share);
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync: failed to unshare from group', [
+					'app' => Application::APP_ID,
+					'group' => $gid,
+					'exception' => $e,
+				]);
+				$this->clearPoisonedTransaction();
+			}
+		}
+
+		foreach ($wanted as $gid) {
 			if ($gid === '') {
 				continue;
 			}
@@ -251,6 +379,23 @@ final class StorageService {
 				$this->clearPoisonedTransaction();
 			}
 		}
+	}
+
+	/**
+	 * The groups an admin-owned folder is currently shared with.
+	 *
+	 * @return list<string>
+	 */
+	private function sharedGroups(Folder $folder, string $ownerUid): array {
+		$out = [];
+		foreach ($this->shareManager->getSharesBy($ownerUid, IShare::TYPE_GROUP, $folder, false, -1, 0) as $share) {
+			$gid = (string)$share->getSharedWith();
+			if ($gid !== '' && !in_array($gid, $out, true)) {
+				$out[] = $gid;
+			}
+		}
+
+		return $out;
 	}
 
 	/**

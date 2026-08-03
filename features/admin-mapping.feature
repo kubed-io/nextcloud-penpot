@@ -17,11 +17,10 @@ Feature: Admin configures team mappings
     Given no Penpot teams are mapped
     And a Penpot team named "Northwind" exists
     And an unset field on the mapping form defaults to:
-      | folder      | Northwind           |
-      | mode        | link                |
-      | groups      |                     |
-      | folder mode | nested              |
-      | storage     | plain shared folder |
+      | folder  | Northwind           |
+      | mode    | link                |
+      | groups  |                     |
+      | storage | plain shared folder |
     When the admin maps "Northwind" with:
       | folder  | <folder>  |
       | mode    | <mode>    |
@@ -46,40 +45,44 @@ Feature: Admin configures team mappings
 
     # notes: AGENTS.md#creating-a-mapping-saves-the-form
 
+  # notes: AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
+  Scenario Outline: The groups a mapped folder is shared with can be changed
+    Given a Penpot team named "Northwind" is mapped to a <folder type>, shared with "design,admin"
+    When the admin changes that mapping's groups to "<groups>"
+    Then the mapping's groups are "<groups>"
+
+    Examples: on a Team Folder
+      | folder type | groups             |
+      | Team Folder | design,admin,sales |
+      | Team Folder | design             |
+      | Team Folder | sales              |
+      | Team Folder |                    |
+
+    Examples: and on a plain shared folder
+      | folder type  | groups             |
+      | plain folder | design,admin,sales |
+      | plain folder | design             |
+      | plain folder | sales              |
+      | plain folder |                    |
+
   @todo
   Scenario: Renaming the team in Penpot does not rename the admin's folder
     Given a Penpot team named "Northwind" is mapped to the folder "Design Files"
-    When the team is renamed in Penpot
-    And the pull runs
+    When the team is renamed to "Under Team" in Penpot
     Then the mapping's Nextcloud folder is still "Design Files"
     # notes: AGENTS.md#renaming-the-team-in-penpot-does-not-rename-the-admins-folder
 
   @todo
   Scenario: Two mappings cannot target the same Nextcloud folder
     Given a Penpot team named "Northwind" is mapped to the folder "Designs"
-    When the admin maps another team into the folder "Designs"
+    When the admin maps a team named "Fudge Cake" into the folder "Designs"
     Then the mapping is rejected
     And the refusal explains "already used"
     # Two teams mirroring into one folder would interleave their project
     # subfolders, and the pull would fight over the same names on every run.
 
-  Scenario Outline: A value the app cannot honour is refused, and says why
-    Given no Penpot teams are mapped
-    And a Penpot team named "Northwind" exists
-    When the admin maps "Northwind" with:
-      | folder      | <folder>      |
-      | folder mode | <folder mode> |
-    Then the mapping is rejected
-    And the refusal explains "<reason>"
-    And there are exactly 0 configured team mappings
-
-    Examples: the same form, and the two values it will not take
-      | folder       | folder mode | reason             |
-      | teams/design |             | single folder name |
-      |              | keyed       | not implemented    |
-
-    # notes: AGENTS.md#a-value-the-app-cannot-honour-is-refused-and-says-why
-
+  # api only because the ui is a drop down
+  @api @occ
   Scenario: A team id that resolves to nothing cannot be mapped
     Given no Penpot teams are mapped
     When the admin tries to map the team id "11111111-2222-3333-4444-555555555555"
@@ -140,23 +143,4 @@ Feature: Admin configures team mappings
     And the mapping still resolves, because it is keyed on the team id, not the name
     # notes: AGENTS.md#a-team-renamed-in-penpot-does-not-rename-the-mapped-folder
 
-    # notes: AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
 
-  Scenario Outline: The groups a mapped folder is shared with can be changed
-    Given a Penpot team named "Northwind" is mapped to a <folder type>, shared with "design,admin"
-    When the admin changes that mapping's groups to "<groups>"
-    Then the mapping's groups are "<groups>"
-
-    Examples: on a Team Folder
-      | folder type | groups             |
-      | Team Folder | design,admin,sales |
-      | Team Folder | design             |
-      | Team Folder | sales              |
-      | Team Folder |                    |
-
-    Examples: and on a plain shared folder
-      | folder type  | groups             |
-      | plain folder | design,admin,sales |
-      | plain folder | design             |
-      | plain folder | sales              |
-      | plain folder |                    |

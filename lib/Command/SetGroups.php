@@ -23,23 +23,27 @@ use Symfony\Component\Console\Output\OutputInterface;
  * ## THE ONLY EDIT A MAPPING HAS
  *
  * Everything else a mapping carries is settled when it is created (saga §C6.33):
- * the team, the folder name, the storage backend, the default mode and the
- * folder mode are all immutable, because changing any of them would force a live
- * migration of already-mirrored content. Removing the mapping and adding it again
- * makes that cost visible instead of hiding it behind a flag.
+ * the team, the folder name, the storage backend and the default mode are all
+ * immutable, because changing any of them would force a live migration of
+ * already-mirrored content. Removing the mapping and adding it again makes that
+ * cost visible instead of hiding it behind a flag.
  *
  * Re-sharing a folder moves no content, which is why it is the one that stayed —
- * and it is the same field the admin panel's PUT owns. This command exists so the
+ * and it is the same thing the admin panel's PUT owns. This command exists so the
  * CLI has the same single edit the UI does, rather than the admin surface being
  * the only way to reach it.
  *
- * ## WHAT IT DOES NOT DO
+ * ## IT IS A CONVENIENCE, NOT THE RECORD (§C6.35)
  *
- * It records the groups. Re-sharing the PROVISIONED folder happens where all
- * provisioning happens — {@see \OCA\PenpotSync\Service\StorageService::ensureRoot()},
- * which every pull calls and which re-asserts the mapping's groups on the folder.
- * Handing a mapping a group and finding the share on the folder are therefore two
- * events, and the second one is the sync's.
+ * This edits the FOLDER — a groupfolders assignment or a group share, depending
+ * on the backend — and the app stores nothing about the result. That makes it a
+ * shortcut, not an authority: `occ groupfolders:group`, or the Files sharing UI,
+ * change exactly the same thing, and this app will report whatever they left
+ * behind rather than putting its own idea back on the next sync.
+ *
+ * What it buys you is not having to know which of those two mechanisms your
+ * mapping uses. It prints the groups the folder reports AFTERWARDS, so a group
+ * that does not exist is visibly absent rather than silently accepted.
  */
 final class SetGroups extends Command {
 	public function __construct(
@@ -67,22 +71,28 @@ final class SetGroups extends Command {
 		$id = (string)$input->getArgument('id');
 
 		try {
-			// A comma-separated string is accepted verbatim by the model's group
-			// normaliser, so the CLI needs no parsing of its own.
-			$updated = $this->service->updateGroups($id, (string)$input->getArgument('groups'));
+			// A comma-separated string is accepted verbatim by the normaliser, so
+			// the CLI parses nothing of its own.
+			$groups = $this->service->updateGroups($id, (string)$input->getArgument('groups'));
 		} catch (\InvalidArgumentException $e) {
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			$output->writeln('List them with: occ penpot_sync:list-mappings');
 
 			return 1;
+		} catch (\RuntimeException $e) {
+			// The folder could not be reached to re-share it — an unresolvable sync
+			// actor, or groupfolders gone from under a Team Folder mapping. Distinct
+			// from the refusal above because it is an instance problem, not a typo.
+			$output->writeln('<error>Could not re-share the mapped folder: ' . $e->getMessage() . '</error>');
+
+			return 1;
 		}
 
 		$output->writeln(sprintf(
-			'Mapping %s is now shared with: %s',
-			$updated->id,
-			$updated->ncGroups === [] ? '(no groups)' : implode(', ', $updated->ncGroups),
+			'The folder for mapping %s is shared with: %s',
+			$id,
+			$groups === [] ? '(no groups)' : implode(', ', $groups),
 		));
-		$output->writeln('The share itself is re-asserted on the next sync.');
 
 		return 0;
 	}

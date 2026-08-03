@@ -69,15 +69,13 @@ Feature: Renaming a Penpot project
     And Penpot is never contacted
 
   @todo
-  Scenario: In nested mode the app never sends a slash to Penpot
-    Given the mapping's folder mode is "nested"
+  Scenario: The app never sends a slash to Penpot
     When a project is created or renamed through this app
     Then the resulting Penpot project name never contains "/"
-    # notes: AGENTS.md#in-nested-mode-the-app-never-sends-a-slash-to-penpot
+    # notes: AGENTS.md#the-app-never-sends-a-slash-to-penpot
 
   @in-penpot @todo
-  Scenario: In nested mode, a project whose name contains a slash is skipped with a clear reason
-    Given the mapping's folder mode is "nested"
+  Scenario: A project whose name contains a slash is skipped with a clear reason
     And a Penpot project named "Has/Slash"
     When the pull runs
     Then no folder is created for that project
@@ -87,7 +85,6 @@ Feature: Renaming a Penpot project
 
   @in-penpot @todo
   Scenario: One unmappable project does not block the rest of the team
-    Given the mapping's folder mode is "nested"
     And a Penpot project named "Has/Slash"
     And other projects with ordinary names in the same team
     When the pull runs
@@ -96,7 +93,6 @@ Feature: Renaming a Penpot project
 
   @in-penpot @todo
   Scenario: Renaming the project in Penpot fixes it on the next pull
-    Given the mapping's folder mode is "nested"
     And a Penpot project named "Has/Slash" that was skipped
     When it is renamed to "Has Slash" in Penpot
     And the pull runs
@@ -105,7 +101,6 @@ Feature: Renaming a Penpot project
 
   @in-penpot @todo
   Scenario: The app never invents a substitute name
-    Given the mapping's folder mode is "nested"
     And a Penpot project named "Has/Slash"
     When the pull runs
     Then no folder named "Has-Slash" or "Has Slash" is created for it

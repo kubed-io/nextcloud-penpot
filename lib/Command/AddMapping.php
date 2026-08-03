@@ -19,7 +19,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * `occ penpot_sync:add-mapping <team-id> [--mode=link] [--folder-mode=nested]`
+ * `occ penpot_sync:add-mapping <team-id> [--folder=] [--groups=] [--team-folder] [--mode=link]`
  *
  * Map a Penpot team. The same {@see MappingService::add()} the settings panel
  * calls — validation, the visibility precondition, and persistence all live in
@@ -60,7 +60,8 @@ final class AddMapping extends Command {
 				'groups',
 				null,
 				InputOption::VALUE_REQUIRED,
-				'Comma-separated Nextcloud groups the folder is shared with.',
+				'Comma-separated Nextcloud groups to share the folder with. '
+				. 'Change them later with penpot_sync:set-groups.',
 				'',
 			)
 			->addOption(
@@ -76,13 +77,6 @@ final class AddMapping extends Command {
 				InputOption::VALUE_REQUIRED,
 				'Default mode for files under this mapping: link or sync.',
 				Mapping::MODE_LINK,
-			)
-			->addOption(
-				'folder-mode',
-				null,
-				InputOption::VALUE_REQUIRED,
-				'How projects map to folders: nested (keyed is designed but not implemented).',
-				Mapping::FOLDER_MODE_NESTED,
 			);
 	}
 
@@ -92,15 +86,14 @@ final class AddMapping extends Command {
 			$mapping = Mapping::fromArray([
 				'team_id' => (string)$input->getArgument('team-id'),
 				'nc_folder' => (string)$input->getOption('folder'),
-				// A comma-separated string is accepted verbatim by the model's
-				// group normaliser, so the CLI needs no parsing of its own.
-				'nc_groups' => (string)$input->getOption('groups'),
 				'use_team_folder' => (bool)$input->getOption('team-folder'),
 				'mode' => (string)$input->getOption('mode'),
-				'folder_mode' => (string)$input->getOption('folder-mode'),
 			]);
 
-			$saved = $this->service->add($mapping);
+			// Groups ride alongside rather than on the mapping: they are applied to
+			// the folder, not stored (§C6.35). A comma-separated string is accepted
+			// verbatim by the normaliser, so the CLI parses nothing of its own.
+			$saved = $this->service->add($mapping, (string)$input->getOption('groups'));
 		} catch (\InvalidArgumentException $e) {
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 
@@ -119,11 +112,15 @@ final class AddMapping extends Command {
 			$saved->teamName !== '' ? $saved->teamName : $saved->teamId,
 			$saved->id,
 		));
+		// Read back off the folder rather than echoing the flag: a group that does
+		// not exist cannot be shared with, and the admin should see that here
+		// rather than believe the mapping is set up the way they typed it.
+		$groups = $this->service->groupsOf($saved);
+
 		$output->writeln('  folder: ' . $saved->ncFolder
 			. ($saved->useTeamFolder ? ' (Team Folder)' : ' (shared folder)'));
-		$output->writeln('  groups: ' . ($saved->ncGroups === [] ? '(none)' : implode(', ', $saved->ncGroups)));
-		$output->writeln('  mode: ' . $saved->mode . ', folder mode: ' . $saved->folderMode);
-		$output->writeln('<comment>Nothing is mirrored yet — the pull is not built (saga Ch2, Course 3).</comment>');
+		$output->writeln('  groups: ' . ($groups === [] ? '(none)' : implode(', ', $groups)));
+		$output->writeln('  mode: ' . $saved->mode);
 
 		return 0;
 	}

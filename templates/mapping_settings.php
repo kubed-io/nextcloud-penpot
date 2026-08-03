@@ -8,18 +8,18 @@
  * look and behave the same:
  *
  *   col 1: Penpot team (row 1) · Nextcloud folder (row 2)
- *   col 2: Mode (row 1) · Folder mode (row 2, immutable) · Team Folder (row 3)
+ *   col 2: Mode (row 1) · Team Folder (row 2)
  *   col 3: Groups picker (spans every row)
  *   row 4: Save / Delete
  *
- * One field fewer than the Grafana card: no Format, because a `.penpot` archive
- * has exactly one shape. Everything else — including Groups and Team Folder —
- * sits where the siblings put it.
+ * Two fields fewer than the Grafana card: no Format, because a `.penpot` archive
+ * has exactly one shape, and no Folder mode, which was a designed-but-unbuilt
+ * fork rendered as a permanently-"(fixed)" label (§C6.36). Everything else —
+ * including Groups and Team Folder — sits where the siblings put it.
  *
- * NB (parity, provisioning deferred): Groups and Team Folder **persist today**
- * and are inert until Course 3 provisions the folder — the same "saved now,
- * honoured later" state `nextcloud-grafana` ships them in, and the field help
- * says so rather than implying they already do something.
+ * Groups is the one editable control on a saved card, and the only one whose
+ * value is not stored: it is read from the mapped folder as this renders and
+ * written straight back to it on save (§C6.35).
  *
  * Server-renders existing cards; js/mapping-settings.js handles add/save/delete
  * and the per-field help.
@@ -45,9 +45,8 @@ $desc = [
 	'team' => $l->t('The Penpot team to mirror. Its projects become subfolders inside the Nextcloud folder. Bound by team id, so renaming the team in Penpot never breaks the mapping.'),
 	'nc' => $l->t('Name of the Nextcloud folder the team is mirrored into. Leave blank to use the Penpot team\'s own name. Fixed once the mapping is created — changing it would have to move the whole mirrored tree. Project folders inside it are always named exactly as Penpot names them.'),
 	'mode' => $l->t('Link: a read-only pointer that opens the design in Penpot. Sync: the exported .penpot archive is downloaded and kept as a real file. Fixed once the mapping is created — switching it in bulk would either delete every downloaded archive or export every file at once; promote or demote individual files instead.'),
-	'foldermode' => $l->t('Nested (default): Penpot project names are plain names, and you may reorganise project folders freely inside the team folder. Fixed once the mapping is created — changing it would restructure every folder and rename every project in Penpot.'),
-	'tf' => $l->t('On = an ownerless Team Folder (groupfolders). Off = a folder in the admin account shared to the groups below. Fixed once the mapping is created — switching would have to migrate the folder and its shares. Applied when the sync engine provisions the folder.'),
-	'groups' => $l->t('Which Nextcloud groups the mapped folder is shared with. Saved with the mapping; applied when the sync engine provisions the folder.'),
+	'tf' => $l->t('On = an ownerless Team Folder (groupfolders). Off = a folder in the admin account shared to the groups below. Fixed once the mapping is created — switching would have to migrate the folder and its shares.'),
+	'groups' => $l->t('Which Nextcloud groups the mapped folder is shared with. Read from the folder itself, so sharing it elsewhere — the Files app, occ — shows up here too, and syncing never puts back a group you removed.'),
 ];
 
 // Inline an SVG glyph from img/icons/ — the single source of truth for the app's
@@ -156,18 +155,6 @@ $info = static function (string $tip) use ($icon): string {
 								 showing raw "link"/"sync" while a new one says "Link"/"Sync"
 								 is both inconsistent and untranslatable. */ ?>
 						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
-					</div>
-					<div class="penpot-sync-field pp-foldermode">
-						<label><?php p($l->t('Folder mode'));
-			print_unescaped($info($desc['foldermode'])); ?></label>
-						<?php /* Immutable after creation (§6.53) — rendered as text, not
-								 a disabled control, because a greyed-out dropdown invites
-								 clicking and implies it might become editable. */ ?>
-						<?php /* Localised, for the same reason Mode is: a stored value is
-								 still a label when it is shown to a human. */ ?>
-						<span class="penpot-sync-fixed"><?php p(($m['folder_mode'] ?? 'nested') === 'keyed' ? $l->t('Keyed') : $l->t('Nested')); ?>
 							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
 						</span>
 					</div>

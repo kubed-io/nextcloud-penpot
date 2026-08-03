@@ -92,8 +92,7 @@ Feature: Renaming a mirrored Penpot design
     And Penpot is never contacted
 
   @todo
-  Scenario: In nested mode, a Penpot file whose name contains a slash is skipped with a clear reason
-    Given the mapping's folder mode is "nested"
+  Scenario: A Penpot file whose name contains a slash is skipped with a clear reason
     And a Penpot file named "Has/Slash"
     When the pull runs
     Then no file is created for it

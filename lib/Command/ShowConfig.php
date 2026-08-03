@@ -79,11 +79,11 @@ final class ShowConfig extends Command {
 
 		foreach ($mappings as $mapping) {
 			$output->writeln(sprintf(
-				'  - %s (%s) mode=%s folder-mode=%s',
+				'  - %s (%s) folder=%s mode=%s',
 				$mapping->teamName !== '' ? $mapping->teamName : '(unknown)',
 				$mapping->teamId,
+				$mapping->ncFolder,
 				$mapping->mode,
-				$mapping->folderMode,
 			));
 		}
 

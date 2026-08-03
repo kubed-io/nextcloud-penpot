@@ -6,12 +6,13 @@
  * ported from nextcloud-grafana so the family looks the same:
  *
  *   col 1: Penpot team (row 1) · Nextcloud folder (row 2)
- *   col 2: Mode (row 1) · Folder mode (row 2, immutable) · Team Folder (row 3)
+ *   col 2: Mode (row 1) · Team Folder (row 2)
  *   col 3: Groups selector (spans every row — it's the big one)
- *   row 4: Save / Delete action buttons (spanning cols 1–2)
+ *   row 3: Save / Delete action buttons (spanning cols 1–2)
  *
- * One field fewer than the siblings' card: no Format, because a .penpot archive
- * has exactly one shape. Everything else sits where they put it.
+ * Two fields fewer than the siblings' card: no Format, because a .penpot archive
+ * has exactly one shape, and no Folder mode (removed, §C6.36). Everything else
+ * sits where they put it.
  */
 
 .penpot-sync-mappings {
@@ -35,14 +36,13 @@
 }
 
 /* team      | mode         (row 1)
- * nc-folder | folder-mode  (row 2)
- *           | team-folder  (row 3)
- * actions                  (row 4, spans the two left columns)
- * groups spans all four rows in the third (wider) column. */
+ * nc-folder | team-folder  (row 2)
+ * actions                  (row 3, spans the two left columns)
+ * groups spans all three rows in the third (wider) column. */
 .penpot-sync-mappings__grid {
 	display: grid;
 	grid-template-columns: minmax(140px, 0.9fr) minmax(140px, 0.9fr) minmax(340px, 2.2fr);
-	grid-template-rows: auto auto auto auto;
+	grid-template-rows: auto auto auto;
 	gap: 10px 18px;
 	align-items: start;
 }
@@ -50,19 +50,15 @@
 .pp-team       { grid-area: 1 / 1; }
 .pp-nc         { grid-area: 2 / 1; }
 .pp-mode       { grid-area: 1 / 2; }
-.pp-foldermode { grid-area: 2 / 2; }
-.pp-tf         { grid-area: 3 / 2; align-self: center; }
+.pp-tf         { grid-area: 2 / 2; align-self: end; }
 
-/* Spans every row of col 3, INCLUDING the actions row (4), so its bottom edge
+/* Spans every row of col 3, INCLUDING the actions row (3), so its bottom edge
    lines up with the Save/Sync/Delete buttons — which is what makes the card look
    like the siblings' rather than leaving the box floating short.
    `align-self: stretch` overrides the grid's `align-items: start` for this one
-   item; without it the box would collapse to its content height.
-   The sibling card gets away with less because it has a control in row 3 of
-   BOTH left columns; ours has one only in col 2, so row 3 would otherwise
-   collapse and the groups box would stop above the buttons. */
+   item; without it the box would collapse to its content height. */
 .pp-groups {
-	grid-area: 1 / 3 / 5 / 4;
+	grid-area: 1 / 3 / 4 / 4;
 	align-self: stretch;
 	/* The grid item stretches, but its CONTENT only fills it if the flex column
 	   is told to take the full height — otherwise .penpot-sync-groups' `flex: 1`
@@ -178,7 +174,7 @@
 /* Save / Delete — a horizontal group of colored, icon-only buttons.
  * Row 3 of the grid, spanning both columns, pinned to the bottom. */
 .penpot-sync-mappings__actions {
-	grid-area: 4 / 1 / 5 / 3;
+	grid-area: 3 / 1 / 4 / 3;
 	align-self: end;
 	display: flex;
 	gap: 8px;
@@ -295,7 +291,6 @@
 	.pp-team,
 	.pp-nc,
 	.pp-mode,
-	.pp-foldermode,
 	.pp-tf,
 	.pp-groups,
 	.penpot-sync-mappings__actions {

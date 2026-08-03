@@ -121,28 +121,24 @@ final class MappingService {
 	 * invite may have landed (or been revoked) since the admin page was
 	 * rendered, and this is the moment the answer matters.
 	 *
-	 * @throws \InvalidArgumentException if the team is already mapped, is not
-	 *                                   visible to the service account, or the
-	 *                                   requested folder mode is not implemented.
+	 * `$groups` is not part of the mapping — it is what to share the provisioned
+	 * folder with, handed straight to storage (§C6.35). It is a parameter rather
+	 * than a field for the same reason it is not persisted: the folder is the
+	 * record, and this is simply the admin saying what it should start as.
+	 *
+	 * @param array<array-key, mixed>|string $groups
+	 *
+	 * @throws \InvalidArgumentException if the team is already mapped or is not
+	 *                                   visible to the service account.
 	 * @throws PenpotApiException if Penpot cannot be reached or the token is bad.
 	 *                            Deliberately NOT swallowed: "could not reach
 	 *                            Penpot" and "that team does not exist" are
 	 *                            different problems needing different fixes.
 	 */
-	public function add(Mapping $mapping): Mapping {
+	public function add(Mapping $mapping, array|string $groups = []): Mapping {
 		if ($this->getByTeamId($mapping->teamId) !== null) {
 			throw new \InvalidArgumentException(
 				'That Penpot team is already mapped. A team may only be mapped once.',
-			);
-		}
-
-		if ($mapping->folderMode === Mapping::FOLDER_MODE_KEYED) {
-			// The fork is locked (§6.53) and the field round-trips, but the mode
-			// is not implemented. Refusing loudly here is much kinder than
-			// accepting the value and behaving as `nested` — a silent lie the
-			// admin would only discover from the folder layout.
-			throw new \InvalidArgumentException(
-				'Folder mode "keyed" is designed but not implemented yet (saga §6.53, open question #47). Use "nested".',
 			);
 		}
 
@@ -218,7 +214,11 @@ final class MappingService {
 		// leaves nothing behind. The reverse order can leave a folder with no
 		// mapping if the write fails, and a folder with no mapping is just a
 		// folder: re-adding finds it and ensureRoot is idempotent.
-		$this->storage->ensureRoot($mapping);
+		//
+		// The one call that passes GROUPS along with the mapping, together with
+		// updateGroups() below. Every other caller — every pull — passes none, so
+		// a sync never touches sharing (§C6.35).
+		$this->storage->ensureRoot($mapping, $groups);
 
 		$all = $this->list();
 		$all[] = $mapping;
@@ -252,8 +252,6 @@ final class MappingService {
 	 *     tree and re-stamp every file's metadata.
 	 *   - **the Team Folder flag** — switching backend would migrate the
 	 *     provisioned folder and all of its shares.
-	 *   - **`folder_mode`** (§6.53) — flipping it would restructure every folder
-	 *     under the mapping *and* rewrite every project name in Penpot.
 	 *   - **`mode`** — link ⇄ sync decides whether we HOLD THE BYTES (§6.22), not
 	 *     which way edits flow as it does in Grafana. sync→link would delete every
 	 *     downloaded archive under the mapping; link→sync would export every file
@@ -263,37 +261,66 @@ final class MappingService {
 	 * Re-sharing a folder is the one change that moves no content, which is why it
 	 * is the one that stayed.
 	 *
-	 * Takes whatever the caller has — a list, a comma-separated form field, or an
-	 * array of unknown shape off a request. {@see Mapping::withNcGroups()} runs it
-	 * through the same normaliser every other entry point uses, so there is one
-	 * definition of what a group list is and coercing at the boundary would only
-	 * add a second.
+	 * ## AND IT WRITES TO THE FOLDER, NOT TO THE MAPPING (§C6.35)
+	 *
+	 * Nothing here is persisted, because the mapping does not hold groups: this
+	 * re-shares the provisioned folder and returns what the folder then reports.
+	 * It used to save a list to appconfig and leave the actual re-share to the
+	 * next pull, so "the groups changed" and "the folder is shared with them" were
+	 * two events an hour apart, and an admin who fixed the sharing by hand in the
+	 * meantime had it reverted.
+	 *
+	 * Reading the result back rather than echoing the input is the honest answer
+	 * and occasionally a different one — a group that does not exist cannot be
+	 * shared with, and the caller should see that it is not in the list.
+	 *
+	 * Takes whatever the caller has: a list, a comma-separated form field, or an
+	 * array of unknown shape off a request. {@see StorageService::normaliseGroups()}
+	 * is the one definition of what a group list is, so coercing at the boundary
+	 * would only add a second.
 	 *
 	 * @param array<array-key, mixed>|string $ncGroups
 	 *
-	 * @throws \InvalidArgumentException
+	 * @return list<string> the groups the folder is shared with afterwards
+	 *
+	 * @throws \InvalidArgumentException when there is no such mapping
+	 * @throws \RuntimeException when the folder cannot be reached to re-share it
 	 */
-	public function updateGroups(string $id, array|string $ncGroups): Mapping {
-		$all = $this->list();
-		$updated = null;
+	public function updateGroups(string $id, array|string $ncGroups): array {
+		$mapping = $this->getById($id);
 
-		foreach ($all as $i => $existing) {
-			if ($existing->id !== $id) {
-				continue;
-			}
-
-			$updated = $existing->withNcGroups($ncGroups);
-			$all[$i] = $updated;
-			break;
-		}
-
-		if ($updated === null) {
+		if ($mapping === null) {
 			throw new \InvalidArgumentException('No mapping with id ' . $id . '.');
 		}
 
-		$this->persist($all);
+		$this->storage->ensureRoot($mapping, $ncGroups);
 
-		return $updated;
+		return $this->storage->groupsOf($mapping);
+	}
+
+	/**
+	 * The groups a mapping's folder is shared with. Read from the folder, every
+	 * time, because the folder is the only record (§C6.35).
+	 *
+	 * @return list<string>
+	 */
+	public function groupsOf(Mapping $mapping): array {
+		return $this->storage->groupsOf($mapping);
+	}
+
+	/**
+	 * A mapping as the admin page, `list-mappings --json` and the REST endpoints
+	 * render it: everything stored, plus the folder's current groups.
+	 *
+	 * Separate from {@see Mapping::toArray()} on purpose — that is the STORED
+	 * shape and must stay free of anything read live, or the next person to call
+	 * it in `persist()` would write a cached copy of the groups back into
+	 * appconfig and undo the whole point.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function describe(Mapping $mapping): array {
+		return $mapping->toArray() + ['nc_groups' => $this->groupsOf($mapping)];
 	}
 
 	/**

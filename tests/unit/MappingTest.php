@@ -23,13 +23,11 @@ use PHPUnit\Framework\TestCase;
 final class MappingTest extends TestCase {
 	private const TEAM_ID = '4eda2e11-843e-8045-8008-51824bda07a1';
 
-	public function testDefaultsToLinkAndNested(): void {
+	public function testDefaultsToLink(): void {
 		$mapping = Mapping::fromArray(['team_id' => self::TEAM_ID]);
 
-		// Both defaults are the conservative choice: `link` downloads nothing,
-		// and `nested` is the only folder model that is actually implemented.
+		// The conservative choice: `link` downloads nothing.
 		self::assertSame(Mapping::MODE_LINK, $mapping->mode);
-		self::assertSame(Mapping::FOLDER_MODE_NESTED, $mapping->folderMode);
 	}
 
 	public function testGeneratesAnIdWhenNoneGiven(): void {
@@ -84,27 +82,23 @@ final class MappingTest extends TestCase {
 		Mapping::fromArray(['team_id' => self::TEAM_ID, 'mode' => 'backup']);
 	}
 
-	public function testRejectsAnUnknownFolderMode(): void {
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('folder_mode must be');
-
-		Mapping::fromArray(['team_id' => self::TEAM_ID, 'folder_mode' => 'flat']);
-	}
-
 	/**
-	 * `keyed` must PARSE even though it is not implemented — the value object's
-	 * job is round-tripping stored data. Refusing to *create* one is
-	 * MappingService's job, and separating the two is what lets a stored keyed
-	 * row still be listed and removed rather than silently vanishing from the
-	 * admin page.
+	 * A stored row from before folder mode was removed (§C6.36) still parses —
+	 * unknown keys are ignored, not rejected. Otherwise every existing mapping
+	 * would silently vanish from the admin page after the upgrade, because
+	 * MappingService skips rows it cannot parse.
 	 */
-	public function testParsesKeyedFolderModeEvenThoughItIsNotImplemented(): void {
+	public function testIgnoresKeysItNoLongerKnowsAbout(): void {
 		$mapping = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'folder_mode' => Mapping::FOLDER_MODE_KEYED,
+			'team_name' => 'Northwind',
+			'folder_mode' => 'keyed',
+			'nc_groups' => ['design'],
 		]);
 
-		self::assertSame(Mapping::FOLDER_MODE_KEYED, $mapping->folderMode);
+		self::assertSame(self::TEAM_ID, $mapping->teamId);
+		self::assertArrayNotHasKey('folder_mode', $mapping->toArray());
+		self::assertArrayNotHasKey('nc_groups', $mapping->toArray());
 	}
 
 	/**
@@ -158,7 +152,7 @@ final class MappingTest extends TestCase {
 		]);
 	}
 
-	public function testDefaultsToAPlainSharedFolderWithNoGroups(): void {
+	public function testDefaultsToAPlainSharedFolder(): void {
 		$mapping = Mapping::fromArray(['team_id' => self::TEAM_ID]);
 
 		// A DEFAULT HAS TO WORK ON A STOCK NEXTCLOUD. groupfolders is an optional
@@ -166,32 +160,6 @@ final class MappingTest extends TestCase {
 		// often simply absent, which StorageService then refuses to provision.
 		// The plain shared folder is core and always there.
 		self::assertFalse($mapping->useTeamFolder);
-		self::assertSame([], $mapping->ncGroups);
-	}
-
-	public function testAcceptsGroupsAsAnArrayOrACommaSeparatedString(): void {
-		// The CLI passes a comma-separated string straight through; the settings
-		// panel posts an array. Both must land identically.
-		$fromArray = Mapping::fromArray([
-			'team_id' => self::TEAM_ID,
-			'nc_groups' => ['design', 'admin'],
-		]);
-		$fromString = Mapping::fromArray([
-			'team_id' => self::TEAM_ID,
-			'nc_groups' => 'design, admin',
-		]);
-
-		self::assertSame(['design', 'admin'], $fromArray->ncGroups);
-		self::assertSame($fromArray->ncGroups, $fromString->ncGroups);
-	}
-
-	public function testDeduplicatesAndDropsEmptyGroups(): void {
-		$mapping = Mapping::fromArray([
-			'team_id' => self::TEAM_ID,
-			'nc_groups' => ['design', '', 'design', '  admin  '],
-		]);
-
-		self::assertSame(['design', 'admin'], $mapping->ncGroups);
 	}
 
 	public function testTeamFolderIsOptedInto(): void {
@@ -241,7 +209,7 @@ final class MappingTest extends TestCase {
 		self::assertSame($original->id, $renamed->id);
 		self::assertSame($original->teamId, $renamed->teamId);
 		self::assertSame($original->mode, $renamed->mode);
-		self::assertSame($original->folderMode, $renamed->folderMode);
+		self::assertSame($original->useTeamFolder, $renamed->useTeamFolder);
 	}
 
 	public function testTrimsWhitespace(): void {

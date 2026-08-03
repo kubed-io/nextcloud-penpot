@@ -195,6 +195,12 @@ trait MappingSteps {
 		foreach ($this->formDefaults as $field => $default) {
 			$typed = trim($this->submittedForm[$field] ?? '');
 			$expected = $typed === '' ? trim($default) : $typed;
+			// Groups come back from the FOLDER in whatever order it stores them
+			// (§C6.35), so both sides are canonicalised. Every other field is a
+			// single value and compares as typed.
+			if ($field === 'groups') {
+				$expected = self::canonicalGroups($expected);
+			}
 			$actual = $this->settingOf($mapping, $field);
 
 			if ($actual !== $expected) {
@@ -214,7 +220,6 @@ trait MappingSteps {
 		return match ($field) {
 			'folder' => '--folder=' . escapeshellarg($value),
 			'mode' => '--mode=' . escapeshellarg($value),
-			'folder mode' => '--folder-mode=' . escapeshellarg($value),
 			'groups' => '--groups=' . escapeshellarg($value),
 			// The only storage worth a flag is the one you opt into; the plain
 			// shared folder IS the absence of it (§C6.31).
@@ -234,8 +239,7 @@ trait MappingSteps {
 		return match ($field) {
 			'folder' => (string)($mapping['nc_folder'] ?? ''),
 			'mode' => (string)($mapping['mode'] ?? ''),
-			'folder mode' => (string)($mapping['folder_mode'] ?? ''),
-			'groups' => is_array($groups) ? implode(',', $groups) : '',
+			'groups' => self::canonicalGroups($groups),
 			'storage' => ($mapping['use_team_folder'] ?? null) === true ? 'team folder' : 'plain shared folder',
 			default => throw new \RuntimeException("the mapping form has no field called \"{$field}\""),
 		};
@@ -321,12 +325,40 @@ trait MappingSteps {
 
 	/** @Then /^the mapping's groups are "([^"]*)"$/ */
 	public function theMappingsGroupsAre(string $expected): void {
-		$groups = $this->firstMapping()['nc_groups'] ?? [];
-		$actual = is_array($groups) ? implode(',', $groups) : '';
+		$actual = self::canonicalGroups($this->firstMapping()['nc_groups'] ?? []);
+		$want = self::canonicalGroups($expected);
 
-		if ($actual !== $expected) {
-			throw new \RuntimeException("expected the groups to be '{$expected}', got '{$actual}'");
+		if ($actual !== $want) {
+			throw new \RuntimeException("expected the groups to be '{$want}', got '{$actual}'");
 		}
+	}
+
+	/**
+	 * A comparable rendering of a group list: sorted, comma-joined.
+	 *
+	 * SORTED, BECAUSE GROUPS ARE A SET. Since §C6.35 these are read back out of the
+	 * folder — a groupfolders assignment table or the share table — and neither
+	 * query orders its rows. What comes back is insertion order if the database
+	 * feels like it, which would make an assertion pass or fail on the order the
+	 * scenario happened to list its groups in. That is not a fact about the app.
+	 *
+	 * @param mixed $groups a list from JSON, or a comma-separated string
+	 */
+	private static function canonicalGroups(mixed $groups): string {
+		if (is_string($groups)) {
+			$groups = $groups === '' ? [] : explode(',', $groups);
+		}
+		if (!is_array($groups)) {
+			return '';
+		}
+
+		$out = array_values(array_filter(array_map(
+			static fn (mixed $g): string => trim((string)$g),
+			$groups,
+		), static fn (string $g): bool => $g !== ''));
+		sort($out);
+
+		return implode(',', $out);
 	}
 
 	/** @Then the mapping's default mode is "link" */
@@ -335,15 +367,6 @@ trait MappingSteps {
 
 		if ($mappings === [] || ($mappings[0]['mode'] ?? null) !== 'link') {
 			throw new \RuntimeException("expected a mapping with mode=link, got:\n" . $this->lastOutput);
-		}
-	}
-
-	/** @Then the mapping's folder mode is "nested" */
-	public function theMappingsFolderModeIsNested(): void {
-		$mappings = $this->mappings();
-
-		if ($mappings === [] || ($mappings[0]['folder_mode'] ?? null) !== 'nested') {
-			throw new \RuntimeException("expected a mapping with folder_mode=nested, got:\n" . $this->lastOutput);
 		}
 	}
 

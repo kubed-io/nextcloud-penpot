@@ -117,7 +117,7 @@ engine it configures does not exist yet.
 | **Service-account token, encrypted** | both siblings' Instance card | 🟢 | The *required* credential (§6.18). Stored `sensitive` in appconfig. |
 | **Test connection** | both | 🟡 | Authenticated `get-teams`, distinguishing *missing* from *rejected* from *unreachable* — and reporting **which teams the account can actually see**, since that is exactly what gates mapping (§6.18). |
 | **Team mapping card** | `MappingSettings` | 🟡 | Team picker fed by `get-teams`. Refuses a team the service account cannot see, with the invite-as-`viewer` explanation (admin-mapping.feature). |
-| **`folder_mode`, immutable** | — | 🔴 | `nested` default, `keyed` offered but **not implemented** — see ⛔ below. Immutable after create, mirroring `MappingService`'s existing refusal on structural fields. |
+| ~~**`folder_mode`, immutable**~~ | — | ⬛ | **REMOVED (§C6.36).** Was `nested` default with `keyed` offered-but-refused. A field with one usable value is not a choice; the design stays in §6.53 / #47. |
 | **Default mode (`link`/`sync`)** | Grafana's format/mode | 🟢 | Per-mapping default; per-file promotion is Course 5. |
 | **Personal token card** | Grafana personal settings | 🟡 | *Optional*, attribution-only (§6.18). Per-user storage — open question #9's one remaining mechanical bit. |
 | **Sync schedule card** | `AutoSyncSettings` | 🟢 | Interval; persisted now, honoured in Course 3. |
@@ -222,11 +222,14 @@ protocol that has already fooled us twice.
 
 ## What is deliberately not built (so it never sneaks on)
 
-- **`keyed` folder mode.** The *fork* is locked (§6.53) and the mapping field
-  exists; the mode is not implemented and has **no feature file**. Three real
-  questions block it (#47): how inferred intermediate folders are distinguished
-  from user folders, what a move-out-of-team means when position *is* the name,
-  and whether a `foo/bar` key collision is refused or disambiguated.
+- **`keyed` folder mode.** The *fork* is locked (§6.53); the mode is not
+  implemented and has **no feature file**. Three real questions block it (#47):
+  how inferred intermediate folders are distinguished from user folders, what a
+  move-out-of-team means when position *is* the name, and whether a `foo/bar`
+  key collision is refused or disambiguated. The mapping field that stood for it
+  is **gone** (§C6.36) — it held one usable value and made every reader work out
+  that the other branch did not exist. Answering #47 means adding a field back,
+  which is an hour.
 - **Webhooks.** Delivery unexplained (#19). Cron is the trigger.
 - **Content push.** §6.1. Not a phase-ordering question — a permanent boundary.
 - **Creating teams or projects from Nextcloud** beyond §6.33's narrow carve-out.
@@ -3407,9 +3410,9 @@ default mode, the folder mode, the folder name, the groups, the Team Folder flag
 Read together they made picking `sync` look like a different BEHAVIOUR from
 picking `link`. It is not. Nothing an admin picks changes what creating a mapping
 does, and none of the values can even be OBSERVED until something later acts on
-one — the mode decides whether a file's bytes are held, the groups and the
-storage flag decide what the pull provisions, the folder mode decides how project
-names become paths.
+one — the mode decides whether a file's bytes are held, the storage flag decides
+what kind of folder gets provisioned, and the groups decide who can see it.
+(Folder mode was among the five and has since gone entirely, §C6.36.)
 
 So they became an `Examples` table over one behaviour — *creating a mapping saves
 the option the admin chose* — with a defaults block and a per-option block. The
@@ -3498,7 +3501,8 @@ in miniature, and it now has a live reproduction rather than a paragraph.
 ### §C6.33 — Immutability belongs in the signature, not in five guards
 
 `MappingService::update()` took a whole `Mapping` and refused five fields:
-the team, the Nextcloud folder, the Team Folder flag, `mode`, `folder_mode`.
+the team, the Nextcloud folder, the Team Folder flag, `mode`, `folder_mode`
+(since removed outright — §C6.36).
 Four scenarios in `admin-mapping.feature` described those refusals, and five unit
 tests exercised them.
 
@@ -3518,8 +3522,10 @@ parameter that no longer exists — and four `@todo` scenarios, replaced by a
 comment stating why the fields are locked and where that reason lives.
 
 **A refusal only earns a scenario when someone can provoke it.** The refusals that
-survive in this file — a nonexistent team id, a folder name with a `/`, `keyed`,
-a team already mapped — are all things an admin can genuinely type.
+survive in this file — a nonexistent team id, a team already mapped — are all
+things an admin can genuinely type. (`keyed` was one too, until the value stopped
+existing; the `/`-in-a-folder-name rule kept its unit test and lost its
+integration scenario, §C6.36.)
 
 #### The one edit, and the command it needed
 
@@ -3592,3 +3598,123 @@ No UI work: the admin panel never exposed groups.
 reason, an invalidation story, and a rule for who wins a disagreement. `nc_folder`
 earns its place — the admin chose it and nothing else records that choice.
 `nc_groups` never did: Nextcloud already knows who a folder is shared with.
+
+---
+
+### §C6.35 — Do not store what you can read: groups become a pass-through
+
+§C6.34 argued the case and deferred the work. This is the work.
+
+`Mapping` no longer has `ncGroups`. Nothing persists a group list. The two
+mechanisms Nextcloud already has — a groupfolders assignment, or a group share —
+are the record, and this app reads them.
+
+#### The argument that settled it was not about this app
+
+The deferral note framed this as a source-of-truth tidy-up: two copies can
+disagree, and when they do the pull silently picks the one the admin did not
+touch. True, but it undersells it. **There are three of these apps.**
+`nextcloud-n8n`, `nextcloud-grafana` and this one all map an upstream object to a
+Nextcloud folder, all inherited the same `nc_groups` field, and all of them
+re-assert it on their own schedule.
+
+Nothing stops two of them pointing at the same folder. Nothing *should* — a
+folder is a folder. But with a stored list each, that folder's sharing **flaps**:
+n8n's reconciler puts back the group penpot's had just removed, then penpot's
+next pass removes it again, each on whatever interval its own admin configured.
+No single app's logs would show a conflict, because from inside each one it is
+just doing its job. The bug would present as "the sharing on this folder keeps
+changing" with three plausible suspects and no evidence.
+
+Passing through removes the possibility rather than managing it. Two apps that
+both only read cannot disagree about what they read, and neither has to know the
+other exists. That is a much stronger property than "we made the copies agree",
+and it is worth more than the read costs.
+
+#### The shape
+
+`StorageService::ensureRoot(Mapping $m, array|string|null $groups = null)` — and
+the null is the whole design:
+
+- **null** means *the folder must exist* and says nothing about sharing, so it
+  changes nothing about sharing. Every pull passes null. This is what makes a
+  hand edit survive a sync: not a rule about hand edits, just the absence of any
+  code that would undo one.
+- **a list** means *the folder must exist and be shared with exactly these*, and
+  it prunes as well as adds. Only `add()` and `updateGroups()` pass one.
+
+`groupsOf()` reads it back per backend. `MappingService::describe()` — stored
+shape plus live groups — is what the admin page, `list-mappings --json` and the
+REST endpoints render. `Mapping::toArray()` stays the STORED shape and must:
+`persist()` calls it, so the moment `describe()` and `toArray()` become the same
+function, the groups get cached back into appconfig and the whole arrangement
+quietly reverts.
+
+#### Two things this forced that were bugs already
+
+**Pruning.** `syncGroupShares()` deliberately never removed a share — "so a
+manual share is never clobbered". Defensible while it ran on every pull with a
+stored list. But it also meant `set-groups` could add and never remove, so the
+one editable thing about a mapping was **write-only**: setting the groups to
+nothing did nothing at all, silently. Now that only an explicit action reaches
+this code, "shared with these" can mean what it says.
+
+**Telling the plumbing apart from a choice.** groupfolders has no per-user
+applicable, so writing into a Team Folder means assigning a group the actor is
+in — `admin`. Reporting that back would tell an admin their folder is shared
+with a group they never picked; suppressing it unconditionally would make
+"share this with the admin group" inexpressible on one backend and not the
+other. The permission bitmask settles it: plumbing gets `PERMISSION_ALL`, a
+chosen group keeps `CONTENT_PERMISSIONS` (which is already enough to write
+with), and `contentGroups()` skips only the first. The two backends now report
+the same thing for the same input, which is what the eight-row outline in
+`admin-mapping.feature` has been asserting all along — it just used to assert it
+against our own record of what we did, and now it goes and looks.
+
+#### The rule, restated
+
+**Do not store what you can read** — and the corollary the three-app case adds:
+*a cache of shared state is not just stale, it is contended.* One app's stale
+copy is a bug in that app. Three apps' stale copies are a system that fights
+itself on a timer.
+
+---
+
+### §C6.36 — A fork that was never taken is not a setting
+
+`folder_mode` is gone: the field, the two constants, the CLI option, the
+validation, the refusal in `add()`, the admin card's row, and the column in
+`list-mappings`.
+
+It had one implemented value (`nested`) and one that `MappingService::add()`
+refused outright (`keyed`, designed in §6.53, blocked on open question #47). So
+the app carried, across six files:
+
+- a value object field that could only ever hold one value;
+- a validator rejecting a third value, to protect a choice between two, one of
+  which was itself rejected a layer up;
+- an `occ` flag whose only non-default argument produced an error;
+- an admin card row rendering a permanent `Nested (fixed)` label — a control
+  that could never be operated, sitting between two that could;
+- a column in the defaults table of `admin-mapping.feature` that no row set,
+  plus half of a two-row refusal outline;
+- five `Given the mapping's folder mode is "nested"` preambles in
+  `rename-project.feature` and `rename-design.feature`, qualifying rules that
+  were never conditional in practice.
+
+None of that is a choice. It is the *shape* of a choice, built early and left
+standing, and every reader since has had to work out that the second branch does
+not exist before they can read the first.
+
+**The design is not lost, and it should not be.** §6.53's reasoning — that `/`
+either carries structure or does not, that it cannot do both, and that this
+makes it a per-mapping fork rather than a global pick — is still the right
+analysis, and question #47's three blockers are still unanswered. It lives in
+the saga, which is where an unbuilt design belongs. When someone answers #47
+they will add a field; adding a field to a value object is an hour.
+
+#### The rule
+
+**Ship the branch you built; describe the branch you didn't.** A field with one
+usable value is not extensibility, it is a comment that costs a validator, a
+flag, a UI row and a test column. The saga is cheaper and says more.

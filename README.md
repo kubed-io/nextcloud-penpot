@@ -187,27 +187,18 @@ never deletes the project — it is a label, not a lifetime.
 Folder, but **not out of it**. Moving a project between teams is a destructive
 cross-team change that belongs in Penpot, not in a drag gesture.
 
-### Two folder modes, chosen per team
+### A `/` in a Penpot project name
 
-The nesting above is **`nested` mode** — the default, and what the rest of this
-README describes. There is one alternative, and the two are mutually exclusive:
+Project names are plain names here, and a `/` in one is not allowed — a Nextcloud
+folder name cannot carry it, and inventing an intermediate folder from it would
+create a folder no Penpot object corresponds to. Such a project is skipped and
+reported by name so you can rename it in Penpot.
 
-| Mode | Penpot side | Nextcloud side |
-|---|---|---|
-| **`nested`** *(default)* | Projects are plain names; `/` is not allowed in one | Nest freely under the Team Folder |
-| **`keyed`** | A project's **name is its path** — `foo/bar` | Mirrors that path exactly; no free nesting |
-
-Either `/` carries structure or it doesn't — it can't do both, which is why this
-is a choice rather than a feature. A team that already types `client/project` in
-Penpot picks `keyed`; a team that organises in Nextcloud picks `nested`.
-
-**The choice is made when the team is mapped and cannot be changed afterwards.**
-Flipping it would restructure every folder *and* rewrite every project name in
-Penpot — a bulk, two-sided migration behind a dropdown. Changing your mind means
-removing the mapping and re-adding it.
-
-> **`keyed` mode is designed, not built.** Only the choice is settled; the mode
-> itself waits for a later release. Everything below describes `nested`.
+The alternative — a project's name *being* its path, so `foo/bar` mirrors as two
+folders — was designed and never built. Either `/` carries structure or it
+doesn't, and it can't do both, so it would have to be a per-team choice rather
+than a fallback. Until that is built there is nothing to choose, so there is no
+setting for it.
 
 ### Personal designs land in your home folder
 
@@ -284,10 +275,19 @@ would interleave and the pull would fight over the same names on every run.
 **Most of a mapping is fixed once it is created**, following the same rule the
 n8n and Grafana integrations use: a field is immutable when changing it would
 force a live migration of already-mirrored content. The team, the Nextcloud
-folder, the Team Folder setting, the default mode and the folder mode are all set
-at creation; the groups the folder is shared with stay editable. To change
-anything else, remove the mapping and add it again — which makes the cost
-visible instead of hiding it behind a dropdown.
+folder, the Team Folder setting and the default mode are all set at creation; the
+groups the folder is shared with stay editable. To change anything else, remove
+the mapping and add it again — which makes the cost visible instead of hiding it
+behind a dropdown.
+
+**The groups are the folder's, not the mapping's.** Nothing about sharing is
+stored here: the app applies the groups you give it when it creates the folder,
+and after that it simply reads whatever the folder says. Re-share it from the
+Files app or with `occ` and this app reports the change; syncing never puts back
+a group you removed. `occ penpot_sync:set-groups` is a convenience that does the
+right thing on either backend, not a separate source of truth — which also means
+two of these integrations can point at the same folder without fighting over its
+sharing.
 
 The **default mode** is the one place this app is stricter than the Grafana
 integration, which leaves its mode editable. Here the axis decides whether the

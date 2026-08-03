@@ -121,9 +121,16 @@
 		data.teamId = teamSel ? (teamSel.dataset.id || teamSel.value) : '';
 		data.ncFolder = ncEl ? ncEl.value.trim() : '';
 		data.mode = modeEl ? modeEl.value : 'link';
-		data.useTeamFolder = tfEl ? tfEl.checked : true;
+		data.useTeamFolder = tfEl ? tfEl.checked : false;
 
 		return data;
+	}
+
+	/** Check exactly the boxes in `groups`, clearing the rest. */
+	function showGroups(card, groups) {
+		card.querySelectorAll('.js-groups input[type="checkbox"]').forEach(function (cb) {
+			cb.checked = groups.indexOf(cb.value) !== -1;
+		});
 	}
 
 	function saveCard(card) {
@@ -144,12 +151,18 @@
 				card.dataset.id = res.id;
 				// Everything except the groups is immutable once created, so redraw
 				// the card from the server's own renderer rather than trying to
-				// convert five controls into text here. It also surfaces the folder
-				// name the backend materialised from the team name.
+				// convert the controls into text here. It also surfaces the folder
+				// name the backend materialised from the team name, and the groups
+				// the folder actually ended up shared with.
 				window.location.reload();
 				return;
 			}
 
+			// Re-tick from the RESPONSE, not from what was submitted. The server
+			// applies the groups to the folder and reads them back, and the two can
+			// differ — a group that does not exist cannot be shared with. Showing
+			// the box still checked would claim a share that was never made.
+			showGroups(card, res.nc_groups || []);
 			cardStatus(card, 'success', t('penpot_sync', 'Saved.'));
 		}).catch(function (err) {
 			cardStatus(card, 'error', err.message || t('penpot_sync', 'Save failed.'));
@@ -286,11 +299,14 @@
 			+       '<option value="link" selected>' + t('penpot_sync', 'Link') + '</option>'
 			+       '<option value="sync">' + t('penpot_sync', 'Sync') + '</option>'
 			+     '</select></div>'
-			+   '<div class="penpot-sync-field pp-foldermode"><label>' + t('penpot_sync', 'Folder mode') + info(DESC.foldermode) + '</label>'
-			+     '<span class="penpot-sync-fixed">' + t('penpot_sync', 'Nested') + ' <span class="penpot-sync-hint">'
-			+       t('penpot_sync', '(fixed)') + '</span></span></div>'
 			+   '<div class="penpot-sync-field pp-tf"><label class="penpot-sync-checkbox">'
-			+     '<input type="checkbox" class="js-use-team-folder"' + (teamFoldersAvailable() ? ' checked' : '')
+			// UNCHECKED, even where groupfolders IS installed. A default has to be
+			// the same through both front doors, and `occ add-mapping` with no flag
+			// makes a plain shared folder (§C6.31) — a card that arrives pre-ticked
+			// would make the panel and the CLI disagree about what "I said nothing"
+			// means. Disabled when groupfolders is absent, so the option reads as
+			// unavailable rather than merely off.
+			+     '<input type="checkbox" class="js-use-team-folder"' + (teamFoldersAvailable() ? '' : ' disabled')
 			+     ' /> ' + t('penpot_sync', 'Team Folder') + info(DESC.tf) + '</label></div>'
 			+   '<div class="penpot-sync-field pp-groups"><label>' + t('penpot_sync', 'Groups') + info(DESC.groups) + '</label>'
 			+     '<div class="js-groups penpot-sync-groups">' + groupBoxes + '</div></div>'
