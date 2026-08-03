@@ -469,10 +469,54 @@ jobs:
         tail -30 data/nextcloud.log 2>/dev/null || echo "(no log)"
       working-directory: ${{ github.workspace }}
 
-    - name: Publish integration results
+    # ONE RESULT FOR THE WHOLE RUN, NOT SEVEN. Each leg only UPLOADS its JUnit
+    # XML; the publish job below collects them and reports once. Publishing per
+    # leg produced seven checks and seven PR comment updates for one test run,
+    # which buries the answer to "did the suite pass?" under the mechanics of how
+    # it was split.
+    #
+    # `if: always()` so a failing leg still contributes its results — a leg that
+    # fails is exactly the one whose report you want.
+    - name: Upload JUnit results
       if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        # Unique per leg: artifacts with the same name collide.
+        name: junit-${{ matrix.suite }}-${{ matrix.backend }}
+        path: apps/${{ env.APP_ID }}/tests/integration/junit/*.xml
+        retention-days: 7
+        if-no-files-found: error
+
+  # ── one report for the whole matrix ────────────────────────────────────────
+  # This is the action's own documented matrix pattern, and it needs NO XML
+  # merging: `files` is a glob and the action aggregates across every file it
+  # matches. It also distinguishes TESTS from RUNS, which is exactly right here —
+  # a scenario run on both backends is one test with two runs, not two tests.
+  publish-integration-results:
+    name: Integration results
+    needs: integration
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
+
+    steps:
+    - name: Download every leg's results
+      uses: actions/download-artifact@v8
+      with:
+        path: junit
+        pattern: junit-*
+        merge-multiple: true
+
+    - name: Publish integration results
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
-        check_name: Integration results (${{ matrix.suite }}/${{ matrix.backend }})
-        files: apps/${{ env.APP_ID }}/tests/integration/junit/*.xml
+        check_name: Integration test results
+        files: junit/**/*.xml
         comment_mode: always
+        # The legs already fail the workflow on a failing scenario; this job
+        # exists to REPORT, so it must not turn a reporting hiccup into a second
+        # red X for the same failure.
+        action_fail: false

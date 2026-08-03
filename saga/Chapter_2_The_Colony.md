@@ -3077,3 +3077,35 @@ ceasing to run real ones.
 > whole reason you built it. One you can fix; one is the oven's fault and you've
 > written which is which on the wall. And the burnt one puts itself out in a
 > week — say so, or the next cook will think it's worse than it is."*
+
+#### One report for seven legs, and no XML merging at all
+
+Splitting the run split the REPORT too: seven legs each published their own
+check and their own pull-request comment update, for one test run. The question
+a reader has is "did the suite pass?", and seven partial answers is a worse way
+to answer it than one.
+
+The instinct was to merge the JUnit XML — and the research says don't. This is
+the reporter's own documented matrix pattern:
+
+> *In a scenario where your tests run multiple times in different environments
+> (e.g. a strategy matrix), the action should run only once over all test
+> results. For this, put the action into a separate job that depends on all your
+> test environments.*
+
+`files:` takes a **glob** and aggregates across everything it matches. So each leg
+only uploads its XML as an artifact, and one `needs: integration` job downloads
+them all (`pattern: junit-*`, `merge-multiple: true`) and reports once. No merge
+tool, no `github-script`, no XML library, and no deep-merge edge cases to get
+wrong — the thing that looked like the work was work nobody has to do.
+
+It is also strictly better than merging would have been: the action distinguishes
+TESTS from RUNS precisely for this case, so a scenario exercised on both backends
+reads as one test with two runs rather than two tests. A hand-merged file would
+have had to invent that distinction or lose it.
+
+The version pins were wrong on the first try in the way `AGENTS.md` warns about —
+`v4` for both artifact actions, when the current majors are `v7` and `v8` and the
+rest of this repo already used them. Checking `gh api repos/<o>/<r>/releases/latest`
+is in the gotchas list for a reason.
+
