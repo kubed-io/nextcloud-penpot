@@ -73,13 +73,93 @@ trait MappingSteps {
 		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
 	}
 
-	/** @When /^the admin tries to map the team "([^"]*)" with folder mode "([^"]*)"$/ */
-	public function theAdminTriesToMapTheTeamWithFolderMode(string $team, string $folderMode): void {
+	/**
+	 * Map a team having chosen ONE option on the form — or none.
+	 *
+	 * The step behind the `Examples` tables. Creating a mapping is one behaviour
+	 * whatever the admin picks, so the spec names the CHOICE ("the mode \"sync\"")
+	 * and this translates it to the flag that makes it. Three near-identical
+	 * steps used to sit here, one per option, which is how five near-identical
+	 * scenarios came to sit in the feature file.
+	 *
+	 * Does not throw on failure: half the rows expect a refusal (§C6.31).
+	 *
+	 * @When /^the admin maps the team "([^"]*)" choosing (.+)$/
+	 */
+	public function theAdminMapsTheTeamChoosing(string $team, string $choice): void {
 		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder-mode=%s',
+			'penpot_sync:add-mapping %s %s',
 			escapeshellarg($this->teamNamed($team)),
-			escapeshellarg($folderMode),
+			$this->flagForChoice($choice),
 		));
+	}
+
+	/**
+	 * The one CLI flag a choice on the mapping form comes down to.
+	 *
+	 * Throws on an unknown choice rather than mapping nothing. A typo in an
+	 * Examples cell would otherwise run the DEFAULT mapping and assert against it
+	 * — which passes for the "nothing" rows and quietly stops testing the option.
+	 */
+	private function flagForChoice(string $choice): string {
+		if ($choice === 'nothing') {
+			return '';
+		}
+
+		if ($choice === 'a Team Folder') {
+			return '--team-folder';
+		}
+
+		if (preg_match('/^the (folder mode|folder|mode|group) "([^"]*)"$/', $choice, $m) === 1) {
+			$flag = match ($m[1]) {
+				'folder' => '--folder',
+				'folder mode' => '--folder-mode',
+				'mode' => '--mode',
+				'group' => '--groups',
+			};
+
+			return $flag . '=' . escapeshellarg($m[2]);
+		}
+
+		throw new \RuntimeException("no such choice on the mapping form: \"{$choice}\"");
+	}
+
+	/** @Then the mapping is created */
+	public function theMappingIsCreated(): void {
+		// Exit code FIRST: `thereAreExactlyNMappings` runs `list-mappings`, which
+		// replaces the output the failure would have been explained in.
+		if ($this->lastExit !== 0) {
+			throw new \RuntimeException("expected the mapping to be created, it was refused:\n" . $this->lastOutput);
+		}
+
+		$this->thereAreExactlyNMappings(1);
+	}
+
+	/**
+	 * One saved setting, by the name the FORM uses for it.
+	 *
+	 * Quoted deliberately — `the mapping's "mode" is "sync"` cannot collide with
+	 * the unquoted `the mapping's default mode is "link"`, and Behat treats two
+	 * definitions matching one step as an ambiguity it refuses to resolve.
+	 *
+	 * @Then /^the mapping's "([^"]*)" is "([^"]*)"$/
+	 */
+	public function theMappingsSettingIs(string $setting, string $expected): void {
+		$mapping = $this->firstMapping();
+		$groups = $mapping['nc_groups'] ?? [];
+
+		$actual = match ($setting) {
+			'folder' => (string)($mapping['nc_folder'] ?? ''),
+			'mode' => (string)($mapping['mode'] ?? ''),
+			'folder mode' => (string)($mapping['folder_mode'] ?? ''),
+			'groups' => is_array($groups) ? implode(',', $groups) : '',
+			'storage' => ($mapping['use_team_folder'] ?? null) === true ? 'Team Folder' : 'plain shared folder',
+			default => throw new \RuntimeException("the mapping form has no setting called \"{$setting}\""),
+		};
+
+		if ($actual !== $expected) {
+			throw new \RuntimeException("expected the mapping's {$setting} to be '{$expected}', got '{$actual}'");
+		}
 	}
 
 	/** @Then /^there (?:is|are) exactly (\d+) configured team mappings?$/ */
@@ -162,28 +242,6 @@ trait MappingSteps {
 		}
 
 		throw new \RuntimeException('needs a second visible Penpot team, found only one');
-	}
-
-	/** @When /^the admin maps the team "([^"]*)" shared with the group "([^"]*)"$/ */
-	public function theAdminMapsTheTeamSharedWith(string $team, string $groups): void {
-		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s --groups=%s',
-			escapeshellarg($this->teamNamed($team)),
-			escapeshellarg($groups),
-		));
-	}
-
-	/** @Then the mapping's Nextcloud folder is named after the Penpot team */
-	public function theFolderIsNamedAfterTheTeam(): void {
-		$mapping = $this->firstMapping();
-		$teamName = (string)($mapping['team_name'] ?? '');
-		$ncFolder = (string)($mapping['nc_folder'] ?? '');
-
-		if ($teamName === '' || $ncFolder !== $teamName) {
-			throw new \RuntimeException(
-				"expected the folder to default to the team name '{$teamName}', got '{$ncFolder}'",
-			);
-		}
 	}
 
 	/** @Then /^the mapping's Nextcloud folder is "([^"]*)"$/ */

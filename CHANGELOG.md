@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **BREAKING:** a new mapping now defaults to a **plain shared folder** instead of a Team Folder. Team Folders come from the optional `groupfolders` app, so the old default asked for a backend that is absent on a stock Nextcloud and could not be provisioned there. Pass `--team-folder` (or tick the box) to get one; existing mappings are unchanged.
 - Documentation: the sync behaviour is now described as "sync now" by the admin or the schedule, rather than as the internal reconciler.
 - Documentation: a mapped folder's name and its Penpot team's name are now shown as the two independent names they are — a folder need not be called what the team is called.
 - A design restored from the trash now stays restored in Penpot, instead of occasionally sliding back into Penpot's trash and being removed again by the next sync.

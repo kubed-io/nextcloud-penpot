@@ -86,7 +86,7 @@ final class MappingController extends Controller {
 		string $teamId,
 		string $ncFolder = '',
 		array $ncGroups = [],
-		bool $useTeamFolder = true,
+		bool $useTeamFolder = false,
 		string $mode = Mapping::MODE_LINK,
 		string $folderMode = Mapping::FOLDER_MODE_NESTED,
 	): JSONResponse {

@@ -35,10 +35,9 @@ use GuzzleHttp\Client;
  *
  * ## PLAIN FOLDER, NOT A TEAM FOLDER
  *
- * The CI Nextcloud has no groupfolders app, so mappings here use
- * `--no-team-folder` — the admin-owned backend {@see \OCA\PenpotSync\Service\StorageService}
- * builds. The groupfolders backend is out of scope for this suite until the CI
- * image ships it.
+ * The `plain` legs take the DEFAULT backend — a plain shared folder, which is
+ * core and always present. The `team` legs install groupfolders and ask for a
+ * Team Folder explicitly with `--team-folder`. {@see OccTrait::backendFlags()}.
  *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}; reuses
  * the occ transport and the team helpers from the other traits.

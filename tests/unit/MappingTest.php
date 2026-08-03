@@ -158,12 +158,14 @@ final class MappingTest extends TestCase {
 		]);
 	}
 
-	public function testDefaultsToATeamFolderWithNoGroups(): void {
+	public function testDefaultsToAPlainSharedFolderWithNoGroups(): void {
 		$mapping = Mapping::fromArray(['team_id' => self::TEAM_ID]);
 
-		// Matches both siblings: groupfolders is the preferred backend, so an
-		// omitted flag means "use a Team Folder".
-		self::assertTrue($mapping->useTeamFolder);
+		// A DEFAULT HAS TO WORK ON A STOCK NEXTCLOUD. groupfolders is an optional
+		// app; defaulting to it made the default mapping ask for a backend that is
+		// often simply absent, which StorageService then refuses to provision.
+		// The plain shared folder is core and always there.
+		self::assertFalse($mapping->useTeamFolder);
 		self::assertSame([], $mapping->ncGroups);
 	}
 
@@ -192,13 +194,13 @@ final class MappingTest extends TestCase {
 		self::assertSame(['design', 'admin'], $mapping->ncGroups);
 	}
 
-	public function testTeamFolderFlagCanBeTurnedOff(): void {
+	public function testTeamFolderIsOptedInto(): void {
 		$mapping = Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'use_team_folder' => false,
+			'use_team_folder' => true,
 		]);
 
-		self::assertFalse($mapping->useTeamFolder);
+		self::assertTrue($mapping->useTeamFolder);
 	}
 
 	/**

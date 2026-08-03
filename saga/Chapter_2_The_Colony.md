@@ -3394,3 +3394,52 @@ The same scenario also stopped mirroring. It ran on past a second `When the pull
 runs` to assert project subfolders, which made a mapping look like it pulls. It
 does not: the folder appears when the mapping is made, and what lands inside it is
 `sync-now.feature`'s to state.
+
+### §C6.31 — A form is not a set of behaviours, and a default has to work
+
+Two findings from one reading of `admin-mapping.feature`, and the second is a
+product bug the first uncovered.
+
+#### Options are rows
+
+Five scenarios sat here mapping a team and reading one field back each: the
+default mode, the folder mode, the folder name, the groups, the Team Folder flag.
+Read together they made picking `sync` look like a different BEHAVIOUR from
+picking `link`. It is not. Nothing an admin picks changes what creating a mapping
+does, and none of the values can even be OBSERVED until something later acts on
+one — the mode decides whether a file's bytes are held, the groups and the
+storage flag decide what the pull provisions, the folder mode decides how project
+names become paths.
+
+So they became an `Examples` table over one behaviour — *creating a mapping saves
+the option the admin chose* — with a defaults block and a per-option block. The
+step takes the CHOICE in the spec's words ("the mode \"sync\"") and translates it
+to a flag, so the Gherkin never grows a `--`.
+
+The refusals collapsed the same way, and the split between the two tables is the
+useful part: **a refused OPTION** (a path where a folder name goes, `keyed`) sits
+in one table, and refusals about the **TEAM** (not there, already mapped) stay
+separate, because no option would have changed them.
+
+#### The default asked for an app that might not be installed
+
+Writing the defaults down in one column made it obvious: `use_team_folder`
+defaulted to **true**. Team Folders are the `groupfolders` app — optional, absent
+on a stock Nextcloud. So the default mapping, the one an admin gets by naming a
+team and nothing else, asked for a backend `StorageService::canProvision()` then
+refuses. A default that fails on an unconfigured instance is not a default.
+
+It is now **false**, and the flag inverted: `--no-team-folder` became
+`--team-folder`, an opt-in. The plain shared folder is core, always present, and
+carries the same folder metadata a Team Folder would (§6.21) — the difference is
+sharing, not mechanism, which is exactly why every other scenario can ignore it.
+
+This diverges from the sibling apps' "prefer groupfolders" wording, and the
+divergence is the lesson: **"prefer X when available" and "assume X when nobody
+said" are different sentences.** The siblings meant the first. This app had
+implemented the second.
+
+The scenario that had been asserting the old default was not wrong to exist — it
+was the only thing in the suite that stated what an unconfigured admin gets. It
+just stated the wrong answer, in a place where nothing made the answer look odd.
+A table of defaults does.
