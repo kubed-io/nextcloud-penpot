@@ -334,24 +334,49 @@ Feature: Admin configures team mappings
     # instead of hiding it behind a dropdown, which is the same line
     # nextcloud-grafana draws.
 
-  Scenario: The groups a mapped folder is shared with can be changed
-    Given a Penpot team named "Northwind" is mapped to the folder "Northwind Shared"
-    When the admin changes that mapping's groups to "design,admin"
-    Then the mapping's groups are "design,admin"
+  Scenario Outline: The groups a mapped folder is shared with can be changed
+    Given a Penpot team named "Northwind" is mapped to a <folder type>, shared with "design,admin"
+    When the admin changes that mapping's groups to "<groups>"
+    Then the mapping's groups are "<groups>"
+
+    Examples: on a Team Folder
+      | folder type | groups             |
+      | Team Folder | design,admin,sales |
+      | Team Folder | design             |
+      | Team Folder | sales              |
+      | Team Folder |                    |
+
+    Examples: and on a plain shared folder
+      | folder type  | groups             |
+      | plain folder | design,admin,sales |
+      | plain folder | design             |
+      | plain folder | sales              |
+      | plain folder |                    |
+
     # THE ONE EDIT, and it is the one that moves no content — re-sharing a folder
     # is not a migration. Everything else about a mapping is settled when it is
-    # created.
+    # created (§C6.33).
+    #
+    # BOTH BACKENDS, NAMED OUT LOUD. This is the second place in the suite where
+    # the storage backend is the SUBJECT rather than a matrix dimension (§C6.30 is
+    # the other): a group change has to reach a groupfolders mount and an
+    # admin-owned share, and those are different code paths in StorageService. The
+    # admin leg runs with groupfolders installed precisely so one run can ask both.
+    #
+    # The four group sets are the four shapes a change comes in — add one, drop
+    # one, replace the set entirely, and clear it. The last is the one worth
+    # having: an empty set is easy to treat as "nothing was sent, keep what is
+    # there", and on a Team Folder it is also the set that makes the folder
+    # invisible to everyone.
+    #
+    # Each folder type maps into its own folder, chosen by the step from the type.
+    # Two rows of the SAME type reuse one folder, which is fine because ensureRoot()
+    # is idempotent — but a Team Folder and a plain folder must never share a name,
+    # or the second row inherits the first row's folder and asserts against the
+    # wrong thing (the mistake §C6.32 records).
     #
     # The MAPPING is what changes here. Re-sharing the provisioned folder is
     # ensureRoot()'s, re-asserted on every sync, which is why this scenario stops
     # at what the admin actually gets an answer about.
 
-  @unbuilt
-  Scenario: A team can be mapped in keyed mode
-    When the admin maps the Penpot team "Design Co" with folder mode "keyed"
-    Then the mapping's folder mode is "keyed"
-    And project names are treated as paths relative to the Team Folder
-    # DESIGNED, NOT BUILT (saga §6.53). Only the fork is locked — keyed mode has
-    # no feature file of its own and several open questions (inferred-folder
-    # ownership, key collisions, what a move out of the team means). Do not
-    # implement against this scenario.
+

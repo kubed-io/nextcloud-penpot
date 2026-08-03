@@ -275,6 +275,37 @@ trait MappingSteps {
 		$this->theMappingsFolderIs($expected);
 	}
 
+	/**
+	 * Map a team onto a NAMED BACKEND, with a starting set of groups.
+	 *
+	 * Does not read {@see backendFlags()} — this is the one place the scenario
+	 * chooses the backend rather than inheriting the leg's, because the backend is
+	 * what it is testing. The admin leg installs groupfolders so both are reachable.
+	 *
+	 * The folder name comes from the KIND, so a Team Folder and a plain folder can
+	 * never collide on one name. They must not: removing a mapping deletes nothing,
+	 * so a folder outlives the mapping that made it and a later mapping reusing the
+	 * name would inherit a folder of the wrong kind (§C6.32). Rows of the same kind
+	 * DO share a folder, which is safe — ensureRoot() is idempotent.
+	 *
+	 * @Given /^a Penpot team named "([^"]*)" is mapped to a (Team Folder|plain folder), shared with "([^"]*)"$/
+	 */
+	public function aTeamIsMappedToABackendSharedWith(string $team, string $kind, string $groups): void {
+		$this->noPenpotTeamsAreMapped();
+
+		$res = $this->occ(sprintf(
+			'penpot_sync:add-mapping %s --folder=%s --groups=%s %s',
+			escapeshellarg($this->teamNamed($team)),
+			escapeshellarg($kind === 'Team Folder' ? 'Groups On A Team Folder' : 'Groups On A Plain Folder'),
+			escapeshellarg($groups),
+			$kind === 'Team Folder' ? '--team-folder' : '',
+		));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not map \"{$team}\" onto a {$kind}:\n{$res['output']}");
+		}
+	}
+
 	/** @When /^the admin changes that mapping's groups to "([^"]*)"$/ */
 	public function theAdminChangesThatMappingsGroupsTo(string $groups): void {
 		$res = $this->occ(sprintf(
