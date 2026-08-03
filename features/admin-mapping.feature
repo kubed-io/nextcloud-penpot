@@ -199,22 +199,6 @@ Feature: Admin configures team mappings
     # not by a permission bit. Withholding CREATE stopped no write to Penpot; it
     # only stopped the user from using their own files.
 
-  @blocked
-  Scenario: A mapped folder behaves like any other Nextcloud folder
-    Given a folder mapped to the Penpot team "Northwind"
-    When a member of its groups opens the folder in the Files app
-    Then the "+ New" button is available, as in any other folder
-    And they can create a plain subfolder inside it
-    And they can paste a file into it
-
-  @todo
-  Scenario: The folder grants the same rights as the sibling apps
-    Given a folder mapped to the Penpot team "Northwind"
-    Then each content group is granted read, update, create and delete
-    And the grant does not vary with the mapping's "link" / "sync" mode
-    # Unlike the siblings, the grant is mode-independent: penpot's link/sync is a
-    # per-file archive choice, not a folder-wide read-vs-write stance.
-
   @todo
   Scenario: A pull re-asserts the folder's group rights
     Given a folder mapped to the Penpot team "Northwind"
@@ -285,16 +269,25 @@ Feature: Admin configures team mappings
     Given no Penpot teams are mapped
     And a Penpot team named "Northwind" exists
     And the admin maps "Northwind" with:
+      | folder  | <folder>  |
       | storage | <storage> |
       | groups  | admin     |
     When the admin runs a pull
-    Then a <kind> named "Northwind" exists
+    Then a <kind> named "<folder>" exists
 
     Examples: opted in, and left alone
-      | storage     | kind                |
-      | team folder | Team Folder         |
-      |             | plain shared folder |
+      | folder          | storage     | kind                |
+      | Northwind Team  | team folder | Team Folder         |
+      | Northwind Plain |             | plain shared folder |
 
+    # EACH ROW OWNS ITS FOLDER NAME, and that is not cosmetic. Removing a mapping
+    # deletes nothing (see below, and saga Course 5) — so a Team Folder provisioned
+    # by one row is STILL MOUNTED when the next row runs, and a second row reusing
+    # the name would find the previous row's folder and report the wrong backend.
+    # The first version of this scenario did exactly that and failed on the plain
+    # row with "'Northwind' is a Team Folder, but the mapping never asked for one",
+    # which is the assertion working: the folder really was the wrong kind.
+    #
     # `groups` is set on both rows because a Team Folder shared with no group is
     # invisible to everyone, including the admin — the folder would exist and the
     # assertion would still fail. It is fixture, not a claim; the groups a mapping
