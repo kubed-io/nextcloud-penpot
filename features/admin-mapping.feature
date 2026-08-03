@@ -62,102 +62,66 @@ Feature: Admin configures team mappings
     # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
     # These drive the same MappingService the settings panel calls, over occ.
 
-    # CREATING A MAPPING IS ONE BEHAVIOUR WITH A FORM ATTACHED.
-    #
-    # Everything the admin picks — folder name, default mode, folder mode, groups,
-    # Team Folder or not — is an OPTION, and not one of them changes what creating
-    # a mapping does. None can even be OBSERVED until something later acts on it:
-    # the mode decides whether a file's bytes are held (sync-mode.feature), the
-    # groups and the Team Folder flag decide what the pull provisions, the folder
-    # mode decides how project names become paths (§6.53).
-    #
-    # So they are ROWS, not scenarios. There were five near-identical scenarios
-    # here, each mapping a team and reading one field back, which made picking
-    # "sync" read as a different BEHAVIOUR from picking "link". It is not — it is
-    # the same behaviour with a different value saved, and the part worth watching
-    # happens in the feature that acts on the value.
-
-  Scenario Outline: Creating a mapping saves the option the admin chose
+  Scenario Outline: Creating a mapping saves the form
     Given no Penpot teams are mapped
     And a Penpot team named "Northwind" exists
-    When the admin maps the team "Northwind" choosing <choice>
-    Then the mapping is created
-    And the mapping's "<setting>" is "<value>"
+    And an unset field on the mapping form defaults to:
+      | folder      | Northwind           |
+      | mode        | link                |
+      | groups      |                     |
+      | folder mode | nested              |
+      | storage     | plain shared folder |
+    When the admin maps "Northwind" with:
+      | folder  | <folder>  |
+      | mode    | <mode>    |
+      | groups  | <groups>  |
+      | storage | <storage> |
+    Then the mapping matches the form, unset fields at their defaults
 
-    Examples: what an admin who chooses nothing gets
-      | choice  | setting     | value       |
-      | nothing | folder      | Northwind   |
-      | nothing | mode        | link        |
-      | nothing | folder mode | nested      |
-      | nothing | storage     | plain shared folder |
-      | nothing | groups      |             |
+    Examples: one field at a time, and nothing at all
+      | folder       | mode | groups       | storage     |
+      |              |      |              |             |
+      | Design Files |      |              |             |
+      |              | link |              |             |
+      |              | sync |              |             |
+      |              |      | admin        |             |
+      |              |      | admin,design |             |
+      |              |      |              | team folder |
 
-    Examples: and what each option on the form does to that
-      | choice                    | setting | value               |
-      | the folder "Design Files" | folder  | Design Files        |
-      | the mode "sync"           | mode    | sync                |
-      | the group "admin"         | groups  | admin               |
-      | a Team Folder             | storage | Team Folder         |
+    Examples: and in combination
+      | folder       | mode | groups       | storage     |
+      | Design Files | sync | admin,design | team folder |
+      | Northwind    | link | admin        | team folder |
 
-    # EVERY DEFAULT IS THE ONE THAT WORKS ON A STOCK NEXTCLOUD. link downloads
-    # nothing, nested is the only folder model built, groups start empty and
-    # opt-in, an unnamed folder falls back to the team's own name — and storage
-    # falls back to a PLAIN SHARED FOLDER, which is core.
+    # ONE BEHAVIOUR, AND EVERY ROW CHECKS ALL OF IT.
     #
-    # That last one is a deliberate divergence from the siblings' "prefer
-    # groupfolders" wording. Preferring it is right when it is INSTALLED; assuming
-    # it when nobody said anything makes the no-choice mapping ask for an optional
-    # app and fail wherever it is absent. A Team Folder is an upgrade you opt into
-    # (§C6.31).
+    # Creating a mapping is a form submission: whatever the admin typed comes
+    # back, and whatever they left alone comes back as its default. That is the
+    # whole of it, so it is ONE scenario — the rows are inputs, not behaviours.
+    # Choosing "sync" is not a different behaviour from choosing "link"; none of
+    # these values can even be OBSERVED until something later acts on one (the
+    # mode decides whether a file's bytes are held, the groups and storage decide
+    # what the pull provisions, the folder mode decides how project names become
+    # paths).
     #
-    # "folder mode" has only a default row because the other value is REFUSED —
-    # keyed is designed and not built (§6.53). Its refusal is below, with the
-    # other choices the app will not honour.
-
-    # ── naming: the FOLDER is the admin's, the PROJECTS are Penpot's ────────────
-    # The one place the two levels deliberately differ, and the same shape both
-    # sibling apps use: a mapping names its DESTINATION, and the source object's
-    # name is merely the default.
+    # THE DEFAULTS ARE DECLARED AS DATA, not asserted one scenario at a time.
+    # There were five near-identical scenarios here, each mapping a team and
+    # reading back one field, and the storage default among them was WRONG for as
+    # long as it took to notice — a Team Folder needs the optional groupfolders
+    # app, so the no-choice mapping asked for a backend a stock Nextcloud does not
+    # have (§C6.31). Five titles hid that. One column does not.
     #
-    #   nextcloud-n8n:     tag        → Team Folder (named by the admin)
-    #   nextcloud-grafana: folder     → nc_folder, blank ⇒ the Grafana folder title
-    #   here:              Penpot team → nc_folder, blank ⇒ the Penpot team name
+    # AND EVERY ROW ASSERTS ALL FIVE FIELDS, which is what the earlier drafts got
+    # wrong: a row that sets the mode is also proving it did not disturb the
+    # folder. Rows 1 and 2 together are the whole of "the folder name is the
+    # admin's, and defaults to the team's" — the two names are independent, and it
+    # costs a row rather than a scenario. The last row is a Team Folder named
+    # exactly as its team, which is legal and worth pinning: nothing about the
+    # storage backend constrains the name.
     #
-    # Project folders INSIDE the mapped folder are the exception: they always match
-    # their Penpot project's name exactly, in both directions (saga §6.36). A team
-    # folder is a mount point the admin chose to create, so naming it is theirs; a
-    # project folder is a mirror of a Penpot object, and letting its name drift
-    # would break the identity the pull uses to match folders to projects.
-
-  Scenario Outline: The admin may name the Nextcloud folder whatever they like
-    Given no Penpot teams are mapped
-    And a Penpot team named "<team>" exists
-    When the admin maps the team "<team>" into the folder "<folder>"
-    Then the mapping's Nextcloud folder is "<folder>"
-    And the mapping records the Penpot team "<team>"
-
-    Examples: the two names are independent
-      | team      | folder       |
-      | Northwind | Northwind    |
-      | Northwind | Design Files |
-
-    # BOTH NAMES ARE KEPT, AND NEITHER CONSTRAINS THE OTHER. The folder name is
-    # what gets created; the team name is what the admin page shows, so the
-    # pairing stays legible at a glance.
-    #
-    # The two rows are the whole point. Matching names are the ordinary case and
-    # look like a rule — so the second row states outright that they may differ,
-    # and the app behaves identically either way. A mapping is a row holding a
-    # team id and a folder name, and nothing in it makes the names one name.
-    #
-    # A PROJECT HAS NO SECOND NAME, and could not have one: there is no
-    # per-project mapping row to remember a pairing in (saga §6.24). A project
-    # folder's NAME is the only thing tying it to its Penpot project, so the two
-    # are pinned equal in both directions (§6.36) — rename the folder and the
-    # project is renamed to match, rename the project and the pull renames the
-    # folder (rename-project.feature). A project rename is never REFUSED; it is
-    # propagated, which is how the single name is kept single. The asymmetry with
-    # a team is structural, not a style choice.
+    # "folder mode" is in the defaults table but no row sets it — its only other
+    # value is REFUSED (keyed is designed and not built, §6.53), so every row
+    # asserts the default and the refusal lives with the other refusals below.
 
   @todo
   Scenario: Renaming the team in Penpot does not rename the admin's folder
@@ -178,18 +142,20 @@ Feature: Admin configures team mappings
     # Two teams mirroring into one folder would interleave their project
     # subfolders, and the pull would fight over the same names on every run.
 
-  Scenario Outline: A choice the app cannot honour is refused, and says why
+  Scenario Outline: A value the app cannot honour is refused, and says why
     Given no Penpot teams are mapped
     And a Penpot team named "Northwind" exists
-    When the admin maps the team "Northwind" choosing <choice>
+    When the admin maps "Northwind" with:
+      | folder      | <folder>      |
+      | folder mode | <folder mode> |
     Then the mapping is rejected
     And the refusal explains "<reason>"
     And there are exactly 0 configured team mappings
 
-    Examples: the same form, and the two things it will not take
-      | choice                    | reason             |
-      | the folder "teams/design" | single folder name |
-      | the folder mode "keyed"   | not implemented    |
+    Examples: the same form, and the two values it will not take
+      | folder       | folder mode | reason             |
+      | teams/design |             | single folder name |
+      |              | keyed       | not implemented    |
 
     # A PATH IS NOT A FOLDER NAME. Everything below the team folder is created by
     # the pull from Penpot's own project names, so an inner "/" would invent an
@@ -297,41 +263,42 @@ Feature: Admin configures team mappings
     # (remove-mapping.feature) — until then the safe behaviour is to leave them
     # and say so.
 
-    # ── what mapping PROVISIONS ─────────────────────────────────────────────────
+    # ── what actually gets built ────────────────────────────────────────────────
     #
     # THE ONE PLACE IN THIS SUITE WHERE THE BACKEND IS THE SUBJECT. Everywhere
     # else it is a matrix dimension the spec never mentions (features/README.md),
     # because everywhere else it cannot change the outcome. Here it IS the
     # outcome: the admin picked a kind of folder and a folder of that kind has to
-    # appear. So the admin leg runs on a runner WITH groupfolders installed and
-    # each scenario asks for its kind by name, instead of inheriting whichever
-    # kind the leg was configured for.
+    # appear. The admin leg installs groupfolders for exactly this reason, so both
+    # rows are reachable in one run (§C6.30).
     #
-    # MAPPING PROVISIONS; IT DOES NOT MIRROR. This scenario used to run on past a
-    # second `When the pull runs` and assert the project subfolders too, which
-    # made a mapping look like it pulls. It does not — the folder appears when the
-    # mapping is made, and everything inside it appears when a sync runs. What is
-    # in there afterwards is sync-now.feature's to state.
+    # THE MAPPING DOES NOT BUILD IT — THE SYNC DOES. `add-mapping` records a
+    # choice and touches no storage; {@see PullService} calls `ensureRoot` on its
+    # first pass. So the `When` is the sync, and what this scenario adds over
+    # sync-now.feature is WHICH KIND appeared, which is the mapping's decision.
+    #
+    # From WebDAV the two are indistinguishable — that is §14.1, and it is a
+    # feature. So the assertion asks groupfolders whether it owns the mount point,
+    # rather than looking at the folder and hoping.
 
-  @blocked
-  Scenario: Mapping a team provisions a plain shared folder
+  Scenario Outline: The first sync builds the kind of folder the mapping asked for
     Given no Penpot teams are mapped
     And a Penpot team named "Northwind" exists
-    When the admin maps the Penpot team "Northwind"
-    Then a plain Nextcloud folder named "Northwind" is provisioned
-    And it carries the Penpot team id as folder metadata
-    And it is shared with the mapping's groups
+    And the admin maps "Northwind" with:
+      | storage | <storage> |
+      | groups  | admin     |
+    When the admin runs a pull
+    Then a <kind> named "Northwind" exists
 
-  @blocked
-  Scenario: Mapping a team that asked for a Team Folder provisions one
-    Given no Penpot teams are mapped
-    And a Penpot team named "Northwind" exists
-    When the admin maps the team "Northwind" choosing a Team Folder
-    Then a Team Folder named "Northwind" is provisioned
-    And it carries the Penpot team id as folder metadata
-    # Folder metadata works identically on both (saga §6.21, confirmed live on a
-    # real production Team Folder), so the two differ in SHARING, not in mapping
-    # mechanism — which is what lets every other scenario ignore the difference.
+    Examples: opted in, and left alone
+      | storage     | kind                |
+      | team folder | Team Folder         |
+      |             | plain shared folder |
+
+    # `groups` is set on both rows because a Team Folder shared with no group is
+    # invisible to everyone, including the admin — the folder would exist and the
+    # assertion would still fail. It is fixture, not a claim; the groups a mapping
+    # carries are the outline above's business.
 
   @decision
   Scenario: There is no project-level mapping to configure
@@ -365,19 +332,6 @@ Feature: Admin configures team mappings
     # TeamFolderService.php already set.
 
     # ── naming, mode, and duplicate prevention ───────────────────────────────────
-
-  @todo
-  Scenario: A mapped folder defaults to the team's name but may be renamed
-    When the admin maps the Penpot team "Northwind" without naming a folder
-    Then the provisioned Team Folder is named "Northwind", matching Penpot
-    But the admin may name it something else when creating the mapping
-    And that name is what gets provisioned
-    # SUPERSEDES an earlier draft that said the folder name is "not independently
-    # chosen" and that the UI offers no "call it something else" field. Both are
-    # now false: a mapping names its DESTINATION and the team name is merely the
-    # default, matching how the n8n and Grafana integrations have always worked.
-    # Project folders INSIDE it are the ones pinned to Penpot's names — see the
-    # next scenario, which is the rule that did survive.
 
   @todo
   Scenario: Project folder names always match their Penpot projects
@@ -415,33 +369,6 @@ Feature: Admin configures team mappings
     # Note this is the opposite of the PROJECT folder rule below, and
     # deliberately so: a team folder is a mount point the admin chose to create,
     # a project folder is a mirror of a Penpot object.
-
-  @todo
-  Scenario: A mapping records the default mode its files get, defaulting to link
-    When the admin maps the Penpot team "Northwind" without choosing a mode
-    Then the mapping's default mode is "link"
-    When the admin maps the Penpot team "Design Co" with default mode "sync"
-    Then the mapping's default mode is "sync"
-    # Per-file promotion/demotion is sync-mode.feature's concern, not this one.
-
-    # ── folder mode: how this team's projects map to folders (saga §6.53) ───────
-    # A per-mapping, IMMUTABLE choice between two mutually-exclusive models:
-    #
-    #   nested (default) — Penpot projects are flat names; Nextcloud nests freely
-    #                      under the team folder (§6.29). A "/" in a project name
-    #                      is INVALID, because it would mean nothing.
-    #   keyed            — a project's name IS its path relative to the team folder
-    #                      ("foo/bar" → Team/foo/bar/). Moving a project folder is
-    #                      renaming it. Free nesting does not apply, because
-    #                      position IS the name.
-    #
-    # The two cannot coexist: either "/" carries structure or it doesn't. Making
-    # the choice explicit per team is what removes the awkward middle case.
-
-  @todo
-  Scenario: A mapping records its folder mode, defaulting to nested
-    When the admin maps the Penpot team "Northwind" without choosing a folder mode
-    Then the mapping's folder mode is "nested"
 
   @unbuilt
   Scenario: The folder mode cannot be changed after the mapping is created

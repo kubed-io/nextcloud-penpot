@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
+use Behat\Gherkin\Node\TableNode;
+
 /**
  * Team-mapping steps, driven over `occ` against a real Nextcloud and a real
  * Penpot.
@@ -73,95 +75,6 @@ trait MappingSteps {
 		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
 	}
 
-	/**
-	 * Map a team having chosen ONE option on the form — or none.
-	 *
-	 * The step behind the `Examples` tables. Creating a mapping is one behaviour
-	 * whatever the admin picks, so the spec names the CHOICE ("the mode \"sync\"")
-	 * and this translates it to the flag that makes it. Three near-identical
-	 * steps used to sit here, one per option, which is how five near-identical
-	 * scenarios came to sit in the feature file.
-	 *
-	 * Does not throw on failure: half the rows expect a refusal (§C6.31).
-	 *
-	 * @When /^the admin maps the team "([^"]*)" choosing (.+)$/
-	 */
-	public function theAdminMapsTheTeamChoosing(string $team, string $choice): void {
-		$this->occ(sprintf(
-			'penpot_sync:add-mapping %s %s',
-			escapeshellarg($this->teamNamed($team)),
-			$this->flagForChoice($choice),
-		));
-	}
-
-	/**
-	 * The one CLI flag a choice on the mapping form comes down to.
-	 *
-	 * Throws on an unknown choice rather than mapping nothing. A typo in an
-	 * Examples cell would otherwise run the DEFAULT mapping and assert against it
-	 * — which passes for the "nothing" rows and quietly stops testing the option.
-	 */
-	private function flagForChoice(string $choice): string {
-		if ($choice === 'nothing') {
-			return '';
-		}
-
-		if ($choice === 'a Team Folder') {
-			return '--team-folder';
-		}
-
-		if (preg_match('/^the (folder mode|folder|mode|group) "([^"]*)"$/', $choice, $m) === 1) {
-			$flag = match ($m[1]) {
-				'folder' => '--folder',
-				'folder mode' => '--folder-mode',
-				'mode' => '--mode',
-				'group' => '--groups',
-			};
-
-			return $flag . '=' . escapeshellarg($m[2]);
-		}
-
-		throw new \RuntimeException("no such choice on the mapping form: \"{$choice}\"");
-	}
-
-	/** @Then the mapping is created */
-	public function theMappingIsCreated(): void {
-		// Exit code FIRST: `thereAreExactlyNMappings` runs `list-mappings`, which
-		// replaces the output the failure would have been explained in.
-		if ($this->lastExit !== 0) {
-			throw new \RuntimeException("expected the mapping to be created, it was refused:\n" . $this->lastOutput);
-		}
-
-		$this->thereAreExactlyNMappings(1);
-	}
-
-	/**
-	 * One saved setting, by the name the FORM uses for it.
-	 *
-	 * Quoted deliberately — `the mapping's "mode" is "sync"` cannot collide with
-	 * the unquoted `the mapping's default mode is "link"`, and Behat treats two
-	 * definitions matching one step as an ambiguity it refuses to resolve.
-	 *
-	 * @Then /^the mapping's "([^"]*)" is "([^"]*)"$/
-	 */
-	public function theMappingsSettingIs(string $setting, string $expected): void {
-		$mapping = $this->firstMapping();
-		$groups = $mapping['nc_groups'] ?? [];
-
-		$actual = match ($setting) {
-			'folder' => (string)($mapping['nc_folder'] ?? ''),
-			'mode' => (string)($mapping['mode'] ?? ''),
-			'folder mode' => (string)($mapping['folder_mode'] ?? ''),
-			'groups' => is_array($groups) ? implode(',', $groups) : '',
-			'storage' => ($mapping['use_team_folder'] ?? null) === true ? 'Team Folder' : 'plain shared folder',
-			default => throw new \RuntimeException("the mapping form has no setting called \"{$setting}\""),
-		};
-
-		if ($actual !== $expected) {
-			throw new \RuntimeException("expected the mapping's {$setting} to be '{$expected}', got '{$actual}'");
-		}
-	}
-
 	/** @Then /^there (?:is|are) exactly (\d+) configured team mappings?$/ */
 	public function thereAreExactlyNMappings(int $expected): void {
 		$actual = count($this->mappingIds());
@@ -207,21 +120,125 @@ trait MappingSteps {
 	}
 
 	/**
-	 * The team name the mapping kept, by name.
+	 * The defaults the form applies to whatever the admin left alone.
 	 *
-	 * Distinct from "records the team's own name separately", which asserts only
-	 * that the two names DIFFER — a check that cannot run on the same-name row of
-	 * an Examples table, and that would pass on any non-empty string. This one
-	 * names the team it expects, so it holds on both rows and pins the value.
+	 * DECLARED IN THE SPEC, NOT IN HERE. Five scenarios used to assert one default
+	 * each, and one of them was wrong for as long as it took someone to notice
+	 * (§C6.31). Written down as a table they are read as a set, and a change to one
+	 * is a one-word diff in the feature file instead of a new scenario title.
 	 *
-	 * @Then /^the mapping records the Penpot team "([^"]*)"$/
+	 * @var array<string, string>
 	 */
-	public function theMappingRecordsThePenpotTeam(string $expected): void {
-		$actual = (string)($this->firstMapping()['team_name'] ?? '');
+	private array $formDefaults = [];
 
-		if ($actual !== $expected) {
-			throw new \RuntimeException("expected the mapping to record the team '{$expected}', got '{$actual}'");
+	/** What the admin actually typed. @var array<string, string> */
+	private array $submittedForm = [];
+
+	/** @Given an unset field on the mapping form defaults to: */
+	public function anUnsetFieldOnTheMappingFormDefaultsTo(TableNode $defaults): void {
+		$this->formDefaults = $defaults->getRowsHash();
+	}
+
+	/**
+	 * Fill in the mapping form and submit it.
+	 *
+	 * A BLANK CELL IS AN UNTOUCHED FIELD, not an empty value — it produces no flag
+	 * at all, which is the only way a row can exercise a DEFAULT. Behat substitutes
+	 * Examples placeholders inside a step's table argument exactly as it does in the
+	 * step text, so one table serves every row.
+	 *
+	 * Does not throw on a non-zero exit: half the rows using this step expect a
+	 * refusal, and that verdict belongs to the `Then`.
+	 *
+	 * @When /^the admin maps "([^"]*)" with:$/
+	 */
+	public function theAdminMapsWith(string $team, TableNode $form): void {
+		$this->submittedForm = $form->getRowsHash();
+
+		$flags = [];
+		foreach ($this->submittedForm as $field => $value) {
+			$value = trim($value);
+			if ($value !== '') {
+				$flags[] = $this->flagFor($field, $value);
+			}
 		}
+
+		$this->occ(sprintf(
+			'penpot_sync:add-mapping %s %s',
+			escapeshellarg($this->teamNamed($team)),
+			implode(' ', $flags),
+		));
+	}
+
+	/**
+	 * EVERY FIELD, EVERY ROW — including the ones this row did not touch.
+	 *
+	 * A row that sets the mode is also proving it did not disturb the folder. The
+	 * drafts this replaced asserted only the field under test, so nothing in the
+	 * suite would have caught one option quietly overwriting another.
+	 *
+	 * @Then the mapping matches the form, unset fields at their defaults
+	 */
+	public function theMappingMatchesTheForm(): void {
+		// Exit code FIRST: reading the mapping runs `list-mappings`, which replaces
+		// the output a refusal would have been explained in.
+		if ($this->lastExit !== 0) {
+			throw new \RuntimeException("expected the mapping to be created, it was refused:\n" . $this->lastOutput);
+		}
+
+		if ($this->formDefaults === []) {
+			throw new \RuntimeException('no form defaults were declared; the assertion would check nothing');
+		}
+
+		$mapping = $this->firstMapping();
+
+		foreach ($this->formDefaults as $field => $default) {
+			$typed = trim($this->submittedForm[$field] ?? '');
+			$expected = $typed === '' ? trim($default) : $typed;
+			$actual = $this->settingOf($mapping, $field);
+
+			if ($actual !== $expected) {
+				throw new \RuntimeException(sprintf(
+					"expected the mapping's %s to be '%s'%s, got '%s'",
+					$field,
+					$expected,
+					$typed === '' ? ' (the default, the field was left unset)' : '',
+					$actual,
+				));
+			}
+		}
+	}
+
+	/** The CLI flag one filled-in field comes down to. */
+	private function flagFor(string $field, string $value): string {
+		return match ($field) {
+			'folder' => '--folder=' . escapeshellarg($value),
+			'mode' => '--mode=' . escapeshellarg($value),
+			'folder mode' => '--folder-mode=' . escapeshellarg($value),
+			'groups' => '--groups=' . escapeshellarg($value),
+			// The only storage worth a flag is the one you opt into; the plain
+			// shared folder IS the absence of it (§C6.31).
+			'storage' => $value === 'team folder' ? '--team-folder' : '',
+			default => throw new \RuntimeException("the mapping form has no field called \"{$field}\""),
+		};
+	}
+
+	/**
+	 * One saved setting, under the name the FORM calls it.
+	 *
+	 * @param array<string, mixed> $mapping
+	 */
+	private function settingOf(array $mapping, string $field): string {
+		$groups = $mapping['nc_groups'] ?? [];
+
+		return match ($field) {
+			'folder' => (string)($mapping['nc_folder'] ?? ''),
+			'mode' => (string)($mapping['mode'] ?? ''),
+			'folder mode' => (string)($mapping['folder_mode'] ?? ''),
+			'groups' => is_array($groups) ? implode(',', $groups) : '',
+			'storage' => ($mapping['use_team_folder'] ?? null) === true ? 'team folder' : 'plain shared folder',
+			default => throw new \RuntimeException("the mapping form has no field called \"{$field}\""),
+		};
 	}
 
 	/** @When /^the admin maps another team into the folder "([^"]*)"$/ */
@@ -258,28 +275,52 @@ trait MappingSteps {
 		$this->theMappingsFolderIs($expected);
 	}
 
-	/** @Then /^the mapping's groups are "([^"]*)"$/ */
-	public function theMappingsGroupsAre(string $expected): void {
-		$actual = $this->firstMapping()['nc_groups'] ?? [];
-		$actual = is_array($actual) ? implode(',', $actual) : '';
+	/**
+	 * The mapped folder EXISTS, and is the kind the mapping asked for.
+	 *
+	 * WHY THIS CAN RUN AT ALL: the admin leg installs groupfolders (§C6.30), so
+	 * both kinds are reachable in one run and a scenario can name the one it
+	 * wants. On a leg without it, the Team Folder half is untestable and the
+	 * scenario could only ever have been `@blocked`.
+	 *
+	 * The two are told apart by ASKING GROUPFOLDERS, not by looking at the folder:
+	 * from WebDAV a Team Folder and a plain folder are both just a folder, which
+	 * is the whole point of §14.1 — a user cannot tell which one answered.
+	 *
+	 * @Then /^a (Team Folder|plain shared folder) named "([^"]*)" exists$/
+	 */
+	public function aFolderOfKindNamedExists(string $kind, string $name): void {
+		if (!$this->davExists($name)) {
+			throw new \RuntimeException("expected a folder named '{$name}', found none");
+		}
 
-		if ($actual !== $expected) {
-			throw new \RuntimeException("expected the groups to be '{$expected}', got '{$actual}'");
+		$listed = $this->isAGroupFolder($name);
+
+		if ($kind === 'Team Folder' && !$listed) {
+			throw new \RuntimeException("'{$name}' exists but groupfolders does not know it — it is a plain folder");
+		}
+
+		if ($kind === 'plain shared folder' && $listed) {
+			throw new \RuntimeException("'{$name}' is a Team Folder, but the mapping never asked for one");
 		}
 	}
 
-	/** @Then the mapping uses a Team Folder */
-	public function theMappingUsesATeamFolder(): void {
-		if (($this->firstMapping()['use_team_folder'] ?? null) !== true) {
-			throw new \RuntimeException("expected the mapping to use a Team Folder:\n" . $this->lastOutput);
+	/** Does groupfolders own a mount point by this name? */
+	private function isAGroupFolder(string $mountPoint): bool {
+		$res = $this->occ('groupfolders:list --output=json');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("groupfolders:list failed — is the app installed on this leg?\n{$res['output']}");
 		}
-	}
 
-	/** @Then the mapping has no groups */
-	public function theMappingHasNoGroups(): void {
-		if (($this->firstMapping()['nc_groups'] ?? []) !== []) {
-			throw new \RuntimeException("expected no groups:\n" . $this->lastOutput);
+		$decoded = json_decode($res['output'], true);
+		foreach (is_array($decoded) ? $decoded : [] as $folder) {
+			$listedAs = $folder['mount_point'] ?? $folder['mountPoint'] ?? null;
+			if (is_array($folder) && $listedAs === $mountPoint) {
+				return true;
+			}
 		}
+
+		return false;
 	}
 
 	/** @Then the mapping's default mode is "link" */
