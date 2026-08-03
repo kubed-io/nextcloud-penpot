@@ -3109,3 +3109,33 @@ The version pins were wrong on the first try in the way `AGENTS.md` warns about 
 rest of this repo already used them. Checking `gh api repos/<o>/<r>/releases/latest`
 is in the gotchas list for a reason.
 
+##### …and the no-merge answer was right about the merge and wrong about the download
+
+The research held: `files:` really is a glob, the action really does aggregate,
+and no XML merging was needed. What shipped alongside it was a bug anyway, in the
+line nobody was studying — `merge-multiple: true` on the download.
+
+Behat names its report after the SUITE, not the leg. Every leg writes
+`<suite>.xml`, so flattening seven artifacts into one directory lands
+`design/plain` and `design/team` on the same `design.xml`, and the second
+download overwrites the first. Seven artifacts in, four files out. 173 tests
+reported as 97, 54 suites as 30.
+
+The number that matters is not the loss, it is WHICH results were lost: download
+order decides. That run published **`97 tests, 97 passed, 0 failed`** while
+`design / team` was red. A green report over a red matrix — the one failure mode
+a reporter must never have, and the one that would have quietly trained everybody
+to trust it.
+
+It was found by the person reading the summary and asking whether `4 files`
+looked right for a seven-leg matrix. It was not found by the workflow, because a
+silently smaller run looks exactly like a healthy one. So the fix carries a guard
+that counts legs against reports — one leg uploads one suite report, so any
+collision is arithmetic — and the guard was tested against both layouts before
+being trusted: 7/7 passes, the flattened layout fails.
+
+The lesson is the session's own recurring one, arriving from a new direction.
+Every previous instance was a hollow verification of the CHANGE. This one was a
+correct change with an unverified NEIGHBOUR: the merge question was researched
+properly and the download question was answered from habit in the same breath.
+
