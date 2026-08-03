@@ -201,10 +201,6 @@ final class MappingService {
 			);
 		}
 
-		$all = $this->list();
-		$all[] = $mapping;
-		$this->persist($all);
-
 		// PROVISION NOW, NOT ON THE FIRST SYNC. A mapping IS a folder — the admin
 		// pressed save and expects to see it, not to wait for a schedule they did
 		// not set. It used to appear only when PullService called ensureRoot on its
@@ -214,7 +210,19 @@ final class MappingService {
 		// the sync stays the safety net: a folder deleted by hand comes back on the
 		// next pass rather than staying gone. Same function, two callers, one for
 		// promptness and one for repair.
+		//
+		// BEFORE PERSISTING, AND THE ORDER IS THE POINT. If provisioning throws —
+		// no sync actor, the name already taken by a FILE — a saved row would
+		// outlive the failure and claim a folder that does not exist, which is
+		// exactly the invariant this call was added to establish. Failing here
+		// leaves nothing behind. The reverse order can leave a folder with no
+		// mapping if the write fails, and a folder with no mapping is just a
+		// folder: re-adding finds it and ensureRoot is idempotent.
 		$this->storage->ensureRoot($mapping);
+
+		$all = $this->list();
+		$all[] = $mapping;
+		$this->persist($all);
 
 		return $mapping;
 	}
@@ -255,7 +263,13 @@ final class MappingService {
 	 * Re-sharing a folder is the one change that moves no content, which is why it
 	 * is the one that stayed.
 	 *
-	 * @param list<string>|string $ncGroups
+	 * Takes whatever the caller has — a list, a comma-separated form field, or an
+	 * array of unknown shape off a request. {@see Mapping::withNcGroups()} runs it
+	 * through the same normaliser every other entry point uses, so there is one
+	 * definition of what a group list is and coercing at the boundary would only
+	 * add a second.
+	 *
+	 * @param array<array-key, mixed>|string $ncGroups
 	 *
 	 * @throws \InvalidArgumentException
 	 */

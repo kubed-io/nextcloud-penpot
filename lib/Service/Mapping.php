@@ -250,7 +250,7 @@ final class Mapping implements JsonSerializable {
 	 * A copy with the shared groups replaced — the only field a mapping may change
 	 * after it is created ({@see MappingService::updateGroups()}).
 	 *
-	 * @param list<string>|string $ncGroups
+	 * @param array<array-key, mixed>|string $ncGroups
 	 */
 	public function withNcGroups(array|string $ncGroups): self {
 		return new self($this->id, $this->teamId, $this->teamName, $this->ncFolder, self::normaliseGroups($ncGroups), $this->useTeamFolder, $this->mode, $this->folderMode);

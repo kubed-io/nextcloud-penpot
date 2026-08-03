@@ -167,6 +167,31 @@ final class MappingServiceTest extends TestCase {
 	}
 
 	/**
+	 * A mapping that could not be provisioned must not be saved.
+	 *
+	 * `add()` establishes "the folder exists when this returns" (§C6.32), so the
+	 * order matters: provisioning runs BEFORE the write. If it throws — no sync
+	 * actor, the name already taken by a file — the failure leaves nothing behind
+	 * rather than a row claiming a folder that was never built.
+	 */
+	public function testAMappingWhoseFolderCannotBeBuiltIsNotSaved(): void {
+		$storage = $this->createStub(StorageService::class);
+		$storage->method('isAvailable')->willReturn(true);
+		$storage->method('ensureRoot')->willThrowException(new \RuntimeException('no sync actor'));
+
+		$service = new MappingService($this->config, $this->client, $storage);
+
+		try {
+			$service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+			self::fail('expected the provisioning failure to surface');
+		} catch (\RuntimeException $e) {
+			self::assertSame('no sync actor', $e->getMessage());
+		}
+
+		self::assertSame([], (new MappingService($this->config, $this->client, $storage))->list());
+	}
+
+	/**
 	 * Groups are the ONE thing a mapping may change, and now the only thing the
 	 * API can express (§C6.33).
 	 *
