@@ -223,6 +223,53 @@ those scenarios are untagged below. Everything that depends on the PULL (Team
 Folder provisioning, project subfolders, rename propagation) is still @todo:
 MappingService and the admin surface exist, the sync engine does not.
 
+### The preconditions
+
+ONE SENTENCE PER FACT, AND A MAPPING IS ONE FACT.
+
+    Given a mapping with the following values:
+      | team    | Northwind    |
+      | folder  | Design Files |
+      | groups  | design,admin |
+      | storage | team folder  |
+
+The table takes the SAME fields as the creation form, and both run them through
+one `flagFor()`, so "storage" or "groups" means the same thing whether a value
+is being set up or submitted. An omitted or blank row is the app's own default,
+exactly as a blank cell is in the form.
+
+WHAT IT REPLACED was a family of sentences that each said a different SUBSET of
+the same fact — "…is mapped to the folder X", "…is mapped to a Team Folder",
+"…shared with Y". A scenario needing two of them said the mapping twice; a
+scenario needing a combination nobody had written yet had to grow a new step. A
+table has no subsets, so the family collapses to one sentence and the new
+combination is a new row.
+
+An intermediate draft went the other way and split the compound Given into
+three short sentences — the team exists, then it is mapped, then it is shared.
+That reads as a RECIPE for reaching the state rather than the state itself,
+which is not what a `Given` is for. One sentence that ties a team to its folder
+is the pre-state; three steps in sequence are how you would perform it.
+
+"IT" IS WHATEVER TEAM WAS NAMED LAST. Every sentence that names a team sets it,
+including this one, so the rest of a scenario never repeats the name. Naming
+another team afterwards re-points "it" — which is how "Two mappings cannot
+target the same Nextcloud folder" reaches a second team without a second
+mapping sentence, and why that scenario names it LAST.
+
+THE ONE-LINE FORM STILL EXISTS for the thirteen other feature files whose
+Background just needs a mapping to be there: "a Penpot team named X is mapped
+to the folder Y". It names the team the same way, so "it" works after either.
+It keeps `backendFlags()` — those files inherit the matrix leg's backend rather
+than choosing one, which is exactly the difference that makes it a separate
+sentence rather than an alias.
+
+GROUPS HAVE TO EXIST FIRST. `the Nextcloud groups "design,sales" exist` is a
+precondition and not a detail: only `admin` exists on a fresh instance, and a
+group that does not exist cannot be shared with. See
+"The groups a mapped folder is shared with can be changed" for how long that
+went unnoticed.
+
 ### Creating a mapping saves the form
 
 ONE BEHAVIOUR, AND EVERY ROW CHECKS ALL OF IT.
@@ -427,6 +474,16 @@ The empty-groups rows earn their place because of that: they are the only ones
 that prove PRUNING. The old code applied groups additively and never removed
 one, so "set the groups to nothing" silently did nothing at all.
 
+AND THE FIRST RUN OF IT CAUGHT THE SUITE LYING. Four of these scenarios had
+been green while proving nothing: `design` and `sales` do not exist on a fresh
+Nextcloud, nothing in the suite created them, and no share or assignment was
+ever made. It passed because it read the groups back out of the app's own
+stored copy — which faithfully recorded what we INTENDED. Reading through to the
+folder turned them red immediately, and `the Nextcloud groups "…" exist` is the
+fixture that was always missing. It is hard to think of a better argument for
+not storing what you can read: the cache did not just risk going stale, it was
+answering the question the test meant to ask.
+
 BOTH BACKENDS, NAMED OUT LOUD. This is the second place in the suite where
 the storage backend is the SUBJECT rather than a matrix dimension (§C6.30 is
 the other): a group change has to reach a groupfolders mount and an
@@ -439,29 +496,16 @@ having: an empty set is easy to treat as "nothing was sent, keep what is
 there", and on a Team Folder it is also the set that makes the folder
 invisible to everyone.
 
-FOUR PRECONDITIONS THAT EACH MEAN ONE THING. This used to open with a single
-compound Given — "a Penpot team named X is mapped to a <folder type>, shared
-with Y" — which said three things in one sentence and could therefore be
-reused for none of them. Split, every line is a sentence the suite already
-had or can now use anywhere: the team exists, it is mapped to a kind of
-folder, it is shared with a set. A scenario wanting a different starting
-point edits one line instead of needing a compound step of its own.
+THE PRE-STATE IS ONE SENTENCE AND A TABLE — see "The preconditions" above.
+The storage kind and the folder name are both Examples columns here, because
+the folder name has to differ per kind: removing a mapping deletes nothing, so
+a folder outlives the mapping that made it, and a later row reusing the name
+would inherit a folder of the wrong kind (the mistake §C6.32 records). Rows of
+the SAME kind DO reuse one folder, which is safe — ensureRoot() is idempotent.
 
-"it" carries the team forward, which is what makes the split readable rather
-than repetitive — the name is stated once, where it is established.
-
-AND THE SEED USES THE SAME COMMAND THE `When` DOES. `shared with` runs
-`set-groups`, not `add-mapping --groups`. Deliberate: a precondition reached
-by a different code path from the action could disagree with it about what
-"shared with these" means, which is exactly the disagreement this scenario is
-here to catch. It throws where the `When` reports, because a fixture that did
-not take is not a result to assert on.
-
-Each folder type maps into its own folder, chosen by the step from the type.
-Two rows of the SAME type reuse one folder, which is fine because ensureRoot()
-is idempotent — but a Team Folder and a plain folder must never share a name,
-or the second row inherits the first row's folder and asserts against the
-wrong thing (the mistake §C6.32 records).
+That hazard used to be hidden in the step's PHP, which picked a folder name
+from the kind. Putting it in the Examples table makes the reason visible at
+the point where someone would otherwise "tidy" the two names into one.
 
 THE FOLDER is what changes here — see above. That sentence used to read "the
 MAPPING is what changes here … re-sharing the provisioned folder is

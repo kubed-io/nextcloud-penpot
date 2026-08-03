@@ -82,7 +82,13 @@ trait PullSteps {
 	 */
 	public function aPenpotTeamNamedIsMappedToTheFolder(string $team, string $folder): void {
 		$this->noPenpotTeamsAreMapped();
-		$this->pulledTeamId = $this->teamNamed($team);
+
+		// NAMES THE TEAM as well as mapping it, so a scenario that starts from this
+		// one sentence can still say "it" afterwards — which is how the refusals in
+		// admin-mapping.feature reach a team without repeating its name. Same reason
+		// its Team-Folder twin does it.
+		$this->aPenpotTeamNamedExists($team);
+		$this->pulledTeamId = $this->namedTeamId;
 
 		$res = $this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder=%s %s',

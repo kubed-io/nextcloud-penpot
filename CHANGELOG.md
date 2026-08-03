@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Re-share a mapped folder from anywhere and this app reflects it.** The groups a mapped folder is shared with are now read from the folder itself rather than stored alongside the mapping, so a change made in Files or with `occ` shows up here and a sync never puts back a group you removed. Setting the groups to nothing now actually clears them, which it silently did not before.
+- **BREAKING:** the `folder mode` setting is gone. It offered `nested` and `keyed`, but only `nested` was ever implemented and `keyed` was refused on save, so it was a choice with one usable value. `--folder-mode` is no longer accepted; existing mappings are unaffected.
+- The new-mapping form no longer arrives with **Team Folder** pre-ticked, matching what `occ penpot_sync:add-mapping` does when you say nothing.
 - **`occ penpot_sync:set-groups`** changes the groups a mapped folder is shared with — the one field a mapping lets you edit, previously reachable only from the admin panel.
 - **A mapped folder now appears the moment you save the mapping**, instead of only when the first sync runs — which could be up to an hour later, and made a fresh mapping look broken. A sync still re-creates it if it goes missing.
 - A mapping that asks for a Team Folder is now **refused up front** when the `groupfolders` app is not available, rather than being saved and failing on every sync afterwards.

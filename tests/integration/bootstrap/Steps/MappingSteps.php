@@ -47,21 +47,6 @@ trait MappingSteps {
 	}
 
 	/**
-	 * Map a named team, naming no folder — the case where the folder name is left
-	 * to default to the team's own.
-	 *
-	 * DOES NOT THROW ON FAILURE, and neither does any other `When` here. Half these
-	 * scenarios are asserting a REFUSAL, so the outcome belongs to the `Then` that
-	 * follows; a step that threw first would make "the mapping is rejected"
-	 * unreachable. `$this->lastExit` and `$this->lastOutput` carry the verdict.
-	 *
-	 * @When /^the admin maps the Penpot team "([^"]*)"$/
-	 */
-	public function theAdminMapsThePenpotTeam(string $team): void {
-		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($this->teamNamed($team)));
-	}
-
-	/**
 	 * Map by RAW ID, for the ids that resolve to nothing.
 	 *
 	 * The one step here that does not take a NAME, and deliberately so: it exists
@@ -120,13 +105,128 @@ trait MappingSteps {
 	private string $namedTeam = '';
 	private string $namedTeamId = '';
 
-	/** @When /^the admin maps the team "([^"]*)" into the folder "([^"]*)"$/ */
-	public function theAdminMapsTheTeamIntoTheFolder(string $team, string $folder): void {
+	/**
+	 * The team the scenario is talking about when it says "it".
+	 *
+	 * Every sentence that names a team sets this, INCLUDING the two that map one
+	 * in the same breath, so "it" always means the team most recently named. That
+	 * is what lets one `When` serve both refusals: map the same team again (no
+	 * second team named) or map a different one into a taken folder (a second team
+	 * named first).
+	 */
+	private function theNamedTeam(): string {
+		if ($this->namedTeamId === '') {
+			throw new \RuntimeException(
+				'this step says "it", but no team has been named yet — name one first',
+			);
+		}
+
+		return $this->namedTeamId;
+	}
+
+	/**
+	 * Map whichever team was named last, into a folder the scenario picks.
+	 *
+	 * @When /^the admin maps it into the folder "([^"]*)"$/
+	 */
+	public function theAdminMapsItIntoTheFolder(string $folder): void {
 		$this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder=%s',
-			escapeshellarg($this->teamNamed($team)),
+			escapeshellarg($this->theNamedTeam()),
 			escapeshellarg($folder),
 		));
+	}
+
+	/**
+	 * A whole mapping, stated as the state it is rather than the steps that reach
+	 * it — the one pre-state sentence every scenario in admin-mapping.feature
+	 * starts from.
+	 *
+	 * ## ONE VOCABULARY FOR THE PRE-STATE AND THE ACTION
+	 *
+	 * The table takes the SAME fields as the creation form ({@see theAdminMapsWith()}),
+	 * and both run them through {@see flagFor()}, so there is one definition of what
+	 * "storage" or "groups" means and a scenario reads the same whether a value is
+	 * being set up or submitted. An omitted or blank row is the app's own default,
+	 * exactly as a blank cell is in the form.
+	 *
+	 * It replaced a family of near-identical sentences — "…is mapped to the folder
+	 * X", "…is mapped to a Team Folder", "…shared with Y" — each of which said a
+	 * DIFFERENT SUBSET of the same fact, so a scenario needing two of them said the
+	 * mapping twice and a scenario needing a third had to grow a new step. A table
+	 * has no subsets.
+	 *
+	 * NAMES THE TEAM, so everything after can say "it". Naming another team
+	 * afterwards re-points "it", which is how a scenario reaches a second team
+	 * without a second sentence for mapping one.
+	 *
+	 * @Given /^a mapping with the following values:$/
+	 */
+	public function aMappingWithTheFollowingValues(TableNode $values): void {
+		$fields = $values->getRowsHash();
+		$team = trim($fields['team'] ?? '');
+		unset($fields['team']);
+
+		if ($team === '') {
+			throw new \RuntimeException('a mapping needs a team — add a "team" row to the table');
+		}
+
+		$this->noPenpotTeamsAreMapped();
+		$this->aPenpotTeamNamedExists($team);
+
+		$flags = [];
+		foreach ($fields as $field => $value) {
+			$value = trim($value);
+			if ($value !== '') {
+				$flags[] = $this->flagFor($field, $value);
+			}
+		}
+
+		$res = $this->occ(sprintf(
+			'penpot_sync:add-mapping %s %s',
+			escapeshellarg($this->namedTeamId),
+			implode(' ', $flags),
+		));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not map \"{$team}\":\n{$res['output']}");
+		}
+	}
+
+	/**
+	 * The Nextcloud groups a scenario is about to share a folder with.
+	 *
+	 * WITHOUT THIS THE GROUP SCENARIOS PROVED NOTHING, and nothing could tell.
+	 * Only `admin` exists on a fresh instance — `design` and `sales` were never
+	 * created, so no share or assignment was ever made for them. The suite passed
+	 * regardless, because it read the groups back out of the app's own stored copy,
+	 * which recorded what we INTENDED. Sourcing them from the folder (§C6.35)
+	 * turned four green scenarios red on the first run. That is the argument for
+	 * reading through rather than remembering, made by the suite itself.
+	 *
+	 * Idempotent: a leg runs many scenarios against one Nextcloud, so this
+	 * find-or-creates exactly as {@see teamNamed()} does for Penpot teams.
+	 *
+	 * @Given /^the Nextcloud groups "([^"]*)" exist$/
+	 */
+	public function theNextcloudGroupsExist(string $groups): void {
+		foreach (explode(',', $groups) as $gid) {
+			$gid = trim($gid);
+			if ($gid === '') {
+				continue;
+			}
+
+			// `group:add` exits non-zero when the group is already there, which is
+			// success for our purposes. So the exit code is ignored and existence is
+			// confirmed below instead — that check is the one that matters, and it
+			// covers both paths.
+			$this->occ('group:add ' . escapeshellarg($gid));
+
+			$res = $this->occ('group:list --output=json');
+			if ($res['exit'] !== 0 || !str_contains($res['output'], '"' . $gid . '"')) {
+				throw new \RuntimeException("could not create the Nextcloud group \"{$gid}\":\n{$res['output']}");
+			}
+		}
 	}
 
 	/**
@@ -160,9 +260,9 @@ trait MappingSteps {
 	 * Does not throw on a non-zero exit: half the rows using this step expect a
 	 * refusal, and that verdict belongs to the `Then`.
 	 *
-	 * @When /^the admin maps "([^"]*)" with:$/
+	 * @When /^the admin maps it with:$/
 	 */
-	public function theAdminMapsWith(string $team, TableNode $form): void {
+	public function theAdminMapsWith(TableNode $form): void {
 		$this->submittedForm = $form->getRowsHash();
 
 		$flags = [];
@@ -175,7 +275,7 @@ trait MappingSteps {
 
 		$this->occ(sprintf(
 			'penpot_sync:add-mapping %s %s',
-			escapeshellarg($this->teamNamed($team)),
+			escapeshellarg($this->theNamedTeam()),
 			implode(' ', $flags),
 		));
 	}
@@ -255,26 +355,6 @@ trait MappingSteps {
 		};
 	}
 
-	/** @When /^the admin maps another team into the folder "([^"]*)"$/ */
-	public function theAdminMapsAnotherTeamIntoTheFolder(string $folder): void {
-		$mapped = $this->mappings();
-		$taken = $mapped === [] ? '' : (string)($mapped[0]['team_id'] ?? '');
-
-		foreach ($this->visibleTeamIds() as $id) {
-			if ($id !== $taken) {
-				$this->occ(sprintf(
-					'penpot_sync:add-mapping %s --folder=%s',
-					escapeshellarg($id),
-					escapeshellarg($folder),
-				));
-
-				return;
-			}
-		}
-
-		throw new \RuntimeException('needs a second visible Penpot team, found only one');
-	}
-
 	/** @Then /^the mapping's Nextcloud folder is "([^"]*)"$/ */
 	public function theMappingsFolderIs(string $expected): void {
 		$actual = (string)($this->firstMapping()['nc_folder'] ?? '');
@@ -287,71 +367,6 @@ trait MappingSteps {
 	/** @Then /^the mapping's Nextcloud folder is still "([^"]*)"$/ */
 	public function theMappingsFolderIsStill(string $expected): void {
 		$this->theMappingsFolderIs($expected);
-	}
-
-	/**
-	 * Map the team the scenario just named onto a NAMED BACKEND.
-	 *
-	 * Says "it" because the team is already established — see
-	 * {@see aPenpotTeamNamedExists()}. Three short preconditions that each mean one
-	 * thing beat one sentence that means three: every clause here is a sentence the
-	 * suite can use on its own, and a scenario that wants a different starting
-	 * point changes one line instead of needing its own compound step.
-	 *
-	 * Does not read {@see backendFlags()} — this is the one place the scenario
-	 * chooses the backend rather than inheriting the leg's, because the backend is
-	 * what it is testing. The admin leg installs groupfolders so both are reachable.
-	 *
-	 * The folder name comes from the KIND, so a Team Folder and a plain folder can
-	 * never collide on one name. They must not: removing a mapping deletes nothing,
-	 * so a folder outlives the mapping that made it and a later mapping reusing the
-	 * name would inherit a folder of the wrong kind (§C6.32). Rows of the same kind
-	 * DO share a folder, which is safe — ensureRoot() is idempotent.
-	 *
-	 * @Given /^it is mapped to a (Team Folder|plain folder)$/
-	 */
-	public function itIsMappedToA(string $kind): void {
-		if ($this->namedTeamId === '') {
-			throw new \RuntimeException('no team has been named yet — say which team is mapped first');
-		}
-
-		$res = $this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder=%s %s',
-			escapeshellarg($this->namedTeamId),
-			escapeshellarg($kind === 'Team Folder' ? 'Groups On A Team Folder' : 'Groups On A Plain Folder'),
-			$kind === 'Team Folder' ? '--team-folder' : '',
-		));
-
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not map \"{$this->namedTeam}\" onto a {$kind}:\n{$res['output']}");
-		}
-	}
-
-	/**
-	 * The starting sharing, as a precondition rather than an argument.
-	 *
-	 * Runs the same `set-groups` the `When` below does, and that is deliberate:
-	 * this is the state a scenario needs to START in, and there is exactly one
-	 * mechanism for reaching it. Making the seed a distinct code path — the flag on
-	 * `add-mapping` — would mean the precondition and the action could disagree
-	 * about what "shared with these" does, which is precisely the disagreement the
-	 * scenario exists to catch.
-	 *
-	 * It throws where the `When` reports, because a fixture that did not take is
-	 * not a result to assert on.
-	 *
-	 * @Given /^shared with "([^"]*)"$/
-	 */
-	public function sharedWith(string $groups): void {
-		$res = $this->occ(sprintf(
-			'penpot_sync:set-groups %s %s',
-			escapeshellarg((string)($this->firstMapping()['id'] ?? '')),
-			escapeshellarg($groups),
-		));
-
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not share the mapped folder with \"{$groups}\":\n{$res['output']}");
-		}
 	}
 
 	/** @When /^the admin changes that mapping's groups to "([^"]*)"$/ */
