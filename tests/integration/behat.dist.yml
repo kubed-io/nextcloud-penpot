@@ -90,7 +90,7 @@ default:
 
     core:
       paths:
-      - '%paths.base%/../../features/reconcile.feature'
+      - '%paths.base%/../../features/sync-now.feature'
       - '%paths.base%/../../features/mapping-membership.feature'
       - '%paths.base%/../../features/file-type.feature'
       - '%paths.base%/../../features/open-with.feature'
