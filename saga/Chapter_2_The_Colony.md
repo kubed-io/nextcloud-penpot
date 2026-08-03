@@ -3234,9 +3234,9 @@ at.
 
 #### Asserting a feature that does not exist (1)
 
-`An ignored file is skipped by the pull, not pruned` — there is no per-file ignore
-in this app. It is the same assumption the untracked-restore scenario smuggled in,
-and it goes where that one went: the `penpot:ignore` open question, not a test.
+`An ignored file is skipped by the pull, not pruned` — there is no user-set per-file ignore marker implemented yet.
+It is the same assumption the untracked-restore scenario smuggled in, and it goes where that one went:
+the `penpot:ignore` open question, not a test.
 
 #### The one that moves house (1)
 
