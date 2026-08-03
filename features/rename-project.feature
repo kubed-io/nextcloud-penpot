@@ -31,8 +31,7 @@ Feature: Renaming a Penpot project
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And no Penpot teams are mapped
-    And the first visible team is mapped to the folder "Penpot"
+    And a Penpot team is mapped to the folder "Penpot"
 
   # A PROJECT FOLDER IS ITS OWN FLOW, not a variant of the file rename (§6.36 /
   # §6.39): a different event, a different id, a different RPC, and a 204 with no

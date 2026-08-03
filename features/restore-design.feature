@@ -28,8 +28,7 @@ Feature: Restoring a mirrored design
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
-    And no Penpot teams are mapped
-    And the first visible team is mapped to the folder "Penpot"
+    And a Penpot team is mapped to the folder "Penpot"
 
   @in-nextcloud @gesture
   Scenario: Restoring a design brings back the file and its design together
@@ -63,17 +62,32 @@ Feature: Restoring a mirrored design
     # business.
 
   @in-nextcloud @gesture
-  Scenario: Restoring an untracked ".penpot" file never contacts Penpot
-    Given a mirrored design "Not Involved" in the project "Bystander"
-    And an uploaded ".penpot" archive at "Penpot/Bystander/Strays In.penpot"
-    And "Penpot/Bystander/Strays In.penpot" is in the trash
-    When I restore "Penpot/Bystander/Strays In.penpot" from the Nextcloud trash
-    Then the file "Penpot/Bystander/Strays In.penpot" carries no Penpot id
-    And Penpot project "Bystander" holds a design named "Not Involved"
-    And Penpot project "Bystander" holds no design named "Strays In"
-    # Restore only ever puts BACK something this app mirrored out. Inventing a
-    # design for a file that never had one is team-import.feature's still-open
-    # fork, and it must not happen by accident on the way out of the trash.
+  Scenario: Restoring a file that was never in Penpot leaves Penpot alone
+    Given an uploaded ".penpot" archive at "Loose Design.penpot"
+    And "Loose Design.penpot" is in the trash
+    When I restore "Loose Design.penpot" from the Nextcloud trash
+    Then the file "Loose Design.penpot" is not in the Nextcloud trash
+    And the file "Loose Design.penpot" carries no Penpot id
+    # A restore only ever puts BACK something this app mirrored out. Inventing a
+    # design for a file that never had one is team-import.feature's open fork, and
+    # it must not happen by accident on the way out of the trash.
+    #
+    # THE OLD VERSION ASSUMED SOMETHING THE APP DOES NOT ALLOW. It staged a
+    # "mirrored design in the project Bystander", uploaded a second, untracked
+    # `.penpot` NEXT TO IT inside that same mapped project folder, and then
+    # asserted the bystander was still there — an uninvolved file being uninvolved,
+    # which is not a claim worth a scenario unless the two could collide, and they
+    # cannot.
+    #
+    # Worse, it implied a `.penpot` file can sit inside a mapped project folder
+    # WITHOUT being in Penpot. Nothing in this app produces that state: anything
+    # under a mapping is mirrored. An opt-out marker — a `penpot:ignore` tag, say —
+    # would create it, and that idea has never been designed, only implied by this
+    # scenario. It is written down in the saga as an open question rather than
+    # smuggled in as a fact the spec depends on.
+    #
+    # So the file lives OUTSIDE every mapping, which is the only way a `.penpot`
+    # file is genuinely untracked today, and the assertions are about it alone.
 
     # ── restore is never automatic ───────────────────────────────────────────────
 

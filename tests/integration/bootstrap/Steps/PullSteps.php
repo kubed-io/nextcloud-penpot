@@ -61,7 +61,17 @@ trait PullSteps {
 	 * The old phrasing said "as a plain folder", which was true of the only
 	 * backend CI could reach and is now a lie on half the legs.
 	 *
-	 * @Given /^the first visible team is mapped to the folder "([^"]*)"$/
+	 * ONE ATOMIC PRE-STATE, AND IT ALREADY RESETS. The Background used to say "no
+	 * Penpot teams are mapped" and then map one on the next line — a statement
+	 * contradicted by the line beneath it, and a redundant one, because this step
+	 * calls noPenpotTeamsAreMapped() itself. A Background is pre-state: it says how
+	 * the world IS so the scenario is doable, not what was done to get there.
+	 *
+	 * "the first visible team" also leaked the fixture into the spec. Which team it
+	 * is has never mattered to a single scenario; that a team IS mapped is the
+	 * whole precondition.
+	 *
+	 * @Given /^a Penpot team is mapped to the folder "([^"]*)"$/
 	 */
 	public function theFirstVisibleTeamIsMappedToAFolder(string $folder): void {
 		$this->noPenpotTeamsAreMapped();

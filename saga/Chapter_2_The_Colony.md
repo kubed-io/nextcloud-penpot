@@ -3139,3 +3139,28 @@ Every previous instance was a hollow verification of the CHANGE. This one was a
 correct change with an unverified NEIGHBOUR: the merge question was researched
 properly and the download question was answered from habit in the same breath.
 
+#### An open question the spec had already assumed the answer to
+
+`restore-design.feature` carried a scenario that uploaded an untracked `.penpot`
+file INSIDE a mapped project folder and asserted the app left it alone. Nothing
+in this app produces that state — anything under a mapping is mirrored — so the
+scenario was quietly asserting a capability that does not exist.
+
+The only thing that WOULD produce it is an opt-out marker: a `penpot:ignore` tag,
+or a naming convention, that tells the mirror to keep its hands off a file
+sitting inside a mapped folder. That is a real idea with real questions behind
+it — does the pull skip it, does the prune skip it, what happens when the tag is
+removed later, and does an ignored file block the name its Penpot design wants —
+and none of them have been asked, let alone answered.
+
+It is recorded here as an open question rather than left implied by a test.
+Until it is designed, the features assume the simple truth: a design under a team
+folder or a project folder is in Penpot, and the only way to have a `.penpot`
+file that is not is to keep it outside every mapping. The scenario was rewritten
+to do exactly that.
+
+The general lesson is the one this whole chapter keeps re-learning from a new
+angle. A test is a claim about the system. This one made a claim nobody had
+decided was true, and because it passed — an uninvolved file being uninvolved
+passes trivially — it looked like evidence for a feature that was never built.
+
