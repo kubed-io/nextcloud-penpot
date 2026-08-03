@@ -3195,7 +3195,7 @@ situation — whatever put the designs in Penpot before this app existed is out 
 scope, so "existing designs arrive for the first time" is a real, independent
 thing to describe, and it only needs one or two designs to describe it.
 
-`sync-now.feature` replaces `reconcile.feature`. Scenarios 1, 2 and 8 of the old
+`sync-now.feature` will replace `reconcile.feature` once the scenarios are moved. Scenarios 1, 2 and 8 of the old
 file become its assertions.
 
 #### Redundant with the file that owns the verb (13)
