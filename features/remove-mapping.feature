@@ -1,35 +1,4 @@
-# Removing a team mapping — the admin deletes a mapping from the list (or
-# `occ penpot_sync:remove-mapping`). This is NOT the "Purge Nextcloud files"
-# button (that keeps the mapping and never touches Penpot — see purge.feature).
-# Removing a MAPPING tears down the connection: what happens to the files that
-# were mirrored through it?
-#
-# A MAPPING IS A TEAM, AND THAT'S THE ONLY THING THERE IS TO REMOVE (saga §6.24).
-# An earlier draft had a "remove the My Stuff project mapping" scenario. That
-# operation doesn't exist and never coherently could: project subfolders are
-# MIRRORED by the pull, not mapped by a human, so "removing" one would just mean
-# the next pull recreates it. One mapping object, one lifecycle.
-#
-# GRAFANA HAS THIS FILE, N8N DOESN'T — Grafana's exists because its recycle-bin
-# setting gives removing a mapping a two-path story. This app has no such
-# setting: Penpot provides its own trash (saga §6.49/§6.52), and it only ever
-# engages on an explicit "Delete in Penpot" action. Removing a mapping never
-# deletes anything in Penpot at all, so teardown collapses to ONE rule — but the
-# file is still needed, because the app DOES provision real folders that a
-# removed mapping leaves behind.
-#
-# THE CONTRACT: every mirrored file connected to the removed mapping goes to the
-# Nextcloud trash and becomes unmapped — purely local, since there is no remote
-# state to reconcile. Files that were never part of the mapping are left strictly
-# alone. Penpot is never contacted, at any point.
-#
-# MODE MATTERS FOR WHAT THE USER ACTUALLY LOSES (saga §6.22): a trashed "sync"
-# file still holds its real archive, so it's recoverable content. A trashed
-# "link" file was only ever a pointer — there's nothing in it to recover. The
-# teardown warns about this, because "removing a mapping deleted my backups" and
-# "removing a mapping deleted some pointers" are very different events.
-#
-# @todo — no lib/Service/MappingTeardownService exists yet.
+# Notes, decisions and history for this feature: AGENTS.md#remove-mapping
 
 Feature: Removing a mapping tears down the connection without ever touching Penpot
   As a Nextcloud admin

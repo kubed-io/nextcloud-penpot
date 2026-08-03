@@ -1,85 +1,15 @@
-# SPECULATIVE — this file documents a PROPOSAL (saga §6.15), not a locked
-# design, and it directly touches an open architectural fork. Do not read any
-# scenario below as decided behaviour; every one of them is written to make the
-# open questions visible, the same "design, not wired" convention both sibling
-# apps use for their own undecided slices (compare Grafana's tag-sync.feature
-# header, or n8n's speculative-fork write-ups).
-#
-# THE PROPOSAL: from wherever a user's Penpot token is configured
-# (personal-settings.feature), query that account's visible Penpot teams, show
-# which already correspond to an existing Nextcloud Team Folder and which
-# don't, and let the user opt to "import" one — provisioning a Team Folder that
-# becomes a team mapping (admin-mapping.feature). This reuses §6.13's
-# ownership-pill/tag mechanism for a SECOND purpose: pulling FROM Penpot, a
-# project becomes/matches a same-named subfolder by ordinary name-matching
-# (fine, because §6.13 already locked mapped-folder naming as
-# Penpot-authoritative on the pull direction — see admin-mapping.feature). Going
-# the OTHER way — a user makes a plain folder inside a mapped Team Folder and
-# wants it to BECOME a new Penpot project — name-matching alone can't
-# disambiguate "this is meant to be a project" from "this is just reference
-# material sitting in the folder" (§6.13's tolerated-content rule), so the
-# proposal is a dedicated app-owned tag as the creation signal: tag present ⇒
-# create the project in Penpot (via `create-project`, confirmed real in §6.5) on
-# the next pull cycle; tag absent ⇒ ordinary tolerated content, untouched.
-#
-# WHY THIS IS STILL OPEN, NOT LOCKED (do not resolve these here):
-#
-#   1. THIS REOPENS §6.1, NOT JUST EXTENDS IT (saga §6.7/§6.15). §6.1 locked
-#      Nextcloud as read-only — no writeback, no Nextcloud-originated content.
-#      "New Penpot project from a tagged Nextcloud folder" is Nextcloud
-#      ORIGINATING a Penpot object. That's not disqualifying, but it means this
-#      proposal is really asking for a narrower carve-out than blanket
-#      read-only: existing files/projects stay strictly read-only; CREATION
-#      would be a distinct, separately-decided path. Nothing in this app should
-#      treat that carve-out as granted until a saga chapter says so explicitly.
-#
-#   2. TEAM FOLDER CREATION PERMISSIONS (saga §6.15, the one genuinely NEW open
-#      point raised by this section specifically): Team Folders are
-#      admin-configured by default; a non-admin, non-delegated user checking an
-#      "import as Team Folder" box has nothing behind that checkbox to act on,
-#      on this cluster today. Whether the UI greys the box out, routes to an
-#      admin-approval step, or something else is explicitly undecided.
-#
-#   3. `import-binfile` IS NOW CONFIRMED WORKING (saga §6.20 — open question #6
-#      closed). Both the create-new and in-place variants were exercised live.
-#      So this fork is no longer blocked on "does the mechanism exist"; it's
-#      blocked purely on the §6.1 policy question in point 1. Three practical
-#      facts came out of that testing and apply here: the call is SSE, its params
-#      are kebab-case (`project-id`, not `projectId`), and its `name` parameter
-#      is IGNORED — an imported file takes the name from its archive manifest, so
-#      any create path needs a follow-up `rename-file`.
-#
-#   4. THE SERVICE ACCOUNT MUST ALREADY BE ON THE TEAM (saga §6.18, new since
-#      this file was written): a team can't be mapped at all unless the service
-#      account holds a `viewer` invite. That changes this feature's framing —
-#      "import a team I can see" is really "import a team BOTH I and the service
-#      account can see." A user's personal token showing them a team is not
-#      sufficient for it to be importable, and the UI must say which of the two
-#      is missing rather than just failing.
-#
-# CI SKIPS THIS ENTIRE FILE. Nothing here should be implemented against until a
-# future saga chapter either ratifies §6.7/§6.15's creation carve-out or
-# explicitly rejects it in favour of the plainer "map only what already exists
-# in Penpot" shape (admin-mapping.feature).
+# Notes, decisions and history for this feature: AGENTS.md#team-import
 
 Feature: Importing an existing Penpot team as a Team Folder, and the open question of Nextcloud-originated projects
   As a Nextcloud user with a configured Penpot token
   I want to see which of my Penpot teams are already mapped and import the ones that aren't
   So that connecting a new team doesn't require the admin to hand-configure every mapping
-    # NOTE: only the IMPORT-AN-EXISTING-TEAM half of this feature is proposed as
-    # buildable-once-ratified; the tag-triggers-project-CREATION half is
-    # additionally gated on the still-open §6.1 read-only-scope question above.
+    # notes: AGENTS.md#team-import-background
 
   Background:
     Given the app is connected to Penpot
     And the user has a personal Penpot token configured
 
-    # ── the "already imported, shows up automatically" half — confirmed workable ──
-    # Confirmed against the groupfolders README + live behaviour (saga §6.15): a
-    # Team Folder "shows up in the home folder for each user in the configured
-    # groups" automatically once granted — there's no separate pending state to
-    # build. So detecting "is this already imported" is a read-only match, not a
-    # grant action.
   @unbuilt
   Scenario: A Penpot team already mapped to a Team Folder is detected, not re-imported
     Given the Penpot team "Northwind" is already mapped to a Team Folder
@@ -96,15 +26,9 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     When the user tries to import "New Team" as a Team Folder
     Then the import is refused or routed to an admin approval step
     And the UI explains that Team Folder creation is admin-configured by default
-    # Which of "refused with an explanation" vs "routed to an admin step" is
-    # correct is explicitly undecided (saga §6.15) — this scenario only asserts
-    # that the checkbox is NOT allowed to silently no-op or silently succeed
-    # for a user who lacks the underlying permission.
+    # notes: AGENTS.md#importing-an-unmapped-team-as-a-team-folder-requires-team-folder-rights
 
-    # ── the OTHER gate, new since saga §6.18: service-account visibility ────────
-    # A user seeing a team through their personal token is NOT sufficient. The
-    # service account does all mirroring, so it must be able to see the team too,
-    # or the resulting mapping would pull nothing forever.
+    # notes: AGENTS.md#a-team-the-service-account-cannot-see-is-shown-as-not-importable
   @blocked
   Scenario: A team the service account cannot see is shown as not importable
     Given the Penpot team "Solo Team" is visible to the user's personal token
@@ -113,25 +37,6 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     Then "Solo Team" is listed but marked as not importable
     And the UI explains the service account must be invited as "viewer" first
     And it names which of the two prerequisites is missing
-    # Two distinct gates now exist — Team Folder rights and service-account
-    # visibility. Failing to say WHICH one blocked the import turns a fixable
-    # setup step into a mystery.
-
-    # ── creation-via-tag: DECIDED AND SHIPPED (§C6.18) ──────────────────────────
-    # This section used to be headed "the speculative, explicitly-not-decided
-    # creation-via-tag mechanism", with a tag "name TBD", an "open fork against
-    # §6.1", and a scenario that deliberately asserted nothing. All three are
-    # settled: the tag is `penpot`, the fork closed the same way §6.33 closed for
-    # files (creating a CONTAINER is not pushing CONTENT), and the behaviour is
-    # live in create-project.feature.
-    #
-    # It happens on the TAG EVENT, not on the next pull — the pull never
-    # originates anything in Penpot, and making it the actor would have meant a
-    # user's gesture taking up to five minutes to have an effect.
-    #
-    # What is left for this file is the import surface's view of it: an admin
-    # looking at a team they have not mapped should be told what tagging would do,
-    # not left to discover it.
 
   @unbuilt
   Scenario: The import surface explains that tagging a folder creates a project
@@ -140,6 +45,4 @@ Feature: Importing an existing Penpot team as a Team Folder, and the open questi
     Then that subfolder is ordinary tolerated content — nothing happens to it
     # The confirmed, locked tolerated-content rule (§6.13), unchanged by the tag.
     And the import surface names the "penpot" tag as the way to make one a project
-    # The behaviour itself is asserted in create-project.feature, where it is
-    # live. Duplicating the assertion here would be the two-files-one-behaviour
-    # mistake features/README.md exists to prevent.
+    # notes: AGENTS.md#the-import-surface-explains-that-tagging-a-folder-creates-a-project

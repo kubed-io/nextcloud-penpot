@@ -1,27 +1,4 @@
-# Renaming a PROJECT — the folder in Nextcloud and the Penpot project it maps to.
-# Renaming a DESIGN is rename-design.feature: same gesture in the Files app, but
-# a different Penpot object (`rename-project` vs `rename-file`) and a different
-# set of name rules, because a project name has to survive becoming a folder name.
-#
-# A PROJECT IS A FOLDER. That is why this file exists separately: in Nextcloud a
-# Penpot project has no representation other than a folder, so every constraint
-# Nextcloud puts on folder names lands here and nowhere else.
-#
-# PENPOT → NEXTCLOUD: the pull compares Penpot's project name against the folder
-# on disk and renames the folder, keyed on `penpot_project_id` — never on the
-# name, which is exactly what a rename would defeat.
-#
-# NEXTCLOUD → PENPOT: locked since saga §6.36. This direction was settled BEFORE
-# the file rename was (§6.54), and the asymmetry it created is what forced that
-# decision.
-#
-# THE NAME RULES ARE THE SUBSTANCE HERE. A project name that cannot become a
-# folder name is REFUSED rather than sanitised (saga §6.51): "foo/bar" and
-# "foo-bar" would both collapse to "foo-bar", silently merging two distinct
-# projects into one folder with no way to tell which is which. Refusing visibly
-# beats breaking the names-always-match rule invisibly. Inferring a parent folder
-# from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), never a
-# fallback triggered by one awkward name.
+# Notes, decisions and history for this feature: AGENTS.md#rename-project
 
 Feature: Renaming a Penpot project
   As a Nextcloud user
@@ -33,14 +10,7 @@ Feature: Renaming a Penpot project
     And the admin has configured the service-account token
     And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 
-  # A PROJECT FOLDER IS ITS OWN FLOW, not a variant of the file rename (§6.36 /
-  # §6.39): a different event, a different id, a different RPC, and a 204 with no
-  # body instead of a record. It had no live coverage at all, which meant the two
-  # rename paths were one green test and one assumption.
-  #
-  # The assertion works because `penpot_sync:probe` lists PENPOT's own project
-  # names — so finding a design under the new name proves Penpot renamed the
-  # project, not merely that Nextcloud renamed a folder.
+  # notes: AGENTS.md#rename-project-background
   @in-nextcloud @gesture
   Scenario: Renaming a project folder renames the project in Penpot
     Given a mirrored design "Inside" in the project "Old Project Name"
@@ -54,9 +24,7 @@ Feature: Renaming a Penpot project
     When I rename "Penpot/Renamed Around It" to "Renamed Around It v2"
     Then Penpot project "Renamed Around It v2" holds a design named "Untouched Design"
     And the file "Penpot/Renamed Around It v2/Untouched Design.penpot" carries a Penpot id
-    # `rename-project` takes the PROJECT id; nothing about the files changes, and
-    # a regression that sent file ids here would rename a design instead — which
-    # this catches, because the design would no longer be found by its own name.
+    # notes: AGENTS.md#renaming-a-project-folder-does-not-touch-the-designs-inside-it
 
   @in-nextcloud @gesture @todo
   Scenario: A failed project rename leaves the local rename standing
@@ -66,9 +34,7 @@ Feature: Renaming a Penpot project
     And Penpot is unchanged
     And the divergence is reported
     And the next pull reconciles the name
-    # Saga §6.18 rule 3 — a remote failure never destroys local state. Same rule
-    # as the file twin below, and it has to be stated for both because they are
-    # different listeners reading different ids.
+    # notes: AGENTS.md#a-failed-project-rename-leaves-the-local-rename-standing
 
   @in-nextcloud @gesture @blocked
   Scenario: A project rename is attributed to the acting user
@@ -107,9 +73,7 @@ Feature: Renaming a Penpot project
     Given the mapping's folder mode is "nested"
     When a project is created or renamed through this app
     Then the resulting Penpot project name never contains "/"
-    # A Nextcloud folder name cannot contain "/" anyway, so this is automatic for
-    # renames — but it must also hold for the CREATE path (create-project.feature's
-    # tag opt-in), which is where a name could be composed rather than typed.
+    # notes: AGENTS.md#in-nested-mode-the-app-never-sends-a-slash-to-penpot
 
   @in-penpot @todo
   Scenario: In nested mode, a project whose name contains a slash is skipped with a clear reason
@@ -145,11 +109,6 @@ Feature: Renaming a Penpot project
     And a Penpot project named "Has/Slash"
     When the pull runs
     Then no folder named "Has-Slash" or "Has Slash" is created for it
-    # Sanitising is REJECTED (saga §6.51): "foo/bar" and "foo-bar" would both
-    # become "foo-bar", silently collapsing two distinct projects into one folder
-    # with no way to tell which is which. That breaks the names-always-match rule
-    # invisibly, which is worse than refusing visibly. Inferring a parent folder
-    # from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), not
-    # something to fall back into because one name happened to contain a slash.
+    # notes: AGENTS.md#the-app-never-invents-a-substitute-name
 
     # ── the invariant, true under either branch ─────────────────────────────────

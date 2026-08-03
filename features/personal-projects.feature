@@ -1,31 +1,4 @@
-# PERSONAL PROJECTS — the WHO and the WHERE, and nothing else.
-#
-# ## WHAT THIS FILE OWNS, AFTER THE DESIGN/PROJECT SPLIT
-#
-# A personal project is a project. Creating, renaming, moving, copying and
-# deleting one behaves exactly as it does in a mapped team — so those scenarios
-# live with their verb (create-project.feature, rename-project.feature, and so
-# on), where a reader comparing the personal case against the team case sees both
-# answers in one table instead of hunting two files. That is the same rule the
-# whole `-design` / `-project` split rests on: organise by BEHAVIOUR, not by the
-# kind of thing acted on.
-#
-# What genuinely differs is not the behaviour but its two coordinates:
-#
-#   WHO    the user's OWN personal token, never the service account. No token,
-#          no personal projects at all — and clearing one stops the pull without
-#          deleting anything.
-#   WHERE  the user's home root, with NO team-folder ancestor. The personal team
-#          itself gets no folder, which is why the membership resolver has to
-#          cope with a project folder that has no team above it (saga §6.29).
-#
-# Those two are what this file is for, plus the isolation that follows from them:
-# one user's personal projects never appear in another user's home.
-#
-# THE ONE PLACE THE PERSONAL CASE REALLY DIVERGES — deleting a personal project
-# folder does not touch Penpot — is stated in delete-project.feature, beside the
-# team answer it contradicts. A divergence hidden in a file nobody opens while
-# holding the question is a divergence nobody finds.
+# Notes, decisions and history for this feature: AGENTS.md#personal-projects
 
 Feature: Personal Penpot projects in a user's own home
   As a Nextcloud user with my own Penpot token
@@ -98,11 +71,7 @@ Feature: Personal Penpot projects in a user's own home
     # Don't-lose-data: losing a credential is never evidence that content is gone
     # (the same rule errors.feature applies to the service account).
 
-    # ── the implicit mapping, and what it makes possible ────────────────────────
-    # These are the scenarios the "home root IS the mapping" reading adds. They
-    # are not a second pull pathway; they are what having a team ancestor at the
-    # root means for every OTHER feature, which is the point of framing it as a
-    # mapping rather than as a sync job.
+    # notes: AGENTS.md#setting-a-personal-token-maps-the-personal-team-to-the-home-root
 
   @unbuilt
   Scenario: Setting a personal token maps the personal team to the home root

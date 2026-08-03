@@ -1,13 +1,4 @@
-# Stage 0: the app installs and uninstalls cleanly on a real Nextcloud.
-# A clean uninstall is also an app-store rule. No Penpot contact.
-#
-# Identical shape to both sibling apps (nextcloud-n8n, nextcloud-grafana) — app
-# enable/disable has nothing to do with the read-only-vs-bidirectional split that
-# makes Penpot Sync architecturally different elsewhere (saga §6.1). This is a
-# clean, mechanical port.
-#
-# LIVE — this is one of the first two features to come off @todo. It runs against
-# a real Nextcloud in CI (.github/workflows/integration.yml).
+# Notes, decisions and history for this feature: AGENTS.md#lifecycle
 
 Feature: App install lifecycle
   As a Nextcloud admin

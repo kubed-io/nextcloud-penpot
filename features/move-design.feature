@@ -1,25 +1,4 @@
-# MOVING A DESIGN — every way a design can change project, team, or Drafts state,
-# from either side. Moving a PROJECT (the folder) is move-project.feature: a
-# different object with a different rule, because a project folder's position is
-# constrained where a design's is not.
-#
-# This file used to be the Nextcloud half only: the Penpot half lived in
-# reconcile.feature and the two scenarios CI could prove lived in a third file
-# called gestures.feature. Three places, one behaviour. Now a move is a move,
-# whoever performed it, and the sections below are ordered by where it happened.
-#
-# ## THE GUIDING PRINCIPLE: DON'T LOSE DATA
-#
-# A move never destroys bytes, never contacts Penpot destructively, and never
-# leaves a file in a state the user cannot get back out of. The closing invariant
-# below is stated for files AND folders, and move-project.feature relies on it
-# rather than restating it.
-#
-# ## NEXTCLOUD OWNS LAYOUT, PENPOT OWNS MEMBERSHIP (saga §6.29)
-#
-# A design may sit anywhere inside a folder that maps to its real project — the
-# pull only ensures membership, never a particular path. That is what makes a
-# plain subfolder a legitimate place to file work.
+# Notes, decisions and history for this feature: AGENTS.md#move-design
 
 Feature: Moving a mirrored design
   As a Nextcloud user
@@ -64,9 +43,7 @@ Feature: Moving a mirrored design
     When I move "Penpot/Move From/Travelling.penpot" to "Penpot/Move To/Travelling.penpot"
     Then Penpot project "Move To" holds a design named "Travelling"
     And Penpot project "Move From" holds no design named "Travelling"
-    # Promoted to sync first because a `link` is confined to its project (§6.43)
-    # and the guard refuses this drag before it happens — that refusal is its own
-    # scenario below, and needs a different assertion.
+    # notes: AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
   @in-nextcloud @gesture @blocked
   Scenario: A move between projects is attributed to the acting user
@@ -86,10 +63,7 @@ Feature: Moving a mirrored design
     And the next pull reconciles it
     # Saga §6.18 rule 3 — a remote failure never destroys local state.
 
-    # ── across the Drafts boundary, both directions (§6.35) ───────────────────
-    # Both walked by hand on a live instance before being written. They are the
-    # same rule in mirror image: the team root has no project ancestor, so it IS
-    # that team's Drafts — a real project, not an absence of one.
+    # notes: AGENTS.md#filing-a-draft-dragging-from-the-team-root-into-a-project
 
   @in-nextcloud @gesture
   Scenario: Filing a draft — dragging from the team root into a project
@@ -106,9 +80,7 @@ Feature: Moving a mirrored design
     And "Penpot/Unfile Me/Going Loose.penpot" is a "sync" design
     When I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
     Then Penpot project "Unfile Me" holds no design named "Going Loose"
-    # The design is in Drafts now. The file simply sits at the team root, because
-    # Drafts is a state and never a folder — Nextcloud stays more expressive than
-    # Penpot here, and that is the point of the rule.
+    # notes: AGENTS.md#un-filing-dragging-from-a-project-out-to-the-team-root
 
     # ── out of every mapping: the meaningful move ─────────────────────────────
 
@@ -143,22 +115,7 @@ Feature: Moving a mirrored design
     # Creating a design is a deliberate action (create-design.feature), never a
     # side effect of dragging a file somewhere.
 
-    # ── across two mappings: personal ⇄ a shared team ──────────────────────────
-    # A user's home root and a mapped Team Folder are two mappings to two
-    # DIFFERENT Penpot teams (personal-projects.feature — setting a personal token
-    # maps the personal team to the home root, implicitly). So a drag between them
-    # is a real cross-team move, and Penpot supports it directly: `move-files`
-    # carries the destination's team with it, proven live in §6.27/§6.34.
-    #
-    # ALLOWED IN BOTH DIRECTIONS, deliberately and for now. It is the simple
-    # behaviour — the user moved a design, so the design moved. An admin option to
-    # FORBID moving designs out of a team folder is a reasonable thing to want and
-    # is deliberately NOT specified: see saga §C6.21 for why it is a bigger
-    # decision than it looks.
-    #
-    # @unbuilt rather than @todo: the personal side of the mapping does not exist
-    # in `lib/` at all. The cross-TEAM machinery underneath these does — it is the
-    # same `move-files` the scenarios above use.
+    # notes: AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Moving a design from a personal project into a mapped team project
@@ -168,9 +125,6 @@ Feature: Moving a mirrored design
     Then the design changes team and project in Penpot in one "move-files" call
     And it keeps its id, its revision and its history
     And the file's "penpot_team_id" is re-stamped to the new team
-    # One call does both: the destination project's team follows automatically.
-    # The re-stamp matters because the workspace deep link is built from it
-    # (§C6.7) — a stale one opens the wrong team's workspace.
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Moving a design from a mapped team into a personal project
@@ -192,26 +146,9 @@ Feature: Moving a mirrored design
     # The existing unmapped state (§6.23, above), reached from the personal side.
     # Nothing about the personal mapping changes what leaving a mapping means.
 
-    # ── RULE: a link may not leave the project it points into (§6.43) ────────
-    #
-    # A "sync" file is a real archive, so moving it anywhere leaves the user
-    # holding something valuable. A "link" is a POINTER — move it out and they
-    # hold an empty husk that looks like a design and isn't. So links are
-    # confined, and every refusal offers the same escape: promote to "sync" first.
-    # That is not a fob-off; it is exactly the action that makes the move safe.
-    #
-    # ONE RULE, THREE DESTINATIONS — which is why these are Examples rather than
-    # three scenarios. The destination is an INPUT; the outcome is identical for
-    # every row. Contrast the Drafts pair further down, which look equally
-    # symmetrical and are two different rules read from opposite ends.
-    #
-    # (Written as a comment, not a Gherkin `Rule:` block — Behat's parser rejects
-    # that keyword outright. See features/README.md.)
+    # notes: AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
-  # DRIVEN LIVE. The guard is the only thing in this app that says no, and until
-  # now nothing proved it ever does — a guard that silently stopped refusing
-  # would hand someone an empty husk that looks like a design, and every test
-  # would still have been green.
+  # notes: AGENTS.md#a-link-cannot-be-moved-out-of-the-project-it-points-into
   @in-nextcloud @gesture
   Scenario Outline: A link cannot be moved out of the project it points into
     Given a mirrored design "Pointer" in the project "Confined"
@@ -226,12 +163,6 @@ Feature: Moving a mirrored design
       | Penpot/Elsewhere/Pointer.penpot      |
       | Penpot/Pointer.penpot                |
       | Pointer.penpot                       |
-    # Row 1 is another project, row 2 is the team root (which MEANS Drafts, a
-    # real project change, §6.35), and row 3 leaves every mapping. One rule,
-    # three destinations, one outcome — which is what makes it a table.
-    #
-    # The last two assertions are the point of the refusal: the file is still
-    # where it was, still tracked, and Penpot never heard about any of it.
 
   @in-nextcloud @gesture @todo
   Scenario: A link refusal offers to promote the file to "sync" mode first
@@ -274,10 +205,7 @@ Feature: Moving a mirrored design
     Then there is no node at "Penpot/Upstream From/Relocated.penpot"
     And the file "Penpot/Upstream To/Relocated.penpot" carries a Penpot id
     And the file "Penpot/Upstream To/Relocated.penpot" is not in the Nextcloud trash
-    # THE PRUNE MUST NOT FIRE. The design is still named by Penpot, just from a
-    # different project — a reconciler that keyed on "not in this folder" instead
-    # of "not in this team's listing" would trash the mirror and re-create it,
-    # losing a `sync` file's archive on the way past.
+    # notes: AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
 
   @in-penpot @todo
   Scenario: A design moved into Drafts in Penpot surfaces at the team root

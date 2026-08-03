@@ -1,32 +1,4 @@
-# Purge — an admin-only button beside "Sync from Penpot" and "Test connection"
-# (also `occ penpot_sync:purge`) that removes the mirrored ".penpot" files THIS
-# APP created and nothing else. It deletes every mirrored file across all
-# mappings, and:
-#   - never contacts Penpot at all (there is nothing to guard against pushing —
-#     unlike both siblings, there is no SyncGuard-style "don't mirror this
-#     delete back out" concern, because there is no writeback direction to
-#     guard, saga §6.1);
-#   - leaves the mappings configured;
-#   - leaves the custom mimetype registration alone (that is uninstall's job).
-#
-# THE IGNORE MARKER IS PRESERVED, SAME AS BOTH SIBLINGS. An earlier draft of this
-# header claimed Penpot Sync had no ignore mechanism, reasoning from saga §6.3
-# (Penpot's API has zero tag support). That conflated the two sides: the ignore
-# marker is a NEXTCLOUD system tag, and Nextcloud has tags regardless of what
-# Penpot offers. §6.23 established it, and purge must respect it — a purge that
-# deleted ignored files would destroy the one thing the tag exists to protect.
-#
-# WHAT PURGE MUST REASON ABOUT: mirrored (delete), unmapped (keep), untracked
-# (keep), ignored (keep). And within "mirrored", the MODE matters for what the
-# user actually loses — a "sync" file holds a real archive, a "link" file holds
-# nothing (saga §6.22), so the confirmation says which.
-#
-# Driven headlessly through `occ penpot_sync:purge`.
-# Two intended flows: purge → "Sync from Penpot" (everything reappears, since
-# Penpot's copy was never touched), and purge → uninstall (Nextcloud looks like
-# the app was never there).
-#
-# @todo — no lib/Command/Purge exists yet.
+# Notes, decisions and history for this feature: AGENTS.md#purge
 
 Feature: Purge the app's mirrored files from Nextcloud
   As a Nextcloud admin
