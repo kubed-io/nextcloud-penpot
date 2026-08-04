@@ -68,6 +68,18 @@ for php in bootstrap.rglob('*.php'):
             # one-line docblock closes on the same line, so `*/` is not step text.
             text = re.sub(r'\s*\*/\s*$', '', m.group(1))
             body = re.sub(r':\w+', '(.+)', re.escape(text).replace('\\:', ':'))
+            # `file(s)` IS an optional group to Behat, so compile it as one.
+            # Escaped literally instead, a step declared `... file(s)` matches
+            # only text carrying the parentheses — so every singular use of it in
+            # a .feature file reads as undefined. Found on nextcloud-grafana,
+            # where it reported reconcile.feature's live `holds exactly 1
+            # dashboard file` as undefined and --strict proved otherwise.
+            #
+            # This suite writes no optional plurals today, which is precisely why
+            # it is worth fixing now: the failure is silent in the OTHER
+            # direction too. A pattern this mangles never matches anything, so it
+            # can also make a genuinely undefined step look defined.
+            body = body.replace(r'\(s\)', 's?')
         patterns.append(body)
         seen.setdefault(body, []).append(php.name)
 
@@ -88,17 +100,28 @@ undefined = []
 for feature in features:
     tags, in_scenario, runs = set(), False, False
     background_gaps, any_runs = [], False
+    # A TAG ON THE `Feature:` LINE APPLIES TO EVERY SCENARIO BELOW IT. No file
+    # here uses one yet, but both siblings do — nextcloud-n8n marks the whole of
+    # uninstall.feature @blocked that way, and read without this the checker
+    # reports all seven of its steps as undefined in live scenarios: a page of
+    # false failures against a file the runner has never once executed.
+    feature_tags = set()
     for raw in feature.read_text(encoding='utf-8').splitlines():
         line = raw.strip()
         if line.startswith('@'):
             tags |= set(line.split())
             continue
         if line.startswith(('Scenario:', 'Scenario Outline:')):
-            in_scenario, runs = True, not (tags & UNRUN)
+            in_scenario, runs = True, not ((tags | feature_tags) & UNRUN)
             any_runs = any_runs or runs
             tags = set()
             continue
-        if line.startswith(('Feature:', 'Background:')):
+        if line.startswith('Feature:'):
+            feature_tags = tags
+            in_scenario, runs = True, None
+            tags = set()
+            continue
+        if line.startswith('Background:'):
             # A BACKGROUND IS ONLY REQUIRED IF SOMETHING IN ITS FILE RUNS. It runs
             # once per scenario, so in a file that is entirely specification it never
             # runs at all — and demanding its steps be implemented would report 24
