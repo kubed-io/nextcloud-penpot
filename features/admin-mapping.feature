@@ -131,40 +131,6 @@ Feature: Admin configures team mappings
     And removing it reported that nothing was deleted
     # notes: AGENTS.md#removing-a-mapping-deletes-nothing
 
-    # notes: AGENTS.md#there-is-no-project-level-mapping-to-configure
-
-  @decision
-  Scenario: There is no project-level mapping to configure
-    Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
-    Then the mapping list shows exactly 1 mapping, for the team
-    And no per-project mapping can be added, configured, or removed
-    And project subfolders exist only because the pull created them
-
-    # ── permissions and fallback ─────────────────────────────────────────────────
-
-  @todo
-  Scenario: Project folder names always match their Penpot projects
-    Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
-    And the pull runs
-    Then every project folder is named exactly as Penpot names that project
-    And the app never lets a project folder's name diverge from its project's
-    # notes: AGENTS.md#project-folder-names-always-match-their-penpot-projects
-
-  @todo
-  Scenario: Two Penpot projects in one team sharing a name is handled, not crashed
-    Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
-    And it has two projects both named "Brand"
-    When the pull runs
-    Then both are mirrored without a folder-name collision
-    And the app reports the ambiguity so an admin can rename one in Penpot
-    # notes: AGENTS.md#two-penpot-projects-in-one-team-sharing-a-name-is-handled-not-crashed
-
   @todo
   Scenario: A team renamed in Penpot does not rename the mapped folder
     Given a mapping with the following values:

@@ -276,6 +276,15 @@ That symmetry is what makes the file readable end to end: one way to describe a
 mapping, one way to create one, and every scenario is a pre-state and an
 outcome.
 
+WHAT THIS FILE IS NOT ABOUT: what is INSIDE a mapped folder. A mapping
+guarantees exactly one thing — the Nextcloud folder it names. Project folders,
+their names, their `penpot` tags and the designs in them all arrive with the
+FIRST SYNC, and two scenarios that used to sit here ("Project folder names
+always match their Penpot projects", "Two Penpot projects in one team sharing a
+name") moved to sync-now.feature for that reason. They had been reading as
+though mapping a team produced a tree, which is exactly the confusion this split
+removes.
+
 GROUPS HAVE TO EXIST FIRST. `the Nextcloud groups "design,sales" exist` is a
 precondition and not a detail: only `admin` exists on a fresh instance, and a
 group that does not exist cannot be shared with. See
@@ -2832,6 +2841,52 @@ but the end state is identical, and a scenario that differs only in scope is the
 same scenario. The one genuine difference is that the personal team mapping is
 AUTOMATIC, so a user's button is scoped to exactly one folder and needs no
 mapping card at all.
+
+### The first sync
+
+A MAPPING GUARANTEES ONE FOLDER. Everything else — the project folders, their
+tags, the designs — arrives on the first sync, so it is described here and not
+in admin-mapping.feature. The scenarios further down that file are all LATER
+runs, which only have work to do because something moved in Penpot; this
+section is the only one that starts from nothing mirrored at all.
+
+THE PRE-STATE IS WHAT PENPOT HOLDS, as one table:
+
+    And the Penpot team already contains:
+      | project | design    |
+      | Widgets | Gizmo     |
+      | Widgets | Doohickey |
+      | Gadgets | Sprocket  |
+
+A first sync is only interesting when the team already has something in it, and
+"something" is a SHAPE — projects, each with designs. Repeating "a project named
+X exists" and "a file named Y exists in the project X" describes how it was
+built instead, which is not what a `Given` is for. The step find-or-creates each
+project, so a name may repeat down the column to give one project several
+designs.
+
+WHICH IS ALSO HOW DRAFTS GETS WRITTEN IN THE SAME TABLE. `Drafts` resolves to
+the team's real default project rather than making a second project that happens
+to share its name — so "a loose design in Drafts" needs no special sentence. It
+mirrors to the mapped folder's ROOT, because the default project has no folder
+of its own (§6.35), and the scenario asserts both halves: the design is at the
+root and there is no `Drafts` folder beside it.
+
+FOUND BY NAME, KEPT BY ID. This is the rule the section exists to pin. A project
+folder is named exactly as Penpot names the project; from then on the stamped
+`penpot_project_id` is what identifies it, which is why a rename upstream MOVES
+the folder rather than making a second one. The first time round there is no id
+to match on — a folder somebody made by hand carries nothing — so the name is
+all there is, and `PullService::ensureProjectFolder()` adopts a same-named
+folder rather than creating `Widgets (2)` beside it. That adoption is a real
+behaviour with a real scenario now; it used to be a comment in the code.
+
+AND THE TAG IS PART OF THE MIRROR, not decoration applied later. Every project
+folder wears `penpot` — the same tag a user applies by hand to opt a folder in
+(create-project.feature), so one badge means "this is a project" whichever
+direction it came from. `tagProject()` runs on both the adopt and the create
+path, which is why the adoption scenario asserts the tag too: adopting a folder
+that never got badged would leave it invisible to the same searches.
 
 ### A pull mirrors a project as a folder carrying its project id and its date
 

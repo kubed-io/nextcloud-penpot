@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
+use Behat\Gherkin\Node\TableNode;
 use GuzzleHttp\Client;
 
 /**
@@ -152,6 +153,87 @@ trait PullSteps {
 			if (preg_match('/^([0-9a-f-]{36})\s+(.+?)\s+(?:yes|-)\s*$/i', trim($line), $m) === 1
 				&& $m[2] === $name) {
 				return $m[1];
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * The Penpot side of a first sync, as one table.
+	 *
+	 * ## THE PRE-STATE IS WHAT PENPOT HOLDS, NOT WHAT WE DID TO PUT IT THERE
+	 *
+	 * A first sync is only interesting when the team already has something in it,
+	 * and "something" is a shape — projects, each with designs — not a sequence of
+	 * seeding calls. One table says the shape; repeating "a project named X exists"
+	 * and "a file named Y exists in the project X" says how it was built, which is
+	 * not what a `Given` is for.
+	 *
+	 * FIND-OR-CREATE PER PROJECT, so a name may repeat down the column to give one
+	 * project several designs — and so `Drafts` resolves to the team's REAL default
+	 * project instead of making a second project that happens to share its name.
+	 * That is what lets the Drafts scenario be written in the same table as every
+	 * other one.
+	 *
+	 * A row with no design seeds an empty project, which is a legitimate thing for
+	 * a team to contain.
+	 *
+	 * @Given /^the Penpot team already contains:$/
+	 */
+	public function thePenpotTeamAlreadyContains(TableNode $contents): void {
+		foreach ($contents->getHash() as $row) {
+			$project = trim((string)($row['project'] ?? ''));
+			$design = trim((string)($row['design'] ?? ''));
+
+			if ($project === '') {
+				throw new \RuntimeException('every row needs a project — leave only the design blank');
+			}
+
+			$projectId = $this->projectIdNamedOrNull($project);
+			if ($projectId === null) {
+				$this->aPenpotProjectExistsInThatTeam($project);
+				$projectId = $this->projectIdNamedOrNull($project);
+			}
+
+			if ($projectId === null) {
+				throw new \RuntimeException("created the Penpot project \"{$project}\" but it is not visible");
+			}
+
+			if ($design !== '') {
+				$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => $design]);
+			}
+		}
+	}
+
+	/**
+	 * A folder somebody made by hand, before anything was mirrored into it.
+	 *
+	 * The path is relative to the actor's root exactly as every other path in the
+	 * suite is, so a scenario names it the same way it later asserts on it.
+	 *
+	 * davMkcol(), not davMkdir(): the folder sits INSIDE the mapped folder, and
+	 * davMkdir only makes a top-level one.
+	 *
+	 * @Given /^a folder "([^"]*)" already exists$/
+	 */
+	public function aFolderAlreadyExists(string $path): void {
+		$this->davMkcol($path);
+	}
+
+	/**
+	 * The id of a project with this name, or null when the team has none.
+	 *
+	 * Reads Penpot directly rather than `probe --files`: this runs BEFORE the first
+	 * pull, when the probe has no mirrored tree to describe, and the answer has to
+	 * come from the team itself.
+	 */
+	private function projectIdNamedOrNull(string $name): ?string {
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			if (($project['name'] ?? null) === $name) {
+				$id = (string)($project['id'] ?? '');
+
+				return $id === '' ? null : $id;
 			}
 		}
 

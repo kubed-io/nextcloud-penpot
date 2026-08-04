@@ -10,6 +10,105 @@ Feature: Syncing Penpot into Nextcloud, now or on a schedule
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
 
+  # ── the first sync: what the team already had ──────────────────────────────
+  #
+  # A MAPPING GUARANTEES EXACTLY ONE FOLDER — the one it names. Every project
+  # folder, every tag and every design inside it arrives here, on the first sync.
+  # That is why these are sync-now's scenarios and not admin-mapping's.
+  #
+  # Everything further down this file is a LATER run, which only has work to do
+  # because something moved in Penpot. This section is the one that starts from
+  # nothing mirrored at all.
+  # notes: AGENTS.md#the-first-sync
+
+  @admin @occ
+  Scenario: The first sync mirrors the projects and designs a team already had
+    Given a Penpot team named "Design Team" is mapped to the folder "First Sync"
+    And the Penpot team already contains:
+      | project | design    |
+      | Widgets | Gizmo     |
+      | Widgets | Doohickey |
+      | Gadgets | Sprocket  |
+    When the admin runs a pull
+    Then the pull succeeds
+    And the folder "First Sync/Widgets" carries a Penpot project id
+    And the folder "First Sync/Gadgets" carries a Penpot project id
+    And the file "First Sync/Widgets/Gizmo.penpot" carries a Penpot id
+    And the file "First Sync/Widgets/Doohickey.penpot" carries a Penpot id
+    And the file "First Sync/Gadgets/Sprocket.penpot" carries a Penpot id
+    # A PROJECT IS FOUND BY NAME AND KEPT BY ID: the folder is named exactly as
+    # Penpot names the project, and from then on it is the stamped id that
+    # identifies it — which is why a rename upstream moves the folder instead of
+    # making a second one.
+
+  @admin @occ
+  Scenario: Every mirrored project folder wears the penpot tag
+    Given a Penpot team named "Design Team" is mapped to the folder "Tagged Sync"
+    And the Penpot team already contains:
+      | project | design  |
+      | Badges  | Rosette |
+    When the admin runs a pull
+    Then the pull succeeds
+    And the folder "Tagged Sync/Badges" carries the "penpot" tag
+    # The tag is what makes a project findable in Files, and it is the SAME tag a
+    # user applies by hand to opt a folder in (create-project.feature). One badge,
+    # whichever direction the project came from.
+
+  @admin @occ
+  Scenario: A folder already named like a Penpot project is adopted, not duplicated
+    Given a Penpot team named "Design Team" is mapped to the folder "Adopted"
+    And a folder "Adopted/Handmade" already exists
+    And the Penpot team already contains:
+      | project  | design |
+      | Handmade | Sketch |
+    When the admin runs a pull
+    Then the pull succeeds
+    And there is no node at "Adopted/Handmade (2)"
+    And the folder "Adopted/Handmade" carries a Penpot project id
+    And the folder "Adopted/Handmade" carries the "penpot" tag
+    And the file "Adopted/Handmade/Sketch.penpot" carries a Penpot id
+    # THE NAME IS ALL THERE IS TO MATCH ON the first time — a hand-made folder
+    # carries no project id yet. Adopting it is what stops a first sync over an
+    # existing tree from leaving "Widgets (2)" beside the folder someone made.
+
+  @admin @occ
+  Scenario: A design in the team's Drafts mirrors into the mapped folder itself
+    Given a Penpot team named "Design Team" is mapped to the folder "Draft Sync"
+    And the Penpot team already contains:
+      | project | design     |
+      | Drafts  | Loose Idea |
+    When the admin runs a pull
+    Then the pull succeeds
+    And the file "Draft Sync/Loose Idea.penpot" carries a Penpot id
+    And there is no node at "Draft Sync/Drafts"
+    # Drafts is the team's DEFAULT project and gets no folder of its own — it IS
+    # the mapped folder (§6.35), so a loose design sits at the root. Naming it in
+    # the table costs nothing: the step finds the existing project rather than
+    # making a second one called "Drafts".
+
+  @todo
+  Scenario: Project folder names always match their Penpot projects
+    Given a Penpot team named "Design Team" is mapped to the folder "Named Sync"
+    And the team has been mirrored into Nextcloud
+    Then every project folder is named exactly as Penpot names that project
+    And the app never lets a project folder's name diverge from its project's
+    # notes: AGENTS.md#project-folder-names-always-match-their-penpot-projects
+
+  @todo
+  Scenario: Two Penpot projects in one team sharing a name is handled, not crashed
+    Given a Penpot team named "Design Team" is mapped to the folder "Twin Sync"
+    And the Penpot team already contains:
+      | project | design |
+      | Brand   | Logo   |
+      | Brand   | Mark   |
+    When the admin runs a pull
+    Then both are mirrored without a folder-name collision
+    And the app reports the ambiguity so an admin can rename one in Penpot
+    # Penpot permits two projects with one name; Nextcloud does not permit two
+    # folders with one name in one parent. freeName() already picks a free one —
+    # what is unspecified is how the admin is TOLD, which is why this is @todo.
+    # notes: AGENTS.md#two-penpot-projects-in-one-team-sharing-a-name-is-handled-not-crashed
+
   # ── the admin syncs one mapping, and waits ─────────────────────────────────
 
   @admin @occ
