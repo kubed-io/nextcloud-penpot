@@ -396,7 +396,20 @@ a team we were never invited to is a team that is not there. Testing the
 difference would be testing Penpot's own permission model, which is not
 ours to prove — the token works or nothing in this suite runs at all.
 
-### A Penpot team may only be mapped once
+### A mapping may not reuse a team or a folder
+
+TWO RULES THAT READ AS ONE SCENARIO WRITTEN TWICE. `getByTeamId()` refuses a
+team that is already mapped; `assertFolderUnique()` refuses a folder that is
+already used. Apart, both scenarios said "a mapping exists, the admin maps one,
+it is refused" — the whole difference lived in whether a second team had been
+named first, which is invisible on the page and was flagged as a duplicate the
+moment someone read them together.
+
+Side by side the columns ARE the difference: row 1 reuses the team and takes a
+free folder, row 2 brings a fresh team to the taken folder. The `reason` column
+is what makes them two rules rather than one, and asserting it is what would
+catch the app refusing for the right-sounding wrong reason.
+
 
 The pre-state is a mapping that already exists, so the scenario opens where
 the interesting part starts. It used to map twice inside the `When` block,
@@ -2842,13 +2855,67 @@ same scenario. The one genuine difference is that the personal team mapping is
 AUTOMATIC, so a user's button is scoped to exactly one folder and needs no
 mapping card at all.
 
-### The first sync
+### sync-now scope
 
 A MAPPING GUARANTEES ONE FOLDER. Everything else — the project folders, their
 tags, the designs — arrives on the first sync, so it is described here and not
-in admin-mapping.feature. The scenarios further down that file are all LATER
-runs, which only have work to do because something moved in Penpot; this
-section is the only one that starts from nothing mirrored at all.
+in admin-mapping.feature.
+
+AND THE FIRST SYNC IS ALL THIS FILE COVERS. A later run only has work to do
+because something changed in Penpot, and every one of those is a scenario about
+THE CHANGE rather than about syncing: a design deleted upstream is
+delete-design.feature's, a project renamed upstream is rename-project.feature's.
+Once those are theirs, there is no "second sync" behaviour left to describe.
+
+Three scenarios about pruning used to sit here — a mirror pruned when its design
+is gone, a `link` getting a last archive on the way out, a `sync` needing none.
+All three are already asserted, step for step, by delete-design.feature's "A
+design deleted in Penpot is snapshotted, then moved to the trash" and "A design
+that already had its archive needs no second export". They were duplicates, and
+the duplicate was in the wrong file: a prune is an effect of deleting in Penpot,
+which is a Penpot-origin behaviour.
+
+Three more said a second run changes nothing — no duplicate folder, nothing
+pruned, no mtime or etag moved. Idempotence is real and it is how the reconciler
+works, but "a sync that reacts to nothing" is not a behaviour a user can ask
+for. The step definitions for the mtime/etag pair are deliberately KEPT in
+PullSteps: their docblock records a live bug (a pull was moving mtime and etag on
+every file on every run, which makes every sync client re-download the world),
+and re-adding the scenario is one line if that guard is wanted back.
+
+THE TRIGGER IS DATA. Four ways to start a sync —
+
+    actor    | scope
+    ---------+---------------------
+    admin    | one mapping          the card's "Sync now"
+    admin    | every mapping        the section's "Sync from Penpot"
+    schedule | every mapping        time as the actor
+    user     | their personal team  the personal "Sync now"
+
+— with the same pre-state and the same post-state. They were four scenarios,
+each asserting that post-state in its own words, and they had used four
+different phrasings for it. As columns the sameness is the point of the table.
+Only the admin's two are reachable from this harness; the schedule needs time to
+pass and the personal sync is not built, so those sit in tagged scenarios of
+their own rather than being silently skipped inside a green outline.
+
+WHETHER A RUN IS QUEUED OR SYNCHRONOUS IS ASSERTED NOWHERE. A scenario used to
+end `Then the sync is queued as a background job`, with a comment justifying why
+"everything" cannot be synchronous. That is a mechanism and a design note, not a
+behaviour — the admin's question is whether their designs arrived and whether
+they were told.
+
+A TREE IS ONE FACT, so the post-state is one table:
+
+    And the mapped folder holds:
+      | path                       | tagged |
+      | One Mapping/Cogs           | penpot |
+      | One Mapping/Cogs/Gizmo.penpot | -   |
+
+It replaced a column of one-node-per-line assertions that never showed the
+SHAPE the sync was meant to build. The tag is a column rather than a scenario
+because it is a property of a node, the same as the node existing at all — and
+that also ends the tag being asserted in three files at once.
 
 PROJECT NAMES ARE GLOBAL TO THE SUITE, and this section learned it the hard
 way. Every core-suite scenario seeds into the SAME Penpot team, nothing tears a
@@ -2899,6 +2966,24 @@ folder wears `penpot` — the same tag a user applies by hand to opt a folder in
 direction it came from. `tagProject()` runs on both the adopt and the create
 path, which is why the adoption scenario asserts the tag too: adopting a folder
 that never got badged would leave it invisible to the same searches.
+
+### A sync that cannot finish says so, and says why
+
+@unbuilt, AND THE GAP IS REAL — found while writing it. `occ penpot_sync:sync`
+catches exactly one exception, `OutOfBoundsException`, which is an unknown
+mapping id. A `PenpotApiException` — an unreachable Penpot, a rejected token —
+escapes uncaught, so the honest answer to "what happens when a sync cannot reach
+Penpot?" is currently "a stack trace".
+
+It is one scenario rather than a CLI one and a UI one because both front doors
+need the same answer, which is the same rule MappingService follows for
+validation: the rules live in the service so the `occ` twin cannot drift from
+the panel.
+
+The two rows are the two ways the connection can be wrong, and they are the two
+`admin-connection.feature` already distinguishes for the connection TEST —
+missing token versus unreachable host. A sync should not collapse them, for the
+same reason the test does not: they send an operator to different fixes.
 
 ### A pull mirrors a project as a folder carrying its project id and its date
 

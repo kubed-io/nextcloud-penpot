@@ -200,7 +200,12 @@ trait PullSteps {
 				throw new \RuntimeException("created the Penpot project \"{$project}\" but it is not visible");
 			}
 
-			if ($design !== '') {
+			// FIND-OR-CREATE THE DESIGN TOO, so the step is honestly a STATE. Created
+			// unconditionally it was a recipe: re-stating the same pre-state — which
+			// is what a second Examples row does — left the team holding two designs
+			// with one name, and the mirror holding "Gizmo.penpot" beside
+			// "Gizmo (2).penpot".
+			if ($design !== '' && !$this->projectHoldsDesign($projectId, $design)) {
 				$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => $design]);
 			}
 		}
@@ -228,6 +233,16 @@ trait PullSteps {
 	 * pull, when the probe has no mirrored tree to describe, and the answer has to
 	 * come from the team itself.
 	 */
+	private function projectHoldsDesign(string $projectId, string $design): bool {
+		foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $projectId]) as $file) {
+			if (($file['name'] ?? null) === $design) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private function projectIdNamedOrNull(string $name): ?string {
 		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
 			if (($project['name'] ?? null) === $name) {
@@ -289,6 +304,93 @@ trait PullSteps {
 	 */
 	public function theAdminRunsAPull(): void {
 		$this->occ('penpot_sync:sync pull');
+	}
+
+	/**
+	 * A sync, named by its ACTOR and its SCOPE — the two things that actually
+	 * differ between the four ways one starts.
+	 *
+	 * ## THE TRIGGER IS DATA, NOT A BEHAVIOUR
+	 *
+	 * The card's "Sync now", the section's "Sync from Penpot", the schedule and a
+	 * user's personal sync all have the same pre-state and the same post-state.
+	 * Four scenarios each asserting that in its own words was four chances to say
+	 * it differently — and they had taken all four. As columns, the sameness is
+	 * the point of the table.
+	 *
+	 * Only the admin's two are reachable from here: the schedule needs time to
+	 * pass and the personal sync is not built. Those rows sit in tagged scenarios
+	 * of their own rather than being quietly skipped, so nothing claims coverage
+	 * it does not have — hence the throw, which is a bug if it is ever reached.
+	 *
+	 * @When /^(the admin|the schedule|the user) syncs (one mapping|every mapping|their personal team)$/
+	 */
+	public function actorSyncsScope(string $actor, string $scope): void {
+		if ($actor !== 'the admin') {
+			throw new \RuntimeException(
+				"this harness can only start a sync as the admin, not as \"{$actor}\" — "
+				. 'that row belongs in a tagged scenario',
+			);
+		}
+
+		if ($scope === 'one mapping') {
+			$ids = $this->mappingIds();
+			if ($ids === []) {
+				throw new \RuntimeException('there is no mapping to sync');
+			}
+
+			$this->occ('penpot_sync:sync pull --mapping=' . escapeshellarg($ids[0]));
+
+			return;
+		}
+
+		$this->occ('penpot_sync:sync pull');
+	}
+
+	/**
+	 * The mirrored tree, as one assertion.
+	 *
+	 * ## A TREE IS ONE FACT TOO
+	 *
+	 * Every path a sync should have produced, and whether it wears a tag. It
+	 * replaces a column of "the folder X carries…" / "the file Y carries…" lines
+	 * that said one thing each and made a six-node tree into six assertions, none
+	 * of which showed the SHAPE the sync was supposed to build.
+	 *
+	 * `-` in the tagged column means "no tag expected" and is not checked; naming
+	 * a tag checks it is there. The tag lives here rather than in a scenario of
+	 * its own because it is a property of a node in the tree, the same as the
+	 * node existing at all.
+	 *
+	 * @Then /^the mapped folder holds:$/
+	 */
+	public function theMappedFolderHolds(TableNode $tree): void {
+		foreach ($tree->getHash() as $row) {
+			$path = trim((string)($row['path'] ?? ''));
+			$tag = trim((string)($row['tagged'] ?? ''));
+
+			if ($path === '') {
+				continue;
+			}
+
+			if (!$this->davExists($path)) {
+				throw new \RuntimeException("the sync did not produce \"{$path}\"");
+			}
+
+			if ($tag === '' || $tag === '-') {
+				continue;
+			}
+
+			$tags = $this->davSystemTags($path);
+			if (!in_array($tag, $tags, true)) {
+				throw new \RuntimeException(sprintf(
+					'"%s" should carry the "%s" tag, carries: %s',
+					$path,
+					$tag,
+					$tags === [] ? '(none)' : implode(', ', $tags),
+				));
+			}
+		}
 	}
 
 	/**
@@ -366,7 +468,15 @@ trait PullSteps {
 		}
 	}
 
-	/** @Then /^the pull succeeds$/ */
+	/**
+	 * TWO PHRASINGS, ONE FUNCTION. "The sync succeeds" is the word the product
+	 * uses — the button says Sync, the command is `penpot_sync:sync`, the file is
+	 * sync-now.feature. "The pull succeeds" is the mechanism's word and is kept
+	 * because a dozen other feature files say it; new scenarios should say sync.
+	 *
+	 * @Then /^the pull succeeds$/
+	 * @Then /^the sync succeeds$/
+	 */
 	public function thePullSucceeds(): void {
 		if ($this->lastExit !== 0 || !str_contains($this->lastOutput, 'Pull complete')) {
 			throw new \RuntimeException("the pull did not complete cleanly (exit {$this->lastExit}):\n{$this->lastOutput}");

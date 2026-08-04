@@ -82,22 +82,6 @@ Feature: Admin configures team mappings
       | Groups On A Plain Folder | plain shared folder | sales              |
       | Groups On A Plain Folder | plain shared folder |                    |
 
-  Scenario: Two mappings cannot target the same Nextcloud folder
-    Given a mapping with the following values:
-      | team   | Northwind |
-      | folder | Designs   |
-    And a Penpot team named "Bundt Cake" exists
-    When the admin maps it with:
-      | folder | Designs |
-    Then the mapping is rejected
-    And the refusal explains "already used"
-    # Two teams mirroring into one folder would interleave their project
-    # subfolders, and the pull would fight over the same names on every run.
-    #
-    # The second team is named LAST because naming a team re-points "it", and the
-    # When needs "it" to be the team that is not yet mapped. A DIFFERENT team into
-    # a taken folder is what makes this the folder rule rather than the team rule.
-
   # api only because the ui is a drop down
   @api @occ
   Scenario: A team id that resolves to nothing cannot be mapped
@@ -110,17 +94,36 @@ Feature: Admin configures team mappings
     # add-mapping something no lookup could have produced.
     # notes: AGENTS.md#a-team-id-that-resolves-to-nothing-cannot-be-mapped
 
-  Scenario: A Penpot team may only be mapped once
+  Scenario Outline: A mapping may not reuse a team or a folder
     Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
+      | team   | Northwind |
+      | folder | Designs   |
+    And a Penpot team named "<team>" exists
     When the admin maps it with:
-      | folder | Design Files |
+      | folder | <folder> |
     Then the mapping is rejected
+    And the refusal explains "<reason>"
     And there is exactly 1 configured team mapping
-    # The SAME team, mapped again — no second team is named, so "it" is still
-    # Northwind. That is what separates this from the folder rule above.
-    # notes: AGENTS.md#a-penpot-team-may-only-be-mapped-once
+
+    Examples: a team may be mapped once, and a folder may be used once
+      | team       | folder    | reason         |
+      | Northwind  | Elsewhere | already mapped |
+      | Bundt Cake | Designs   | already used   |
+
+    # TWO RULES, AND THEY LOOKED LIKE ONE SCENARIO TWICE. Written apart, both read
+    # "a mapping exists, the admin maps one, it is refused" — the difference lived
+    # in whether a second team had been named, which is invisible on the page.
+    # Side by side the columns ARE the difference: row 1 reuses the team and takes
+    # a free folder, row 2 brings a fresh team to the taken folder.
+    #
+    # Naming a team re-points "it", so row 1 names the mapped team back again and
+    # row 2 names one that is not mapped at all.
+    #
+    # Why each is refused: a team is what a mapping IS, so mapping it twice would
+    # make two mappings mean the same thing. Two teams mirroring into one folder
+    # would interleave their project subfolders, and every sync would fight over
+    # the same names.
+    # notes: AGENTS.md#a-mapping-may-not-reuse-a-team-or-a-folder
 
   Scenario: Removing a mapping deletes nothing
     Given a mapping with the following values:
