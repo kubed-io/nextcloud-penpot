@@ -363,7 +363,11 @@ final class RestoreService {
 		// only ever when a design really was restored. It is the one slow path in
 		// the app, and it is slow on purpose: the alternative is telling the user
 		// their design is back when it is about to disappear.
-		$deadline = microtime(true) + ($this->settleMicroseconds / 1_000_000);
+		// Both operands float, deliberately: `microtime(true)` is a float and an
+		// int/int division is int|float, which Psalm's strict binary operands mode
+		// refuses to mix. Casting here rather than suppressing keeps the arithmetic
+		// honest — a settle of 500_000 really is half a second, not zero.
+		$deadline = microtime(true) + ((float)$this->settleMicroseconds / 1_000_000.0);
 		do {
 			usleep(self::SETTLE_POLL_MICROSECONDS);
 
