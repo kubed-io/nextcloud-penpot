@@ -315,16 +315,26 @@ final class StorageService {
 	 * narrowed. A hand-made share is still safe: nothing removes it unless an
 	 * admin submits a set that omits it.
 	 *
+	 * ## A LIST, NOT A MAP KEYED ON THE GROUP ID
+	 *
+	 * The existing shares used to be indexed by group id, which PHP quietly turns
+	 * into an INT for a numeric group name — and `in_array($gid, $wanted, true)`
+	 * then compares `123` against `'123'` and says no. A group called "2024" would
+	 * have been pruned on every save and re-created immediately after. Keeping the
+	 * shares as a list and asking each one for its own id removes the coercion
+	 * entirely, and takes a redundant cast with it.
+	 *
 	 * @param list<string> $wanted
 	 */
 	private function syncGroupShares(Folder $folder, string $ownerUid, array $wanted): void {
 		$existing = [];
 		foreach ($this->shareManager->getSharesBy($ownerUid, IShare::TYPE_GROUP, $folder, false, -1, 0) as $share) {
-			$existing[$share->getSharedWith()] = $share;
+			$existing[] = $share;
 		}
 
-		foreach ($existing as $gid => $share) {
-			if (in_array((string)$gid, $wanted, true)) {
+		foreach ($existing as $share) {
+			$gid = $share->getSharedWith();
+			if (in_array($gid, $wanted, true)) {
 				continue;
 			}
 			try {
@@ -343,8 +353,16 @@ final class StorageService {
 			if ($gid === '') {
 				continue;
 			}
-			if (isset($existing[$gid])) {
-				$share = $existing[$gid];
+
+			$share = null;
+			foreach ($existing as $candidate) {
+				if ($candidate->getSharedWith() === $gid) {
+					$share = $candidate;
+					break;
+				}
+			}
+
+			if ($share !== null) {
 				if ($share->getPermissions() !== self::CONTENT_PERMISSIONS) {
 					$share->setPermissions(self::CONTENT_PERMISSIONS);
 					try {
@@ -389,7 +407,7 @@ final class StorageService {
 	private function sharedGroups(Folder $folder, string $ownerUid): array {
 		$out = [];
 		foreach ($this->shareManager->getSharesBy($ownerUid, IShare::TYPE_GROUP, $folder, false, -1, 0) as $share) {
-			$gid = (string)$share->getSharedWith();
+			$gid = $share->getSharedWith();
 			if ($gid !== '' && !in_array($gid, $out, true)) {
 				$out[] = $gid;
 			}

@@ -90,10 +90,11 @@ final class TeamFolderService {
 	 * Ensure a Team Folder named $mountPoint exists and is writable by the actor
 	 * (via the `admin` group). Returns the groupfolders folder id.
 	 *
-	 * Idempotent. When $contentGroups is null the folder's existing assignments
-	 * are left exactly as they are — only the actor's access is re-asserted, since
-	 * without it nothing could write. When a list IS given it is applied
-	 * literally: assignments not in it are removed. See
+	 * Idempotent. When $contentGroups is null the folder's existing assignments are
+	 * left exactly as they are, INCLUDING the actor's — which is only added when it
+	 * is absent, never re-stamped, because on a folder shared with the `admin`
+	 * group re-stamping would change a chosen group's bits into plumbing. When a
+	 * list IS given it is applied literally: assignments not in it are removed. See
 	 * {@see StorageService}'s docblock for which caller does which, and why.
 	 *
 	 * @param list<string>|null $contentGroups user-facing groups (admin-managed), or null to leave sharing alone
@@ -106,7 +107,28 @@ final class TeamFolderService {
 			$folderId = $fm->createFolder($mountPoint);
 		}
 
-		foreach ($contentGroups ?? [] as $gid) {
+		// LEAVE SHARING ALONE MEANS LEAVE THE ADMIN ASSIGNMENT ALONE TOO.
+		//
+		// This branch used to fall through and stamp `admin` with PERMISSION_ALL
+		// unconditionally. On a folder deliberately shared WITH the admin group —
+		// where `admin` is a content group at CONTENT_PERMISSIONS — the next pull
+		// would overwrite those bits, and contentGroups() would then read the
+		// result as plumbing and stop reporting it. A sync would have silently
+		// dropped a group the admin chose, which is precisely the thing §C6.35
+		// exists to prevent, in the one code path that runs most often.
+		//
+		// So when no groups were asked for, the actor's access is only ADDED if it
+		// is missing entirely — never re-stamped. A folder that already grants the
+		// actor anything is a folder this method has nothing to do.
+		if ($contentGroups === null) {
+			if (!$this->groupIsApplied($folderId, self::ADMIN_GROUP)) {
+				$this->assignGroup($fm, $folderId, self::ADMIN_GROUP, Constants::PERMISSION_ALL);
+			}
+
+			return $folderId;
+		}
+
+		foreach ($contentGroups as $gid) {
 			if ($gid === '') {
 				continue;
 			}
@@ -128,12 +150,8 @@ final class TeamFolderService {
 		// so nothing is lost by not upgrading it. That leaves "share this with the
 		// admin group" expressible on a Team Folder — it would not be if we always
 		// stamped ALL over it.
-		if (!in_array(self::ADMIN_GROUP, $contentGroups ?? [], true)) {
+		if (!in_array(self::ADMIN_GROUP, $contentGroups, true)) {
 			$this->assignGroup($fm, $folderId, self::ADMIN_GROUP, Constants::PERMISSION_ALL);
-		}
-
-		if ($contentGroups === null) {
-			return $folderId;
 		}
 
 		// Prune assignments the admin did not ask for (keeping the actor's).

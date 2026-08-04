@@ -3659,6 +3659,24 @@ one editable thing about a mapping was **write-only**: setting the groups to
 nothing did nothing at all, silently. Now that only an explicit action reaches
 this code, "shared with these" can mean what it says.
 
+**And the pull must not re-stamp the plumbing either** — caught in review, in
+the code path that runs most often. `ensure(null)` is the "leave sharing alone"
+call every pull makes, and it still fell through to assigning `admin`
+`PERMISSION_ALL` unconditionally. On a folder deliberately shared WITH the admin
+group, where `admin` is a content group at `CONTENT_PERMISSIONS`, every pull
+overwrote those bits — and `contentGroups()` then read the result as plumbing
+and stopped reporting it. A sync would have silently dropped a group the admin
+chose, which is the one thing this whole section exists to prevent, happening on
+a schedule.
+
+The fix is the same shape as the rule: when nobody asked for groups, the actor's
+access is only ADDED if it is absent, never re-stamped. A folder that already
+grants the actor anything is a folder that branch has nothing to do to. Worth
+noting how it got in — the null case was added late, as an early `return` after
+the admin assignment rather than before it, and "leave sharing alone" read as
+true because the *content* loop was skipped. The assignment below it was not
+thought of as sharing.
+
 **Telling the plumbing apart from a choice.** groupfolders has no per-user
 applicable, so writing into a Team Folder means assigning a group the actor is
 in — `admin`. Reporting that back would tell an admin their folder is shared
