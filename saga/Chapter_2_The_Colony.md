@@ -3736,3 +3736,88 @@ they will add a field; adding a field to a value object is an hour.
 **Ship the branch you built; describe the branch you didn't.** A field with one
 usable value is not extensibility, it is a comment that costs a validator, a
 flag, a UI row and a test column. The saga is cheaper and says more.
+
+### C6.37 — The delete that finishes after you undo it
+
+The restore slice shipped with a scenario that failed about one run in eight,
+with two different symptoms — the design missing from its project, or still
+listed in Penpot's trash — and both messages ended `condition never held within
+10s`. It was re-run four times across two branches, called a flake each time,
+and it was not one.
+
+**What made it hard to read is that the app's own log claimed success in the
+same run.** `penpot_sync restore: brought a design back out of Penpot's trash,
+losslessly` at 13:03:21, and the assertion failing at 13:03:32 against the same
+listing the app had just read. Two honest observers of one API, eleven seconds
+apart, disagreeing.
+
+#### The measurement
+
+A throwaway probe against a live Penpot, driving the RPC directly with a
+disposable project. Three oracles polled at 100ms after a restore:
+`get-project-files` (what this app trusts), `get-projects` (how the suite
+resolves a project, by name), and `get-team-deleted-files` (the trash).
+
+All three agreed within **0.18s**, every time, in fifteen runs. So the theory
+the docblock had been carrying — that the listings settle at different rates and
+the trash lags the project — is simply wrong, and the "confirm against the
+project listing, never the trash" rule was right for a reason nobody had
+measured.
+
+What the probe did catch was the design coming back and then **vanishing again**
+about a second later. Sweeping the gap between the delete and the restore:
+
+| gap (delete → restore) | undone | when, after the restore | when, after the DELETE |
+|---|---|---|---|
+| 0.0s | 5/5 | +3.0…3.9s | ~3.8s |
+| 1.0s | 5/5 | +2.5…3.0s | ~3.8s |
+| 2.0s | 5/5 | +1.7…1.9s | ~3.75s |
+
+`delete-file` answers immediately and lists the design in the trash within
+~0.1–0.3s. Then, about **3.8 seconds later**, a delayed job removes the file
+again — *even though it was restored in between*. The undo lands at a fixed
+offset from the DELETE, not from the restore, which makes it a scheduled job
+rather than a race. It is 100% reproducible.
+
+#### Why the app reported success
+
+`staysListed()` read the listing, slept a flat **2.5s**, and read it once more.
+Both reads therefore happened before the undo could arrive. The service returned
+true, logged "losslessly", and the design disappeared a second later — after
+which the next pull trashed the mirror, which is the exact bug the whole slice
+exists to prevent, reported as its opposite.
+
+The 2.5s was itself "measured, not guessed", from CI log timings of a *different*
+phenomenon. A number taken from the symptom rather than the mechanism.
+
+#### The fix, and the one that was rejected
+
+Two candidates, both tested live:
+
+- **Wait out the window before restoring** — a 4s pre-delay still failed 2 of 6,
+  5s passed 6 of 6. Rejected: it is a magic number tuned to one instance, and it
+  slows every restore including the ones that were never at risk.
+- **Confirm past the window and re-issue if undone** — the second restore lands
+  after the delayed job has fired, and holds. 6 of 6, then 10 of 10 running the
+  full rewritten algorithm end to end.
+
+So the retry `restoreInPenpot()` already had was right all along; it was being
+told the wrong answer about whether the first attempt held. The settle became a
+**poll** to 6s — same worst case, but an undo ends the wait the moment it is
+seen — and the constant now carries the measurements above rather than a
+recollection.
+
+It costs 8–9s on a restore that gets undone, inside the WebDAV request. That is
+the price of not lying about the outcome.
+
+#### The rule
+
+**A flake that reproduces 100% under measurement was never a flake.** Four
+re-runs bought nothing because re-running asks the same question that was
+already answered. The probe took one afternoon and turned "sometimes fails" into
+a table with a fixed number in it.
+
+And the second-order one: **the app's success log was the evidence, not the
+alibi.** It disagreed with the test, so one of them was wrong about what it had
+observed — and the disagreement was the whole clue. It was read for two runs as
+proof that the test was flaky.

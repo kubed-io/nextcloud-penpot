@@ -2488,6 +2488,30 @@ Penpot's success event is not proof: the restore is re-read from the same
 listing the pull uses before it is reported as done. A restore that did not
 actually happen must never be announced as one.
 
+### …and confirmed PAST the undo window (saga §C6.37)
+
+The scenario below failed roughly one run in eight for weeks, with two
+alternating symptoms — the design missing from its project, or still sitting in
+Penpot's trash — and was re-run as a flake four times. It was not a flake.
+
+Measured against a live Penpot: `delete-file` answers immediately, lists the
+design in the trash within ~0.3s, and then runs a delayed job **about 3.8
+seconds later** that removes the file again *even though it was restored in the
+meantime*. The offset is from the DELETE, not the restore, and it reproduces
+5/5 at every gap tested — a scheduled job, not a race.
+
+The app used to confirm with a flat 2.5s settle, so both of its reads landed
+before the undo could arrive. It logged a lossless restore and the design
+vanished a second later. **Do not shorten that window, and do not weaken these
+assertions to make the scenario pass.** In particular:
+
+- `And the design "Round Trip" is not in Penpot's trash` looks like it asserts a
+  mechanism, and an earlier reading of this flake proposed deleting it for that
+  reason. It does not: when the undo fires, the design really is back in the
+  trash, and that step is what catches it. It stays.
+- Both assertions are backed by the app's own guarantee now — the restore is
+  confirmed by polling to 6s and re-issued if it was undone (10/10 durable live).
+
 ## A LINK HAS NOTHING TO RESTORE INTO PENPOT
 
 Restoring a dismissed `link` un-hides a pointer. It never pushes anything back
