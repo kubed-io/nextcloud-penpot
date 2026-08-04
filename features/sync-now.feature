@@ -19,6 +19,11 @@ Feature: Syncing Penpot into Nextcloud, now or on a schedule
   # Everything further down this file is a LATER run, which only has work to do
   # because something moved in Penpot. This section is the one that starts from
   # nothing mirrored at all.
+  #
+  # PROJECT NAMES MUST BE UNIQUE ACROSS THIS WHOLE SUITE. Every scenario here
+  # seeds into the SAME Penpot team, nothing tears a project down, and several
+  # assertions find a project BY NAME — so reusing one silently points a later
+  # scenario at an earlier scenario's project.
   # notes: AGENTS.md#the-first-sync
 
   @admin @occ
@@ -26,16 +31,16 @@ Feature: Syncing Penpot into Nextcloud, now or on a schedule
     Given a Penpot team named "Design Team" is mapped to the folder "First Sync"
     And the Penpot team already contains:
       | project | design    |
-      | Widgets | Gizmo     |
-      | Widgets | Doohickey |
-      | Gadgets | Sprocket  |
+      | Cogs    | Gizmo     |
+      | Cogs    | Doohickey |
+      | Levers  | Sprocket  |
     When the admin runs a pull
     Then the pull succeeds
-    And the folder "First Sync/Widgets" carries a Penpot project id
-    And the folder "First Sync/Gadgets" carries a Penpot project id
-    And the file "First Sync/Widgets/Gizmo.penpot" carries a Penpot id
-    And the file "First Sync/Widgets/Doohickey.penpot" carries a Penpot id
-    And the file "First Sync/Gadgets/Sprocket.penpot" carries a Penpot id
+    And the folder "First Sync/Cogs" carries a Penpot project id
+    And the folder "First Sync/Levers" carries a Penpot project id
+    And the file "First Sync/Cogs/Gizmo.penpot" carries a Penpot id
+    And the file "First Sync/Cogs/Doohickey.penpot" carries a Penpot id
+    And the file "First Sync/Levers/Sprocket.penpot" carries a Penpot id
     # A PROJECT IS FOUND BY NAME AND KEPT BY ID: the folder is named exactly as
     # Penpot names the project, and from then on it is the stamped id that
     # identifies it — which is why a rename upstream moves the folder instead of
@@ -69,7 +74,7 @@ Feature: Syncing Penpot into Nextcloud, now or on a schedule
     And the file "Adopted/Handmade/Sketch.penpot" carries a Penpot id
     # THE NAME IS ALL THERE IS TO MATCH ON the first time — a hand-made folder
     # carries no project id yet. Adopting it is what stops a first sync over an
-    # existing tree from leaving "Widgets (2)" beside the folder someone made.
+    # existing tree from leaving a second folder beside the one someone made.
 
   @admin @occ
   Scenario: A design in the team's Drafts mirrors into the mapped folder itself
@@ -131,11 +136,11 @@ Feature: Syncing Penpot into Nextcloud, now or on a schedule
   @admin @occ
   Scenario: A second pull reconciles in place and does not duplicate the folder
     Given a Penpot team named "Design Team" is mapped to the folder "Twice Pulled"
-    And a Penpot project named "Widgets" exists in that team
+    And a Penpot project named "Reconciled" exists in that team
     When the admin runs a pull
     And the team has been mirrored into Nextcloud
     Then the pull succeeds
-    And there is no node at "Twice Pulled/Widgets (2)"
+    And there is no node at "Twice Pulled/Reconciled (2)"
     # IDEMPOTENCE IS THE WHOLE POINT of a reconciler: the second run must find
     # what the first one made, by id, and leave it alone.
 

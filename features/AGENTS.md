@@ -2850,6 +2850,18 @@ in admin-mapping.feature. The scenarios further down that file are all LATER
 runs, which only have work to do because something moved in Penpot; this
 section is the only one that starts from nothing mirrored at all.
 
+PROJECT NAMES ARE GLOBAL TO THE SUITE, and this section learned it the hard
+way. Every core-suite scenario seeds into the SAME Penpot team, nothing tears a
+project down afterwards, and several assertions locate a project BY NAME — so a
+reused name silently points a later scenario at an earlier one's project. The
+first draft called a project "Widgets", which an existing scenario further down
+also creates; that scenario then read the wrong project's `created-at` and
+failed on a date it had asserted correctly for months. Two projects already
+shared the name "Widgets" before this section existed, which is why the second
+of them is now "Reconciled".
+
+Pick a name nothing else uses. `grep -rn '"<name>"' features/` is the check.
+
 THE PRE-STATE IS WHAT PENPOT HOLDS, as one table:
 
     And the Penpot team already contains:
