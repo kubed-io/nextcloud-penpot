@@ -36,8 +36,8 @@ use OCP\IRequest;
  * ## THE TWO FAILURE MODES ARE KEPT APART, ON PURPOSE
  *
  * `InvalidArgumentException` → **422**: the request was understood and refused
- * (already mapped, team not visible, folder mode not implemented). The admin
- * must change what they asked for.
+ * (already mapped, team not visible, folder name already taken). The admin must
+ * change what they asked for.
  *
  * `PenpotApiException` → **502**: we could not get an answer from Penpot at all.
  * The admin must fix the connection, and nothing about their input was wrong.
@@ -72,7 +72,7 @@ final class MappingController extends Controller {
 	public function index(): JSONResponse {
 		return new JSONResponse([
 			'mappings' => array_map(
-				static fn (Mapping $m): array => $m->toArray(),
+				fn (Mapping $m): array => $this->service->describe($m),
 				$this->service->list(),
 			),
 		]);
@@ -80,6 +80,10 @@ final class MappingController extends Controller {
 
 	/**
 	 * Map a Penpot team.
+	 *
+	 * `$ncGroups` is passed alongside the mapping rather than into it: groups are
+	 * applied to the provisioned folder and read back from it, never stored
+	 * (§C6.35).
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function create(
@@ -88,17 +92,14 @@ final class MappingController extends Controller {
 		array $ncGroups = [],
 		bool $useTeamFolder = false,
 		string $mode = Mapping::MODE_LINK,
-		string $folderMode = Mapping::FOLDER_MODE_NESTED,
 	): JSONResponse {
 		try {
 			$mapping = $this->service->add(Mapping::fromArray([
 				'team_id' => $teamId,
 				'nc_folder' => $ncFolder,
-				'nc_groups' => $ncGroups,
 				'use_team_folder' => $useTeamFolder,
 				'mode' => $mode,
-				'folder_mode' => $folderMode,
-			]));
+			]), $ncGroups);
 		} catch (\InvalidArgumentException $e) {
 			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_UNPROCESSABLE_ENTITY);
 		} catch (PenpotApiException $e) {
@@ -108,20 +109,23 @@ final class MappingController extends Controller {
 			);
 		}
 
-		return new JSONResponse($mapping->toArray());
+		return new JSONResponse($this->service->describe($mapping));
 	}
 
 	/**
-	 * Update a mapping's mutable fields — in practice, the groups its folder is
-	 * shared with.
+	 * Re-share a mapping's folder with the given groups — the only edit there is.
 	 *
 	 * Everything else is immutable once created: the team, the Nextcloud folder,
-	 * the Team Folder flag, `mode`, and `folder_mode`. That is not enforced here —
-	 * it is enforced by {@see MappingService::updateGroups()} taking GROUPS, so no
-	 * caller can express a change to anything else. Its docblock gives the reason
-	 * each field is locked. Changing one means removing the mapping and adding it
-	 * again, which makes the migration cost visible instead of hiding it behind a
+	 * the Team Folder flag and `mode`. That is not enforced here — it is enforced
+	 * by {@see MappingService::updateGroups()} taking GROUPS, so no caller can
+	 * express a change to anything else. Its docblock gives the reason each field
+	 * is locked. Changing one means removing the mapping and adding it again,
+	 * which makes the migration cost visible instead of hiding it behind a
 	 * dropdown.
+	 *
+	 * It writes to the FOLDER and stores nothing (§C6.35), so the response carries
+	 * the groups the folder reports afterwards — which is not always what was
+	 * submitted, since a group that does not exist cannot be shared with.
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function update(string $id, array $ncGroups = []): JSONResponse {
@@ -132,17 +136,20 @@ final class MappingController extends Controller {
 		}
 
 		try {
-			// Groups are the whole of what this endpoint owns, and now the whole of
-			// what the service will accept. It used to rebuild the entire mapping
-			// from storage so an omitted parameter could not trip an immutability
-			// check — a careful workaround for an API that should never have taken
-			// the other fields in the first place.
-			$updated = $this->service->updateGroups($id, $ncGroups);
+			$this->service->updateGroups($id, $ncGroups);
 		} catch (\InvalidArgumentException $e) {
 			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_UNPROCESSABLE_ENTITY);
+		} catch (\RuntimeException $e) {
+			// The mapping is fine and the request was fine — the folder could not be
+			// reached to re-share it. A 422 would send the admin back to the form to
+			// change an input that was never the problem.
+			return new JSONResponse(
+				['message' => 'Could not re-share the mapped folder: ' . $e->getMessage()],
+				Http::STATUS_INTERNAL_SERVER_ERROR,
+			);
 		}
 
-		return new JSONResponse($updated->toArray());
+		return new JSONResponse($this->service->describe($existing));
 	}
 
 	/**

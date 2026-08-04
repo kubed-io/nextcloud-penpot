@@ -14,6 +14,7 @@ use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\StorageService;
+use OCP\Files\Folder;
 use OCP\IAppConfig;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
@@ -21,9 +22,9 @@ use PHPUnit\Framework\TestCase;
 /**
  * The mapping store's rules.
  *
- * The three that matter most — and that would each fail *silently* if wrong —
- * are the §6.18 visibility precondition, the §6.53 folder-mode immutability, and
- * the refusal to create a `keyed` mapping. Each one, if skipped, produces a
+ * The ones that matter most — and that would each fail *silently* if wrong — are
+ * the §6.18 visibility precondition, the folder-before-persist order (§C6.32),
+ * and groups never reaching appconfig (§C6.35). Each one, if skipped, produces a
  * mapping that looks correct in the admin list and does the wrong thing (or
  * nothing) later.
  *
@@ -46,14 +47,27 @@ final class MappingServiceTest extends TestCase {
 	/**
 	 * Provisioning is StorageService's, and it is stubbed AVAILABLE here.
 	 *
-	 * `add()` now builds the folder as well as saving the row (§C6.32), so every
-	 * test in this file would otherwise need a filesystem. What the folder ends up
-	 * being is StorageService's own concern and the integration suite's to prove;
-	 * these tests are about the store's RULES.
+	 * `add()` builds the folder as well as saving the row (§C6.32), so every test
+	 * in this file would otherwise need a filesystem. What the folder ends up being
+	 * is StorageService's own concern and the integration suite's to prove; these
+	 * tests are about the store's RULES.
+	 *
+	 * The stub is a small FAKE rather than a silent double, because groups now live
+	 * on the folder: it remembers what `ensureRoot()` was asked to apply and hands
+	 * it back from `groupsOf()`. Without that, "the service reads groups from
+	 * storage" would be untestable here — every assertion would see `[]` and pass
+	 * for the wrong reason.
 	 *
 	 * @var StorageService&Stub
 	 */
 	private StorageService $storage;
+
+	/**
+	 * What the fake storage believes each mapping's folder is shared with.
+	 *
+	 * @var array<string, list<string>>
+	 */
+	private array $appliedGroups = [];
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -76,8 +90,23 @@ final class MappingServiceTest extends TestCase {
 			},
 		);
 
+		$this->appliedGroups = [];
 		$this->storage = $this->createStub(StorageService::class);
 		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturnCallback(
+			function (Mapping $mapping, array|string|null $groups = null): Folder {
+				// null means "just make sure the folder is there" — every pull — and
+				// must leave sharing alone. Only an explicit set changes it (§C6.35).
+				if ($groups !== null) {
+					$this->appliedGroups[$mapping->id] = StorageService::normaliseGroups($groups);
+				}
+
+				return $this->createStub(Folder::class);
+			},
+		);
+		$this->storage->method('groupsOf')->willReturnCallback(
+			fn (Mapping $mapping): array => $this->appliedGroups[$mapping->id] ?? [],
+		);
 
 		$this->client = $this->createStub(PenpotClient::class);
 		$this->client->method('getTeams')->willReturn([
@@ -132,21 +161,6 @@ final class MappingServiceTest extends TestCase {
 		$this->expectExceptionMessage('already mapped');
 
 		$this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
-	}
-
-	/**
-	 * `keyed` parses (so stored rows round-trip) but must never be CREATED —
-	 * accepting it and behaving as `nested` would be a silent lie the admin could
-	 * only detect from the resulting folder layout.
-	 */
-	public function testRefusesToCreateAKeyedMapping(): void {
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('not implemented');
-
-		$this->service()->add(Mapping::fromArray([
-			'team_id' => self::TEAM_ID,
-			'folder_mode' => Mapping::FOLDER_MODE_KEYED,
-		]));
 	}
 
 	/**
@@ -207,8 +221,27 @@ final class MappingServiceTest extends TestCase {
 
 		$updated = $this->service()->updateGroups($saved->id, ['design']);
 
-		self::assertSame(['design'], $updated->ncGroups);
-		self::assertSame(['design'], $this->service()->getById($saved->id)?->ncGroups);
+		// The RETURN is what the folder reports afterwards, not the input echoed
+		// back — a group that does not exist cannot be shared with.
+		self::assertSame(['design'], $updated);
+		self::assertSame(['design'], $this->service()->groupsOf($saved));
+	}
+
+	/**
+	 * A group change writes to the FOLDER and to nothing else (§C6.35).
+	 *
+	 * The strongest single statement of the new design: appconfig is untouched, so
+	 * there is no stored copy to disagree with the folder, and no reconciler that
+	 * could put an old list back over an admin's hand edit.
+	 */
+	public function testUpdatingGroupsStoresNothing(): void {
+		$this->service()->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
+		$before = $this->stored;
+
+		$this->service()->updateGroups($this->service()->list()[0]->id, 'design, admin');
+
+		self::assertSame($before, $this->stored);
+		self::assertStringNotContainsString('design', $this->stored);
 	}
 
 	/** Everything else the mapping carries survives a group change untouched. */
@@ -220,14 +253,14 @@ final class MappingServiceTest extends TestCase {
 			'mode' => Mapping::MODE_SYNC,
 		]));
 
-		$updated = $this->service()->updateGroups($saved->id, 'design, admin');
+		self::assertSame(['design', 'admin'], $this->service()->updateGroups($saved->id, 'design, admin'));
 
-		self::assertSame(['design', 'admin'], $updated->ncGroups);
-		self::assertSame($saved->teamId, $updated->teamId);
-		self::assertSame('Design Files', $updated->ncFolder);
-		self::assertTrue($updated->useTeamFolder);
-		self::assertSame(Mapping::MODE_SYNC, $updated->mode);
-		self::assertSame($saved->folderMode, $updated->folderMode);
+		$reloaded = $this->service()->getById($saved->id);
+
+		self::assertSame($saved->teamId, $reloaded?->teamId);
+		self::assertSame('Design Files', $reloaded?->ncFolder);
+		self::assertTrue($reloaded?->useTeamFolder);
+		self::assertSame(Mapping::MODE_SYNC, $reloaded?->mode);
 	}
 
 	public function testUpdatingAnUnknownMappingIsRefused(): void {
@@ -319,17 +352,48 @@ final class MappingServiceTest extends TestCase {
 		]));
 	}
 
-	public function testGroupsAndTeamFolderPersist(): void {
+	public function testTheTeamFolderFlagPersists(): void {
 		$saved = $this->service()->add(Mapping::fromArray([
 			'team_id' => self::TEAM_ID,
-			'nc_groups' => ['design', 'admin'],
 			'use_team_folder' => false,
 		]));
 
-		$reloaded = $this->service()->getById($saved->id);
+		self::assertFalse($this->service()->getById($saved->id)?->useTeamFolder);
+	}
 
-		self::assertSame(['design', 'admin'], $reloaded?->ncGroups);
-		self::assertFalse($reloaded?->useTeamFolder);
+	/**
+	 * Groups given at create reach the FOLDER and never appconfig (§C6.35).
+	 *
+	 * They are a parameter to `add()`, not a field on the mapping, for the same
+	 * reason they are not persisted: the folder is the record. Reloading proves it
+	 * — the groups come back from storage, and the stored JSON has never heard of
+	 * them.
+	 */
+	public function testGroupsGivenAtCreateGoToTheFolderNotTheStore(): void {
+		$saved = $this->service()->add(
+			Mapping::fromArray(['team_id' => self::TEAM_ID]),
+			['design', 'admin'],
+		);
+
+		self::assertSame(['design', 'admin'], $this->service()->groupsOf($saved));
+		self::assertStringNotContainsString('design', $this->stored);
+		self::assertStringNotContainsString('nc_groups', $this->stored);
+	}
+
+	/**
+	 * `describe()` is the shape the admin page and `list-mappings --json` render:
+	 * everything stored, plus the folder's live groups. It must not be what
+	 * `persist()` writes, or the groups would be cached back into appconfig and
+	 * the whole arrangement would quietly revert.
+	 */
+	public function testDescribeAddsTheFoldersGroupsToTheStoredShape(): void {
+		$saved = $this->service()->add(
+			Mapping::fromArray(['team_id' => self::TEAM_ID]),
+			'design',
+		);
+
+		self::assertSame(['design'], $this->service()->describe($saved)['nc_groups']);
+		self::assertArrayNotHasKey('nc_groups', $saved->toArray());
 	}
 
 	public function testRemovesAMapping(): void {

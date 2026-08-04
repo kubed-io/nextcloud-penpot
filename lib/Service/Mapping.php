@@ -74,6 +74,21 @@ use JsonSerializable;
  *
  * **No per-project anything.** See above.
  *
+ * **No groups** (§C6.35). Which groups the mapped folder is shared with is a
+ * property OF THE FOLDER, and Nextcloud already stores it — as groupfolders
+ * assignments or as group shares. Copying it here would create a second answer
+ * to the same question, and the two would disagree the moment an admin changed
+ * the sharing on the folder directly, which they are entitled to do. Groups are
+ * therefore read from the folder on demand ({@see StorageService::groupsOf()})
+ * and written straight through ({@see MappingService::updateGroups()}).
+ *
+ * **No folder mode** (§C6.36). `nested`/`keyed` was a designed-but-unbuilt fork
+ * that this object carried, the CLI took, the admin card rendered as "(fixed)",
+ * and `add()` refused half the values of. One unimplemented value on a field
+ * with one implemented value is not a choice, so the field is gone. The design
+ * question it stood for is still open in the saga (§6.53, open question #47),
+ * which is where an unbuilt design belongs.
+ *
  * @see MappingService for storage, uniqueness, and the immutability rule.
  */
 final class Mapping implements JsonSerializable {
@@ -83,39 +98,13 @@ final class Mapping implements JsonSerializable {
 	/** Files under this mapping download their real `.penpot` archive. */
 	public const MODE_SYNC = 'sync';
 
-	/**
-	 * Penpot projects are flat names; Nextcloud may nest them freely under the
-	 * Team Folder (saga §6.29). A `/` in a project name is INVALID here, because
-	 * it would mean nothing.
-	 */
-	public const FOLDER_MODE_NESTED = 'nested';
-
-	/**
-	 * A project's name IS its path relative to the Team Folder ("foo/bar" →
-	 * `Team/foo/bar/`).
-	 *
-	 * DESIGNED, NOT BUILT (saga §6.53). The *fork* is locked and this constant
-	 * exists so stored values round-trip, but the mode has no implementation and
-	 * no feature file. Three real questions block it (open question #47): how
-	 * inferred intermediate folders are told apart from user folders, what a
-	 * move out of the team means when position *is* the name, and whether a
-	 * `foo/bar` key collision is refused or disambiguated.
-	 *
-	 * {@see MappingService::add()} refuses it for exactly that reason. Do not
-	 * "finish" it without resolving #47 first — that is a saga decision.
-	 */
-	public const FOLDER_MODE_KEYED = 'keyed';
-
 	public function __construct(
 		public readonly string $id,
 		public readonly string $teamId,
 		public readonly string $teamName,
 		public readonly string $ncFolder,
-		/** @var list<string> */
-		public readonly array $ncGroups,
 		public readonly bool $useTeamFolder,
 		public readonly string $mode,
-		public readonly string $folderMode,
 	) {
 	}
 
@@ -152,10 +141,10 @@ final class Mapping implements JsonSerializable {
 			$ncFolder = self::borrowFolderName($teamName);
 		}
 
-		// Which Nextcloud groups the mapped folder is shared with, and whether it
-		// is an ownerless Team Folder (groupfolders) or a plain shared folder.
-		$ncGroups = self::normaliseGroups($data['nc_groups'] ?? []);
-
+		// Whether the folder is an ownerless Team Folder (groupfolders) or a plain
+		// shared folder. Which GROUPS it is shared with is not here — that lives on
+		// the folder itself (§C6.35, see the class docblock).
+		//
 		// DEFAULT FALSE, BECAUSE A DEFAULT HAS TO WORK EVERYWHERE.
 		//
 		// groupfolders is an OPTIONAL app. Defaulting to it meant the default
@@ -173,12 +162,10 @@ final class Mapping implements JsonSerializable {
 		$useTeamFolder = array_key_exists('use_team_folder', $data)
 			&& filter_var($data['use_team_folder'], FILTER_VALIDATE_BOOLEAN);
 
-		// Both default rather than being required: the overwhelmingly common
-		// `occ` call names a team and nothing else, and every default here is
-		// the conservative one (link downloads nothing, nested is the only
-		// implemented folder model).
+		// Defaults rather than being required: the overwhelmingly common `occ` call
+		// names a team and nothing else, and `link` is the conservative choice —
+		// it downloads nothing.
 		$mode = trim((string)($data['mode'] ?? self::MODE_LINK));
-		$folderMode = trim((string)($data['folder_mode'] ?? self::FOLDER_MODE_NESTED));
 
 		if ($teamId === '') {
 			throw new \InvalidArgumentException('team_id is required');
@@ -200,15 +187,18 @@ final class Mapping implements JsonSerializable {
 		if (!in_array($mode, [self::MODE_LINK, self::MODE_SYNC], true)) {
 			throw new \InvalidArgumentException('mode must be "link" or "sync"');
 		}
-		if (!in_array($folderMode, [self::FOLDER_MODE_NESTED, self::FOLDER_MODE_KEYED], true)) {
-			throw new \InvalidArgumentException('folder_mode must be "nested" or "keyed"');
-		}
 
-		return new self($id, $teamId, $teamName, $ncFolder, $ncGroups, $useTeamFolder, $mode, $folderMode);
+		return new self($id, $teamId, $teamName, $ncFolder, $useTeamFolder, $mode);
 	}
 
 	/**
-	 * @return array{id: string, team_id: string, team_name: string, nc_folder: string, nc_groups: list<string>, use_team_folder: bool, mode: string, folder_mode: string}
+	 * The STORED shape — what goes into appconfig, and nothing else.
+	 *
+	 * Deliberately not the shape the admin page or `list-mappings --json` renders:
+	 * those add the folder's current groups, which are read live rather than
+	 * stored ({@see MappingService::describe()}).
+	 *
+	 * @return array{id: string, team_id: string, team_name: string, nc_folder: string, use_team_folder: bool, mode: string}
 	 */
 	public function toArray(): array {
 		return [
@@ -216,15 +206,13 @@ final class Mapping implements JsonSerializable {
 			'team_id' => $this->teamId,
 			'team_name' => $this->teamName,
 			'nc_folder' => $this->ncFolder,
-			'nc_groups' => $this->ncGroups,
 			'use_team_folder' => $this->useTeamFolder,
 			'mode' => $this->mode,
-			'folder_mode' => $this->folderMode,
 		];
 	}
 
 	/**
-	 * @return array{id: string, team_id: string, team_name: string, nc_folder: string, nc_groups: list<string>, use_team_folder: bool, mode: string, folder_mode: string}
+	 * @return array{id: string, team_id: string, team_name: string, nc_folder: string, use_team_folder: bool, mode: string}
 	 */
 	#[\Override]
 	public function jsonSerialize(): array {
@@ -243,22 +231,12 @@ final class Mapping implements JsonSerializable {
 	 * to Course 3, not a side effect of this setter.
 	 */
 	public function withTeamName(string $teamName): self {
-		return new self($this->id, $this->teamId, trim($teamName), $this->ncFolder, $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);
-	}
-
-	/**
-	 * A copy with the shared groups replaced — the only field a mapping may change
-	 * after it is created ({@see MappingService::updateGroups()}).
-	 *
-	 * @param array<array-key, mixed>|string $ncGroups
-	 */
-	public function withNcGroups(array|string $ncGroups): self {
-		return new self($this->id, $this->teamId, $this->teamName, $this->ncFolder, self::normaliseGroups($ncGroups), $this->useTeamFolder, $this->mode, $this->folderMode);
+		return new self($this->id, $this->teamId, trim($teamName), $this->ncFolder, $this->useTeamFolder, $this->mode);
 	}
 
 	/** A copy with the Nextcloud folder name replaced. */
 	public function withNcFolder(string $ncFolder): self {
-		return new self($this->id, $this->teamId, $this->teamName, self::normaliseFolder($ncFolder), $this->ncGroups, $this->useTeamFolder, $this->mode, $this->folderMode);
+		return new self($this->id, $this->teamId, $this->teamName, self::normaliseFolder($ncFolder), $this->useTeamFolder, $this->mode);
 	}
 
 	/**
@@ -288,37 +266,6 @@ final class Mapping implements JsonSerializable {
 		$v = preg_replace('#/+#', '/', $v) ?? $v;
 
 		return trim($v, '/');
-	}
-
-	/**
-	 * Group ids: non-empty trimmed strings, de-duplicated, re-indexed. Tolerates
-	 * a comma-separated string from a form field.
-	 *
-	 * Identical to both siblings' normaliser, so the three mapping models reduce
-	 * cleanly into a shared base later.
-	 *
-	 * @return list<string>
-	 */
-	private static function normaliseGroups(mixed $value): array {
-		if (is_string($value)) {
-			$value = $value === '' ? [] : explode(',', $value);
-		}
-
-		if (!is_array($value)) {
-			return [];
-		}
-
-		$out = [];
-
-		foreach ($value as $g) {
-			$g = trim((string)$g);
-
-			if ($g !== '' && !in_array($g, $out, true)) {
-				$out[] = $g;
-			}
-		}
-
-		return $out;
 	}
 
 	/**

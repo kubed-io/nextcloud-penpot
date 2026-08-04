@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
+use Behat\Gherkin\Node\TableNode;
 use GuzzleHttp\Client;
 
 /**
@@ -82,7 +83,13 @@ trait PullSteps {
 	 */
 	public function aPenpotTeamNamedIsMappedToTheFolder(string $team, string $folder): void {
 		$this->noPenpotTeamsAreMapped();
-		$this->pulledTeamId = $this->teamNamed($team);
+
+		// NAMES THE TEAM as well as mapping it, so a scenario that starts from this
+		// one sentence can still say "it" afterwards — which is how the refusals in
+		// admin-mapping.feature reach a team without repeating its name. Same reason
+		// its Team-Folder twin does it.
+		$this->aPenpotTeamNamedExists($team);
+		$this->pulledTeamId = $this->namedTeamId;
 
 		$res = $this->occ(sprintf(
 			'penpot_sync:add-mapping %s --folder=%s %s',
@@ -152,6 +159,102 @@ trait PullSteps {
 		return null;
 	}
 
+	/**
+	 * The Penpot side of a first sync, as one table.
+	 *
+	 * ## THE PRE-STATE IS WHAT PENPOT HOLDS, NOT WHAT WE DID TO PUT IT THERE
+	 *
+	 * A first sync is only interesting when the team already has something in it,
+	 * and "something" is a shape — projects, each with designs — not a sequence of
+	 * seeding calls. One table says the shape; repeating "a project named X exists"
+	 * and "a file named Y exists in the project X" says how it was built, which is
+	 * not what a `Given` is for.
+	 *
+	 * FIND-OR-CREATE PER PROJECT, so a name may repeat down the column to give one
+	 * project several designs — and so `Drafts` resolves to the team's REAL default
+	 * project instead of making a second project that happens to share its name.
+	 * That is what lets the Drafts scenario be written in the same table as every
+	 * other one.
+	 *
+	 * A row with no design seeds an empty project, which is a legitimate thing for
+	 * a team to contain.
+	 *
+	 * @Given /^the Penpot team already contains:$/
+	 */
+	public function thePenpotTeamAlreadyContains(TableNode $contents): void {
+		foreach ($contents->getHash() as $row) {
+			$project = trim((string)($row['project'] ?? ''));
+			$design = trim((string)($row['design'] ?? ''));
+
+			if ($project === '') {
+				throw new \RuntimeException('every row needs a project — leave only the design blank');
+			}
+
+			$projectId = $this->projectIdNamedOrNull($project);
+			if ($projectId === null) {
+				$this->aPenpotProjectExistsInThatTeam($project);
+				$projectId = $this->projectIdNamedOrNull($project);
+			}
+
+			if ($projectId === null) {
+				throw new \RuntimeException("created the Penpot project \"{$project}\" but it is not visible");
+			}
+
+			// FIND-OR-CREATE THE DESIGN TOO, so the step is honestly a STATE. Created
+			// unconditionally it was a recipe: re-stating the same pre-state — which
+			// is what a second Examples row does — left the team holding two designs
+			// with one name, and the mirror holding "Gizmo.penpot" beside
+			// "Gizmo (2).penpot".
+			if ($design !== '' && !$this->projectHoldsDesign($projectId, $design)) {
+				$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => $design]);
+			}
+		}
+	}
+
+	/**
+	 * A folder somebody made by hand, before anything was mirrored into it.
+	 *
+	 * The path is relative to the actor's root exactly as every other path in the
+	 * suite is, so a scenario names it the same way it later asserts on it.
+	 *
+	 * davMkcol(), not davMkdir(): the folder sits INSIDE the mapped folder, and
+	 * davMkdir only makes a top-level one.
+	 *
+	 * @Given /^a folder "([^"]*)" already exists$/
+	 */
+	public function aFolderAlreadyExists(string $path): void {
+		$this->davMkcol($path);
+	}
+
+	/**
+	 * The id of a project with this name, or null when the team has none.
+	 *
+	 * Reads Penpot directly rather than `probe --files`: this runs BEFORE the first
+	 * pull, when the probe has no mirrored tree to describe, and the answer has to
+	 * come from the team itself.
+	 */
+	private function projectHoldsDesign(string $projectId, string $design): bool {
+		foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $projectId]) as $file) {
+			if (($file['name'] ?? null) === $design) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function projectIdNamedOrNull(string $name): ?string {
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			if (($project['name'] ?? null) === $name) {
+				$id = (string)($project['id'] ?? '');
+
+				return $id === '' ? null : $id;
+			}
+		}
+
+		return null;
+	}
+
 	/** @Given /^a Penpot project named "([^"]*)" exists in that team$/ */
 	public function aPenpotProjectExistsInThatTeam(string $name): void {
 		$teamId = $this->pulledTeamId !== '' ? $this->pulledTeamId : $this->firstVisibleTeamId();
@@ -201,6 +304,171 @@ trait PullSteps {
 	 */
 	public function theAdminRunsAPull(): void {
 		$this->occ('penpot_sync:sync pull');
+	}
+
+	/**
+	 * A sync, named by its ACTOR and its SCOPE — the two things that actually
+	 * differ between the four ways one starts.
+	 *
+	 * ## THE TRIGGER IS DATA, NOT A BEHAVIOUR
+	 *
+	 * The card's "Sync now", the section's "Sync from Penpot", the schedule and a
+	 * user's personal sync all have the same pre-state and the same post-state.
+	 * Four scenarios each asserting that in its own words was four chances to say
+	 * it differently — and they had taken all four. As columns, the sameness is
+	 * the point of the table.
+	 *
+	 * The personal sync is not built, so that one row still sits in a tagged
+	 * scenario of its own rather than being quietly skipped inside a green
+	 * outline — hence the throw, which is a bug if it is ever reached.
+	 *
+	 * @When /^(the admin|the schedule|the user) syncs (one mapping|every mapping|their personal team)$/
+	 */
+	public function actorSyncsScope(string $actor, string $scope): void {
+		if ($actor === 'the schedule') {
+			$this->theScheduleFires();
+
+			return;
+		}
+
+		if ($actor !== 'the admin') {
+			throw new \RuntimeException(
+				"this harness cannot start a sync as \"{$actor}\" — that row belongs in a tagged scenario",
+			);
+		}
+
+		if ($scope === 'one mapping') {
+			$ids = $this->mappingIds();
+			if ($ids === []) {
+				throw new \RuntimeException('there is no mapping to sync');
+			}
+
+			$this->occ('penpot_sync:sync pull --mapping=' . escapeshellarg($ids[0]));
+
+			return;
+		}
+
+		$this->occ('penpot_sync:sync pull');
+	}
+
+	/**
+	 * Time as the actor, without waiting for any.
+	 *
+	 * ## THE INTERVAL IS NOT THE THING TO SHORTEN
+	 *
+	 * The obvious idea is to set the schedule to a few seconds and sleep. It does
+	 * not work and would be the wrong test anyway: {@see ScheduleConfig} clamps to
+	 * 300s and the job clamps again to 60s, both deliberately, because a job that
+	 * re-enters faster than a pull can finish is a bug rather than a feature. A
+	 * test that had to defeat two safety floors would be testing the floors.
+	 *
+	 * `background-job:execute --force-execute` runs the registered job NOW,
+	 * ignoring its interval — which is exactly "the schedule came round" with the
+	 * waiting taken out. What runs is the real {@see ScheduledPullJob}, so the row
+	 * proves what it claims: the same tree appears when nobody pressed anything.
+	 *
+	 * The schedule has to be ENABLED first or `run()` returns immediately by
+	 * design — "disabled means do nothing, not do not tick". Setting it is part of
+	 * the trigger, not a fixture: a schedule nobody turned on has no actor.
+	 */
+	private function theScheduleFires(): void {
+		$this->occ('config:app:set penpot_sync schedule_enabled --value=yes');
+
+		$res = $this->occ('background-job:list --output=json');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not list the background jobs:\n{$res['output']}");
+		}
+
+		$jobs = json_decode($res['output'], true);
+		$id = null;
+		foreach (is_array($jobs) ? $jobs : [] as $job) {
+			if (is_array($job) && str_contains((string)($job['class'] ?? ''), 'ScheduledPullJob')) {
+				$id = (string)($job['id'] ?? '');
+				break;
+			}
+		}
+
+		if ($id === null || $id === '') {
+			throw new \RuntimeException("the scheduled pull job is not registered:\n{$res['output']}");
+		}
+
+		$run = $this->occ('background-job:execute ' . escapeshellarg($id) . ' --force-execute');
+		if ($run['exit'] !== 0) {
+			throw new \RuntimeException("the scheduled pull job failed:\n{$run['output']}");
+		}
+	}
+
+	/**
+	 * A mirror's dates are PENPOT'S, and that is an end state rather than a
+	 * behaviour — so it is a sentence any feature can end with, not a scenario.
+	 *
+	 * It had a scenario of its own here, which made "the dates are right" look
+	 * like something syncing does rather than something every mirror is true of.
+	 * Every Penpot-origin behaviour — a design created, renamed, restored — wants
+	 * to end by saying this, and now each can.
+	 *
+	 * @Then /^"([^"]*)" carries its Penpot dates$/
+	 */
+	public function carriesItsPenpotDates(string $path): void {
+		$this->theDesignIsDatedWhenItChanged($path);
+		$this->theDesignWasCreatedWhenItWasCreated($path);
+	}
+
+	/**
+	 * The folder twin. A project folder gets its project's CREATION time only —
+	 * its mtime is propagated from its children by core, so asserting one would be
+	 * asserting core's propagation rather than this app's behaviour (§C6.24).
+	 *
+	 * @Then /^the folder "([^"]*)" carries its Penpot dates$/
+	 */
+	public function theFolderCarriesItsPenpotDates(string $path): void {
+		$this->theFolderWasCreatedWhenItsProjectWas($path);
+	}
+
+	/**
+	 * The mirrored tree, as one assertion.
+	 *
+	 * ## A TREE IS ONE FACT TOO
+	 *
+	 * Every path a sync should have produced, and whether it wears a tag. It
+	 * replaces a column of "the folder X carries…" / "the file Y carries…" lines
+	 * that said one thing each and made a six-node tree into six assertions, none
+	 * of which showed the SHAPE the sync was supposed to build.
+	 *
+	 * `-` in the tagged column means "no tag expected" and is not checked; naming
+	 * a tag checks it is there. The tag lives here rather than in a scenario of
+	 * its own because it is a property of a node in the tree, the same as the
+	 * node existing at all.
+	 *
+	 * @Then /^the mapped folder holds:$/
+	 */
+	public function theMappedFolderHolds(TableNode $tree): void {
+		foreach ($tree->getHash() as $row) {
+			$path = trim((string)($row['path'] ?? ''));
+			$tag = trim((string)($row['tagged'] ?? ''));
+
+			if ($path === '') {
+				continue;
+			}
+
+			if (!$this->davExists($path)) {
+				throw new \RuntimeException("the sync did not produce \"{$path}\"");
+			}
+
+			if ($tag === '' || $tag === '-') {
+				continue;
+			}
+
+			$tags = $this->davSystemTags($path);
+			if (!in_array($tag, $tags, true)) {
+				throw new \RuntimeException(sprintf(
+					'"%s" should carry the "%s" tag, carries: %s',
+					$path,
+					$tag,
+					$tags === [] ? '(none)' : implode(', ', $tags),
+				));
+			}
+		}
 	}
 
 	/**
@@ -278,7 +546,15 @@ trait PullSteps {
 		}
 	}
 
-	/** @Then /^the pull succeeds$/ */
+	/**
+	 * TWO PHRASINGS, ONE FUNCTION. "The sync succeeds" is the word the product
+	 * uses — the button says Sync, the command is `penpot_sync:sync`, the file is
+	 * sync-now.feature. "The pull succeeds" is the mechanism's word and is kept
+	 * because a dozen other feature files say it; new scenarios should say sync.
+	 *
+	 * @Then /^the pull succeeds$/
+	 * @Then /^the sync succeeds$/
+	 */
 	public function thePullSucceeds(): void {
 		if ($this->lastExit !== 0 || !str_contains($this->lastOutput, 'Pull complete')) {
 			throw new \RuntimeException("the pull did not complete cleanly (exit {$this->lastExit}):\n{$this->lastOutput}");

@@ -22,8 +22,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Print the configured team mappings — the same list the admin panel renders.
  *
  * Defaults to a table because the common use is a human checking what is
- * configured; `--json` gives the exact stored shape for scripts and for the
+ * configured; `--json` gives the machine shape for scripts and for the
  * integration suite, which asserts against it.
+ *
+ * GROUPS is not stored — it is read off each mapping's folder as this runs
+ * (§C6.35), so it shows what the folder is actually shared with, including a
+ * change someone made in the Files UI.
  */
 final class ListMappings extends Command {
 	public function __construct(
@@ -45,8 +49,11 @@ final class ListMappings extends Command {
 		$mappings = $this->service->list();
 
 		if ($input->getOption('json')) {
+			// describe(), not toArray(): `nc_groups` is read off the folder rather
+			// than stored (§C6.35), and this output is what the integration suite
+			// asserts a mapping's groups against.
 			$output->writeln(json_encode(
-				array_map(static fn (Mapping $m): array => $m->toArray(), $mappings),
+				array_map(fn (Mapping $m): array => $this->service->describe($m), $mappings),
 				JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
 			));
 
@@ -61,19 +68,20 @@ final class ListMappings extends Command {
 		}
 
 		$output->writeln(sprintf(
-			'%-18s %-22s %-22s %-6s %-8s %s',
-			'ID', 'TEAM', 'NC FOLDER', 'MODE', 'LAYOUT', 'GROUPS',
+			'%-18s %-22s %-22s %-6s %s',
+			'ID', 'TEAM', 'NC FOLDER', 'MODE', 'GROUPS',
 		));
 
 		foreach ($mappings as $mapping) {
+			$groups = $this->service->groupsOf($mapping);
+
 			$output->writeln(sprintf(
-				'%-18s %-22s %-22s %-6s %-8s %s',
+				'%-18s %-22s %-22s %-6s %s',
 				$mapping->id,
 				$mapping->teamName !== '' ? $mapping->teamName : '(unknown)',
 				$mapping->ncFolder,
 				$mapping->mode,
-				$mapping->folderMode,
-				$mapping->ncGroups === [] ? '-' : implode(',', $mapping->ncGroups),
+				$groups === [] ? '-' : implode(',', $groups),
 			));
 		}
 

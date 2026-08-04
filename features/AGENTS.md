@@ -223,6 +223,74 @@ those scenarios are untagged below. Everything that depends on the PULL (Team
 Folder provisioning, project subfolders, rename propagation) is still @todo:
 MappingService and the admin surface exist, the sync engine does not.
 
+### The preconditions
+
+ONE SENTENCE PER FACT, AND A MAPPING IS ONE FACT.
+
+    Given a mapping with the following values:
+      | team    | Northwind    |
+      | folder  | Design Files |
+      | groups  | design,admin |
+      | storage | team folder  |
+
+The table takes the SAME fields as the creation form, and both run them through
+one `flagFor()`, so "storage" or "groups" means the same thing whether a value
+is being set up or submitted. An omitted or blank row is the app's own default,
+exactly as a blank cell is in the form.
+
+WHAT IT REPLACED was a family of sentences that each said a different SUBSET of
+the same fact — "…is mapped to the folder X", "…is mapped to a Team Folder",
+"…shared with Y". A scenario needing two of them said the mapping twice; a
+scenario needing a combination nobody had written yet had to grow a new step. A
+table has no subsets, so the family collapses to one sentence and the new
+combination is a new row.
+
+An intermediate draft went the other way and split the compound Given into
+three short sentences — the team exists, then it is mapped, then it is shared.
+That reads as a RECIPE for reaching the state rather than the state itself,
+which is not what a `Given` is for. One sentence that ties a team to its folder
+is the pre-state; three steps in sequence are how you would perform it.
+
+"IT" IS WHATEVER TEAM WAS NAMED LAST. Every sentence that names a team sets it,
+including this one, so the rest of a scenario never repeats the name. Naming
+another team afterwards re-points "it" — which is how "Two mappings cannot
+target the same Nextcloud folder" reaches a second team without a second
+mapping sentence, and why that scenario names it LAST.
+
+THE ONE-LINE FORM STILL EXISTS for the thirteen other feature files whose
+Background just needs a mapping to be there: "a Penpot team named X is mapped
+to the folder Y". It names the team the same way, so "it" works after either.
+It keeps `backendFlags()` — those files inherit the matrix leg's backend rather
+than choosing one, which is exactly the difference that makes it a separate
+sentence rather than an alias.
+
+AND ONE ACTION TO MATCH. Creating a mapping is a single `When` — "the admin
+maps it with:" and a table. Saving the form, being refused because the folder
+is taken, and being refused because the team is already mapped are the SAME
+action against three different pre-states, so they share the sentence and
+differ in their `Given` and their `Then`. A draft had a second sentence, "the
+admin maps it into the folder X", which was this one with a single field and no
+table — a subset again, the same mistake the pre-state sentences had made.
+
+That symmetry is what makes the file readable end to end: one way to describe a
+mapping, one way to create one, and every scenario is a pre-state and an
+outcome.
+
+WHAT THIS FILE IS NOT ABOUT: what is INSIDE a mapped folder. A mapping
+guarantees exactly one thing — the Nextcloud folder it names. Project folders,
+their names, their `penpot` tags and the designs in them all arrive with the
+FIRST SYNC, and two scenarios that used to sit here ("Project folder names
+always match their Penpot projects", "Two Penpot projects in one team sharing a
+name") moved to sync-now.feature for that reason. They had been reading as
+though mapping a team produced a tree, which is exactly the confusion this split
+removes.
+
+GROUPS HAVE TO EXIST FIRST. `the Nextcloud groups "design,sales" exist` is a
+precondition and not a detail: only `admin` exists on a fresh instance, and a
+group that does not exist cannot be shared with. See
+"The groups a mapped folder is shared with can be changed" for how long that
+went unnoticed.
+
 ### Creating a mapping saves the form
 
 ONE BEHAVIOUR, AND EVERY ROW CHECKS ALL OF IT.
@@ -232,9 +300,8 @@ back, and whatever they left alone comes back as its default. That is the
 whole of it, so it is ONE scenario — the rows are inputs, not behaviours.
 Choosing "sync" is not a different behaviour from choosing "link"; none of
 these values can even be OBSERVED until something later acts on one (the
-mode decides whether a file's bytes are held, the groups and storage decide
-what the pull provisions, the folder mode decides how project names become
-paths).
+mode decides whether a file's bytes are held, the storage decides what kind
+of folder gets provisioned, and the groups decide who can see it).
 
 THE DEFAULTS ARE DECLARED AS DATA, not asserted one scenario at a time.
 There were five near-identical scenarios here, each mapping a team and
@@ -243,7 +310,7 @@ long as it took to notice — a Team Folder needs the optional groupfolders
 app, so the no-choice mapping asked for a backend a stock Nextcloud does not
 have (§C6.31). Five titles hid that. One column does not.
 
-AND EVERY ROW ASSERTS ALL FIVE FIELDS, which is what the earlier drafts got
+AND EVERY ROW ASSERTS ALL FOUR FIELDS, which is what the earlier drafts got
 wrong: a row that sets the mode is also proving it did not disturb the
 folder. Rows 1 and 2 together are the whole of "the folder name is the
 admin's, and defaults to the team's" — the two names are independent, and it
@@ -251,9 +318,13 @@ costs a row rather than a scenario. The last row is a Team Folder named
 exactly as its team, which is legal and worth pinning: nothing about the
 storage backend constrains the name.
 
-"folder mode" is in the defaults table but no row sets it — its only other
-value is REFUSED (keyed is designed and not built, §6.53), so every row
-asserts the default and the refusal lives with the other refusals below.
+A FIFTH COLUMN USED TO BE HERE. "folder mode" sat in the defaults table with
+no row setting it, because its only other value was refused — `keyed` was
+designed and never built. The field is gone entirely now (§C6.36): one
+unimplemented value beside one implemented value is not a choice, and a form
+field nobody can meaningfully fill in does not earn a column. The design
+question survives where an unbuilt design belongs, in the saga (§6.53,
+question #47).
 
 ### Renaming the team in Penpot does not rename the admin's folder
 
@@ -261,26 +332,27 @@ The folder name was the admin's choice; the team name was only ever its
 default. Silently moving their folder because someone renamed a team
 upstream would be a surprise, not a sync.
 
-### A value the app cannot honour is refused, and says why
+### Removed: A value the app cannot honour is refused, and says why
 
-A PATH IS NOT A FOLDER NAME. Everything below the team folder is created by
-the pull from Penpot's own project names, so an inner "/" would invent an
-intermediate folder no Penpot object corresponds to, and nothing would ever
-clean it up.
+A two-row outline used to live here, refusing an OPTION rather than a team:
+a folder name containing "/" , and `folder_mode: keyed`.
 
-KEYED IS DESIGNED, NOT BUILT. Accepting it and behaving as "nested" would be
-a silent lie the admin could only detect from the resulting folder layout
-(saga §6.53, question #47).
+It went with folder mode (§C6.36). Half of it was refusing a value that no
+longer exists, and what was left was a one-row outline — a shape that reads
+as "there are several of these" while describing one thing.
 
-Both are refusals of an OPTION, which is why they share a table with each
-other and not with the refusals below — those are about the TEAM (it is not
-there, it is already mapped), and no option would have changed them.
+The "/" rule itself did not go anywhere: everything below the team folder is
+created by the pull from Penpot's own project names, so an inner "/" would
+invent an intermediate folder that no Penpot object corresponds to and that
+nothing would ever clean up. It is still enforced in `Mapping::fromArray()`
+and still covered by `MappingTest`. What it lost was an integration scenario,
+which was never where a string-validation rule was best proven.
 
 ── sharing: groups + Team Folder, exactly as the siblings do it ────────────
-Same two controls, same meanings, same defaults as nextcloud-n8n and
-nextcloud-grafana, so an admin configuring all three does the same thing each
-time. They PERSIST today and are honoured when the pull provisions the folder
-(Course 3) — the same "saved now, applied later" state Grafana ships them in.
+Same two controls and the same meanings as nextcloud-n8n and nextcloud-grafana,
+so an admin configuring all three does the same thing each time. Team Folder is
+opt-in and off by default (§C6.31); groups are applied to the folder at create
+and read back from it thereafter (§C6.35).
 
 ### Groups are the FOLDER's, not the mapping's
 
@@ -298,10 +370,20 @@ does the right thing on either backend, so nobody has to remember the difference
 between assigning a groupfolders group and creating a group share. It is a
 helper for a job you may equally do by hand.
 
-NOT YET IMPLEMENTED. The model still stores `nc_groups` and `StorageService`
-still applies it on every `ensureRoot()`. Making the folder authoritative means
-dropping the field, applying groups only when explicitly asked, and reading them
-back from each backend — see the saga for the shape.
+IMPLEMENTED (§C6.35). `Mapping` no longer has an `nc_groups` field and nothing
+persists one. `StorageService::ensureRoot()` takes an OPTIONAL group list:
+passed, it applies it exactly (pruning what is not in it); omitted — which is
+every pull — it leaves sharing alone. `groupsOf()` reads the answer back out of
+whichever backend holds it, and `MappingService::describe()` is what the admin
+page, `list-mappings --json` and the REST endpoints render.
+
+The decisive argument was not this app at all. Three sibling apps map folders
+the same way, and a Nextcloud folder can be the target of more than one of them.
+If each stored its own group list and re-asserted it on its own schedule, a
+shared folder's sharing would FLAP — n8n's reconciler putting back what
+penpot's had just removed, on whatever interval each was configured with, with
+no way to tell from any one app that it was in a fight. Reading through to the
+folder means there is one answer and nobody owns it.
 
 ### A team id that resolves to nothing cannot be mapped
 
@@ -314,7 +396,20 @@ a team we were never invited to is a team that is not there. Testing the
 difference would be testing Penpot's own permission model, which is not
 ours to prove — the token works or nothing in this suite runs at all.
 
-### A Penpot team may only be mapped once
+### A mapping may not reuse a team or a folder
+
+TWO RULES THAT READ AS ONE SCENARIO WRITTEN TWICE. `getByTeamId()` refuses a
+team that is already mapped; `assertFolderUnique()` refuses a folder that is
+already used. Apart, both scenarios said "a mapping exists, the admin maps one,
+it is refused" — the whole difference lived in whether a second team had been
+named first, which is invisible on the page and was flagged as a duplicate the
+moment someone read them together.
+
+Side by side the columns ARE the difference: row 1 reuses the team and takes a
+free folder, row 2 brings a fresh team to the taken folder. The `reason` column
+is what makes them two rules rather than one, and asserting it is what would
+catch the app refusing for the right-sounding wrong reason.
+
 
 The pre-state is a mapping that already exists, so the scenario opens where
 the interesting part starts. It used to map twice inside the `When` block,
@@ -378,6 +473,8 @@ a project folder is a mirror of a Penpot object.
 THERE IS NO EDIT, SO THERE IS NOTHING TO REFUSE. Four scenarios used to sit
 here — the folder mode, the Nextcloud folder, the Team Folder flag and the
 default mode, each saying "the admin tries to change it and is told no".
+(Folder mode has since gone entirely, §C6.36, which is a stronger version of
+the same argument: the field nobody could change is now a field nobody has.)
 None of them was reachable. There is no occ command that edits a mapping,
 and the one HTTP endpoint takes `ncGroups` and nothing else; the service
 signature is `updateGroups(id, groups)` (§C6.33), so a change to any other
@@ -391,15 +488,35 @@ pins that a group change moves nothing else.
 
 WHY THESE FIELDS ARE LOCKED, in one line: changing any of them would force a
 LIVE MIGRATION of already-mirrored content — moving the whole tree,
-re-stamping every file, migrating a provisioned folder and its shares,
-rewriting every project name in Penpot, or deleting every downloaded archive
-at once. Removing the mapping and adding it again makes that cost visible
+re-stamping every file, migrating a provisioned folder and its shares, or
+deleting every downloaded archive at once. Removing the mapping and adding it again makes that cost visible
 instead of hiding it behind a dropdown, which is the same line
 nextcloud-grafana draws.
 
 THE ONE EDIT, and it is the one that moves no content — re-sharing a folder
 is not a migration. Everything else about a mapping is settled when it is
 created (§C6.33).
+
+AND IT IS AN EDIT TO THE FOLDER, NOT TO THE MAPPING (§C6.35). Nothing here is
+persisted: the step re-shares the provisioned folder, and the assertion reads
+`list-mappings --json`, whose `nc_groups` is now sourced from the folder rather
+than from appconfig. So each row proves the whole round trip — apply, prune,
+read back — on a real backend, which is the only place the two backends'
+mechanisms (a groupfolders assignment vs. a group share) could differ.
+
+The empty-groups rows earn their place because of that: they are the only ones
+that prove PRUNING. The old code applied groups additively and never removed
+one, so "set the groups to nothing" silently did nothing at all.
+
+AND THE FIRST RUN OF IT CAUGHT THE SUITE LYING. Four of these scenarios had
+been green while proving nothing: `design` and `sales` do not exist on a fresh
+Nextcloud, nothing in the suite created them, and no share or assignment was
+ever made. It passed because it read the groups back out of the app's own
+stored copy — which faithfully recorded what we INTENDED. Reading through to the
+folder turned them red immediately, and `the Nextcloud groups "…" exist` is the
+fixture that was always missing. It is hard to think of a better argument for
+not storing what you can read: the cache did not just risk going stale, it was
+answering the question the test meant to ask.
 
 BOTH BACKENDS, NAMED OUT LOUD. This is the second place in the suite where
 the storage backend is the SUBJECT rather than a matrix dimension (§C6.30 is
@@ -413,15 +530,21 @@ having: an empty set is easy to treat as "nothing was sent, keep what is
 there", and on a Team Folder it is also the set that makes the folder
 invisible to everyone.
 
-Each folder type maps into its own folder, chosen by the step from the type.
-Two rows of the SAME type reuse one folder, which is fine because ensureRoot()
-is idempotent — but a Team Folder and a plain folder must never share a name,
-or the second row inherits the first row's folder and asserts against the
-wrong thing (the mistake §C6.32 records).
+THE PRE-STATE IS ONE SENTENCE AND A TABLE — see "The preconditions" above.
+The storage kind and the folder name are both Examples columns here, because
+the folder name has to differ per kind: removing a mapping deletes nothing, so
+a folder outlives the mapping that made it, and a later row reusing the name
+would inherit a folder of the wrong kind (the mistake §C6.32 records). Rows of
+the SAME kind DO reuse one folder, which is safe — ensureRoot() is idempotent.
 
-The MAPPING is what changes here. Re-sharing the provisioned folder is
-ensureRoot()'s, re-asserted on every sync, which is why this scenario stops
-at what the admin actually gets an answer about.
+That hazard used to be hidden in the step's PHP, which picked a folder name
+from the kind. Putting it in the Examples table makes the reason visible at
+the point where someone would otherwise "tidy" the two names into one.
+
+THE FOLDER is what changes here — see above. That sentence used to read "the
+MAPPING is what changes here … re-sharing the provisioned folder is
+ensureRoot()'s, re-asserted on every sync", which was true of the design
+§C6.35 replaced and is now exactly backwards.
 
 ---
 
@@ -1166,9 +1289,9 @@ refuse. A project deletes with its contents, reversibly, on a grace window
 that lines up with the Nextcloud trash almost exactly.
 
 ONE PROJECT CANNOT BE DELETED: the team's default (Drafts) answers
-`:non-deletable-project`. It has no folder of its own in `nested` mode — it
-IS the team root (§6.35) — so this app cannot reach it by this gesture
-anyway; the guard is stated so a future folder mode cannot back into it.
+`:non-deletable-project`. It has no folder of its own — it IS the team root
+(§6.35) — so this app cannot reach it by this gesture anyway; the guard is
+stated so a future change to the folder layout cannot back into it.
 
 ### A trash-bypassed delete is treated as the permanent one
 
@@ -1635,10 +1758,11 @@ a "Clients/" folder that has no Penpot counterpart at all. That's real value
 Penpot itself can't offer, and it costs us nothing: "walk up until you find the
 key" is the same lookup as "check one level up," minus the early exit.
 
-THIS FILE DESCRIBES `nested` MODE — the default (saga §6.53). A mapping can
-instead be created in `keyed` mode, where a project's NAME is its path and free
-nesting does not apply. The two are mutually exclusive and the choice is
-immutable per mapping; keyed mode is designed but not yet specced or built.
+THIS IS THE ONLY LAYOUT THERE IS. A mapping used to carry a folder mode, with
+a second `keyed` layout where a project's NAME would be its path and free
+nesting would not apply. It was designed, never built, and the field is gone
+(§C6.36) — so nothing here is conditional any more. The alternative survives
+as an open saga question (§6.53, #47), not as a value anyone can set.
 
 THE MECHANISM IS CONFIRMED LIVE (saga §6.21): Files-Metadata attaches to
 folders exactly as to files — same Node type, same fileid space. Tested
@@ -2159,7 +2283,7 @@ it sounds. BOTH DIRECTIONS ARE SETTLED (saga §6.54 closed the §6.2 fork).
 
 PENPOT → NEXTCLOUD: covered by the same pull as any other change — the pull
 compares Penpot's current name against what's on disk and renames the Nextcloud
-file to match, keyed on "penpot_id". Free in both modes, because the name comes
+file to match, keyed on "penpot_id". Free, because the name comes
 back in the ordinary listing (saga §5.5) — no export needed.
 
 NEXTCLOUD → PENPOT: RATIFIED (saga §6.54). `rename-file` works — HTTP 200,
@@ -2222,7 +2346,7 @@ Penpot enforces this too — [:string {:min 1, :max 250}], confirmed live to
 return HTTP 400 on "" (saga §6.54). Our guard is a better message and a
 saved round trip, not the only defence.
 
-### In nested mode, a Penpot file whose name contains a slash is skipped with a clear reason
+### A Penpot file whose name contains a slash is skipped with a clear reason
 
 Penpot accepts "/" in a FILE name exactly as it does in a project name —
 confirmed live, HTTP 200 (saga §6.54). So the §6.51 guard applies at both
@@ -2231,13 +2355,16 @@ one file skipped, not a whole subtree.
 
 ### Renaming never breaks the Penpot link
 
-── "/" IN A PROJECT NAME: INVALID IN NESTED MODE (saga §6.53) ──────────────
+── "/" IN A PROJECT NAME: INVALID (saga §6.51) ─────────────────────────────
 The project-level twin of the scenario above, and the wider blast radius —
 a project that cannot be spelled as a folder takes its whole file list with
-it. Everything here is scoped to `nested` mode, the default, where Nextcloud
-nests freely and a "/" in a project name would mean nothing. In `keyed` mode
-a "/" is not an error at all: it IS the path, which is the whole point of
-making folder mode a per-mapping choice (admin-mapping.feature).
+it. Nextcloud nests freely (§6.29), so a "/" in a project name would mean
+nothing here.
+
+This used to be qualified with "in nested mode", against a `keyed` mode where
+a "/" would have BEEN the path. That mode was designed and never built, and
+the field is gone (§C6.36) — so the rule is now unconditional, which is how it
+always behaved.
 
 Checked live against Nextcloud's IFilenameValidator: the ONLY forbidden
 characters are "\" and "/" (plus ".."/"." as segments, ".htaccess", and the
@@ -2247,8 +2374,8 @@ problem, not a general sanitisation problem.
 
 THE APP REJECTS IT AT THE SOURCE where it can: it owns project creation
 (create-project.feature's tag opt-in) and project renames (§6.36), so a "/"
-never enters Penpot through this app in nested mode. What is left is the
-only case it cannot reach — a name typed directly in Penpot's own UI.
+never enters Penpot through this app. What is left is the only case it
+cannot reach — a name typed directly in Penpot's own UI.
 
 The invariant under every rename path: the name changes, the identity does
 not. A rename that re-created the design would break every mirror, archive
@@ -2297,8 +2424,8 @@ folder name is REFUSED rather than sanitised (saga §6.51): "foo/bar" and
 "foo-bar" would both collapse to "foo-bar", silently merging two distinct
 projects into one folder with no way to tell which is which. Refusing visibly
 beats breaking the names-always-match rule invisibly. Inferring a parent folder
-from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), never a
-fallback triggered by one awkward name.
+from the "/" is a whole different layout — an unbuilt saga design (§6.53), never
+a fallback triggered by one awkward name.
 
 ### rename-project: Background
 
@@ -2323,7 +2450,7 @@ Saga §6.18 rule 3 — a remote failure never destroys local state. Same rule
 as the file twin below, and it has to be stated for both because they are
 different listeners reading different ids.
 
-### In nested mode the app never sends a slash to Penpot
+### The app never sends a slash to Penpot
 
 A Nextcloud folder name cannot contain "/" anyway, so this is automatic for
 renames — but it must also hold for the CREATE path (create-project.feature's
@@ -2335,7 +2462,7 @@ Sanitising is REJECTED (saga §6.51): "foo/bar" and "foo-bar" would both
 become "foo-bar", silently collapsing two distinct projects into one folder
 with no way to tell which is which. That breaks the names-always-match rule
 invisibly, which is worse than refusing visibly. Inferring a parent folder
-from the "/" is `keyed` mode — a deliberate per-mapping choice (§6.53), not
+from the "/" is a whole different layout — an unbuilt saga design (§6.53), not
 something to fall back into because one name happened to contain a slash.
 
 ---
@@ -2591,7 +2718,8 @@ and a file can be flipped `sync` ⇄ `link` any number of times. The mapping's
 mode is only the default a NEW mirror inherits.
 
 The expectation was the opposite — mode set on the team-folder mapping and
-IMMUTABLE there, the way `folder_mode` is. Nobody asked for per-file switching;
+IMMUTABLE there, the way the folder name and the Team Folder flag are. Nobody
+asked for per-file switching;
 it arrived because the move guard needed an escape hatch to offer. A `link` is
 confined to its project (§6.43), so "promote it to sync first" is the only
 advice a refusal can give that leads anywhere — and that advice needs a lever.
@@ -2726,6 +2854,169 @@ but the end state is identical, and a scenario that differs only in scope is the
 same scenario. The one genuine difference is that the personal team mapping is
 AUTOMATIC, so a user's button is scoped to exactly one folder and needs no
 mapping card at all.
+
+### sync-now scope
+
+A MAPPING GUARANTEES ONE FOLDER. Everything else — the project folders, their
+tags, the designs — arrives on the first sync, so it is described here and not
+in admin-mapping.feature.
+
+AND THE FIRST SYNC IS ALL THIS FILE COVERS. A later run only has work to do
+because something changed in Penpot, and every one of those is a scenario about
+THE CHANGE rather than about syncing: a design deleted upstream is
+delete-design.feature's, a project renamed upstream is rename-project.feature's.
+Once those are theirs, there is no "second sync" behaviour left to describe.
+
+Three scenarios about pruning used to sit here — a mirror pruned when its design
+is gone, a `link` getting a last archive on the way out, a `sync` needing none.
+All three are already asserted, step for step, by delete-design.feature's "A
+design deleted in Penpot is snapshotted, then moved to the trash" and "A design
+that already had its archive needs no second export". They were duplicates, and
+the duplicate was in the wrong file: a prune is an effect of deleting in Penpot,
+which is a Penpot-origin behaviour.
+
+Three more said a second run changes nothing — no duplicate folder, nothing
+pruned, no mtime or etag moved. Idempotence is real and it is how the reconciler
+works, but "a sync that reacts to nothing" is not a behaviour a user can ask
+for. The step definitions for the mtime/etag pair are deliberately KEPT in
+PullSteps: their docblock records a live bug (a pull was moving mtime and etag on
+every file on every run, which makes every sync client re-download the world),
+and re-adding the scenario is one line if that guard is wanted back.
+
+THE TRIGGER IS DATA. Four ways to start a sync —
+
+    actor    | scope
+    ---------+---------------------
+    admin    | one mapping          the card's "Sync now"
+    admin    | every mapping        the section's "Sync from Penpot"
+    schedule | every mapping        time as the actor
+    user     | their personal team  the personal "Sync now"
+
+— with the same pre-state and the same post-state. They were four scenarios,
+each asserting that post-state in its own words, and they had used four
+different phrasings for it. As columns the sameness is the point of the table.
+THE SCHEDULE IS A ROW, NOT A PROMISE. The obvious way to test it — set the
+interval to a few seconds and sleep — does not work and would be the wrong test
+anyway: ScheduleConfig clamps to 300s and the job clamps again to 60s, both
+deliberately, because a job re-entering faster than a pull can finish is a bug.
+A test that had to defeat two safety floors would be testing the floors.
+`occ background-job:execute --force-execute` runs the real ScheduledPullJob now,
+ignoring its interval, which is "the schedule came round" with the waiting taken
+out. Enabling the schedule is part of the trigger rather than a fixture: a
+schedule nobody turned on has no actor, and the job returns immediately by
+design when it is off.
+
+Only the personal sync is still out of reach, so that one row sits in a tagged
+scenario of its own rather than being silently skipped inside a green outline.
+
+NOTHING ASSERTS "THE SYNC SUCCEEDED" any more. The tree is the proof, and it is
+the only proof every trigger can offer — a command's exit code says nothing
+about a job that ran inside Nextcloud. That is what let the schedule join the
+outline instead of needing a scenario with its own weaker assertions.
+
+WHETHER A RUN IS QUEUED OR SYNCHRONOUS IS ASSERTED NOWHERE. A scenario used to
+end `Then the sync is queued as a background job`, with a comment justifying why
+"everything" cannot be synchronous. That is a mechanism and a design note, not a
+behaviour — the admin's question is whether their designs arrived and whether
+they were told.
+
+A TREE IS ONE FACT, so the post-state is one table:
+
+    And the mapped folder holds:
+      | path                       | tagged |
+      | One Mapping/Cogs           | penpot |
+      | One Mapping/Cogs/Gizmo.penpot | -   |
+
+It replaced a column of one-node-per-line assertions that never showed the
+SHAPE the sync was meant to build. The tag is a column rather than a scenario
+because it is a property of a node, the same as the node existing at all — and
+that also ends the tag being asserted in three files at once.
+
+PROJECT NAMES ARE GLOBAL TO THE SUITE, and this section learned it the hard
+way. Every core-suite scenario seeds into the SAME Penpot team, nothing tears a
+project down afterwards, and several assertions locate a project BY NAME — so a
+reused name silently points a later scenario at an earlier one's project. The
+first draft called a project "Widgets", which an existing scenario further down
+also creates; that scenario then read the wrong project's `created-at` and
+failed on a date it had asserted correctly for months. Two projects already
+shared the name "Widgets" before this section existed, which is why the second
+of them is now "Reconciled".
+
+Pick a name nothing else uses. `grep -rn '"<name>"' features/` is the check.
+
+THE PRE-STATE IS WHAT PENPOT HOLDS, as one table:
+
+    And the Penpot team already contains:
+      | project | design    |
+      | Widgets | Gizmo     |
+      | Widgets | Doohickey |
+      | Gadgets | Sprocket  |
+
+A first sync is only interesting when the team already has something in it, and
+"something" is a SHAPE — projects, each with designs. Repeating "a project named
+X exists" and "a file named Y exists in the project X" describes how it was
+built instead, which is not what a `Given` is for. The step find-or-creates each
+project, so a name may repeat down the column to give one project several
+designs.
+
+WHICH IS ALSO HOW DRAFTS GETS WRITTEN IN THE SAME TABLE. `Drafts` resolves to
+the team's real default project rather than making a second project that happens
+to share its name — so "a loose design in Drafts" needs no special sentence. It
+mirrors to the mapped folder's ROOT, because the default project has no folder
+of its own (§6.35), and the scenario asserts both halves: the design is at the
+root and there is no `Drafts` folder beside it.
+
+FOUND BY NAME, KEPT BY ID. This is the rule the section exists to pin. A project
+folder is named exactly as Penpot names the project; from then on the stamped
+`penpot_project_id` is what identifies it, which is why a rename upstream MOVES
+the folder rather than making a second one. The first time round there is no id
+to match on — a folder somebody made by hand carries nothing — so the name is
+all there is, and `PullService::ensureProjectFolder()` adopts a same-named
+folder rather than creating `Widgets (2)` beside it. That adoption is a real
+behaviour with a real scenario now; it used to be a comment in the code.
+
+AND THE TAG IS PART OF THE MIRROR, not decoration applied later. Every project
+folder wears `penpot` — the same tag a user applies by hand to opt a folder in
+(create-project.feature), so one badge means "this is a project" whichever
+direction it came from. `tagProject()` runs on both the adopt and the create
+path, which is why the adoption scenario asserts the tag too: adopting a folder
+that never got badged would leave it invisible to the same searches.
+
+### Dates are an end state, so they are a sentence
+
+`A mirror carries its own dates, not the sync's` was a scenario, and it was an
+end state wearing a scenario's clothes — it made "the dates are right" look like
+something SYNCING does, rather than something every mirror is true of however it
+got there. A design created through the app, renamed, restored from the trash or
+mirrored by the schedule all want to end by saying it.
+
+So it is `"<path>" carries its Penpot dates`, with a folder twin. A project
+folder gets its project's CREATION time only: its mtime is propagated from its
+children by core, so asserting one would assert core's propagation rather than
+this app's behaviour (§C6.24).
+
+`Project folder names always match their Penpot projects` went the same way, and
+did not even need a sentence — every path in the `holds:` table is named exactly
+as Penpot names the thing it mirrors, so the table already says it. A scenario
+restating that was a third copy of an assertion the outline makes on every row.
+
+### A sync that cannot finish says so, and says why
+
+@unbuilt, AND THE GAP IS REAL — found while writing it. `occ penpot_sync:sync`
+catches exactly one exception, `OutOfBoundsException`, which is an unknown
+mapping id. A `PenpotApiException` — an unreachable Penpot, a rejected token —
+escapes uncaught, so the honest answer to "what happens when a sync cannot reach
+Penpot?" is currently "a stack trace".
+
+It is one scenario rather than a CLI one and a UI one because both front doors
+need the same answer, which is the same rule MappingService follows for
+validation: the rules live in the service so the `occ` twin cannot drift from
+the panel.
+
+The two rows are the two ways the connection can be wrong, and they are the two
+`admin-connection.feature` already distinguishes for the connection TEST —
+missing token versus unreachable host. A sync should not collapse them, for the
+same reason the test does not: they send an operator to different fixes.
 
 ### A pull mirrors a project as a folder carrying its project id and its date
 

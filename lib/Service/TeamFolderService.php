@@ -38,14 +38,14 @@ use Psr\Container\ContainerInterface;
  *    service and the cleanest surface; resolved lazily so a disabled app does
  *    not break DI. Name→id lookup hits the `group_folders` table directly, which
  *    is stable.
- *  - **The content groups get read + rename, not full write.** This is the one
- *    penpot-specific deviation from the siblings, and it is deliberate: the
- *    Nextcloud mirror is read-only for *content* (§6.1) but a *rename* flows back
- *    to Penpot (§6.2, Course 4), so members may read and rename and nothing more.
- *    Create and delete are withheld until the courses that define them (§6.33
- *    create, Course 5 delete). Penpot's `link`/`sync` mode is a per-file archive
- *    choice, not a folder-permission stance, so — unlike the siblings — the
- *    permission does not vary by mode.
+ *  - **The content groups get the ordinary folder surface.** Read, update, create
+ *    and delete — what Nextcloud grants any folder. An earlier cut withheld
+ *    create and delete to express "read-only"; see
+ *    {@see StorageService::CONTENT_PERMISSIONS} for why that expressed nothing
+ *    except a broken folder (§C6.8). §6.1 still holds absolutely, enforced by
+ *    there being no content push. Penpot's `link`/`sync` mode is a per-file
+ *    archive choice, not a folder-permission stance, so — unlike the siblings —
+ *    the permission does not vary by mode.
  *
  * Side effect (documented, acceptable, same as the siblings): because the folder
  * is shared to the `admin` group, admins see managed Team Folders in their own
@@ -60,14 +60,13 @@ final class TeamFolderService {
 	private const FOLDER_MANAGER = 'OCA\\GroupFolders\\Folder\\FolderManager';
 
 	/**
-	 * Content-group rights on a managed Penpot folder: read + UPDATE, never
-	 * create or delete. See the class docblock's third rule.
+	 * Content-group rights on a managed Penpot folder: the ordinary folder
+	 * surface. Kept identical to {@see StorageService::CONTENT_PERMISSIONS}, whose
+	 * docblock carries the reasoning, so both backends grant the same thing.
 	 *
-	 * NB: Nextcloud has no "rename-only" permission bit — `PERMISSION_UPDATE` is
-	 * the least that lets a group rename a node, and it also allows editing an
-	 * existing file's contents. We accept that over-grant: a content edit is not
-	 * a rename, so it is never pushed to Penpot ({@see \OCA\PenpotSync\Service\PushService})
-	 * and is overwritten on the next pull, keeping content effectively one-way.
+	 * Deliberately NOT `PERMISSION_ALL`: the missing bit is SHARE, and its absence
+	 * is what {@see contentGroups()} reads to tell a chosen group from the actor's
+	 * plumbing assignment. Widening this to ALL would erase that distinction.
 	 */
 	private const CONTENT_PERMISSIONS = Constants::PERMISSION_READ
 		| Constants::PERMISSION_UPDATE
@@ -88,16 +87,19 @@ final class TeamFolderService {
 	}
 
 	/**
-	 * Ensure a Team Folder named $mountPoint exists, is shared with the content
-	 * groups at the right permission level, and is writable by the actor (via the
-	 * `admin` group). Returns the groupfolders folder id.
+	 * Ensure a Team Folder named $mountPoint exists and is writable by the actor
+	 * (via the `admin` group). Returns the groupfolders folder id.
 	 *
-	 * Idempotent: re-running re-asserts assignments + permissions and prunes
-	 * content groups no longer desired.
+	 * Idempotent. When $contentGroups is null the folder's existing assignments are
+	 * left exactly as they are, INCLUDING the actor's — which is only added when it
+	 * is absent, never re-stamped, because on a folder shared with the `admin`
+	 * group re-stamping would change a chosen group's bits into plumbing. When a
+	 * list IS given it is applied literally: assignments not in it are removed. See
+	 * {@see StorageService}'s docblock for which caller does which, and why.
 	 *
-	 * @param list<string> $contentGroups user-facing groups (admin-managed; ≥1 expected)
+	 * @param list<string>|null $contentGroups user-facing groups (admin-managed), or null to leave sharing alone
 	 */
-	public function ensure(string $mountPoint, array $contentGroups): int {
+	public function ensure(string $mountPoint, ?array $contentGroups): int {
 		$fm = $this->container->get(self::FOLDER_MANAGER);
 
 		$folderId = $this->findByMountPoint($mountPoint);
@@ -105,26 +107,91 @@ final class TeamFolderService {
 			$folderId = $fm->createFolder($mountPoint);
 		}
 
+		// LEAVE SHARING ALONE MEANS LEAVE THE ADMIN ASSIGNMENT ALONE TOO.
+		//
+		// This branch used to fall through and stamp `admin` with PERMISSION_ALL
+		// unconditionally. On a folder deliberately shared WITH the admin group —
+		// where `admin` is a content group at CONTENT_PERMISSIONS — the next pull
+		// would overwrite those bits, and contentGroups() would then read the
+		// result as plumbing and stop reporting it. A sync would have silently
+		// dropped a group the admin chose, which is precisely the thing §C6.35
+		// exists to prevent, in the one code path that runs most often.
+		//
+		// So when no groups were asked for, the actor's access is only ADDED if it
+		// is missing entirely — never re-stamped. A folder that already grants the
+		// actor anything is a folder this method has nothing to do.
+		if ($contentGroups === null) {
+			if (!$this->groupIsApplied($folderId, self::ADMIN_GROUP)) {
+				$this->assignGroup($fm, $folderId, self::ADMIN_GROUP, Constants::PERMISSION_ALL);
+			}
+
+			return $folderId;
+		}
+
 		foreach ($contentGroups as $gid) {
-			if ($gid === self::ADMIN_GROUP || $gid === '') {
+			if ($gid === '') {
 				continue;
 			}
 			$this->assignGroup($fm, $folderId, $gid, self::CONTENT_PERMISSIONS);
 		}
 
-		// Actor access last, with full rights so it overrides if `admin` was also
-		// listed as a content group.
-		$this->assignGroup($fm, $folderId, self::ADMIN_GROUP, Constants::PERMISSION_ALL);
+		// THE ACTOR'S ACCESS, AND HOW IT IS TOLD APART FROM A REAL SHARE.
+		//
+		// groupfolders has no per-user applicable, so the only way this app can
+		// write into the mount is to assign a group the actor belongs to — `admin`,
+		// always present, never created by us. That assignment is PLUMBING: nobody
+		// asked for it, and reporting it back from contentGroups() would tell an
+		// admin their folder is shared with a group they never chose.
+		//
+		// The PERMISSION BITMASK is what distinguishes the two, which is why this
+		// runs after the loop above and does not overwrite it. Plumbing gets
+		// PERMISSION_ALL; a deliberate `admin` content group keeps
+		// CONTENT_PERMISSIONS from the loop, which is already enough to write with,
+		// so nothing is lost by not upgrading it. That leaves "share this with the
+		// admin group" expressible on a Team Folder — it would not be if we always
+		// stamped ALL over it.
+		if (!in_array(self::ADMIN_GROUP, $contentGroups, true)) {
+			$this->assignGroup($fm, $folderId, self::ADMIN_GROUP, Constants::PERMISSION_ALL);
+		}
 
-		// Prune content groups dropped from the mapping (keep admin + desired).
+		// Prune assignments the admin did not ask for (keeping the actor's).
 		$keep = array_merge([self::ADMIN_GROUP], $contentGroups);
-		foreach ($this->appliedGroups($folderId) as $gid) {
+		foreach (array_keys($this->appliedGroups($folderId)) as $gid) {
 			if (!in_array($gid, $keep, true)) {
 				$fm->removeApplicableGroup($folderId, $gid);
 			}
 		}
 
 		return $folderId;
+	}
+
+	/**
+	 * The groups a managed Team Folder is shared with, as an admin would mean it —
+	 * the applied assignments, minus the actor's plumbing one.
+	 *
+	 * Empty for a mount point that has no Team Folder: this is a read, and a
+	 * missing folder has no groups.
+	 *
+	 * @return list<string>
+	 */
+	public function contentGroups(string $mountPoint): array {
+		$folderId = $this->findByMountPoint($mountPoint);
+		if ($folderId === null) {
+			return [];
+		}
+
+		$out = [];
+		foreach ($this->appliedGroups($folderId) as $gid => $permissions) {
+			// See ensure(): `admin` at PERMISSION_ALL is how this app grants itself
+			// write access, not something anyone chose. At any other permission it
+			// got there as a content group, so it is reported like one.
+			if ($gid === self::ADMIN_GROUP && $permissions === Constants::PERMISSION_ALL) {
+				continue;
+			}
+			$out[] = $gid;
+		}
+
+		return $out;
 	}
 
 	/**
@@ -180,21 +247,25 @@ final class TeamFolderService {
 	}
 
 	/**
-	 * Group ids currently applied to the folder (excludes Circles, which store an
-	 * empty group_id). Used to prune content groups dropped from a mapping.
+	 * Group ids currently applied to the folder, mapped to their permission
+	 * bitmask (excludes Circles, which store an empty group_id).
 	 *
-	 * @return list<string>
+	 * The permission comes back because it is load-bearing, not for display:
+	 * {@see contentGroups()} uses it to tell the actor's plumbing assignment from
+	 * a group somebody actually chose.
+	 *
+	 * @return array<string, int>
 	 */
 	private function appliedGroups(int $folderId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('group_id')
+		$qb->select('group_id', 'permissions')
 			->from('group_folders_groups')
 			->where($qb->expr()->eq('folder_id', $qb->createNamedParameter($folderId)))
 			->andWhere($qb->expr()->neq('group_id', $qb->createNamedParameter('')));
 		$res = $qb->executeQuery();
 		$out = [];
 		foreach ($res->fetchAll() as $row) {
-			$out[] = (string)$row['group_id'];
+			$out[(string)$row['group_id']] = (int)$row['permissions'];
 		}
 		$res->closeCursor();
 		return $out;

@@ -92,8 +92,11 @@ final class MappingSettings implements IDelegatedSettings {
 			Application::APP_ID,
 			'mapping_settings',
 			[
+				// describe(), not toArray(): each card's Groups picker is checked
+				// against what the FOLDER is shared with, read as this page renders
+				// (§C6.35). So a share added in the Files UI shows up here.
 				'mappings' => array_map(
-					static fn (Mapping $m): array => $m->toArray(),
+					fn (Mapping $m): array => $this->service->describe($m),
 					$this->service->list(),
 				),
 				'teams' => $teams,
