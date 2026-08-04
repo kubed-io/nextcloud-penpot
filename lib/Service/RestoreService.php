@@ -82,10 +82,66 @@ final class RestoreService {
 	/**
 	 * How long a confirmed restore must survive before it is believed.
 	 *
-	 * Measured, not guessed: in the failing CI runs the delete landed between one
-	 * and two seconds after `delete-file` answered. {@see staysListed()}.
+	 * ## MEASURED AGAINST A LIVE PENPOT, TWICE — AND THE FIRST MEASUREMENT WAS SHORT
+	 *
+	 * This was 2 500 000 (2.5s), from an observation that "the delete landed
+	 * between one and two seconds after `delete-file` answered". That number was
+	 * taken from CI log timings; a direct probe against a live Penpot says it is
+	 * too small, and the gap is exactly the flake.
+	 *
+	 * What `delete-file` actually does: it answers immediately, lists the design in
+	 * the trash within ~0.1–0.3s, and then — about **3.8 seconds later** — runs a
+	 * delayed job that removes the file AGAIN, even if it was restored in the
+	 * meantime. Measured by issuing the restore at three different gaps after the
+	 * delete:
+	 *
+	 *   gap 0.0s → undone 5/5, at +3.0…3.9s after the restore
+	 *   gap 1.0s → undone 5/5, at +2.5…3.0s
+	 *   gap 2.0s → undone 5/5, at +1.7…1.9s
+	 *
+	 * The undo lands at a fixed ~3.8s after the DELETE regardless of when the
+	 * restore happened, so it is a scheduled job rather than a race — and it is
+	 * 100% reproducible, not occasional.
+	 *
+	 * At 2.5s this class therefore confirmed the restore BEFORE the undo could
+	 * arrive, logged "losslessly", and returned. The design vanished a second
+	 * later and the next pull trashed the mirror — the exact bug this slice exists
+	 * to prevent, reported as a success.
+	 *
+	 * Six seconds covers the whole observed window with margin. Waiting it out
+	 * before restoring instead is NOT the fix: a 4s pre-delay still failed 2 of 6,
+	 * and it would delay every restore rather than only the ones at risk. Issuing
+	 * the second restore AFTER the undo is durable — 6 of 6 — which is what the
+	 * retry in {@see restoreInPenpot()} already does, and all it needed was to be
+	 * told the truth about whether the first one held.
+	 *
+	 * ## THE COST, AND THE OPTIMISATION NOT TAKEN
+	 *
+	 * Every restore now pays this window, and one that gets undone pays it twice —
+	 * measured at 8–9s end to end against a live Penpot, inside the WebDAV request.
+	 * That is the price of not lying about the outcome, and restoring from the
+	 * trash is a deliberate, occasional gesture rather than a hot path.
+	 *
+	 * It could be skipped when the delete is OLD, because the delayed job has long
+	 * since fired — a user restoring something they trashed yesterday is never at
+	 * risk. `get-team-deleted-files` even carries `willBeDeletedAt`, and the delete
+	 * instant is that minus Penpot's grace period, so the age is computable today.
+	 * It is not used because the grace period is a SERVER SETTING (7 days on this
+	 * instance, `deletion-delay`), and reading it wrong shortens the wait — the
+	 * unsafe direction. Recording the deletion time ourselves when
+	 * {@see DeletionService} makes the call would be exact and is the better fix;
+	 * it is more moving parts than this bug needs.
 	 */
-	private const SETTLE_MICROSECONDS = 2_500_000;
+	private const SETTLE_MICROSECONDS = 6_000_000;
+
+	/**
+	 * How often to re-ask while waiting out the undo window.
+	 *
+	 * POLLED, NOT SLEPT: the undo is what we are looking for, so seeing it early
+	 * ends the wait early and the second restore goes out sooner. Only a restore
+	 * that is genuinely durable pays the full window.
+	 */
+	private const SETTLE_POLL_MICROSECONDS = 250_000;
 
 	public function __construct(
 		private readonly PenpotClient $client,
@@ -288,14 +344,39 @@ final class RestoreService {
 			return false;
 		}
 
-		// Long enough for an in-flight `delete-file` to land, short enough to sit in
-		// a restore gesture: this runs in the WebDAV request that took the file out
-		// of the trash, and only ever when a design really was restored.
-		if ($this->settleMicroseconds > 0) {
-			usleep($this->settleMicroseconds);
+		// A zero settle still RE-READS, it just does not wait between the two: the
+		// unit suite injects 0 because its Penpot is a mock with no in-flight
+		// delete to outlast, and "confirmation is two reads" is the behaviour those
+		// tests are pinning. Returning true here instead would quietly reduce it to
+		// one read and let a service that cannot detect an undo pass them.
+		if ($this->settleMicroseconds <= 0) {
+			return $this->isListedAgain($node, $teamId, $penpotId);
 		}
 
-		return $this->isListedAgain($node, $teamId, $penpotId);
+		// WATCH FOR THE UNDO, rather than sleeping through it and asking once at
+		// the end. Same total worst case, but a restore that gets undone is
+		// detected the moment it happens instead of at the end of the window — and
+		// the answer is the same either way, because once the delayed delete has
+		// removed the file it does not put it back.
+		//
+		// This runs in the WebDAV request that took the file out of the trash, and
+		// only ever when a design really was restored. It is the one slow path in
+		// the app, and it is slow on purpose: the alternative is telling the user
+		// their design is back when it is about to disappear.
+		// Both operands float, deliberately: `microtime(true)` is a float and an
+		// int/int division is int|float, which Psalm's strict binary operands mode
+		// refuses to mix. Casting here rather than suppressing keeps the arithmetic
+		// honest — a settle of 500_000 really is half a second, not zero.
+		$deadline = microtime(true) + ((float)$this->settleMicroseconds / 1_000_000.0);
+		do {
+			usleep(self::SETTLE_POLL_MICROSECONDS);
+
+			if (!$this->isListedAgain($node, $teamId, $penpotId)) {
+				return false;
+			}
+		} while (microtime(true) < $deadline);
+
+		return true;
 	}
 
 	private function isListedAgain(File $node, string $teamId, string $penpotId): bool {

@@ -67,14 +67,11 @@ final class RestoreServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 
-		$tokens = $this->createStub(PersonalTokenService::class);
-		$tokens->method('tokenForActor')->willReturn(null);
-
 		$this->restores = new RestoreService(
 			$this->client,
 			$this->metadata,
 			$this->resolver,
-			$tokens,
+			$this->tokens(),
 			new NullLogger(),
 			// No settle: Penpot is a mock here, so there is no in-flight delete to
 			// wait on and the wait would only make the suite slower.
@@ -164,6 +161,63 @@ final class RestoreServiceTest extends TestCase {
 			->willReturn([self::PENPOT_ID]);
 
 		$this->restores->onRestored($this->file());
+	}
+
+	/**
+	 * THE UNDO ARRIVES LATE, AND ASKING TWICE IS NOT ENOUGH.
+	 *
+	 * Measured against a live Penpot: `delete-file` answers at once, lists the
+	 * design in the trash within ~0.3s, and then runs a delayed job about **3.8
+	 * seconds later** that removes the file again — even though it was restored in
+	 * between. It is a scheduled job, not a race: at delete→restore gaps of 0s, 1s
+	 * and 2s the undo landed 5/5 times, always ~3.8s after the DELETE.
+	 *
+	 * The previous implementation read the listing, slept a fixed 2.5s, and read it
+	 * once more. Both reads therefore happened BEFORE the undo, so it reported a
+	 * lossless restore and returned — and the design vanished a second later. That
+	 * is precisely what the integration suite kept catching, with the app's own log
+	 * line claiming success in the same run.
+	 *
+	 * So this pins the capability the fix adds rather than the constant it uses: a
+	 * disappearance that happens on a LATER look is still caught. The settle is
+	 * injected short here — the point is the number of looks, not the wall clock.
+	 */
+	public function testAnUndoThatArrivesAfterTheFirstReReadIsStillCaught(): void {
+		$restores = new RestoreService(
+			$this->client,
+			$this->metadata,
+			$this->resolver,
+			$this->tokens(),
+			new NullLogger(),
+			// Long enough to poll several times at the 250ms interval, short enough
+			// to sit in a unit suite.
+			settleMicroseconds: 1_000_000,
+		);
+
+		$this->givenStamped();
+		$this->givenResolvesToProject();
+		$this->givenInPenpotTrash();
+
+		// Listed, and still listed on the first two re-reads — which is all the old
+		// implementation would ever have seen — then gone. The second restore lands
+		// after the delayed delete has fired, which is why it holds (6/6 live).
+		$this->client->method('getProjectFiles')->willReturnOnConsecutiveCalls(
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+			[],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+			[['id' => self::PENPOT_ID]],
+		);
+
+		$this->client->expects($this->exactly(2))->method('restoreDeletedFiles')
+			->willReturn([self::PENPOT_ID]);
+
+		$restores->onRestored($this->file());
 	}
 
 	/** A design at the team root is in Drafts — a real project, resolved by id (§6.35). */
@@ -330,6 +384,14 @@ final class RestoreServiceTest extends TestCase {
 	}
 
 	// ── fixtures ────────────────────────────────────────────────────────────
+
+	/** The actor's own token, which these tests never exercise. */
+	private function tokens(): PersonalTokenService {
+		$tokens = $this->createStub(PersonalTokenService::class);
+		$tokens->method('tokenForActor')->willReturn(null);
+
+		return $tokens;
+	}
 
 	private function givenStamped(): void {
 		$this->metadata->method('readFile')
