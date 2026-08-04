@@ -39,8 +39,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | Levers  | Sprocket   |
       | Drafts  | Loose Idea |
     When <actor> syncs <scope>
-    Then the sync succeeds
-    And the folder "<folder>" carries the team's Penpot id
+    Then the folder "<folder>" carries the team's Penpot id
     And the mapped folder holds:
       | path                            | tagged |
       | <folder>/Cogs                   | penpot |
@@ -50,37 +49,30 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | <folder>/Levers/Sprocket.penpot | -      |
       | <folder>/Loose Idea.penpot      | -      |
     And there is no node at "<folder>/Drafts"
+    And the folder "<folder>/Cogs" carries its Penpot dates
+    And "<folder>/Cogs/Gizmo.penpot" carries its Penpot dates
     # PROJECTS COME IN BY NAME AND WEAR THE TAG; designs come in beneath them.
+    # Every path in that table is named exactly as Penpot names the thing it
+    # mirrors, which is the whole of "project folder names match their projects".
+    #
     # Drafts is the team's default project and gets no folder of its own — it IS
     # the mapped folder (§6.35), so a loose design sits at the root.
+    #
+    # NOTHING ASSERTS "THE SYNC SUCCEEDED". The tree is the proof, and it is the
+    # only proof every trigger can offer: a command's exit code says nothing about
+    # a job that ran inside Nextcloud.
 
-    Examples: the triggers this harness can fire
-      | actor     | scope         | folder       |
-      | the admin | one mapping   | One Mapping  |
-      | the admin | every mapping | All Mappings |
-
-  @todo
-  Scenario: The schedule does the same, with time as the actor
-    Given a Penpot team named "Design Team" is mapped to the folder "On Schedule"
-    And the Penpot team already contains:
-      | project | design    |
-      | Timed   | Clockwork |
-    When the schedule syncs every mapping
-    Then the sync succeeds
-    And the mapped folder holds:
-      | path                               | tagged |
-      | On Schedule/Timed                  | penpot |
-      | On Schedule/Timed/Clockwork.penpot | -      |
-    # The row that belongs in the outline above and cannot sit there yet: the job
-    # is built (ScheduledPullJob), but this harness has no way to make time pass.
-    # notes: AGENTS.md#sync-now-scope
+    Examples: every way a sync starts
+      | actor        | scope         | folder       |
+      | the admin    | one mapping   | One Mapping  |
+      | the admin    | every mapping | All Mappings |
+      | the schedule | every mapping | On Schedule  |
 
   @unbuilt
   Scenario: A user syncs their own personal team
     Given the user has a personal Penpot token configured
     When the user syncs their personal team
-    Then the sync succeeds
-    And the designs their token can see are in their personal folder
+    Then the designs their token can see are in their personal folder
     # notes: AGENTS.md#a-user-syncs-their-own-personal-team-folder
 
   # ── what a first sync does with a tree that is already there ───────────────
@@ -92,8 +84,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | project  | design |
       | Handmade | Sketch |
     When the admin syncs every mapping
-    Then the sync succeeds
-    And there is no node at "Adopted/Handmade (2)"
+    Then there is no node at "Adopted/Handmade (2)"
     And the folder "Adopted/Handmade" carries a Penpot project id
     And the mapped folder holds:
       | path                           | tagged |
@@ -104,18 +95,6 @@ Feature: Syncing a mapped Penpot team into Nextcloud
     # existing tree from leaving a second folder beside the one someone made.
     # From then on it is the id that identifies the project, which is why a
     # rename upstream moves this folder rather than making another.
-
-  # ── what a mirror carries when it arrives ──────────────────────────────────
-
-    # notes: AGENTS.md#a-mirrored-design-carries-the-designs-own-dates-not-the-pulls
-
-  @in-penpot @occ
-  Scenario: A mirror carries its own dates, not the sync's
-    Given a Penpot team named "Design Team" is mapped to the folder "Design Dates"
-    And a mirrored design "Dated" in the project "Clocks"
-    Then "Design Dates/Clocks/Dated.penpot" is dated when the design changed in Penpot
-    And "Design Dates/Clocks/Dated.penpot" was created when the design was created in Penpot
-    And the folder "Design Dates/Clocks" was created when its Penpot project was
 
   # ── when a sync cannot finish ──────────────────────────────────────────────
 
@@ -140,14 +119,6 @@ Feature: Syncing a mapped Penpot team into Nextcloud
     # notes: AGENTS.md#a-sync-that-cannot-finish-says-so-and-says-why
 
   # ── still to specify ───────────────────────────────────────────────────────
-
-  @todo
-  Scenario: Project folder names always match their Penpot projects
-    Given a Penpot team named "Design Team" is mapped to the folder "Named Sync"
-    And the team has been mirrored into Nextcloud
-    Then every project folder is named exactly as Penpot names that project
-    And the app never lets a project folder's name diverge from its project's
-    # notes: AGENTS.md#project-folder-names-always-match-their-penpot-projects
 
   @todo
   Scenario: Two Penpot projects in one team sharing a name is handled, not crashed

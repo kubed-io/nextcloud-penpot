@@ -318,18 +318,22 @@ trait PullSteps {
 	 * it differently — and they had taken all four. As columns, the sameness is
 	 * the point of the table.
 	 *
-	 * Only the admin's two are reachable from here: the schedule needs time to
-	 * pass and the personal sync is not built. Those rows sit in tagged scenarios
-	 * of their own rather than being quietly skipped, so nothing claims coverage
-	 * it does not have — hence the throw, which is a bug if it is ever reached.
+	 * The personal sync is not built, so that one row still sits in a tagged
+	 * scenario of its own rather than being quietly skipped inside a green
+	 * outline — hence the throw, which is a bug if it is ever reached.
 	 *
 	 * @When /^(the admin|the schedule|the user) syncs (one mapping|every mapping|their personal team)$/
 	 */
 	public function actorSyncsScope(string $actor, string $scope): void {
+		if ($actor === 'the schedule') {
+			$this->theScheduleFires();
+
+			return;
+		}
+
 		if ($actor !== 'the admin') {
 			throw new \RuntimeException(
-				"this harness can only start a sync as the admin, not as \"{$actor}\" — "
-				. 'that row belongs in a tagged scenario',
+				"this harness cannot start a sync as \"{$actor}\" — that row belongs in a tagged scenario",
 			);
 		}
 
@@ -345,6 +349,80 @@ trait PullSteps {
 		}
 
 		$this->occ('penpot_sync:sync pull');
+	}
+
+	/**
+	 * Time as the actor, without waiting for any.
+	 *
+	 * ## THE INTERVAL IS NOT THE THING TO SHORTEN
+	 *
+	 * The obvious idea is to set the schedule to a few seconds and sleep. It does
+	 * not work and would be the wrong test anyway: {@see ScheduleConfig} clamps to
+	 * 300s and the job clamps again to 60s, both deliberately, because a job that
+	 * re-enters faster than a pull can finish is a bug rather than a feature. A
+	 * test that had to defeat two safety floors would be testing the floors.
+	 *
+	 * `background-job:execute --force-execute` runs the registered job NOW,
+	 * ignoring its interval — which is exactly "the schedule came round" with the
+	 * waiting taken out. What runs is the real {@see ScheduledPullJob}, so the row
+	 * proves what it claims: the same tree appears when nobody pressed anything.
+	 *
+	 * The schedule has to be ENABLED first or `run()` returns immediately by
+	 * design — "disabled means do nothing, not do not tick". Setting it is part of
+	 * the trigger, not a fixture: a schedule nobody turned on has no actor.
+	 */
+	private function theScheduleFires(): void {
+		$this->occ('config:app:set penpot_sync schedule_enabled --value=yes');
+
+		$res = $this->occ('background-job:list --output=json');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not list the background jobs:\n{$res['output']}");
+		}
+
+		$jobs = json_decode($res['output'], true);
+		$id = null;
+		foreach (is_array($jobs) ? $jobs : [] as $job) {
+			if (is_array($job) && str_contains((string)($job['class'] ?? ''), 'ScheduledPullJob')) {
+				$id = (string)($job['id'] ?? '');
+				break;
+			}
+		}
+
+		if ($id === null || $id === '') {
+			throw new \RuntimeException("the scheduled pull job is not registered:\n{$res['output']}");
+		}
+
+		$run = $this->occ('background-job:execute ' . escapeshellarg($id) . ' --force-execute');
+		if ($run['exit'] !== 0) {
+			throw new \RuntimeException("the scheduled pull job failed:\n{$run['output']}");
+		}
+	}
+
+	/**
+	 * A mirror's dates are PENPOT'S, and that is an end state rather than a
+	 * behaviour — so it is a sentence any feature can end with, not a scenario.
+	 *
+	 * It had a scenario of its own here, which made "the dates are right" look
+	 * like something syncing does rather than something every mirror is true of.
+	 * Every Penpot-origin behaviour — a design created, renamed, restored — wants
+	 * to end by saying this, and now each can.
+	 *
+	 * @Then /^"([^"]*)" carries its Penpot dates$/
+	 */
+	public function carriesItsPenpotDates(string $path): void {
+		$this->theDesignIsDatedWhenItChanged($path);
+		$this->theDesignWasCreatedWhenItWasCreated($path);
+	}
+
+	/**
+	 * The folder twin. A project folder gets its project's CREATION time only —
+	 * its mtime is propagated from its children by core, so asserting one would be
+	 * asserting core's propagation rather than this app's behaviour (§C6.24).
+	 *
+	 * @Then /^the folder "([^"]*)" carries its Penpot dates$/
+	 */
+	public function theFolderCarriesItsPenpotDates(string $path): void {
+		$this->theFolderWasCreatedWhenItsProjectWas($path);
 	}
 
 	/**

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The scheduled sync is now covered by the integration suite, alongside the two manual buttons — the same tree has to appear whichever one started it.
 - Syncing now reports a clear failure when Penpot cannot be reached is **specified but not yet built** — today an unreachable Penpot or a rejected token surfaces as an unhandled error from `occ penpot_sync:sync`.
 - **A folder you already made with a project's name is adopted by the first sync**, tagged and stamped, instead of a second folder appearing beside it.
 - **Re-share a mapped folder from anywhere and this app reflects it.** The groups a mapped folder is shared with are now read from the folder itself rather than stored alongside the mapping, so a change made in Files or with `occ` shows up here and a sync never puts back a group you removed. Setting the groups to nothing now actually clears them, which it silently did not before.

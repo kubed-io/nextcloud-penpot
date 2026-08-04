@@ -2895,9 +2895,24 @@ THE TRIGGER IS DATA. Four ways to start a sync —
 — with the same pre-state and the same post-state. They were four scenarios,
 each asserting that post-state in its own words, and they had used four
 different phrasings for it. As columns the sameness is the point of the table.
-Only the admin's two are reachable from this harness; the schedule needs time to
-pass and the personal sync is not built, so those sit in tagged scenarios of
-their own rather than being silently skipped inside a green outline.
+THE SCHEDULE IS A ROW, NOT A PROMISE. The obvious way to test it — set the
+interval to a few seconds and sleep — does not work and would be the wrong test
+anyway: ScheduleConfig clamps to 300s and the job clamps again to 60s, both
+deliberately, because a job re-entering faster than a pull can finish is a bug.
+A test that had to defeat two safety floors would be testing the floors.
+`occ background-job:execute --force-execute` runs the real ScheduledPullJob now,
+ignoring its interval, which is "the schedule came round" with the waiting taken
+out. Enabling the schedule is part of the trigger rather than a fixture: a
+schedule nobody turned on has no actor, and the job returns immediately by
+design when it is off.
+
+Only the personal sync is still out of reach, so that one row sits in a tagged
+scenario of its own rather than being silently skipped inside a green outline.
+
+NOTHING ASSERTS "THE SYNC SUCCEEDED" any more. The tree is the proof, and it is
+the only proof every trigger can offer — a command's exit code says nothing
+about a job that ran inside Nextcloud. That is what let the schedule join the
+outline instead of needing a scenario with its own weaker assertions.
 
 WHETHER A RUN IS QUEUED OR SYNCHRONOUS IS ASSERTED NOWHERE. A scenario used to
 end `Then the sync is queued as a background job`, with a comment justifying why
@@ -2966,6 +2981,24 @@ folder wears `penpot` — the same tag a user applies by hand to opt a folder in
 direction it came from. `tagProject()` runs on both the adopt and the create
 path, which is why the adoption scenario asserts the tag too: adopting a folder
 that never got badged would leave it invisible to the same searches.
+
+### Dates are an end state, so they are a sentence
+
+`A mirror carries its own dates, not the sync's` was a scenario, and it was an
+end state wearing a scenario's clothes — it made "the dates are right" look like
+something SYNCING does, rather than something every mirror is true of however it
+got there. A design created through the app, renamed, restored from the trash or
+mirrored by the schedule all want to end by saying it.
+
+So it is `"<path>" carries its Penpot dates`, with a folder twin. A project
+folder gets its project's CREATION time only: its mtime is propagated from its
+children by core, so asserting one would assert core's propagation rather than
+this app's behaviour (§C6.24).
+
+`Project folder names always match their Penpot projects` went the same way, and
+did not even need a sentence — every path in the `holds:` table is named exactly
+as Penpot names the thing it mirrors, so the table already says it. A scenario
+restating that was a third copy of an assertion the outline makes on every row.
 
 ### A sync that cannot finish says so, and says why
 
