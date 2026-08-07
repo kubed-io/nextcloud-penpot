@@ -84,11 +84,12 @@ Feature: Syncing every mapping
 
   @in-nextcloud @occ
   Scenario: A sync leaves content it does not manage alone
-    Given a mirrored design "Managed" in the project "Mixed Contents"
-    And I create an unrelated file at "Penpot/Mixed Contents/notes.txt"
+    Given a Penpot team named "Design Team" is mapped to the folder "Untouched"
+    And a mirrored design "Managed" in the project "Mixed Contents"
+    And I create an unrelated file at "Untouched/Mixed Contents/notes.txt"
     When the team is mirrored again
-    Then the file "Penpot/Mixed Contents/notes.txt" is still there and untouched
-    And the file "Penpot/Mixed Contents/notes.txt" carries no Penpot id
+    Then the file "Untouched/Mixed Contents/notes.txt" is still there and untouched
+    And the file "Untouched/Mixed Contents/notes.txt" carries no Penpot id
     # Pruning keys on metadata, never on extension or on where a file sits.
     # notes: ../AGENTS.md#a-sync-leaves-content-it-does-not-manage-alone
 

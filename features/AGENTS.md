@@ -1751,6 +1751,17 @@ metadata, never on a file extension or on where a file happens to sit.
 Filed with the sync rather than with membership because the actor is a sync: the
 question is what a run does to things it did not create.
 
+IT ARRIVED BROKEN, in the way this suite documents and I still walked into. It
+came from `mapping-membership.feature`, whose Background maps a shared `Penpot`
+folder — and `sync-now.feature` deliberately maps NOTHING, so every scenario here
+names its own folder and cannot inherit another's leftovers. Pasted across
+unchanged, the `PUT` for `notes.txt` 404'd on a parent that did not exist. It now
+maps `Untouched` itself, like everything else in this file.
+
+`.github/instructions/gherkin.instructions.md` names this trap and names these
+two files as the pair it happens between. Check the destination's Background
+before moving a scenario into it.
+
 ## designs/move
 
 `features/designs/move.feature`
