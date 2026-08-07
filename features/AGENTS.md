@@ -530,125 +530,38 @@ ensureRoot()'s, re-asserted on every sync", which was true of the design
 
 ---
 
-## admin-section
+## admin-section — RETIRED
 
-`features/admin-section.feature`
+`features/admin-section.feature` is **gone**. It described the settings panel:
+which cards exist, what order they appear in, which fields each holds, where the
+buttons live. Twelve scenarios, none of them a thing anyone does.
 
-The SHAPE of the admin section, and the actions in it.
+| it said | why it went |
+|---|---|
+| The section presents four panels in the family's order | panel ORDER is an implementation detail of the UI |
+| The Instance card holds both the URL and the service-account token | the structure of a form — those fields are the INPUT to connecting, not a behaviour |
+| The token field never echoes a stored token back | already asserted verbatim in `connection/connection.feature`, as the end state of saving a token: *the token is stored as a sensitive value* |
+| Every button in the section lives in Sync Actions | a UI nuance, and `@blocked` because nobody is testing whether the layout looks good |
+| Test connection works today and reports what the account can see | `connection/connection.feature`'s, and already there |
+| "Sync from Penpot" queues a background job and says so | `connection/sync-now.feature`'s — and whether a run is queued or synchronous is a mechanism this suite asserts nowhere, deliberately |
+| The panel reports the outcome of the last run | an END STATE of syncing → moved onto the sync outline as `And the run is recorded with when it ran and what it did` |
+| A second click while a sync is running does not start another | a real edge case → moved to `connection/sync-now.feature` |
+| The scheduled pull uses the interval from Sync Settings | implementation detail. The interval and the enable toggle are connection settings — inputs, which Gherkin need not describe. The schedule already appears as an actor row in the sync outline |
+| Turning the schedule off stops the runs | a negative with nothing to observe: the only honest test is that every `@in-penpot` behaviour stops arriving, which is a test that waits forever |
+| There is no "Sync to Penpot" button, ever | a negative check on a feature that will never exist |
+| Purge is offered but disabled until the delete machine exists | pins the presence and disabled-ness of a button; if it is anything it is `designs/purge.feature`'s |
 
-WHY THIS FILE EXISTS AT ALL. Every other feature file specifies what the app
-DOES; this one specifies what the admin SEES, because in this app family that
-is a deliberate, load-bearing decision rather than an incidental one.
+THE PATTERN WORTH REMEMBERING: a settings panel is where a behaviour is
+*configured*, not a behaviour. Its fields are inputs to the thing they configure,
+and its layout is not specification at all. Everything real in this file already
+had a home in `connection/` — which is why the folder split is what made the
+duplication visible.
 
-THE FAMILY LAYOUT (settled on the n8n master, inherited by nextcloud-grafana,
-and matched here). All three apps present the same four panels in the same
-order, so an admin who has configured one already knows where to look:
+### A second sync started while one is running does not queue another
 
-  Instance (5)       where it is + how we authenticate — ONE card
-  Sync Settings (20) how syncing behaves automatically
-  Team mappings (30) the repeating list — one card per mapping
-  Sync Actions (45)  EVERY button in the section, rendered last
-
-The last rule is the one most easily lost. Nextcloud's declarative settings
-cannot host buttons, and giving each button its own panel beside its data card
-turns the section into a stack of thin strips. So: one classic panel for every
-button, at the bottom, beneath the data it acts on.
-
-WHY THE INSTANCE CARD IS *ONE* CARD. An earlier cut of this app split the URL
-and the token onto separate cards, reasoning that Penpot has two credentials
-(saga §6.18). It does — but the second is PER-USER and lives on the personal
-page, so the admin section has exactly one credential, like Grafana. The split
-expressed a distinction the admin never sees, and produced a section shaped
-unlike either sibling.
-
-HONEST BUTTONS. Buttons whose engines are not built are rendered but disabled,
-or answer with a plain "not available yet" — never absent, and never silently
-inert. Present-but-disabled keeps the finished shape of the section visible
-from the first release, and enabling one later is deleting an attribute rather
-than redesigning the page.
-
-SCOPE, AND WHERE THE REST LIVES. This file covers the section's SHAPE and the
-buttons' presence/honesty. It deliberately does NOT specify what the buttons
-do — that lives with the behaviour, exactly as in the siblings:
-
-  the pull, and the per-mapping "Sync now"  → reconcile.feature
-  purge                                     → purge.feature
-  the connection test's failure modes       → admin-connection.feature
-  the mapping cards' fields                 → admin-mapping.feature
-
-NEITHER SIBLING HAS A FILE LIKE THIS. Their layout is settled by review rather
-than written down — which is exactly how this app drifted out of alignment in
-the first place, and why the rule is worth stating once, here.
-
-PARTIALLY LIVE. The scenarios that can be driven over occ run for real; the
-ones that assert on rendered markup are @todo until there is a browser-driving
-harness (neither sibling has one either).
-
-### The Instance card holds both the URL and the service-account token
-
-One card, because the admin section has exactly one credential. The
-optional per-user token is on the PERSONAL page — see
-personal-settings.feature.
-
-### Test connection works today and reports what the account can see
-
-The one action that is fully live. It reports TEAMS rather than "OK"
-because Penpot visibility is membership-scoped (saga §6.12/§6.18), so that
-list is exactly what decides which teams can be mapped.
-
-@todo here means "not run FROM THIS FILE", not "unimplemented": the exact
-same steps run for real in admin-connection.feature, and duplicating a
-live scenario would just execute it twice. It is restated here so this
-file reads as the complete inventory of the section's actions.
-
-### "Sync from Penpot" queues a background job and says so
-
-── the three ways a pull is triggered ────────────────────────────────────
-
-These five are @todo — the documented spec, not yet driven from Behat.
-Driving them needs the harness to be able to RUN A QUEUED JOB (and to fake
-a cron tick for the timed one), which the suite cannot do yet. Each tag sits
-on its own scenario deliberately: a tag floating above this comment block
-binds to whichever scenario happens to come next, which is exactly how the
-first of these was silently excluded while the other four ran undefined.
-
-Until now there was exactly ONE: `occ penpot_sync:sync pull`. The button was
-rendered disabled with a "later release" tooltip, and the interval in Sync
-Settings was read by nothing at all — so a design renamed in Penpot stayed
-renamed only in Penpot until someone ran occ by hand. The pull itself was
-never the problem; it has followed renames since Course 3.
-
-Both siblings have all three, and the split between them is deliberate:
-
-  per-mapping "Sync now"  SYNCHRONOUS — one mapping, bounded, instant answer
-  "Sync from Penpot"      ASYNC       — every mapping, a queued job, polled
-  the schedule            a TimedJob  — the same work, unattended
-
-WHY THE BULK ONE CANNOT BE SYNCHRONOUS: it walks every mapped team and, for
-`sync` files whose revision moved, exports each archive. On a real instance
-that outlives a PHP request, and a request that dies half way leaves no
-record of how far it got. A queued job survives the admin navigating away,
-which is the actual user behaviour being designed for.
-
-WHY THE PER-MAPPING ONE SHOULD NOT BE ASYNC: it is one team, usually a
-handful of files, and the admin is looking at that card waiting for an
-answer. Queuing it would replace a two-second wait with a spinner and a poll.
-
-### The panel reports the outcome of the last run
-
-Same record for every trigger, so a scheduled run is visible here too —
-otherwise the schedule is a setting with no observable effect, which is
-exactly what it was.
-
-### There is no "Sync to Penpot" button, ever
-
-THE ONE PLACE THIS APP'S LAYOUT DELIBERATELY DIVERGES FROM ITS SIBLINGS,
-and the divergence is load-bearing. Both of them have a push button. This
-app is read-only for file CONTENT (saga §6.1) — a permanent boundary, not
-a phase-ordering gap — so a disabled push button would promise a feature
-that is never coming.
-
----
+`@blocked` — **no browser**, and no way to hold a run open while a second is
+issued. Two concurrent pulls over one folder tree would race on the same files,
+which is the only reason this is worth stating.
 
 ## designs/copy
 

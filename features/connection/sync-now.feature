@@ -41,12 +41,22 @@ Feature: Syncing every mapping
       | content         | empty           |
       | modified        | the design's    |
       | created         | the design's    |
+    And the run is recorded with when it ran and what it did
     # notes: ../AGENTS.md#a-sync-brings-the-teams-projects-and-designs-into-nextcloud
 
     Examples: both ways an instance-wide sync starts
       | actor        | scope         | folder       |
       | the admin    | every mapping | All Mappings |
       | the schedule | every mapping | On Schedule  |
+
+  # @blocked — no browser, and no way to hold a run open while a second is issued.
+  # notes: ../AGENTS.md#a-second-sync-started-while-one-is-running-does-not-queue-another
+  @blocked
+  Scenario: A second sync started while one is running does not queue another
+    Given a sync of every mapping is already running
+    When the admin syncs every mapping again
+    Then no second run is queued
+    And the running one is left to finish
 
   @unbuilt
   Scenario: A user syncs their own personal team

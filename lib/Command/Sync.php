@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Command;
 
 use OCA\PenpotSync\Service\PullService;
+use OCA\PenpotSync\Service\PullStatus;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -36,6 +37,7 @@ final class Sync extends Command {
 
 	public function __construct(
 		private PullService $pull,
+		private PullStatus $status,
 	) {
 		parent::__construct();
 	}
@@ -71,13 +73,22 @@ final class Sync extends Command {
 
 		$mappingId = (string)$input->getOption('mapping');
 
+		// THE RUN IS RECORDED WHATEVER STARTED IT. The scheduled job and the
+		// admin panel both stamp {@see PullStatus}, and the CLI did not — so
+		// `show-config` reported the last SCHEDULED run as "the last run" while a
+		// CLI sync minutes earlier left no trace. One store, every trigger.
+		$this->status->markStarted();
+
 		try {
 			$result = $this->pull->pull($mappingId === '' ? null : $mappingId);
 		} catch (\OutOfBoundsException $e) {
+			$this->status->markFailed($e->getMessage());
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 
 			return 1;
 		}
+
+		$this->status->markFinished($result);
 
 		$output->writeln(sprintf(
 			'Pulled %d project(s): %d folder(s), %d file(s), %d archive(s) exported, %d skipped.',
