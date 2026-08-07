@@ -15,6 +15,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\GestureSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\MetadataSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ModeSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ProjectFolderSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PruneSteps;
@@ -67,6 +68,7 @@ final class FeatureContext implements Context {
 	use PruneSteps;
 	use GestureSteps;
 	use ProjectFolderSteps;
+	use MetadataSteps;
 
 	private const APP_ID = 'penpot_sync';
 

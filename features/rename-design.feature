@@ -13,11 +13,16 @@ Feature: Renaming a mirrored Penpot design
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot
     Given a mirrored design "Old Name" in the project "Rename Live"
+    And "Penpot/Rename Live/Old Name.penpot" is a "sync" design
     When I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
     Then Penpot project "Rename Live" holds a design named "New Name"
     And Penpot project "Rename Live" holds no design named "Old Name"
-    # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
-    # is on "New Name", not "New Name.penpot", and that is the whole rule.
+    And "Penpot/Rename Live/New Name.penpot" holds:
+      | penpot_id   | the design's id |
+      | penpot_mode | "sync"          |
+      | content     | an archive      |
+
+    # notes: AGENTS.md#renaming-a-mirrored-file-renames-its-design-in-penpot
 
   @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull
@@ -99,7 +104,7 @@ Feature: Renaming a mirrored Penpot design
     And the admin is told the file cannot be mirrored because "/" is not allowed in a file name
     And the message names the file so it can be renamed in Penpot
     And every other file in the same project is mirrored normally
-    # notes: AGENTS.md#in-nested-mode-a-penpot-file-whose-name-contains-a-slash-is-skipped-with-a-clear-reason
+    # notes: AGENTS.md#a-penpot-file-whose-name-contains-a-slash-is-skipped-with-a-clear-reason
 
     # notes: AGENTS.md#renaming-never-breaks-the-penpot-link
 

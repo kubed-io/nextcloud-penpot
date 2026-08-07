@@ -43,6 +43,12 @@ Feature: Moving a mirrored design
     When I move "Penpot/Move From/Travelling.penpot" to "Penpot/Move To/Travelling.penpot"
     Then Penpot project "Move To" holds a design named "Travelling"
     And Penpot project "Move From" holds no design named "Travelling"
+    And "Penpot/Move To/Travelling.penpot" holds:
+      | penpot_id      | the design's id |
+      | penpot_team_id | the team's id   |
+      | penpot_mode    | "sync"          |
+      | content        | an archive      |
+
     # notes: AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
   @in-nextcloud @gesture @blocked

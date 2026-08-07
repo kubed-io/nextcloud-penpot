@@ -74,11 +74,6 @@ Feature: Personal Penpot access token settings
   Scenario: Users do not author their own team mappings
     Given a user who is not an admin
     Then they cannot map a Penpot team to a folder
-    # A REGISTRATION CONCERN, not a syncing one — it lived in sync-now.feature,
-    # where it described nobody's sync. What a personal token buys you is
-    # attribution; it never buys you the ability to point a Penpot team at a
-    # Nextcloud folder. That stays an admin act, which is what the scenario below
-    # says from the other direction.
     # notes: AGENTS.md#users-do-not-author-their-own-team-mappings
 
   @blocked

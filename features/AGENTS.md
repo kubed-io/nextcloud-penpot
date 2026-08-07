@@ -13,6 +13,15 @@ read as specification: a scenario should be legible at a glance, and a comment
 should add scope or a tidbit, not carry an essay. The essays are here, one
 section per feature file, and each feature file links to its section on line 1.
 
+**The budget is two lines, and CI enforces it.** A comment block in a `.feature`
+may carry at most two lines of prose; anything longer belongs here, behind a
+`# notes: AGENTS.md#anchor` breadcrumb. `tests/integration/bin/check-notes-anchors.sh`
+checks both halves — that every breadcrumb resolves to a real heading, and that no
+block is over budget — because both rot silently. Rename a scenario and its anchor
+stops matching with nothing to notice; let prose creep back and the spec quietly
+stops being readable, which is how this file came to be as long as the suite it
+explains.
+
 For how the suite is organised — tags, backends, which scenarios CI runs and
 why — see [README.md](README.md).
 
@@ -212,7 +221,7 @@ now contradict it outright.
 
 MODE IS A MAPPING DEFAULT, NOT A MAPPING PROPERTY (saga §6.22): a mapping
 carries the default mode its files get ("link" unless set otherwise), but any
-individual file can be promoted or demoted afterwards — see sync-mode.feature.
+individual file can be promoted or demoted afterwards — see set-mode.feature.
 
 WHAT'S DELIBERATELY NOT HERE: creating a NEW Penpot team or project FROM
 Nextcloud is a separate, still-open fork — see team-import.feature.
@@ -326,65 +335,6 @@ field nobody can meaningfully fill in does not earn a column. The design
 question survives where an unbuilt design belongs, in the saga (§6.53,
 question #47).
 
-### Renaming the team in Penpot does not rename the admin's folder
-
-The folder name was the admin's choice; the team name was only ever its
-default. Silently moving their folder because someone renamed a team
-upstream would be a surprise, not a sync.
-
-### Removed: A value the app cannot honour is refused, and says why
-
-A two-row outline used to live here, refusing an OPTION rather than a team:
-a folder name containing "/" , and `folder_mode: keyed`.
-
-It went with folder mode (§C6.36). Half of it was refusing a value that no
-longer exists, and what was left was a one-row outline — a shape that reads
-as "there are several of these" while describing one thing.
-
-The "/" rule itself did not go anywhere: everything below the team folder is
-created by the pull from Penpot's own project names, so an inner "/" would
-invent an intermediate folder that no Penpot object corresponds to and that
-nothing would ever clean up. It is still enforced in `Mapping::fromArray()`
-and still covered by `MappingTest`. What it lost was an integration scenario,
-which was never where a string-validation rule was best proven.
-
-── sharing: groups + Team Folder, exactly as the siblings do it ────────────
-Same two controls and the same meanings as nextcloud-n8n and nextcloud-grafana,
-so an admin configuring all three does the same thing each time. Team Folder is
-opt-in and off by default (§C6.31); groups are applied to the folder at create
-and read back from it thereafter (§C6.35).
-
-### Groups are the FOLDER's, not the mapping's
-
-A scenario here used to say a pull re-asserts the mapped folder's group rights,
-so that a permissions correction reached folders that already existed and
-hand-editing the share was explicitly not supported.
-
-That is now the opposite of the intent. An admin editing the groups on a Team
-Folder, or on the plain folder's share, is doing a legitimate thing and the app
-must not undo it on the next pass. The folder is the source of truth; a mapping
-should not carry a second copy of the answer to diverge from.
-
-`occ penpot_sync:set-groups` stays as the convenience it is — one command that
-does the right thing on either backend, so nobody has to remember the difference
-between assigning a groupfolders group and creating a group share. It is a
-helper for a job you may equally do by hand.
-
-IMPLEMENTED (§C6.35). `Mapping` no longer has an `nc_groups` field and nothing
-persists one. `StorageService::ensureRoot()` takes an OPTIONAL group list:
-passed, it applies it exactly (pruning what is not in it); omitted — which is
-every pull — it leaves sharing alone. `groupsOf()` reads the answer back out of
-whichever backend holds it, and `MappingService::describe()` is what the admin
-page, `list-mappings --json` and the REST endpoints render.
-
-The decisive argument was not this app at all. Three sibling apps map folders
-the same way, and a Nextcloud folder can be the target of more than one of them.
-If each stored its own group list and re-asserted it on its own schedule, a
-shared folder's sharing would FLAP — n8n's reconciler putting back what
-penpot's had just removed, on whatever interval each was configured with, with
-no way to tell from any one app that it was in a fight. Reading through to the
-folder means there is one answer and nobody owns it.
-
 ### A team id that resolves to nothing cannot be mapped
 
 Better an honest refusal than a mapping that silently pulls nothing.
@@ -422,32 +372,6 @@ Nothing is removed from Penpot and nothing local is removed either. What
 SHOULD happen to already-mirrored files is Course 5's decision
 (remove-mapping.feature) — until then the safe behaviour is to leave them
 and say so.
-
-### There is no project-level mapping to configure
-
-── the folder itself ───────────────────────────────────────────────────────
-
-THERE IS NO SCENARIO HERE, AND THAT IS THE POINT. "A mapped folder exists"
-is not something an admin does — it is what a mapping IS. Saving one builds
-the folder (§C6.32), so a scenario asserting the folder appeared would be
-asserting that `add-mapping` did its own job, one step removed.
-
-It used to be `Mapping a Penpot team provisions a Team Folder and mirrors
-its projects`, which was two claims and both belonged elsewhere: the mirror
-is sync-now.feature's, and the folder is now a postcondition of creating the
-mapping at all. A briefly-live version asserted it after a pull, which only
-documented the OLD timing — that the folder did not appear until a sync ran.
-
-ensureRoot() is idempotent and PullService still calls it every pass, so a
-folder deleted by hand comes back. That is repair, not a feature: nobody
-asked for it and nobody watches it happen.
-
-### Project folder names always match their Penpot projects
-
-Locked in saga §6.36, in both directions: Penpot renames propagate down on
-the pull, and renaming a project folder in Nextcloud calls "rename-project".
-Position is free (§6.29); only the NAME is pinned. This is what earns the
-project tag its keep — a tagged folder named "Acme" IS the project "Acme".
 
 ### Two Penpot projects in one team sharing a name is handled, not crashed
 
@@ -1446,6 +1370,74 @@ see their personal team at all (personal-projects.feature).
 
 ---
 
+## edit-design
+
+`features/edit-design.feature`
+
+A DESIGN'S CONTENT CHANGING — and the only file in this app with one direction
+where both siblings have two.
+
+### edit-design
+
+**Editing happens in Penpot, and only in Penpot.** A `.penpot` archive is opaque
+nested design data; there is nothing coherent to hand-edit and no way to
+re-import it if there were, which is why `open-with.feature` offers no text
+editor in any mode. So there is no Nextcloud-side twin to write, and every
+scenario here is `@in-penpot`.
+
+**THIS FILE FILLS A REAL HOLE.** Until it existed, "a design was edited and the
+mirror caught up" was asserted **nowhere** — the two closest scenarios were both
+negatives (`set-mode.feature`'s "not re-exported by the next pull" and
+`ignore.feature`'s "the file is not re-exported"). The single most important
+thing this app does for a `sync` file had no scenario at all, because the
+behaviour had been filed under the mechanism that carries it.
+
+It replaced a scenario in the retired `sync-mode.feature` called "A leftover body
+from an older version is truncated by the next pull". That one was about an older
+version of **this app** — early builds wrote a small JSON pointer body into link
+files, and §C6.6 changed a link to zero bytes, so the pull truncates whatever the
+old build left. Neither Grafana nor Penpot has ever been released, so there are
+no old builds in the field and nothing to migrate from. It was deleted rather
+than rewritten.
+
+### An edit in Penpot reaches the stored archive
+
+`@blocked` — **no way to edit a design's content.** Penpot's `update-file` is the
+only RPC that changes what is inside a design, and its `changes` payload is
+unproven and reported fragile (saga §1, penpot/penpot#4180). The harness can
+create, rename, move and delete designs; it cannot author in one. Confirm a
+usable `update-file` shape and all three scenarios become ordinary `@in-penpot`
+work.
+
+THE TABLE IS BOTH HALVES OF THE BEHAVIOUR. The revision moved and the archive was
+re-fetched — that is what happened. The id, the team and the mode did not — that
+is the promise, and it is what makes the mirror the same file rather than a new
+one standing where the old one was.
+
+`modified` is the design's clock rather than the sync's, so a mapped folder
+sorted by date sorts by when designs were worked on (§C6.24). It is also the half
+of the drift signal a rename moves without moving `revn`, which is why the signal
+is the two joined (§5.5).
+
+The third scenario — an edit to one design leaves its neighbours alone — is the
+one that costs real money if it regresses. A sync that re-exported everything
+whenever anything changed would satisfy the first two and be a bandwidth bill.
+A THIRD SCENARIO WAS WRITTEN AND CUT: "an edit to one design leaves its
+neighbours alone". It is not a behaviour — the behaviour is still editing, with
+the same pre-state and the same end state, plus a statement that a second file
+was not touched. Nothing edits a file nobody edited; saying so is not a scenario.
+
+Cutting it left `I note the mtime and etag of` with no caller at all, so those
+step definitions went too. The regression they once guarded (a pull rewriting
+every mirror on every run) is recorded in the CHANGELOG.
+
+### An edit in Penpot costs a link nothing but its dates
+
+A LINK TRACKS THE EDIT WITHOUT PAYING FOR IT. The revision and the dates come
+from a listing the sync already had; the bytes do not, because nobody asked for
+them. That is the economic argument for link being the default, stated as an end
+state rather than as a claim about call counts.
+
 ## errors
 
 `features/errors.feature`
@@ -1527,7 +1519,7 @@ duplicates or as end states already owned elsewhere:
 |---|---|
 | A project folder is identifiable by both metadata and a visible tag | word-for-word the same scenario as `mapping-membership.feature`'s "A project folder carries a visible tag as well as its metadata" — same arrange, same two asserts |
 | A file moved out of its mapped folder is unmapped, not untracked | the *rule* is `mapping-membership.feature`'s "A file with no project-id ancestor belongs to no mapping"; the *gesture* is `move-design.feature`'s move-out. Neither needed a third statement of it |
-| The mode is visible and reflects whether content is stored | two `Given`/`Then` pairs in one scenario — two scenarios wearing one name. The DAV half merged into the view scenario; the body half is `sync-mode.feature`'s "A link file holds nothing at all" |
+| The mode is visible and reflects whether content is stored | two `Given`/`Then` pairs in one scenario — two scenarios wearing one name. The DAV half merged into the view scenario; the body half is `set-mode.feature`'s demote scenario |
 | The row icon and the menu glyph are separate files | two files with opposite contracts, so one scenario could not be the arrange for both. The row icon stayed; the menu glyph went to `open-with.feature` |
 
 Ported from `kubed-io/nextcloud-n8n`, where the split landed first — itself
@@ -1613,7 +1605,7 @@ which has been false since Course 3):
   and `+zip` for a `link` one (a JSON pointer), and `+zip` is the worse lie
   because it invites a client to unpack a pointer. Registered by
   lib/Migration/RegisterMimetype.php on every install/upgrade, reverted on
-  uninstall (uninstall.feature).
+  uninstall (lifecycle.feature).
 
   NOT BUILT — the project folder's visible system TAG (§6.32). The folder
   metadata is written; the human-visible pill is still Course 6 work. The
@@ -1670,8 +1662,8 @@ about export state rather than about DAV advertising the key set.
 a wire value differs from the name of the thing it carries, written down here
 because a client author reading only the README would look for "link".
 
-The sync-mode axis — what promotion changes about that body — is
-`sync-mode.feature`'s and `set-mode.feature`'s, not this file's.
+The mode axis — what promotion changes about that body — is `set-mode.feature`'s,
+not this file's.
 
 ### A file carries the team its design belongs to, but never a project
 
@@ -1761,6 +1753,19 @@ visible is the entire point. Same split both siblings use: Grafana's
 
 ---
 
+### An ignored file whose Penpot original is deleted is still kept
+
+The strongest form of the promise: ignore protects a file from the one operation
+that would otherwise remove it — the prune a pull performs when a design is
+deleted in Penpot (delete-design.feature).
+
+### Demoting an ignored file is refused
+
+THE MIRROR OF "Ignoring a link file is refused", and why both live here rather
+than with the mode: ignore is what is being protected in each. Ignoring a link is
+refused because there is no archive to keep; demoting an ignored file is refused
+because it would delete the archive the ignore tag exists to keep.
+
 ## lifecycle
 
 `features/lifecycle.feature`
@@ -1796,9 +1801,7 @@ the config would look exactly like one that worked". It is asserted now, and on
 the one scenario that was already running.
 
 Its visible consequence (a mapped folder that looks like designs) belongs to
-`view-design.feature`; its removal belongs to `uninstall.feature`.
-
----
+`view-design.feature`; its removal is the "Removing the app" scenario below.
 
 ## mapping-membership
 
@@ -2489,6 +2492,17 @@ be loud where it happens.
 
 ---
 
+### Renaming a mirrored file renames its design in Penpot
+
+Penpot's name never carries the ".penpot" extension (§6.4) — the assertion is on
+"New Name", not "New Name.penpot", and that is the whole rule.
+
+THE NAME IS NOT A TABLE ROW BECAUSE IT IS NOT STORED. A mirror is bound to its
+design by `penpot_id`, never by what it is called, which is why a rename cannot
+break the link. `the design's id` resolves through the NEW name, so one row
+asserts both halves: the design is called that now, and this file is still that
+design.
+
 ## rename-project
 
 `features/rename-project.feature`
@@ -2578,30 +2592,6 @@ that remains, and the app says so rather than quietly producing a lookalike.
 Penpot's success event is not proof: the restore is re-read from the same
 listing the pull uses before it is reported as done. A restore that did not
 actually happen must never be announced as one.
-
-### …and confirmed PAST the undo window (saga §C6.37)
-
-The scenario below failed roughly one run in eight for weeks, with two
-alternating symptoms — the design missing from its project, or still sitting in
-Penpot's trash — and was re-run as a flake four times. It was not a flake.
-
-Measured against a live Penpot: `delete-file` answers immediately, lists the
-design in the trash within ~0.3s, and then runs a delayed job **about 3.8
-seconds later** that removes the file again *even though it was restored in the
-meantime*. The offset is from the DELETE, not the restore, and it reproduces
-5/5 at every gap tested — a scheduled job, not a race.
-
-The app used to confirm with a flat 2.5s settle, so both of its reads landed
-before the undo could arrive. It logged a lossless restore and the design
-vanished a second later. **Do not shorten that window, and do not weaken these
-assertions to make the scenario pass.** In particular:
-
-- `And the design "Round Trip" is not in Penpot's trash` looks like it asserts a
-  mechanism, and an earlier reading of this flake proposed deleting it for that
-  reason. It does not: when the undo fires, the design really is back in the
-  trash, and that step is what catches it. It stays.
-- Both assertions are backed by the app's own guarantee now — the restore is
-  confirmed by polling to 6s and re-issued if it was undone (10/10 durable live).
 
 ## A LINK HAS NOTHING TO RESTORE INTO PENPOT
 
@@ -2784,12 +2774,47 @@ restored and points at nothing.
 
 `features/set-mode.feature`
 
-Promoting and demoting a single file — the live half of sync-mode.feature.
+Promoting and demoting a single file — the whole of the mode axis, now that
+`sync-mode.feature` is retired into it.
 
-THE DESIGN LIVES IN sync-mode.feature. That file is the full, still-@todo
-specification of the mode: what each mode is, what a link may not do, what the
-Files-app surface will offer. THIS file is the subset CI can prove today,
-driven entirely through `occ` against a real Nextcloud and a real Penpot.
+THE AXIS MEANS SOMETHING DIFFERENT HERE THAN IN EITHER SIBLING (saga §6.22).
+In n8n and Grafana, `sync` vs `link` decides which way edits flow. This app never
+writes design content back at all (§6.1), so the axis decides only WHETHER WE
+STORE THE BYTES:
+
+    link  — a pointer. No archive stored. Never calls export-binfile.
+    sync  — a real backup. The .penpot archive is downloaded and stored.
+
+A `sync` file is still a read-only mirror. LINK IS THE DEFAULT, which is a safety
+property as much as a performance one: the expensive path is opt-in, so a newly
+mapped team of 500 files costs a listing rather than 500 exports. A `.penpot`
+export is a full ZIP with embedded binaries, not a JSON diff — most designs need
+to be findable and clickable, not duplicated.
+
+### Promoting a mirrored design fetches a real ZIP from Penpot
+
+PROMOTION IS PURELY ADDITIVE, which is what the table shows at a glance: the mode
+is "sync" and there are real bytes, while the file still names the same design in
+the same team. An export never writes to Penpot and never re-stamps the id, which
+is what makes it safe to retry.
+
+### A promoted file is not re-exported by the next pull
+
+Mode is stored PER FILE, and an unchanged revision means an unchanged archive, so
+staying in sync mode is free until the design actually moves.
+
+The one scenario here where a pull IS the subject, because "a second run does not
+undo the first" is a claim about running it twice.
+
+### Demoting throws the archive away and never contacts Penpot
+
+The bytes are gone and the mode says so, while the file still names the same
+design — and that design is still in Penpot, which the last line says out loud
+because "never contacts Penpot" is a claim about the far side.
+
+`penpot_revision | set` is deliberate: a demotion throws away the bytes but keeps
+the file's record of which revision it held, so a later promotion knows whether
+what it fetches is new.
 
 ## WHY THIS SUITE IS WORTH A LIVE PENPOT
 
@@ -2819,12 +2844,18 @@ nothing else. A regression that quietly exported every file would still pass
 every other scenario in this suite, and would first be noticed as a bandwidth
 bill — so the zero is asserted, not assumed.
 
-## NOT ASSERTED HERE, ON PURPOSE
+### Demoting asks first, because it deletes the only local copy
 
-The interactive confirmation on a demotion: Behat has no tty to answer it. The
-prompt is unit-tested where the answer can be scripted (SetModeTest); the steps
-here pass `--force` and assert the CONSEQUENCE instead — the archive is gone,
-the file is empty again, and Penpot was never contacted.
+`@blocked` — **no tty**. Behat has no terminal to answer a confirmation prompt,
+which is why every other scenario here passes `--force`, and why the prompt
+itself went unasserted until now. The consequence IS asserted, in the demote
+scenario: the archive is gone, the file is empty again, and Penpot was never
+contacted. What was missing is that the app asks at all.
+
+It came from `sync-mode.feature`, which specified it and could not run it either.
+The prompt is unit-tested where the answer can be scripted (SetModeTest); this is
+the end-to-end statement of the same promise, parked behind a named wall rather
+than behind a file nobody was going to run.
 ## WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
 
 STATED PLAINLY BECAUSE IT DIVERGED FROM THE DESIGN WITHOUT A DECISION: mode is
@@ -2856,81 +2887,97 @@ decision, not a spec tidy-up.
 
 ---
 
-## sync-mode
+## sync-mode — RETIRED
 
-`features/sync-mode.feature`
+`features/sync-mode.feature` is **gone**. Its subject was real; the file was not.
 
-The per-file "do we store the bytes?" choice.
+The per-file "do we store the bytes?" choice belongs to **`set-mode.feature`**,
+which owns the action a person performs and runs live against a real Penpot.
+`sync-mode.feature` was written first, before the engine existed, and then never
+shrank when `set-mode.feature` came along and proved half of it for real — so the
+repo carried sixteen `@todo` scenarios restating five live ones.
 
-THE AXIS IS BACK, MEANING SOMETHING NEW (saga §6.22). Chapter 1 §6.1 removed
-the sync/link axis because read-only means there's only one write direction.
-That reasoning was right about WRITES and wrong about WEIGHT. In both sibling
-apps the axis means "which direction do edits flow." Here it means only:
+FOURTEEN OF THE SIXTEEN WERE ALREADY COVERED, ELSEWHERE, VERBATIM:
 
-    link  — a pointer. No archive stored. Never calls export-binfile.
-    sync  — a real backup. The .penpot archive is downloaded and stored.
+| it said | already asserted by |
+|---|---|
+| A team of link files costs no exports at all | `set-mode.feature`, same sentence, **live** |
+| Promoting a link file to sync fetches the archive | `set-mode.feature` "Promoting a mirrored design fetches a real ZIP", **live** |
+| Promotion survives future pulls | `set-mode.feature` "A promoted file is not re-exported by the next pull", **live** |
+| Confirming a demotion deletes the archive and keeps the pointer | `set-mode.feature` "Demoting throws the archive away and never contacts Penpot", **live** |
+| A sync file holds the real archive | the promote scenario's own `Then`, **live** |
+| A link file is a pointer with no stored content | `view-design.feature` + the demote scenario, **live** |
+| A link file holds nothing at all | same |
+| A link is never a small placeholder archive | a restatement of "holds no content at all" with no action of its own |
+| A link file is confined to its own project | `move-design.feature` — and the scenario said so itself: *"Detail lives in move-design.feature and ignore.feature; this is the summary"* |
+| Promotion lifts every link restriction at once | `move-design.feature` "Promoting a link first makes the move work normally" |
+| Personal projects support the same link and sync modes | no action, no actor — a claim that a thing behaves normally |
+| Files inherit their mapping's default mode | see below; the operation it describes does not exist |
+| A leftover body from an older version is truncated by the next pull | `When the pull runs` — the reconciler as the subject |
+| An already-empty link is left strictly alone | an mtime and an etag, about the reconciler |
 
-NEITHER MODE EVER PUSHES CONTENT. Saga §6.1's read-only lock is untouched by
-this feature — "sync" here does NOT mean "two-way", it means "we keep the
-bytes." A sync file is still a read-only mirror.
+**A summary of other files is not a scenario.** Two of them said outright that
+the real coverage lived elsewhere. A reader who wants to know what a link cannot
+do is better served by the file where each refusal is actually exercised, and a
+summary that drifts from those files is worse than nothing because it will be
+believed.
 
-WHY THIS MATTERS: a .penpot export is a full ZIP with embedded binaries, not a
-JSON diff (saga Course 2). Mirroring every file in a large team as a stored
-archive would be expensive and mostly pointless — most designs don't need a
-backup in Nextcloud, they need to be findable and clickable. Command's framing:
-"links would be lightweight and never backed up in nxt, then we simply make the
-sync for our important files."
+**"Files inherit their mapping's default mode" described an operation that does
+not exist.** Its second half is *"the admin changes the mapping's default mode to
+sync"* — but a mapping's mode is fixed at creation (`admin-mapping.feature`:
+everything except the groups is immutable, deliberately, because changing it
+would force a live migration of already-mirrored content). Here that is sharper
+than elsewhere: flipping a mapping's mode in bulk would either delete every
+downloaded archive under it or export every file at once. There is no such
+control, so there was nothing to test.
 
-LINK IS THE DEFAULT, and that is a deliberate safety property as much as a
-performance one: the expensive, bandwidth-consuming path is opt-in, so a
-newly-mapped team with 500 files costs a listing, not 500 exports.
+It was also a **two-`When` scenario**, which is the tell: a second `When` is a
+scenario trying to rebuild a pre-state by performing another behaviour, instead
+of stating how the world is in a `Given`.
 
-THE DEMOTION IS THE DANGEROUS DIRECTION: sync → link DELETES a stored archive.
-That's local data the user may be relying on as a backup, so it is confirmed,
-and it is the only operation in this file that can lose bytes.
+**"A leftover body from an older version" and "An already-empty link is left
+strictly alone" both named the pull as the actor.** That is the same defect that
+retired `reconcile.feature` in the Grafana sibling: nobody runs a reconciler, and
+an mtime is a result rather than a behaviour. The end state each was reaching for
+— a link holds nothing — is asserted where a link is made.
 
-BUILD STATE (Course 4, the sync slice). THE ENGINE IS BUILT AND PROVEN ON THE
-WIRE: `PenpotClient::exportBinfile` performs the real two-step export (an SSE
-stream, then a second authenticated GET for the ZIP it names — saga §5.1–§5.4,
-§C4.8), `ArchiveService` stores the result, `PullService` re-exports only on
-drift or a missing archive, and `occ penpot_sync:set-mode` is the per-file
-promote/demote.
+TWO SCENARIOS SURVIVED, and both moved to the file that owns their subject:
 
-The half of this file CI can prove today has moved to **set-mode.feature**,
-where it runs live: a promotion is asserted to leave real ZIP bytes on disk,
-and a team of links is asserted to cost exactly zero exports.
-
-WHAT STAYS @todo HERE is everything that needs a surface the app does not have
-yet — the Files-app mode indicator and switcher, the ignore tag's interaction
-with demotion, and re-deriving files from a changed mapping default. The
-scenarios below remain the specification those will be built against.
-
-### A link file holds nothing at all
-
-Everything identifying the file — id, revision, mode, team — is metadata.
-A body would be a second copy of the same facts, free to drift from the
-first, which is exactly what the drift signal's two halves once did.
-
-### A link is never a small placeholder archive
-
-A ZIP with any entry starts with the same magic bytes a real export does,
-so the app could no longer tell a pointer from a backup. That would
-silently disable the prune's final snapshot, make a demotion ask to delete
-an archive that does not exist, and report "archive" in status.
-
-### A leftover body from an older version is truncated by the next pull
-
-The migration needs no repair step and no version check: the pull already
-calls the same code path on every link. "pointer" is a real third state
-meaning "an old body, not yet truncated".
-
----
+| it said | where it went | why it survived |
+|---|---|---|
+| Demoting a sync file to link warns before deleting the archive | `set-mode.feature` | the confirmation is really implemented (`--force` exists to skip it) and nothing asserted it — every live scenario passes `--force` |
+| Demoting an ignored file is refused | `ignore.feature` | the mirror of "Ignoring a link file is refused"; both are about what ignore protects |
 
 ## sync-now
 
 `features/sync-now.feature`
 
 SYNC NOW — bringing what is already in Penpot into Nextcloud.
+
+### A sync brings the team's projects and designs into Nextcloud
+
+ONE BEHAVIOUR, FOUR WAYS TO START IT — admin/one mapping, admin/every mapping,
+the schedule, and a user's own personal team. Same pre-state, same post-state, so
+the actor and the scope are COLUMNS rather than four scenarios. Whether a run is
+synchronous or queued is a mechanism and is asserted nowhere.
+
+PROJECTS COME IN BY NAME AND WEAR THE TAG; designs come in beneath them. Every
+path in the tree table is named exactly as Penpot names the thing it mirrors,
+which is the whole of "project folder names match their projects". Drafts is the
+team's default project and gets no folder of its own — it IS the mapped folder
+(§6.35), so a loose design sits at the root.
+
+NOTHING ASSERTS "THE SYNC SUCCEEDED". The tree is the proof, and the only one
+every trigger can offer: a command's exit code says nothing about a job that ran
+inside Nextcloud.
+
+### A folder already named like a Penpot project is adopted, not duplicated
+
+THE NAME IS ALL THERE IS TO MATCH ON the first time — a hand-made folder carries
+no project id yet. Adopting it is what stops a first sync over an existing tree
+leaving a second folder beside the one someone made. From then on the id
+identifies the project, which is why a rename upstream moves this folder rather
+than making another.
 
 ## THE RECONCILER IS NOT A FEATURE (saga §C6.28)
 
@@ -3097,24 +3144,6 @@ direction it came from. `tagProject()` runs on both the adopt and the create
 path, which is why the adoption scenario asserts the tag too: adopting a folder
 that never got badged would leave it invisible to the same searches.
 
-### Dates are an end state, so they are a sentence
-
-`A mirror carries its own dates, not the sync's` was a scenario, and it was an
-end state wearing a scenario's clothes — it made "the dates are right" look like
-something SYNCING does, rather than something every mirror is true of however it
-got there. A design created through the app, renamed, restored from the trash or
-mirrored by the schedule all want to end by saying it.
-
-So it is `"<path>" carries its Penpot dates`, with a folder twin. A project
-folder gets its project's CREATION time only: its mtime is propagated from its
-children by core, so asserting one would assert core's propagation rather than
-this app's behaviour (§C6.24).
-
-`Project folder names always match their Penpot projects` went the same way, and
-did not even need a sentence — every path in the `holds:` table is named exactly
-as Penpot names the thing it mirrors, so the table already says it. A scenario
-restating that was a third copy of an assertion the outline makes on every row.
-
 ### A sync that cannot finish says so, and says why
 
 @unbuilt, AND THE GAP IS REAL — found while writing it. `occ penpot_sync:sync`
@@ -3132,97 +3161,6 @@ The two rows are the two ways the connection can be wrong, and they are the two
 `admin-connection.feature` already distinguishes for the connection TEST —
 missing token versus unreachable host. A sync should not collapse them, for the
 same reason the test does not: they send an operator to different fixes.
-
-### A pull mirrors a project as a folder carrying its project id and its date
-
-END STATE, not a feature of its own — the mirror comes into existence here, so
-this is the one place its creation date is answerable. The folder takes its
-CREATION time only: Nextcloud propagates a folder's mtime from its children, so
-stamping that would be a fight lost on every pull that writes any design (and a
-propagated mtime says something more useful anyway — that the project's contents
-changed — since Penpot's project `modified-at` only moves on a rename).
-
-── and syncing again leaves a settled mirror alone ────────────────────────
-
-THE ANTI-CHURN GUARANTEE (§5.11). These read as properties of the machine, and
-they are kept as scenarios only because they are the regression that started
-this whole line of work: every file looking freshly modified on every tick.
-The precise pinning lives in the unit tests; this is the end-to-end proof.
-
-### A pull that changed nothing prunes nothing
-
-══ WHAT A RUN MUST REFUSE TO DO ═══════════════════════════════════════════
-
-Pruning is driven by "Penpot did not name this file", and every way of
-failing to ask — a 502, a project skipped for an illegal name, a half-read
-listing — is indistinguishable from a deletion. A regression here does not
-throw; it quietly moves a team's mirrors to the trash on the next scheduled
-run. So "prunes nothing" is asserted as a step rather than assumed.
-
-The safety property, asserted first because it is the one a regression
-breaks silently. Pruning on a listing that simply did not mention a file is
-the single most destructive thing this app could do.
-
-ITS OWN FOLDER, deliberately. This is the one assertion in the suite that
-IS about the whole mapped folder, so it must not share one: every other
-scenario's leftovers land in "Penpot", and a design any of them deleted in
-Penpot is a mirror this pull would correctly prune. A fresh folder is
-mirrored from the current listing and therefore has nothing to prune —
-which is exactly the state this scenario means to describe.
-
-### A mirrored design carries the design's own dates, not the pull's
-
-── the manual controls in admin settings ────────────────────────────────────
-Both siblings expose a per-mapping "Sync now" button on each mapping card,
-plus a section-wide bulk sync in the Sync Actions panel. This app has the
-same two controls in the same two places — but only ONE direction, because
-there is no content push (saga §6.1). See admin-section.feature for where
-they sit; this is what they do.
-
-The behaviour is "a design exists in Penpot and is mirrored"; these two are its
-end state. A design gets BOTH clocks — unlike its project folder, a file's mtime
-is not propagated from anything, so there is nothing to fight.
-
-### An unchanged pull moves no file's mtime or etag
-
-Now also the guard on the timestamp feature itself (§C6.24): stamping a clock
-unconditionally would move both of these on every tick. `touch()` leaves a
-file's own etag alone but propagates a fresh one to the parent folder, which is
-what clients poll — so the stamp is conditional, and this scenario is what
-proves it stayed that way.
-NOT A MICRO-OPTIMISATION — it is what stops every desktop and mobile client
-re-downloading the whole mapped folder after every scheduled pull. mtime and
-etag ARE the sync protocol, so rewriting a byte-identical file is a
-broadcast to every client that something changed.
-
-This app has always avoided it; BOTH siblings had to be fixed. `nextcloud-n8n`
-and `nextcloud-grafana` each called `putContent()` on every mirror on every run
-unconditionally, and a pull with nothing changed upstream moved both clocks on
-every file — measured live, then fixed in each (§C6.19, and their own sagas).
-Ours avoids it in two places, and BOTH are load-bearing rather than incidental:
-  - `storeLink()` returns early on an already-empty file (§C6.6);
-  - `driftedOrMissing()` gates the archive write on the revision signal.
-A change to either that makes the write unconditional would pass every
-other scenario in this suite, which is why this one exists.
-
-### A pull prunes a mirrored file whose Penpot file no longer exists
-
-TRASH, NEVER DESTROY — the don't-lose-data rule. A pruned file is
-recoverable for as long as the user's trash retention allows, which is what
-makes the most dangerous thing this app does survivable.
-
-### A link file gets a final snapshot before being pruned
-
-THE FINAL SNAPSHOT (saga §6.46) — the app's one genuinely lossy moment,
-fixed. A pruned "link" file would otherwise be a pointer to a design that no
-longer exists, with nothing to rebuild from. But "export-binfile" still
-exports a soft-deleted file for ~7 days (saga §6.42, confirmed live), and a
-trashed Nextcloud file's content is writable (saga §6.44, confirmed live).
-
-The mirror is a `link` — it held nothing at all until this moment. The pull
-exports the design one last time INSIDE Penpot's grace window and writes the
-archive into the file before trashing it, so the user is left with a real,
-openable `.penpot` rather than a pointer to nothing.
 
 ### A user syncs their own personal team folder
 
@@ -3363,56 +3301,48 @@ mistake features/README.md exists to prevent.
 
 ---
 
-## uninstall
+## uninstall — RETIRED, folded into `lifecycle.feature`
 
-`features/uninstall.feature`
+`features/uninstall.feature` is **gone**. Enabling, disabling and removing an app
+are three points on one lifecycle, and they were split across two files because
+the removal grew an essay rather than because a reader needed two places to look.
 
-Uninstall lifecycle — what happens to the SYSTEM and to the user's DATA when the
-app is removed, and that a reinstall reconnects cleanly.
+THREE SCENARIOS IN, ONE OUT:
 
-  - SYSTEM: removing the app runs the <uninstall> repair step (UnregisterMimetype),
-    which REVERTS the custom-mimetype registration the install wrote into the
-    Nextcloud core tree (config/mimetype*.json, core/img/filetypes/Penpot.svg,
-    core/js/mimetypelist.js) and re-stamps the .penpot filecache rows back to a
-    generic archive mimetype (Penpot's own server serves the export as
-    application/zip — saga §6.4 — so there's no Penpot-branded mimetype to fall
-    back to; this app owns the registration end to end, same as both siblings).
-  - DATA: the app ORPHANS the user's data — it never deletes the .penpot files,
-    never clears their Files-Metadata, never deletes Team Folders, never touches
-    Penpot. Every "sync"-mode file is a real archive (saga §6.22), so deleting
-    one would be genuine data loss; "link"-mode files hold no bytes, but their
-    penpot_id is what makes a later reconnect free, so those aren't deleted
-    either. To wipe the Nextcloud side deliberately, an admin uses Purge first
-    (see purge.feature).
+| it said | verdict |
+|---|---|
+| Removing the app reverts the custom mimetype registration | **kept**, as `lifecycle.feature`'s "Removing the app" — real work of ours, and the exact mirror of what "Enabling the app" now asserts |
+| Disabling the app leaves the mirrored design files in place | **deleted** — the app does nothing on disable. There is no code to write and none to break; it asserted Nextcloud's behaviour, not this app's |
+| Re-enabling and pulling reconciles the existing files without duplicates | **deleted** — `sync-now.feature` "A folder already named like a Penpot project is adopted, not duplicated" already asserts id-matched reconciliation. Disabling and re-enabling changes nothing about how a pull matches |
 
-ONE THING SIMPLER THAN BOTH SIBLINGS: reconnection here is PULL-ONLY. n8n/Grafana's
-reinstall story has to worry about a stray push racing the first pull after
-re-enable; Penpot Sync never writes back (saga §6.1), so "reinstall reconciles
-in place, no duplicates" is strictly a read-side guarantee — there is no writeback
-half to reason about at all.
+**The data-orphan promise is still true and still worth knowing** — it is just
+not a scenario. The app never deletes a `.penpot` file, never clears its
+Files-Metadata, never touches a Team Folder and never contacts Penpot on removal.
+Every `sync` file is a real archive, so deleting one would be genuine data loss;
+a `link` holds no bytes but its `penpot_id` is what makes a later reconnect free.
+To wipe the Nextcloud side deliberately, an admin uses Purge (`purge.feature`).
+That is a promise kept by writing no code, which is exactly why it reads as a
+paragraph rather than as a `When`.
 
-Because the files keep their penpot_id (Files-Metadata, saga §6.1/§6.14), a
-reinstall + pull RECONCILES them in place (matched by id, never duplicated) — the
-reconnect is free, by design, same as both sibling apps.
+### Removing the app
 
-The <uninstall> system leg needs a full app remove on a live pod (CI can't drive
-it), so it stays @todo; the data-orphan + reinstall-reconnect legs are provable via
-disable/re-enable + a pull, which exercises the same metadata-keyed reconcile.
+`@blocked` — **no app removal**. The harness enables and disables, which is what
+`occ` offers; removing an app and reinstalling it is a store operation this suite
+cannot perform. That is a different wall from `@todo`, and naming it is the rule
+(see `README.md`).
 
-@todo — the old note here read "no lib/ exists yet (zero code, v0.1.0)", which
-has been false for four courses. The sync engine and the mimetype registration
-are both BUILT: lib/Migration/UnregisterMimetype.php is wired to the
-<uninstall> repair step in appinfo/info.xml as of C6.1, and it is a deliberate
-mirror image of the install step — config keys removed, icon deleted, filecache
-rows re-stamped, mimetypelist.js regenerated, and nothing of the user's touched.
+WHAT IT ASSERTS IS OUR WORK, not the framework's. `UnregisterMimetype` is wired
+to the `<uninstall>` repair step in `appinfo/info.xml`, and it reverts what the
+install wrote into the Nextcloud core tree — `config/mimetype*.json`,
+`core/img/filetypes/Penpot.svg`, `core/js/mimetypelist.js` — and re-stamps the
+`.penpot` filecache rows back to a generic archive mimetype. Penpot's own server
+serves an export as `application/zip` (§6.4), so there is no Penpot-branded type
+to fall back to: this app owns the registration end to end, same as both siblings.
 
-What is missing is still only the DRIVER: a repair step registered under
-<uninstall> runs on a real app removal, which CI does not perform. So the
-system-cleanup leg stays unproven rather than unbuilt.
+The second `Then` — the files are left where they are — is the data-orphan
+promise stated once, at the only moment anyone would doubt it.
 
-ONE CHOICE WORTH READING BEFORE ASSERTING ON IT: the revert re-stamps `.penpot`
-rows to `application/zip`, not `application/json`. Both siblings revert to JSON,
-because their mirrors always were JSON; ours are ZIP in `sync` mode and JSON in
-`link` mode, and no extension-keyed mimetype can be right for both. `zip` is
-what Penpot's own server calls the format (§6.4, confirmed live), so it is the
-honest answer for the archive the user is left holding.
+ONE THING SIMPLER THAN BOTH SIBLINGS: reconnection here is PULL-ONLY. n8n and
+Grafana's reinstall story has to worry about a stray push racing the first pull
+after re-enable; this app never writes back (§6.1), so "reinstall reconciles in
+place" is strictly a read-side guarantee with no writeback half to reason about.

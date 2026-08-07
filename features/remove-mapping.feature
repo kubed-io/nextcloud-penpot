@@ -53,7 +53,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And the next pull confirms it is current, or refreshes it if Penpot has since changed
     And no duplicate mirror is created alongside it
     # Reconnecting is matched on penpot_id, so a restored file is adopted rather
-    # than duplicated — the same id-matching guarantee uninstall.feature relies on.
+    # than duplicated — the same id-matching guarantee sync-now.feature asserts.
 
   @todo
   Scenario: An ignored file under a removed mapping is still trashed, not destroyed

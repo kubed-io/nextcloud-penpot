@@ -16,6 +16,14 @@ documentation that happens to execute.
 this file is the review checklist that follows from it. Where the two disagree,
 `features/README.md` wins and this file is stale.
 
+**The fastest review pass**: read each `Scenario:` line with its `When`, and ask
+*who performed this, and what changed?* Almost every defect this repo has shipped
+in a feature file fails that question — a mechanism as the actor, a construct as
+the subject, a property as the title, or an assertion that nothing happened to
+something nobody touched. Those shapes are catalogued in
+[A scenario that is not one](#a-scenario-that-is-not-one--the-shapes-to-reject),
+with the offending lines.
+
 ## Where the binding lives — check this before saying anything about coverage
 
 A scenario is only real if a step definition matches every one of its lines.
@@ -90,10 +98,13 @@ cite these when a scenario drifts:
 
 Do not "correct" these:
 
-- **Comments are long and carry the reasoning.** Most Gherkin is comment-light;
-  ours records *why* a rule exists, what was tried, and the saga section that
-  settled it. The prose is the point — it is the only place a decision's cost is
-  written down. Never suggest trimming a comment block for brevity.
+- **The reasoning is kept, but not in the feature file.** Every scenario ends
+  with a `# notes: AGENTS.md#anchor` pointer, and the essay lives in
+  `features/AGENTS.md`. A block may carry **at most two lines of prose**;
+  `tests/integration/bin/check-notes-anchors.sh` fails the build on a longer one
+  and on a pointer that no longer resolves. This reversed an earlier rule that
+  said comments should carry the reasoning inline — that produced 3488 lines of
+  notes for 3552 lines of spec, and scenarios nobody could read at a glance.
 - **Backgrounds run to six lines, over the recommended four.** Every line is a
   real configuration step against a live Nextcloud and a live Penpot; there is no
   `Given I am logged in` shortcut to hide them behind.
@@ -118,6 +129,182 @@ answer one question.
 **Flag a scenario that describes a behaviour another file owns.** The owners are
 listed in `features/README.md`.
 
+## A scenario that is not one — the shapes to reject
+
+Every one of these shipped in this repo and was removed. They share a root: the
+scenario names something that is not a thing anyone **does**. Read the `Scenario:`
+line and the `When` together and ask *"who performed this, and what changed?"* —
+if either answer is missing, it is one of the shapes below.
+
+### The `When` is a mechanism, not an action
+
+```gherkin
+    When the pull runs                       # ✘ nobody runs a pull
+    When the team is mirrored again          # ✘ nicer words, same defect
+    When the reconciler notices the change   # ✘
+```
+
+A reconciler is how news travels, not news. **When the change happened in Penpot,
+say what someone did there and let the step hide the sync:**
+
+```gherkin
+    Given a mirrored design "Farewell" in the project "Doomed"
+    When the design "Farewell" is deleted in Penpot        # ✔ pre-state, action,
+    Then the file "…/Farewell.penpot" is in the Nextcloud trash   #   end state
+```
+
+This retired a whole file. `reconcile.feature` was six scenarios that turned out
+to be four behaviours — the first sync, an edit, an upstream delete, a local edit
+pushed back — each of which belonged with the thing a person did.
+
+**The exception is narrow:** a pull may be the subject when running it *twice* is
+the claim ("a promoted file is not re-exported by the next pull"). That is about
+repetition, not about reconciling.
+
+### The subject is a construct
+
+```gherkin
+Feature: A mirrored Penpot file is a first-class file type   # ✘ nobody does this
+  Scenario: WebDAV PROPFIND exposes the metadata             # ✘ nor this
+  Scenario: A mirrored file's mode is visible over DAV       # ✘ a property, not an act
+  Scenario: A design file has an updated-at                  # ✘ a field, not an act
+```
+
+A mimetype, a property set, an index and a timestamp are all **end states of
+something else**. Nobody registers a mimetype; they install an app. Nobody sets
+an `updated-at`; they edit a design and the app stamps it. Put each end state
+with the action that produces it, as a table, and what remains is the one thing
+someone genuinely performs — *looking* (`view-design.feature`).
+
+### More than one `When`
+
+```gherkin
+    When the pull runs
+    Then every newly mirrored file is in "link" mode
+    When the admin changes the mapping's default mode to "sync"   # ✘ second When
+    Then the new file is in "sync" mode
+```
+
+A second `When` is a scenario rebuilding a pre-state by performing another
+behaviour. State it in the `Given` instead. **One `When`, followed by `And`s that
+are only continuations of the same act, then one `Then` and its `And`s.**
+
+Two `Given`/`Then` pairs in one scenario is the same defect wearing a different
+hat — that is two scenarios sharing a name.
+
+### An action wearing a `Given`
+
+```gherkin
+    Given I note the state of "Penpot/Brand/Cover.penpot"   # ✘ that is an act
+```
+
+A `Given` says how the world **is**. Harness bookkeeping is not pre-state. This
+one forced a whole diff vocabulary (`unchanged` / `changed`) that vanished the
+moment the table stated absolute values instead — and the absolute form is the
+stronger claim: not *"the id differs from before"* but *"the id is that design's"*.
+
+### The `Then` asserts that nothing happened to something nobody touched
+
+```gherkin
+  Scenario: An edit to one design leaves its neighbours alone   # ✘
+  Scenario: An already-empty link is left strictly alone        # ✘
+```
+
+Nothing edits a file nobody edited. These are the same action, the same
+pre-state and the same end state as the scenario above them, plus a sentence
+saying an untouched thing was untouched.
+
+**This is not the same as a negative outcome**, which is real and often the
+point: *"Penpot is never contacted"*, *"no folder named Drafts is created"* —
+something happened, and this is what it did not cause. The test is whether an
+action was aimed at the thing you are asserting about.
+
+### The scenario summarises other files
+
+```gherkin
+  Scenario: A link file is confined to its own project
+    Then it cannot be moved into another project folder
+    And it cannot be moved to the team root
+    # Detail lives in move-design.feature and ignore.feature; this is the summary
+```
+
+A comment admitting the coverage is elsewhere is the tell. A summary is a second
+copy free to drift, and the reader who wants the rule is better served by the
+file that exercises it.
+
+### The scenario is another file's scenario
+
+Two files carried *"A project folder carries a visible tag as well as its
+metadata"* with the same arrange and the same two asserts, in two suites. Before
+adding a scenario, grep the `Then` lines for one that already says it.
+
+### The operation does not exist
+
+```gherkin
+    When the admin changes the mapping's default mode to "sync"   # ✘ no such thing
+```
+
+A mapping's mode is fixed at creation. There was no control, no `occ` flag and no
+code path — the scenario described a wish. **Check that the `When` names
+something the app can actually be asked to do**; if it cannot, the scenario is
+`@unbuilt` at best and usually nonsense.
+
+Its sibling: asserting a value the app never writes. A PROPFIND table once listed
+`grafana_folderUid` and `grafana_apiVersion`, both registered and both written by
+nothing.
+
+### The scenario is about an older version of this app
+
+```gherkin
+  Scenario: A leftover body from an older version is truncated by the next pull  # ✘
+```
+
+Neither this app nor its Grafana sibling has ever been released. There is nothing
+in the field to migrate from, so a compatibility scenario describes a population
+of zero. Delete it rather than rewriting it.
+
+## State is a table — both ends of it
+
+Two conventions follow from "a scenario is pre-state, one action, end state", and
+both are worth checking on any PR that touches a mirror.
+
+**A mapping is one fact, so it is one sentence and a table** — the same shape
+whether it is the pre-state or the action, in the vocabulary the creation form
+uses. A blank or absent row means the app's own default, declared once in the
+Background:
+
+```gherkin
+    Given a mapping with the following values:
+      | team    | Northwind    |
+      | folder  | Design Files |
+      | groups  | design,admin |
+```
+
+Naming a field is a claim that it matters to the outcome. Leave out the rows that
+do not — a scenario about DAV properties says nothing about `storage`, because
+what a mirror publishes is identical on both backends.
+
+**Metadata is the end state of the action that changed it**, never a subject of
+its own and never a lone `Then` picking off one key:
+
+```gherkin
+    When the admin promotes "Penpot/Archive Me/Cover.penpot" to "sync" mode
+    Then "Penpot/Archive Me/Cover.penpot" holds:
+      | penpot_id       | the design's id |
+      | penpot_team_id  | the team's id   |
+      | penpot_mode     | "sync"          |
+      | content         | an archive      |
+```
+
+The rows an action did **not** change are half the reason the table earns its
+place: *"a move re-files without re-fetching"* and *"a rename cannot break the
+Penpot link"* are promises, and as rows they are assertions rather than comments.
+
+The vocabulary is closed — `the design's id`, `the team's id`, `set`, `absent`,
+`an archive`, `empty`, `the design's` (a clock), or a quoted literal. **Flag a new
+value word**: a table that can say anything stops being readable, and a diff word
+like `unchanged` drags a "note the state first" action back into the `Given`.
+
 ## The traps this repo has actually fallen into
 
 Each of these has cost a debugging session here. They are worth checking on every
@@ -134,7 +321,7 @@ files carried fictional Backgrounds for months (`a Team Folder mapped to the
 Penpot team "Northwind"` — a step that had never been written). **If a PR
 promotes a scenario to live, verify the Background is real.**
 
-**A scenario borrowing another file's setup habits.** `reconcile.feature`
+**A scenario borrowing another file's setup habits.** `sync-now.feature`
 deliberately maps nothing in its Background — every scenario names its own folder
 so one scenario's leftovers cannot become another's prune. `move-design.feature` maps a
 shared `Penpot` folder in its Background. Copying a scenario between them

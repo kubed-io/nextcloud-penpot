@@ -39,8 +39,7 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And the pull runs
     Then the file remains in place with its archive intact
     And it is not moved to the trash
-    # This is the strongest form of the promise: ignore protects a file from the
-    # one operation that would otherwise remove it (reconcile.feature's prune).
+    # notes: AGENTS.md#an-ignored-file-whose-penpot-original-is-deleted-is-still-kept
 
     # ── the mode restriction, and why it exists ──────────────────────────────────
 
@@ -54,6 +53,14 @@ Feature: Ignoring a mirrored file stops mirroring without losing it
     And the ignore tag is not left applied
     # Refusing beats silently accepting: an "ignored link" is a pointer to a
     # design nobody is tracking — it looks like a backup and is not one.
+
+  @unbuilt
+  Scenario: Demoting an ignored file is refused
+    Given a mirrored ".penpot" file in "sync" mode tagged as ignored
+    When I demote the file to "link" mode
+    Then the action is refused
+    And the refusal explains that an ignored file's archive is the only copy this app is keeping
+    # notes: AGENTS.md#demoting-an-ignored-file-is-refused
 
   @unbuilt
   Scenario: Promoting a link file to sync, then ignoring it, works
