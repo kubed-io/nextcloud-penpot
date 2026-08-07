@@ -55,6 +55,21 @@ Feature: Storing and discarding a mirrored design's archive
     # The design in Penpot is completely unaffected: demotion deletes a LOCAL
     # backup and nothing else.
 
+  # @blocked — no tty. Demotion asks for confirmation on stdin, and Behat has no
+  # terminal to answer with; every other scenario here passes --force for exactly
+  # that reason, which is what leaves the prompt itself unasserted.
+  # notes: AGENTS.md#demoting-asks-first-because-it-deletes-the-only-local-copy
+  @blocked
+  Scenario: Demoting asks first, because it deletes the only local copy
+    Given a mirrored design "Precious" in the project "Stable"
+    And "Penpot/Stable/Precious.penpot" is a "sync" design
+    When the admin demotes "Penpot/Stable/Precious.penpot" without --force
+    Then the demotion asks for confirmation before anything is deleted
+    And the file "Penpot/Stable/Precious.penpot" holds a real ".penpot" archive
+    # THE ARCHIVE IS THE POINT. Penpot is never contacted by a demotion, so the
+    # bytes it removes are the only copy this app was keeping — that is what makes
+    # the prompt worth having and worth specifying.
+
   @admin @occ
   Scenario: A folder has no mode to set
     When the team is mirrored again

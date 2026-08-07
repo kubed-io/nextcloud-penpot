@@ -47,8 +47,8 @@ Feature: Looking at a mirrored design
     # THE THREE KEYS A MIRROR ARRIVES WITH, and the body that goes with them. A
     # pull mints every mirror in the mapping's default mode, which is "link", so
     # what a fresh mirror publishes is exactly this: an id, its team, the mode, and
-    # nothing in the file. The sync-mode axis — what promotion changes about that
-    # body — is sync-mode.feature's and set-mode.feature's.
+    # nothing in the file. The mode axis — what promotion changes about that body
+    # — is set-mode.feature's.
     #
     # "link" stores as "reference". The literal string "link" is is_callable(),
     # which crashes core's PROPFIND — the only place in this app where a wire value

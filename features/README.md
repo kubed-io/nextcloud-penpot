@@ -51,7 +51,7 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | `restore-project.feature` | Bringing a project back whole, and the one case that cannot be |
 | `personal-projects.feature` | Only the WHO and WHERE of a personal team — every verb lives with its verb |
 | `mapping-membership.feature` | Which files a mapping owns, and what "unmapped" means |
-| `set-mode.feature` / `sync-mode.feature` | `sync` ⇄ `link`, and what each mode means |
+| `set-mode.feature` | `sync` ⇄ `link`: storing a design's archive, and throwing it away |
 | `ignore.feature` | Excluding a file from the sync |
 | `open-with.feature` / `view-design.feature` | The Files-app surface of a mirror |
 | `admin-*.feature` | Reaching Penpot at all, and configuring what is mapped |
@@ -248,10 +248,14 @@ front of it.
 
 #### What makes something `@blocked` rather than `@todo`
 
-Name the missing capability, in the scenario or the section above it. The four
+Name the missing capability, in the scenario or the section above it. The six
 that exist today:
 
 * **no browser** — anything about a button, card, panel, icon, or menu entry;
+* **no tty** — anything that answers an interactive `occ` prompt, which today is
+  the confirmation a demotion asks for before it deletes a stored archive;
+* **no app removal** — `occ` enables and disables; removing an app and
+  reinstalling it is a store operation this suite cannot perform;
 * **no logged-in session** — every personal-token attribution scenario, because
   the occ+DAV harness has no acting user to attribute to;
 * **no groupfolders in the CI image** — Team Folder provisioning (which is also

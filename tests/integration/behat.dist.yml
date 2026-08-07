@@ -95,12 +95,10 @@ default:
       - '%paths.base%/../../features/view-design.feature'
       - '%paths.base%/../../features/open-with.feature'
       - '%paths.base%/../../features/set-mode.feature'
-      - '%paths.base%/../../features/sync-mode.feature'
       - '%paths.base%/../../features/ignore.feature'
       - '%paths.base%/../../features/purge.feature'
       - '%paths.base%/../../features/errors.feature'
       - '%paths.base%/../../features/lifecycle.feature'
-      - '%paths.base%/../../features/uninstall.feature'
       contexts: *contexts
 
   formatters:

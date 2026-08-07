@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Spec: `sync-mode.feature` and `uninstall.feature` are gone. Fourteen of the sixteen mode scenarios restated things `set-mode.feature`, `view-design.feature` and `move-design.feature` already assert — several of them live — and one described changing a mapping's mode, which is not an operation this app has. Uninstall folded into `lifecycle.feature`, where enabling, disabling and removing now sit together. 19 scenarios gone, 3 written in their place, no coverage lost.
+- The confirmation `occ penpot_sync:set-mode … link` asks for before deleting a stored archive is now specified end to end rather than only unit-tested.
+
 - The custom `.penpot` mimetype is now asserted in CI, on the install that registers it — a repair step that silently failed to merge the config used to look exactly like one that worked.
 - Spec: `file-type.feature` is gone. A mimetype is not something anyone does — it is what enabling the app left behind, so it is asserted on install; the context-menu glyph moved next to the action that draws it; and the rest became `view-design.feature`, about looking at a mirror. Four scenarios went with it that were already stated elsewhere.
 - The scheduled sync is now covered by the integration suite, alongside the two manual buttons — the same tree has to appear whichever one started it.

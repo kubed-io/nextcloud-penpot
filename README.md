@@ -426,8 +426,9 @@ That invariant is what makes the project tag meaningful: a tagged folder named
 
 Renaming a project folder is a genuinely different operation from renaming a file
 — different Nextcloud event, different Penpot endpoint, no file extension to
-handle — but it is still a rename, so both live side by side in
-[`rename.feature`](features/rename.feature) where the two can be compared.
+handle — which is why the two are specified apart, in
+[`rename-project.feature`](features/rename-project.feature) and
+[`rename-design.feature`](features/rename-design.feature).
 
 **One caveat runs backwards from expectation.** Penpot's naming rules are *looser*
 than Nextcloud's: it accepts essentially any non-empty string, including `/`,
@@ -740,29 +741,31 @@ The specs *are* the requirements, read before any code lands.
 | File | What it covers |
 |---|---|
 | [`admin-connection.feature`](features/admin-connection.feature) | The URL card, the required service token, the optional personal token. |
+| [`admin-mapping.feature`](features/admin-mapping.feature) | Mapping a team; the service-account precondition. |
+| [`admin-section.feature`](features/admin-section.feature) | The settings panel itself — which cards exist and what each one owns. |
 | [`personal-settings.feature`](features/personal-settings.feature) | The per-user token page. |
 | [`personal-projects.feature`](features/personal-projects.feature) | Personal projects at the user's home root. |
-| [`admin-mapping.feature`](features/admin-mapping.feature) | Mapping a team; the service-account precondition. |
-| [`mapping-membership.feature`](features/mapping-membership.feature) | The nearest-ancestor rule — the app's most load-bearing spec. |
-| [`sync-mode.feature`](features/sync-mode.feature) | `link` vs `sync`, promotion, and the one lossy direction. |
-| [`set-mode.feature`](features/set-mode.feature) | **Live.** The real export: promotion leaves ZIP bytes, links cost zero exports. |
-| [`reconcile.feature`](features/reconcile.feature) | The pull, revision gating, and safe pruning. |
-| [`create-design.feature`](features/create-design.feature) | New → Penpot design, and Drafts semantics. |
-| [`move.feature`](features/move.feature) | Free nesting; the project-folder restriction. Moving a project folder lives here. |
-| [`project-folder.feature`](features/project-folder.feature) | **Live.** How a folder becomes a project: the `penpot` tag opt-in, and the marker both directions share. |
-| [`copy.feature`](features/copy.feature) | Copies never create designs. |
-| [`rename.feature`](features/rename.feature) | **Live.** Renaming a design *and* a project folder — both name guards, both directions. |
+| [`remove-mapping.feature`](features/remove-mapping.feature) | Tearing down a mapping safely. |
+| [`team-import.feature`](features/team-import.feature) | **Speculative** — importing a team from personal settings. |
+| [`sync-now.feature`](features/sync-now.feature) | **Live.** The first sync: what a mapped folder holds once it has run. |
+| [`mapping-membership.feature`](features/mapping-membership.feature) | **Live.** The nearest-ancestor rule — the app's most load-bearing spec. |
+| [`set-mode.feature`](features/set-mode.feature) | **Live.** `sync` ⇄ `link`: promotion leaves ZIP bytes, links cost zero exports. |
+| [`create-design.feature`](features/create-design.feature) / [`create-project.feature`](features/create-project.feature) | New → Penpot design, Drafts semantics, and how a folder becomes a project. |
+| [`copy-design.feature`](features/copy-design.feature) / [`copy-project.feature`](features/copy-project.feature) | Copies never create designs; copying a project folder is refused. |
+| [`move-design.feature`](features/move-design.feature) / [`move-project.feature`](features/move-project.feature) | Free nesting; the project-folder restriction; a link cannot leave its project. |
+| [`rename-design.feature`](features/rename-design.feature) / [`rename-project.feature`](features/rename-project.feature) | **Live.** Both name guards, both directions. |
+| [`delete-design.feature`](features/delete-design.feature) / [`delete-project.feature`](features/delete-project.feature) | Penpot's trash, the 7-day grace period, and the one irreversible gesture. |
+| [`restore-design.feature`](features/restore-design.feature) / [`restore-project.feature`](features/restore-project.feature) | Putting a design back, and what it cannot recover. |
 | [`ignore.feature`](features/ignore.feature) | Stop mirroring without losing the file. |
-| [`restore.feature`](features/restore.feature) | Putting a design back, and what it can't recover. |
-| [`delete.feature`](features/delete.feature) | Local-only deletes; Penpot's 7-day grace period. |
 | [`errors.feature`](features/errors.feature) | Every failure mode, and why none of them prune. |
 | [`view-design.feature`](features/view-design.feature) | Looking at a mirror: its file type, and the metadata it publishes. |
 | [`open-with.feature`](features/open-with.feature) | Open in Penpot — no text-editor fallback, ever. |
 | [`purge.feature`](features/purge.feature) | Reset the Nextcloud side without touching Penpot. |
-| [`remove-mapping.feature`](features/remove-mapping.feature) | Tearing down a mapping safely. |
-| [`uninstall.feature`](features/uninstall.feature) | Mimetype cleanup; data orphaned, not deleted. |
-| [`lifecycle.feature`](features/lifecycle.feature) | App enable/disable. |
-| [`team-import.feature`](features/team-import.feature) | **Speculative** — importing a team from personal settings. |
+| [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
+
+A design/project pair is two files because Penpot treats them as two objects with
+different calls, different failure modes and different blast radii — the split is
+the same one `features/README.md` explains for the noun.
 
 Deliberately **not ported** from either sibling: `tag-sync.feature` and
 `reserved-tags.feature` (Penpot has no tags at all).
