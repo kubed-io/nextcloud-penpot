@@ -829,7 +829,7 @@ trait PullSteps {
 	// ── the DAV surface: what a client actually sees ─────────────────────────
 
 	/**
-	 * A Penpot metadata property, read over PROPFIND (`file-type.feature`).
+	 * A Penpot metadata property, read over PROPFIND (`view-design.feature`).
 	 *
 	 * READ THROUGH DAV, NOT THROUGH THE APP, and that is the whole point of these
 	 * scenarios: the README promises these keys are visible to any WebDAV client,
@@ -881,17 +881,7 @@ trait PullSteps {
 	 * @Then /^the DAV content type of "([^"]*)" is "([^"]*)"$/
 	 */
 	public function theDavContentTypeIs(string $path, string $expected): void {
-		$reqBody = '<?xml version="1.0"?>'
-			. '<d:propfind xmlns:d="DAV:"><d:prop><d:getcontenttype/></d:prop></d:propfind>';
-		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
-			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
-			'body' => $reqBody,
-		]);
-		$this->assertStatus($res, [207], "PROPFIND $path");
-
-		$doc = new \SimpleXMLElement((string)$res->getBody());
-		$doc->registerXPathNamespace('d', 'DAV:');
-		$actual = trim((string)(($doc->xpath('//d:getcontenttype') ?: [])[0] ?? ''));
+		$actual = $this->davContentType($path);
 		if ($actual !== $expected) {
 			throw new \RuntimeException(
 				"expected '{$path}' to be served as '{$expected}', got '{$actual}'. "

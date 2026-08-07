@@ -206,7 +206,7 @@ trait WebDavTrait {
 	/**
 	 * PROPFIND a single nc:metadata-<key> on a file. Returns the property value,
 	 * or null if the property is absent (404 inside the multistatus). This is the
-	 * exact DAV surface the README documents for the file-type feature.
+	 * exact DAV surface view-design.feature specifies.
 	 */
 	private function davReadMetadata(string $path, string $key): ?string {
 		$ns = 'http://nextcloud.org/ns';
@@ -362,6 +362,29 @@ trait WebDavTrait {
 		}
 
 		return $mtime . ' / ' . $etag;
+	}
+
+	/**
+	 * The mimetype a Files client is told, read off the same PROPFIND the Files app
+	 * uses.
+	 *
+	 * NOT `application/zip`, which is what a `.penpot` archive would otherwise be
+	 * sniffed as — the whole reason the app registers a mimetype and ships a repair
+	 * step for it (§C6.1). Asserted over DAV because that is where the Files app
+	 * reads it from; the mapping file on disk being right proves nothing about what
+	 * a client is told.
+	 */
+	private function davContentType(string $path): string {
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
+			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
+			'body' => '<?xml version="1.0"?>'
+				. '<d:propfind xmlns:d="DAV:"><d:prop><d:getcontenttype/></d:prop></d:propfind>',
+		]);
+		$this->assertStatus($res, [207], "PROPFIND $path");
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		return trim((string)(($doc->xpath('//d:getcontenttype') ?: [])[0] ?? ''));
 	}
 
 	/** Percent-encode each path segment but keep the slashes. */

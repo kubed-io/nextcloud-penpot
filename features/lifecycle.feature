@@ -9,6 +9,15 @@ Feature: App install lifecycle
     When the admin enables the app
     Then the app should be enabled
     And the app is installed correctly
+    And ".penpot" files are registered as their own file type
+    # THE MIMETYPE IS AN END STATE OF ENABLING, not a feature of its own. It used
+    # to head a file called "A mirrored Penpot file is a first-class file type",
+    # which described the registration as though someone had gone and done it —
+    # but nobody registers a mimetype; they install an app, and the registration
+    # is what the install left behind. Its visible consequence (a mapped folder
+    # that looks like designs) is view-design.feature's, and its removal is
+    # uninstall.feature's.
+    # notes: AGENTS.md#enabling-the-app
 
   Scenario: Disabling the app
     Given the app is enabled

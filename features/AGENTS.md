@@ -1496,13 +1496,42 @@ is undecided — saga open question #38.
 
 ---
 
-## file-type
+## view-design
 
-`features/file-type.feature`
+`features/view-design.feature`
 
-The custom mimetype makes a mirrored design file a first-class FILE TYPE: its
-own mimetype, its own icon, DAV-exposed (and read-only) metadata. (What happens
-when you OPEN one is the separate "open with" concern; see open-with.feature.)
+LOOKING AT A MIRRORED DESIGN — the only part of "it is a real file type" that
+anyone actually performs.
+
+**This replaced `file-type.feature`, which described a CONSTRUCT.** "A mirrored
+Penpot file is a first-class file type" was about a mimetype, an icon and a
+property set — none of which anyone does. Each turned out to be the end state of
+something else:
+
+| it described | whose end state it is | where it went |
+|---|---|---|
+| the mimetype is registered | **enabling the app** | `lifecycle.feature` |
+| a file carries this metadata | **the pull** | asserted by `sync-now.feature`, shown here |
+| the mode property's wire value | what the metadata says | the DAV view scenario |
+| the context-menu glyph | the action that draws it | `open-with.feature` |
+| the metadata cannot be edited | a refusal anyone can provoke | stayed, as a scenario |
+
+Nobody registers a mimetype; they install an app. Nobody sets metadata; they map
+a team and the pull stamps it. Once each end state sits with the behaviour that
+produces it, what remains is looking — and that is a real thing to do.
+
+FOUR SCENARIOS WENT AWAY ENTIRELY, because the reshape exposed them as
+duplicates or as end states already owned elsewhere:
+
+| scenario | why it went |
+|---|---|
+| A project folder is identifiable by both metadata and a visible tag | word-for-word the same scenario as `mapping-membership.feature`'s "A project folder carries a visible tag as well as its metadata" — same arrange, same two asserts |
+| A file moved out of its mapped folder is unmapped, not untracked | the *rule* is `mapping-membership.feature`'s "A file with no project-id ancestor belongs to no mapping"; the *gesture* is `move-design.feature`'s move-out. Neither needed a third statement of it |
+| The mode is visible and reflects whether content is stored | two `Given`/`Then` pairs in one scenario — two scenarios wearing one name. The DAV half merged into the view scenario; the body half is `sync-mode.feature`'s "A link file holds nothing at all" |
+| The row icon and the menu glyph are separate files | two files with opposite contracts, so one scenario could not be the arrange for both. The row icon stayed; the menu glyph went to `open-with.feature` |
+
+Ported from `kubed-io/nextcloud-n8n`, where the split landed first — itself
+downstream of the mapping-table work that started here.
 
 STILL NEEDED, EVEN THOUGH THE EXTENSION IS REAL (saga §6.4): Penpot's own
 server serves an export as generic `Content-Type: application/zip` (confirmed
@@ -1595,37 +1624,54 @@ harness is occ-only. The mimetype registration in particular is UNASSERTED IN
 CI right now: a repair step that silently failed to merge the config would look
 exactly like one that worked. Named here so it is not assumed to be covered.
 
-### Mirrored files get the custom Penpot mimetype, not a generic one
+### A mapped folder shows its designs as designs
 
-ASSERTED OVER DAV, because that is where the Files app reads it. A `.penpot`
-archive would otherwise be sniffed as application/zip — a zip icon, no
-"Open in Penpot" action, and no hint as to why. The mapping file being
-right on disk proves nothing about what a client is told.
+ONE SCENARIO, DELIBERATELY. Behat cannot read rendered pixels, so the icon is
+proven the only way it can be: the file carries the app's own mimetype rather
+than the `application/zip` a `.penpot` archive would otherwise be sniffed as —
+a zip icon, no "Open in Penpot" action, and no hint as to why. Elaborating past
+that would be testing Nextcloud's icon renderer.
 
-The ICON half stays unasserted here: it is a rendering fact, and the two
-icon files' separate treatments (§C6.1) are not reachable from HTTP.
+ASSERTED OVER DAV, because that is where the Files app reads it. The mapping
+file being right on disk proves nothing about what a client is told.
 
-### The row icon and the menu glyph are separate files
+### The row icon is the app's colour mark
 
-TWO FILES, ONE MARK (saga §C6.1/§C6.7). The row icon and the context-menu
-glyph are the same drawing with opposite colour treatments, and collapsing
-them fails in both directions — this is not a style preference.
+`@blocked`, and the reason is named: it is a rendering fact and not reachable
+from HTTP.
 
-Nextcloud renders mimetype icons out of core/img/filetypes/ WITHOUT
-recolouring them, so that file must carry its own fill or it is invisible.
-Menu glyphs are the opposite: NC applies its own fill, which overrides
-fill="none" and floods a stroked outline into a solid tile. A filled shape
-cannot fail that way — recolouring it just recolours it.
+WHY IT SURVIVED AS ITS OWN SCENARIO rather than folding into the mimetype one:
+Nextcloud renders mimetype icons out of `core/img/filetypes/` WITHOUT
+recolouring them, so that file must carry its own fill or it is invisible. That
+is the opposite contract from the context-menu glyph, which NC *does* recolour —
+which is why the menu half now lives in `open-with.feature`, next to the action
+that draws it (saga §C6.1/§C6.7). One scenario could not honestly be the arrange
+for both.
 
-### WebDAV PROPFIND exposes the Penpot metadata in the XML
+### Viewing the DAV properties on a file shows Penpot specific details
 
 The keys are registered in Application::boot() precisely so they ride the
 directory PROPFIND, and nothing had ever checked that they do. The app's own
 `status` command cannot answer this — it reads the metadata store directly.
 
+THE THREE KEYS A MIRROR ARRIVES WITH, plus the body that goes with them. A pull
+mints every mirror in the mapping's default mode, which is `link`, so what a
+fresh mirror publishes is exactly this: an id, its team, the mode, and nothing
+in the file. Merged from what used to be two scenarios (the key set, and the
+mode's wire value) because both had the same arrange and asserted on the same
+PROPFIND.
+
 `penpot_revision` is deliberately not asserted: a `link` file that has never
 drifted carries an empty one, so requiring it here would make this scenario
 about export state rather than about DAV advertising the key set.
+
+`link` is stored as `reference` ON THE WIRE — the literal string `link` is
+`is_callable()`, which crashes core's PROPFIND. The only place in this app where
+a wire value differs from the name of the thing it carries, written down here
+because a client author reading only the README would look for "link".
+
+The sync-mode axis — what promotion changes about that body — is
+`sync-mode.feature`'s and `set-mode.feature`'s, not this file's.
 
 ### A file carries the team its design belongs to, but never a project
 
@@ -1635,14 +1681,16 @@ it and cannot afford to walk a freely-nested tree on every render. The
 project is NOT, because it is derived from the folders and a copy would go
 stale on the first move — see mapping-membership.feature.
 
-### A mirrored file's mode is visible over DAV
+### What the app manages, only the app changes
 
-`link` is stored as `reference` ON THE WIRE — the key predates the rename
-and changing it would break every client already reading it, so the app
-translates at its own boundary and DAV keeps the old name. Written down
-here because a client author reading only the README would look for "link".
+A REFUSAL SOMEONE CAN PROVOKE, so it earns a scenario: any DAV client can
+attempt a PROPPATCH. The identity of a mirror is the app's to write — a client
+that could edit `penpot_id` could silently re-point a file at a different
+design. Every key is registered EDIT_FORBIDDEN, so the refusal comes from core
+rather than from us.
 
-### The metadata is read-only over DAV
+The load-bearing assertion is that the VALUE did not change, not that a
+particular status came back.
 
 ══ NEXTCLOUD'S TIMESTAMPS ARE PENPOT'S NOW ═══════════════════════════════
 
@@ -1659,14 +1707,14 @@ a behaviour anyone performs — it is the shared RESULT of editing, moving,
 copying and renaming, each of which is already owned by its own feature file.
 A scenario asserting "the mtime moved" would be specifying Nextcloud, in the
 wrong file, with an invented actor. So the assertions ride the behaviours that
-cause them: a design changed in Penpot (`reconcile.feature`), and a mirror
-coming into existence (`reconcile.feature`).
+cause them: a design changed in Penpot, and a mirror coming into existence —
+both `sync-now.feature`.
 
-This file keeps only what is genuinely about the FILE TYPE: which DAV
+This file keeps only what is genuinely about LOOKING at a mirror: which DAV
 properties exist and who may write them.
 
 THE CONSTRAINT THAT MADE IT SUBTLE (§C6.19) still holds and is now enforced
-in `reconcile.feature`: a pull that changes nothing must move neither mtime
+in `sync-now.feature`: a pull that changes nothing must move neither mtime
 nor etag. `touch()` leaves a file's own etag alone but propagates a fresh one
 to its PARENT FOLDER — which is what sync clients poll — so an unconditional
 stamp would churn the folder on every tick. Every write is conditional.
@@ -1727,6 +1775,28 @@ clean, mechanical port.
 
 LIVE — this is one of the first two features to come off @todo. It runs against
 a real Nextcloud in CI (.github/workflows/integration.yml).
+
+### Enabling the app
+
+**THE MIMETYPE IS WHAT ENABLING LEFT BEHIND.** It used to head a file called "A
+mirrored Penpot file is a first-class file type", which described the
+registration as though someone had gone and done it. Nobody registers a
+mimetype; they install an app, and the registration is the consequence — so it
+is asserted here, on the install.
+
+Proven by uploading a plain file rather than by reading the app's own metadata:
+a file this app has never touched, with nothing but the extension going for it,
+comes back typed as the app's own mimetype. That is what registration means and
+the only part of it a client can observe. Without the repair step a `.penpot` is
+sniffed as a generic archive (§C6.1), which is a zip icon and no opener.
+
+THIS CLOSES A NAMED GAP. The old `file-type.feature` note said the mimetype
+registration was UNASSERTED IN CI — "a repair step that silently failed to merge
+the config would look exactly like one that worked". It is asserted now, and on
+the one scenario that was already running.
+
+Its visible consequence (a mapped folder that looks like designs) belongs to
+`view-design.feature`; its removal belongs to `uninstall.feature`.
 
 ---
 
@@ -2095,6 +2165,27 @@ credited with it:
     the "instead of dead-linking" half. It does not yet REPORT why, and does
     not offer the restore. Hiding is the safe subset; the sentence the scenario
     asks for is a later slice.
+
+### The "Open in Penpot" glyph is drawn for a menu
+
+TWO FILES, ONE MARK (saga §C6.1/§C6.7). The context-menu glyph and the Files-row
+icon are the same drawing with opposite colour treatments, and collapsing them
+fails in both directions — this is not a style preference.
+
+Nextcloud applies its own fill to a menu glyph, which overrides `fill="none"`
+and floods a stroked outline into a solid tile. A filled shape cannot fail that
+way — recolouring it just recolours it. Mimetype icons are the opposite: NC
+renders those out of `core/img/filetypes/` WITHOUT recolouring, so that file
+must carry its own fill or it is invisible. That half is `view-design.feature`'s,
+because it is a property of the file type rather than of this action.
+
+This scenario used to sit in `file-type.feature` alongside the row icon, as
+though the two were one fact. They are two files with opposite contracts, so one
+scenario could not honestly be the arrange for both — and a menu glyph belongs
+next to the menu entry that draws it.
+
+`@blocked` for the same reason every scenario in this file is: no browser
+driver.
 
 ---
 

@@ -20,6 +20,19 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     When I click the file in the Files app
     Then it opens in Penpot by default
 
+  # notes: AGENTS.md#the-open-in-penpot-glyph-is-drawn-for-a-menu
+  @blocked
+  Scenario: The "Open in Penpot" glyph is drawn for a menu
+    Given a mirrored ".penpot" file
+    When I open its context menu
+    Then the "Open in Penpot" glyph is themed to the menu's own colour
+    And the glyph is drawn as filled shapes, never as strokes
+    # THE ACTION OWNS ITS OWN GLYPH. This used to sit in file-type.feature beside
+    # the Files-row icon, as though the two were one fact — they are two files with
+    # opposite contracts. The row icon is the app's colour mark and keeps a fixed
+    # fill (view-design.feature); a menu glyph inherits the menu's colour, which
+    # only works if it is filled shapes, because a stroke does not take the fill.
+
   @decision
   Scenario: There is no "Edit as text" action, ever
     Given a mirrored ".penpot" file
