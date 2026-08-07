@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#open-with
+# Notes, decisions and history for this feature: ../AGENTS.md#designsopen-with
 
 Feature: Opening a mirrored Penpot file (Open in Penpot only)
   As a Nextcloud user

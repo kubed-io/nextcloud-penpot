@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#restore-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designsrestore
 
 Feature: Restoring a mirrored design
   As a Nextcloud user

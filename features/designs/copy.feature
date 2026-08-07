@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#copy-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designscopy
 
 Feature: Copying a mirrored design
   As a Nextcloud user

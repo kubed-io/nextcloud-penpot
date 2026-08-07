@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#rename-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designsrename
 
 Feature: Renaming a mirrored Penpot design
   As a Nextcloud user

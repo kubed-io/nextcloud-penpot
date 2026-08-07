@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#create-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designscreate
 
 Feature: Creating a new Penpot design from Nextcloud
   As a Nextcloud user

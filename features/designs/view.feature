@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#view-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designsview
 
 Feature: Looking at a mirrored design
   As someone with designs mirrored into Nextcloud

@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#team-mapping-manage-groups
+# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingmanage-groups
 
 Feature: Changing who a mapped folder is shared with
   As a Nextcloud admin

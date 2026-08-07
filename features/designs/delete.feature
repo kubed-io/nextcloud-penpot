@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#delete-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designsdelete
 
 Feature: Deleting a mirrored design
   As a Nextcloud user

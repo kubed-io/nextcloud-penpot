@@ -79,11 +79,22 @@ final class Sync extends Command {
 		// CLI sync minutes earlier left no trace. One store, every trigger.
 		$this->status->markStarted();
 
+		// EVERY EXIT FROM HERE CLEARS `running`, which is why this catches
+		// \Throwable rather than the one exception with a nice message. A
+		// PenpotApiException genuinely does escape `pull()` today — an unreachable
+		// Penpot or a rejected token — and leaving the status stuck at `running`
+		// would make `isBusy()` true forever, so the panel would refuse to start
+		// another sync until the value was cleared by hand.
 		try {
 			$result = $this->pull->pull($mappingId === '' ? null : $mappingId);
 		} catch (\OutOfBoundsException $e) {
 			$this->status->markFailed($e->getMessage());
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
+
+			return 1;
+		} catch (\Throwable $e) {
+			$this->status->markFailed($e->getMessage());
+			$output->writeln('<error>The sync failed: ' . $e->getMessage() . '</error>');
 
 			return 1;
 		}

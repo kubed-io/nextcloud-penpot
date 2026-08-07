@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#set-mode
+# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingset-mode
 
 Feature: Storing and discarding a mirrored design's archive
   As an operator who has mapped a Penpot team

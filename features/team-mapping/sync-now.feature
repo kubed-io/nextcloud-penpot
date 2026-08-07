@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#team-mapping-sync-now
+# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingsync-now
 
 Feature: Syncing one mapping from its card
   As an admin who has just mapped a team

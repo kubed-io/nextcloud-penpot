@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#restore-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsrestore
 
 Feature: Restoring a Penpot project folder
   As a Nextcloud user

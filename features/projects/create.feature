@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#create-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectscreate
 
 Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
   As a Nextcloud user

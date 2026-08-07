@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#copy-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectscopy
 
 Feature: Copying a Penpot project folder
   As a Nextcloud user

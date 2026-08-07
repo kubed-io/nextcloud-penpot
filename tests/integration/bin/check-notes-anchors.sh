@@ -30,6 +30,13 @@
 #
 # The anchor rule is GitHub's: lowercase, spaces to hyphens, drop anything that is
 # not a letter, digit, hyphen or space. Any heading level counts.
+#
+# BOTH KINDS OF POINTER ARE CHECKED: the per-scenario `# notes:` breadcrumb AND
+# the `# Notes, decisions and history…` header on line 1. Only the first was
+# checked once, and the second rotted silently in exactly the way this file warns
+# about — the noun/verb restructure renamed every section to a PATH
+# (`## designs/create`), whose slug drops the slash (`designscreate`), and 22 of
+# 29 headers kept pointing at their old names. Every one of them passed.
 
 set -euo pipefail
 
@@ -60,7 +67,8 @@ while IFS=: read -r file line anchor; do
 		echo "    $file:$line -> #$anchor"
 	fi
 done < <(
-	grep -Hrn --include='*.feature' '# *notes: *\(\.\./\)\?AGENTS\.md#' features 2>/dev/null \
+	grep -Hrn --include='*.feature' -e '# *notes: *\(\.\./\)\?AGENTS\.md#' \
+		-e '^# Notes.*AGENTS\.md#' features 2>/dev/null \
 		| sed -E 's/^([^:]+):([0-9]+):.*AGENTS\.md#([A-Za-z0-9_-]+).*$/\1:\2:\3/' \
 		|| true
 )

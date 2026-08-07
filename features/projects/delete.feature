@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#delete-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsdelete
 
 Feature: Deleting a Penpot project folder
   As a Nextcloud user

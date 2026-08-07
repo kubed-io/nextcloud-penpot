@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#sync-now
+# Notes, decisions and history for this feature: ../AGENTS.md#connectionsync-now
 
 Feature: Syncing every mapping
   As a Nextcloud admin

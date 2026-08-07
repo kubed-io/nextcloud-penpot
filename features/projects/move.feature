@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#move-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsmove
 
 Feature: Moving a Penpot project folder
   As a Nextcloud user

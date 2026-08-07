@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#team-mapping-create
+# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingcreate
 
 Feature: Mapping a Penpot team to a Nextcloud folder
   As a Nextcloud admin

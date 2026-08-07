@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#move-design
+# Notes, decisions and history for this feature: ../AGENTS.md#designsmove
 
 Feature: Moving a mirrored design
   As a Nextcloud user

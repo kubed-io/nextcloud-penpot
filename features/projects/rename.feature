@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#rename-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsrename
 
 Feature: Renaming a Penpot project
   As a Nextcloud user

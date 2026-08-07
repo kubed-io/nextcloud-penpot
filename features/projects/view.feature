@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#projects-view
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsview
 
 Feature: Looking at a project folder
   As someone with a Penpot team mirrored into Nextcloud

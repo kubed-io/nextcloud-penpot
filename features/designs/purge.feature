@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#purge
+# Notes, decisions and history for this feature: ../AGENTS.md#designspurge
 
 Feature: Purge the app's mirrored files from Nextcloud
   As a Nextcloud admin
