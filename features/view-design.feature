@@ -80,6 +80,7 @@ Feature: Looking at a mirrored design
     # could edit it could silently re-point a file at a different design.
     # notes: AGENTS.md#what-the-app-manages-only-the-app-changes
 
+  # @blocked — no browser. An icon is pixels, and the harness is occ + DAV.
   # notes: AGENTS.md#the-row-icon-is-the-app-s-colour-mark
   @blocked
   Scenario: The row icon is the app's colour mark

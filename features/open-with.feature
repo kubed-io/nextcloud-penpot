@@ -20,6 +20,8 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     When I click the file in the Files app
     Then it opens in Penpot by default
 
+  # @blocked — no browser, as everything in this file is: a context menu and the
+  # glyph in it are pixels, and the harness is occ + DAV.
   # notes: AGENTS.md#the-open-in-penpot-glyph-is-drawn-for-a-menu
   @blocked
   Scenario: The "Open in Penpot" glyph is drawn for a menu

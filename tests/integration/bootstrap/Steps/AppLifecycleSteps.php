@@ -81,15 +81,21 @@ trait AppLifecycleSteps {
 	 * repair step a ".penpot" is sniffed as a generic archive (§C6.1).
 	 */
 	public function filesAreRegisteredAsTheirOwnFileType(string $extension): void {
-		$path = 'registered-type-probe.' . ltrim($extension, '.');
+		$ext = ltrim(trim($extension), '.');
+		$path = 'registered-type-probe.' . $ext;
 		$this->davPut($path, 'not a real archive, and it does not need to be');
 
 		try {
+			// THE EXACT MIMETYPE, not a substring of it. `application/vnd.penpot` is
+			// the thing registered; anything else containing "penpot" would satisfy a
+			// looser check while still leaving the Files app with a zip icon. The
+			// parameters are dropped first because a server may append `; charset=…`,
+			// which is not part of what was registered.
 			$type = $this->davContentType($path);
-			Assert::assertStringContainsString(
-				'penpot',
-				$type,
-				"a plain $extension file came back as '$type' — the mimetype is not registered, "
+			Assert::assertSame(
+				'application/vnd.penpot',
+				trim(explode(';', $type, 2)[0]),
+				"a plain .$ext file came back as '$type' — the mimetype is not registered, "
 				. 'so mirrored designs would show a generic archive icon and no Open in Penpot action',
 			);
 		} finally {
