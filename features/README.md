@@ -249,7 +249,7 @@ front of it.
 
 #### What makes something `@blocked` rather than `@todo`
 
-Name the missing capability, in the scenario or the section above it. The six
+Name the missing capability, in the scenario or the section above it. The seven
 that exist today:
 
 * **no browser** — anything about a button, card, panel, icon, or menu entry;
@@ -257,6 +257,9 @@ that exist today:
   the confirmation a demotion asks for before it deletes a stored archive;
 * **no app removal** — `occ` enables and disables; removing an app and
   reinstalling it is a store operation this suite cannot perform;
+* **no way to edit a design's content** — Penpot's `update-file` is the only RPC
+  that changes what is inside a design, and its `changes` payload is unproven
+  (saga §1); the harness creates, renames, moves and deletes, but cannot author;
 * **no logged-in session** — every personal-token attribution scenario, because
   the occ+DAV harness has no acting user to attribute to;
 * **no groupfolders in the CI image** — Team Folder provisioning (which is also
