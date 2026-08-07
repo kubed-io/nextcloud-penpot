@@ -13,11 +13,23 @@ Feature: Renaming a mirrored Penpot design
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot
     Given a mirrored design "Old Name" in the project "Rename Live"
+    And "Penpot/Rename Live/Old Name.penpot" is a "sync" design
     When I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
     Then Penpot project "Rename Live" holds a design named "New Name"
     And Penpot project "Rename Live" holds no design named "Old Name"
+    And "Penpot/Rename Live/New Name.penpot" holds:
+      | penpot_id   | the design's id |
+      | penpot_mode | "sync"          |
+      | content     | an archive      |
+
     # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
     # is on "New Name", not "New Name.penpot", and that is the whole rule.
+    #
+    # THE NAME IS NOT A ROW BECAUSE IT IS NOT STORED. A mirror is bound to its
+    # design by `penpot_id`, never by what it is called — which is why a rename
+    # cannot break the link. `the design's id` resolves through the NEW name, so
+    # the row asserts both halves at once: the design is called that now, and this
+    # file is still that design.
 
   @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull

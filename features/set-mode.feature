@@ -19,16 +19,20 @@ Feature: Storing and discarding a mirrored design's archive
 
   @admin @occ
   Scenario: Promoting a mirrored design fetches a real ZIP from Penpot
-    Given a Penpot project named "Archive Me" exists in that team
-    And a Penpot file named "Cover" exists in the project "Archive Me"
-    When the team is mirrored again
-    And "Penpot/Archive Me/Cover.penpot" is a "sync" design
+    Given a mirrored design "Cover" in the project "Archive Me"
+    When the admin promotes "Penpot/Archive Me/Cover.penpot" to "sync" mode
     Then the mode change succeeds
-    And the file "Penpot/Archive Me/Cover.penpot" is in "sync" mode
-    And the file "Penpot/Archive Me/Cover.penpot" holds a real ".penpot" archive
-    And the file "Penpot/Archive Me/Cover.penpot" still carries its Penpot id
-    # An export never writes to Penpot and never re-stamps the id — promotion is
-    # purely additive, which is what makes it safe to retry.
+    And "Penpot/Archive Me/Cover.penpot" holds:
+      | penpot_id       | the design's id |
+      | penpot_team_id  | the team's id   |
+      | penpot_revision | set             |
+      | penpot_mode     | "sync"          |
+      | content         | an archive      |
+
+    # PROMOTION IS PURELY ADDITIVE, and the table is how that reads at a glance:
+    # the mode is now "sync" and there are real bytes, while the file still names
+    # the same design in the same team. An export never writes to Penpot and never
+    # re-stamps the id, which is what makes it safe to retry.
 
   @admin @occ
   Scenario: A promoted file is not re-exported by the next pull
@@ -37,23 +41,37 @@ Feature: Storing and discarding a mirrored design's archive
     When the team is mirrored again
     Then the pull succeeds
     And the pull exported 0 archives
-    And the file "Penpot/Stable/Logo.penpot" holds a real ".penpot" archive
+    And "Penpot/Stable/Logo.penpot" holds:
+      | penpot_id   | the design's id |
+      | penpot_mode | "sync"          |
+      | content     | an archive      |
     # Mode is stored PER FILE, and an unchanged revision means an unchanged
     # archive — so staying in sync mode is free until the design actually moves.
+    # The one scenario here where the pull IS the subject, because "a second run
+    # does not undo the first" is a claim about running it twice.
 
   @admin @occ
   Scenario: Demoting throws the archive away and never contacts Penpot
-    Given a Penpot project named "Demote Me" exists in that team
-    And a Penpot file named "Sketch" exists in the project "Demote Me"
-    When the team is mirrored again
+    Given a mirrored design "Sketch" in the project "Demote Me"
     And "Penpot/Demote Me/Sketch.penpot" is a "sync" design
-    And "Penpot/Demote Me/Sketch.penpot" is a "link" design
+    When the admin demotes "Penpot/Demote Me/Sketch.penpot" to "link" mode
     Then the mode change succeeds
-    And the file "Penpot/Demote Me/Sketch.penpot" is in "link" mode
-    And the file "Penpot/Demote Me/Sketch.penpot" holds no content at all
-    And the file "Penpot/Demote Me/Sketch.penpot" still carries its Penpot id
-    # The design in Penpot is completely unaffected: demotion deletes a LOCAL
-    # backup and nothing else.
+    And "Penpot/Demote Me/Sketch.penpot" holds:
+      | penpot_id       | the design's id |
+      | penpot_team_id  | the team's id   |
+      | penpot_revision | set             |
+      | penpot_mode     | "link"          |
+      | content         | empty           |
+    And Penpot project "Demote Me" holds a design named "Sketch"
+
+    # DEMOTION DELETES A LOCAL BACKUP AND NOTHING ELSE. The bytes are gone and the
+    # mode says so, while the file still names the same design — and that design
+    # is still in Penpot, which is what the last line exists to say out loud,
+    # because "never contacts Penpot" is a claim about the far side.
+    #
+    # `penpot_revision | set` is deliberate: a demotion throws away the bytes but
+    # keeps the file's record of which revision it once held, so a later promotion
+    # knows whether what it fetches is new.
 
   # @blocked — no tty. Demotion asks for confirmation on stdin, and Behat has no
   # terminal to answer with; every other scenario here passes --force for exactly

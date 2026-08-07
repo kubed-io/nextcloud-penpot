@@ -41,6 +41,7 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | `copy-design.feature` | Duplicating a design |
 | `move-design.feature` | A design changing project, team, or Drafts state |
 | `rename-design.feature` | A design changing name, either side, and the file-name guards |
+| `edit-design.feature` | A design's CONTENT changing — Penpot-side only, because Nextcloud cannot author one |
 | `delete-design.feature` | Everything that removes a design: both trashes, the purge, link dismissal |
 | `restore-design.feature` | Everything that brings a design back: both trashes, the archive |
 | `create-project.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
@@ -385,6 +386,59 @@ the file:
 
 The safe habit is simple: **never put an apostrophe next to a quoted parameter.**
 Rephrase the possessive instead.
+
+## Metadata is a POST-STATE, never a subject
+
+A mirror's metadata is not something anyone does. It is what is true after
+something was done — so it is never a scenario of its own, and never a lone
+`Then` picking off one key. It appears as a **table, at the end of the action
+that changed it**:
+
+```gherkin
+    Given a mirrored design "Cover" in the project "Brand"
+    And "Penpot/Brand/Cover.penpot" is a "sync" design
+    When the design "Cover" is edited in Penpot
+    Then "Penpot/Brand/Cover.penpot" holds the design as it is now
+    And "Penpot/Brand/Cover.penpot" holds:
+      | penpot_id       | the design's id |
+      | penpot_mode     | "sync"          |
+      | content         | an archive      |
+      | modified        | the design's    |
+```
+
+**An end state is absolute, not a diff.** An earlier cut of this offered
+`unchanged` / `changed`, backed by a `Given I note the state of "…"` — which is
+an *action* wearing a `Given`, harness bookkeeping in the one position that is
+supposed to say only how the world already is. A row names the thing its value
+came **from** instead: `the design's id` is resolved out of Penpot by name, at
+assertion time, against the design the `Given` already named. That says what "the
+id survived a rename" was reaching for, and says it better — the id is not merely
+different-from-before, it is *that design's*.
+
+**The rows an action did not touch are half the reason the table exists.** "A
+move re-files a design without re-fetching it" and "a rename cannot break the
+Penpot link" are promises this app makes; as prose they are comments nobody
+executes, and as rows they are assertions.
+
+The vocabulary is deliberately small — a table that can say anything stops being
+readable: `the design's id`, `the team's id`, `set`, `absent`, `an archive`,
+`empty`, `the design's` (for a clock), or a quoted literal.
+
+`penpot_mode` reads `"link"` in a table even though the stored value is
+`reference` (the literal string `link` is `is_callable()` and crashes core's
+PROPFIND). The wire quirk is spelt out once, in `view-design.feature`, where the
+DAV surface genuinely is the subject; everywhere else a table speaks the
+vocabulary the admin chose.
+
+**One canonical table, then deltas.** `view-design.feature` spells out the full
+property set once, because there LOOKING is the behaviour. Every other file shows
+only the rows its action touches or promises not to touch.
+
+**The one sanctioned "before".** `I note the mtime and etag of "…"` survives, in
+`edit-design.feature` alone. An mtime and an etag are not state a table can name
+absolutely — the claim is that a sync client sees no reason to re-download — so
+it is the one place a scenario records a value first. Everything else states what
+is, not what moved.
 
 ## Data tables: an input, or a different rule?
 

@@ -1446,6 +1446,70 @@ see their personal team at all (personal-projects.feature).
 
 ---
 
+## edit-design
+
+`features/edit-design.feature`
+
+A DESIGN'S CONTENT CHANGING — and the only file in this app with one direction
+where both siblings have two.
+
+### edit-design
+
+**Editing happens in Penpot, and only in Penpot.** A `.penpot` archive is opaque
+nested design data; there is nothing coherent to hand-edit and no way to
+re-import it if there were, which is why `open-with.feature` offers no text
+editor in any mode. So there is no Nextcloud-side twin to write, and every
+scenario here is `@in-penpot`.
+
+**THIS FILE FILLS A REAL HOLE.** Until it existed, "a design was edited and the
+mirror caught up" was asserted **nowhere** — the two closest scenarios were both
+negatives (`set-mode.feature`'s "not re-exported by the next pull" and
+`ignore.feature`'s "the file is not re-exported"). The single most important
+thing this app does for a `sync` file had no scenario at all, because the
+behaviour had been filed under the mechanism that carries it.
+
+It replaced a scenario in the retired `sync-mode.feature` called "A leftover body
+from an older version is truncated by the next pull". That one was about an older
+version of **this app** — early builds wrote a small JSON pointer body into link
+files, and §C6.6 changed a link to zero bytes, so the pull truncates whatever the
+old build left. Neither Grafana nor Penpot has ever been released, so there are
+no old builds in the field and nothing to migrate from. It was deleted rather
+than rewritten.
+
+### An edit in Penpot reaches the stored archive
+
+`@blocked` — **no way to edit a design's content.** Penpot's `update-file` is the
+only RPC that changes what is inside a design, and its `changes` payload is
+unproven and reported fragile (saga §1, penpot/penpot#4180). The harness can
+create, rename, move and delete designs; it cannot author in one. Confirm a
+usable `update-file` shape and all three scenarios become ordinary `@in-penpot`
+work.
+
+THE TABLE IS BOTH HALVES OF THE BEHAVIOUR. The revision moved and the archive was
+re-fetched — that is what happened. The id, the team and the mode did not — that
+is the promise, and it is what makes the mirror the same file rather than a new
+one standing where the old one was.
+
+`modified` is the design's clock rather than the sync's, so a mapped folder
+sorted by date sorts by when designs were worked on (§C6.24). It is also the half
+of the drift signal a rename moves without moving `revn`, which is why the signal
+is the two joined (§5.5).
+
+The third scenario — an edit to one design leaves its neighbours alone — is the
+one that costs real money if it regresses. A sync that re-exported everything
+whenever anything changed would satisfy the first two and be a bandwidth bill.
+It is also what brought `I note the mtime and etag of` back into use: those step
+definitions had been left with no caller when the unchanged-pull scenario was
+retired, and the honest home for that assertion turned out to be beside a
+behaviour rather than beside the reconciler.
+
+It is the ONE sanctioned "before" in the suite, and the reason is specific. Every
+other post-state row names what its value came from — `the design's id`, `the
+team's id`, `an archive` — because an end state is absolute. An mtime and an etag
+are not: the claim is that a sync client sees no reason to re-download, which is
+a comparison and nothing else. So this scenario records a value first, and no
+other one does.
+
 ## errors
 
 `features/errors.feature`

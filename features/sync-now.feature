@@ -50,7 +50,14 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | <folder>/Loose Idea.penpot      | -      |
     And there is no node at "<folder>/Drafts"
     And the folder "<folder>/Cogs" carries its Penpot dates
-    And "<folder>/Cogs/Gizmo.penpot" carries its Penpot dates
+    And "<folder>/Cogs/Gizmo.penpot" holds:
+      | penpot_id       | the design's id |
+      | penpot_team_id  | the team's id   |
+      | penpot_revision | set             |
+      | penpot_mode     | "link"          |
+      | content         | empty           |
+      | modified        | the design's    |
+      | created         | the design's    |
     # PROJECTS COME IN BY NAME AND WEAR THE TAG; designs come in beneath them.
     # Every path in that table is named exactly as Penpot names the thing it
     # mirrors, which is the whole of "project folder names match their projects".

@@ -754,6 +754,7 @@ The specs *are* the requirements, read before any code lands.
 | [`copy-design.feature`](features/copy-design.feature) / [`copy-project.feature`](features/copy-project.feature) | Copies never create designs; copying a project folder is refused. |
 | [`move-design.feature`](features/move-design.feature) / [`move-project.feature`](features/move-project.feature) | Free nesting; the project-folder restriction; a link cannot leave its project. |
 | [`rename-design.feature`](features/rename-design.feature) / [`rename-project.feature`](features/rename-project.feature) | **Live.** Both name guards, both directions. |
+| [`edit-design.feature`](features/edit-design.feature) | A design's content changing in Penpot, and what the mirror does about it. |
 | [`delete-design.feature`](features/delete-design.feature) / [`delete-project.feature`](features/delete-project.feature) | Penpot's trash, the 7-day grace period, and the one irreversible gesture. |
 | [`restore-design.feature`](features/restore-design.feature) / [`restore-project.feature`](features/restore-project.feature) | Putting a design back, and what it cannot recover. |
 | [`ignore.feature`](features/ignore.feature) | Stop mirroring without losing the file. |

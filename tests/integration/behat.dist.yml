@@ -74,6 +74,7 @@ default:
       - '%paths.base%/../../features/delete-design.feature'
       - '%paths.base%/../../features/move-design.feature'
       - '%paths.base%/../../features/rename-design.feature'
+      - '%paths.base%/../../features/edit-design.feature'
       - '%paths.base%/../../features/restore-design.feature'
       contexts: *contexts
 

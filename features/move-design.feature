@@ -43,6 +43,22 @@ Feature: Moving a mirrored design
     When I move "Penpot/Move From/Travelling.penpot" to "Penpot/Move To/Travelling.penpot"
     Then Penpot project "Move To" holds a design named "Travelling"
     And Penpot project "Move From" holds no design named "Travelling"
+    And "Penpot/Move To/Travelling.penpot" holds:
+      | penpot_id      | the design's id |
+      | penpot_team_id | the team's id   |
+      | penpot_mode    | "sync"          |
+      | content        | an archive      |
+
+    # THE FILE IS THE SAME FILE SOMEWHERE ELSE, which is what the table says and a
+    # comment could not: it still names that design, in that team, holding real
+    # bytes. A move re-files the design in Penpot — it is not an edit and not a
+    # new mirror.
+    #
+    # THE PROJECT IS DELIBERATELY NOT A ROW. A file's project is the nearest
+    # ancestor folder carrying a project id, never a copy on the file (§C6.7) — and
+    # a move is exactly the gesture that would make such a copy lie, which is why
+    # there is none to update. `penpot_project_id | absent` would say it outright;
+    # it is view-design.feature's to say, once.
     # notes: AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
   @in-nextcloud @gesture @blocked

@@ -1,0 +1,195 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 kubed-io
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+declare(strict_types=1);
+
+namespace OCA\PenpotSync\Tests\Integration\Steps;
+
+use Behat\Gherkin\Node\TableNode;
+
+/**
+ * What a mirror holds, as one table.
+ *
+ * ## WHY THIS EXISTS
+ *
+ * Metadata is not a subject. It is the END STATE of whatever was just done — so
+ * the useful question is never "does this file have a penpot_id", it is "I did
+ * X; what does the mirror hold now". A column of single-fact assertions cannot
+ * answer that: it shows what someone thought to check and says nothing about the
+ * keys they left out.
+ *
+ * ## AN END STATE IS ABSOLUTE, NOT A DIFF
+ *
+ * An earlier cut of this trait offered `unchanged` / `changed`, backed by a
+ * `Given I note the state of "…"`. That step was an ACTION wearing a `Given` —
+ * harness bookkeeping leaking into the specification, in the one position that
+ * is supposed to say only how the world already is.
+ *
+ * So a row names the thing the value came FROM instead: `the design's id` is
+ * resolved out of Penpot by name, at assertion time, against the design the
+ * `Given` already named. That says what "the id survived a rename" was reaching
+ * for, and says it better — the id is not merely different-from-before, it is
+ * *that design's*.
+ *
+ * ## THE VOCABULARY IS DELIBERATELY SMALL
+ *
+ * A table that can say anything stops being readable, so a value is one of:
+ *
+ *   the design's id   resolved from Penpot by the file's own name. Presence is
+ *                     too weak for an id — one that is merely non-empty could be
+ *                     any design's, and naming THIS one is the whole point.
+ *   the team's id     the mapped team's, likewise resolved.
+ *   set               present and non-empty. For genuinely opaque bookkeeping —
+ *                     the revision is `revn` and `modified-at` joined (§5.5), and
+ *                     pinning a literal would assert the engine's internals.
+ *   absent            not stored at all. An assertion in its own right: a file
+ *                     deliberately carries no copy of its project (§C6.7).
+ *   an archive        real ZIP bytes on disk.
+ *   empty             zero bytes. A `link` holds nothing (§C6.6).
+ *   the design's      for a clock: it came from Penpot, not from the sync run.
+ *   "<literal>"       an exact value, quoted.
+ *
+ * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}; reads
+ * the metadata over DAV and the content through `occ penpot_sync:status`, so it
+ * sees what a client sees rather than what the app believes.
+ */
+trait MetadataSteps {
+	/** The properties a table may name, and how each is read. */
+	private const READABLE = ['penpot_id', 'penpot_mode', 'penpot_team_id', 'penpot_revision', 'content'];
+
+	/**
+	 * Assert what a mirror holds, one row per property.
+	 *
+	 * @Then /^"([^"]*)" holds:$/
+	 */
+	public function holds(string $path, TableNode $table): void {
+		$now = $this->readState($path);
+		$failures = [];
+
+		foreach ($table->getRowsHash() as $property => $expected) {
+			$problem = $this->check($path, $property, $expected, $now[$property] ?? null);
+			if ($problem !== null) {
+				$failures[] = "  {$property}: {$problem}";
+			}
+		}
+
+		if ($failures !== []) {
+			throw new \RuntimeException(
+				"'{$path}' is not in the state the scenario describes:\n"
+				. implode("\n", $failures)
+				. "\n\nwhat it actually holds:\n" . $this->describe($now),
+			);
+		}
+	}
+
+	/** One row. Returns a human sentence on failure, or null when it holds. */
+	private function check(string $path, string $property, string $expected, ?string $actual): ?string {
+		// A CLOCK IS NOT A STORED PROPERTY. `modified` / `created` are Nextcloud's
+		// own times, stamped FROM Penpot's (§C6.24), so the only thing a table can
+		// say about them is whose they are. Anything else is a scenario asking a
+		// question this vocabulary cannot answer, and passing it quietly would be
+		// worse than refusing.
+		if (in_array($property, ['modified', 'created'], true)) {
+			if ($expected !== "the design's") {
+				throw new \RuntimeException(
+					"'{$property}' can only be \"the design's\" — it is a clock stamped from Penpot, "
+					. "not a value to compare. The table asked for '{$expected}'.",
+				);
+			}
+			$this->carriesItsPenpotDates($path);
+			return null;
+		}
+
+		// THE WIRE VALUE FOR `link` IS `reference`, because the literal string
+		// "link" is is_callable() and crashes core's PROPFIND. That quirk is spelt
+		// out once, in view-design.feature, where the DAV surface IS the subject.
+		// Everywhere else a table reads in the vocabulary the admin chose.
+		if ($property === 'penpot_mode' && $expected === '"link"') {
+			$expected = '"reference"';
+		}
+
+		switch ($expected) {
+			case "the design's id":
+				$want = $this->fileIdNamed($this->designNameOf($path));
+				return $actual === $want
+					? null : "expected the id of the design '{$this->designNameOf($path)}' ({$want}), found '{$actual}'";
+
+			case "the team's id":
+				$want = $this->theNamedTeam();
+				return $actual === $want
+					? null : "expected the mapped team's id ({$want}), found '{$actual}'";
+
+			case 'set':
+				return ($actual ?? '') !== ''
+					? null : 'expected a value, found nothing';
+
+			case 'absent':
+				return ($actual ?? '') === ''
+					? null : "expected it not to be stored, found '{$actual}'";
+
+			case 'an archive':
+				return $actual === 'archive'
+					? null : "expected real ZIP bytes, the file is '{$actual}'";
+
+			case 'empty':
+				return $actual === 'empty'
+					? null : "expected zero bytes, the file is '{$actual}'";
+
+			default:
+				$literal = trim($expected, '"');
+				return $actual === $literal
+					? null : "expected '{$literal}', found '{$actual}'";
+		}
+	}
+
+	/**
+	 * The Penpot design a mirror stands for, by name.
+	 *
+	 * THE FILENAME IS THE DESIGN'S NAME, minus the extension Penpot never carries
+	 * (§6.4) — an invariant rename-design.feature pins in both directions, which
+	 * is exactly what makes it safe to resolve an id from a path.
+	 */
+	private function designNameOf(string $path): string {
+		return preg_replace('/\.penpot$/', '', basename($path)) ?? '';
+	}
+
+	/**
+	 * Every readable property of a mirror, in one pass.
+	 *
+	 * Metadata comes over DAV because that is the surface a client reads; content
+	 * comes from `occ penpot_sync:status`, the only thing that can tell a real
+	 * archive from a pointer from nothing.
+	 *
+	 * @return array<string,string|null>
+	 */
+	private function readState(string $path): array {
+		$state = [];
+		foreach (self::READABLE as $property) {
+			$state[$property] = $property === 'content'
+				? $this->contentKind($path)
+				: $this->davReadMetadata($path, $property);
+		}
+		return $state;
+	}
+
+	/** `archive`, `pointer` or `empty` — what the file on disk actually is. */
+	private function contentKind(string $path): string {
+		if (preg_match('/Content: (\w+)/', $this->status($path), $m) !== 1) {
+			throw new \RuntimeException("could not read the content state of '{$path}' from status output.");
+		}
+		return $m[1];
+	}
+
+	/** @param array<string,string|null> $state */
+	private function describe(array $state): string {
+		$out = [];
+		foreach ($state as $property => $value) {
+			$out[] = sprintf('  %-16s %s', $property, ($value ?? '') === '' ? '(nothing)' : $value);
+		}
+		return implode("\n", $out);
+	}
+}
