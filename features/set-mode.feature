@@ -68,10 +68,9 @@ Feature: Storing and discarding a mirrored design's archive
   Scenario: Demoting asks first, because it deletes the only local copy
     Given a mirrored design "Precious" in the project "Stable"
     And "Penpot/Stable/Precious.penpot" is a "sync" design
-    When the admin demotes "Penpot/Stable/Precious.penpot" without --force
+    When the admin demotes "Penpot/Stable/Precious.penpot" to "link" mode without confirming
     Then the demotion asks for confirmation before anything is deleted
     And the file "Penpot/Stable/Precious.penpot" holds a real ".penpot" archive
-    # notes: AGENTS.md#demoting-asks-first-because-it-deletes-the-only-local-copy
 
   @admin @occ
   Scenario: A folder has no mode to set

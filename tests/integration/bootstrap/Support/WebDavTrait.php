@@ -280,6 +280,37 @@ trait WebDavTrait {
 	}
 
 	/**
+	 * A DAV timestamp property on a node, as a Unix second. `getlastmodified` is
+	 * RFC-1123; `{nc:}creation_time` is a Unix second already. Null when the property
+	 * is absent or unset (an unset creation time reads back as 0).
+	 *
+	 * Read over DAV rather than through the app: the question these clocks answer is
+	 * what a person in Files or a sync client SEES, and the app's own view of a node
+	 * cannot answer that.
+	 */
+	private function davTime(string $path, string $property): ?int {
+		$nc = 'http://nextcloud.org/ns';
+		$prop = $property === 'creation_time' ? '<nc:creation_time/>' : '<d:' . $property . '/>';
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
+			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
+			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="' . $nc . '">'
+				. '<d:prop>' . $prop . '</d:prop></d:propfind>',
+		]);
+		$this->assertStatus($res, [207], "PROPFIND $property $path");
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		$doc->registerXPathNamespace('nc', $nc);
+		$node = $doc->xpath($property === 'creation_time' ? '//nc:creation_time' : '//d:' . $property) ?: [];
+		$raw = trim((string)($node[0] ?? ''));
+		if ($raw === '' || $raw === '0') {
+			return null;
+		}
+		$ts = ctype_digit($raw) ? (int)$raw : strtotime($raw);
+		return $ts === false ? null : $ts;
+	}
+
+	/**
 	 * The mimetype a Files client is told, read off the same PROPFIND the Files app
 	 * uses.
 	 *

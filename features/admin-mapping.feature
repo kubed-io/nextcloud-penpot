@@ -57,7 +57,6 @@ Feature: Admin configures team mappings
     When the admin changes that mapping's groups to "<groups>"
     Then the mapping's groups are "<groups>"
 
-    # notes: AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
 
     Examples: on a Team Folder
       | folder                  | storage     | groups             |

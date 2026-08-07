@@ -25,5 +25,5 @@ Feature: App install lifecycle
   Scenario: Removing the app
     Given the app is enabled
     When the admin removes the app
-    Then ".penpot" files are no longer registered as their own file type
+    Then ".penpot" files are not registered as their own file type
     And the mirrored design files are left where they are, with their metadata

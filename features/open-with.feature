@@ -29,7 +29,6 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     When I open its context menu
     Then the "Open in Penpot" glyph is themed to the menu's own colour
     And the glyph is drawn as filled shapes, never as strokes
-    # notes: AGENTS.md#the-open-in-penpot-glyph-is-drawn-for-a-menu
 
   @decision
   Scenario: There is no "Edit as text" action, ever
