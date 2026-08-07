@@ -53,7 +53,7 @@ Three files, one behaviour, and no single place that told you the shape of it.
 | `mapping-membership.feature` | Which files a mapping owns, and what "unmapped" means |
 | `set-mode.feature` / `sync-mode.feature` | `sync` ⇄ `link`, and what each mode means |
 | `ignore.feature` | Excluding a file from the sync |
-| `open-with.feature` / `file-type.feature` | The Files-app surface of a mirror |
+| `open-with.feature` / `view-design.feature` | The Files-app surface of a mirror |
 | `admin-*.feature` | Reaching Penpot at all, and configuring what is mapped |
 
 ## The two nouns: a DESIGN and a PROJECT

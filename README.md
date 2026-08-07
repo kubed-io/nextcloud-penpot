@@ -756,7 +756,7 @@ The specs *are* the requirements, read before any code lands.
 | [`restore.feature`](features/restore.feature) | Putting a design back, and what it can't recover. |
 | [`delete.feature`](features/delete.feature) | Local-only deletes; Penpot's 7-day grace period. |
 | [`errors.feature`](features/errors.feature) | Every failure mode, and why none of them prune. |
-| [`file-type.feature`](features/file-type.feature) | Mimetype, icon, and the metadata key set. |
+| [`view-design.feature`](features/view-design.feature) | Looking at a mirror: its file type, and the metadata it publishes. |
 | [`open-with.feature`](features/open-with.feature) | Open in Penpot — no text-editor fallback, ever. |
 | [`purge.feature`](features/purge.feature) | Reset the Nextcloud side without touching Penpot. |
 | [`remove-mapping.feature`](features/remove-mapping.feature) | Tearing down a mapping safely. |

@@ -66,6 +66,43 @@ trait AppLifecycleSteps {
 		Assert::assertNotSame('', trim($res['output']), 'app path did not resolve');
 	}
 
+	/**
+	 * @Then :extension files are registered as their own file type
+	 *
+	 * THE MIMETYPE IS WHAT ENABLING LEFT BEHIND. Nobody registers a mimetype; they
+	 * install an app, and the registration is the consequence. So it is asserted
+	 * on the install rather than heading a feature file of its own, which is where
+	 * it used to live.
+	 *
+	 * PROVEN BY UPLOADING A PLAIN FILE, not by reading the app's own metadata. A
+	 * file this app has never touched, with nothing but the extension going for
+	 * it, comes back typed as the app's own mimetype — which is exactly what
+	 * registration means and the only part of it a client can observe. Without the
+	 * repair step a ".penpot" is sniffed as a generic archive (§C6.1).
+	 */
+	public function filesAreRegisteredAsTheirOwnFileType(string $extension): void {
+		$ext = ltrim(trim($extension), '.');
+		$path = 'registered-type-probe.' . $ext;
+		$this->davPut($path, 'not a real archive, and it does not need to be');
+
+		try {
+			// THE EXACT MIMETYPE, not a substring of it. `application/vnd.penpot` is
+			// the thing registered; anything else containing "penpot" would satisfy a
+			// looser check while still leaving the Files app with a zip icon. The
+			// parameters are dropped first because a server may append `; charset=…`,
+			// which is not part of what was registered.
+			$type = $this->davContentType($path);
+			Assert::assertSame(
+				'application/vnd.penpot',
+				trim(explode(';', $type, 2)[0]),
+				"a plain .$ext file came back as '$type' — the mimetype is not registered, "
+				. 'so mirrored designs would show a generic archive icon and no Open in Penpot action',
+			);
+		} finally {
+			$this->davDelete($path);
+		}
+	}
+
 	/** Slice the "Enabled:" block out of `occ app:list` output (stop at "Disabled:"). */
 	private function enabledBlock(string $appList): string {
 		$lines = explode("\n", $appList);
