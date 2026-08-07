@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#copy-design
+# Notes, decisions and history for this feature: ../AGENTS.md#copy-design
 
 Feature: Copying a mirrored design
   As a Nextcloud user
@@ -20,7 +20,7 @@ Feature: Copying a mirrored design
     # Different ids is the load-bearing one: two files claiming a single design
     # is the ambiguity that made the old inert-copy rule necessary at all.
 
-    # notes: AGENTS.md#copying-a-penpot-file-outside-every-mapping-never-contacts-penpot
+    # notes: ../AGENTS.md#copying-a-penpot-file-outside-every-mapping-never-contacts-penpot
   @in-nextcloud @gesture
   Scenario: Copying a ".penpot" file outside every mapping never contacts Penpot
     Given a mirrored project "Bystanders"
@@ -44,7 +44,7 @@ Feature: Copying a mirrored design
     Then Penpot project "Chain" holds a design named "After"
     And Penpot project "Chain" holds no design named "Before copy"
     And Penpot project "Chain" holds a design named "Before"
-    # notes: AGENTS.md#a-copy-can-be-renamed-immediately-because-it-was-tracked
+    # notes: ../AGENTS.md#a-copy-can-be-renamed-immediately-because-it-was-tracked
 
     # ── the two gestures, which are the same feature ──────────────────────────
 
@@ -85,7 +85,7 @@ Feature: Copying a mirrored design
     # Nearest-ancestor at any depth (§6.29): a plain subfolder carries no project
     # id, so the walk keeps going up and finds "My Stuff".
 
-    # notes: AGENTS.md#a-copy-is-tracked-the-moment-it-exists-so-the-next-action-works
+    # notes: ../AGENTS.md#a-copy-is-tracked-the-moment-it-exists-so-the-next-action-works
 
   @todo
   Scenario: A copy is tracked the moment it exists, so the next action works
@@ -100,7 +100,7 @@ Feature: Copying a mirrored design
     When I copy the file up one level, to the mapped team folder itself
     Then a new design appears in that team's Drafts in Penpot
     And the copy in Nextcloud carries that new design's id
-    # notes: AGENTS.md#copying-to-the-team-root-creates-the-design-in-drafts
+    # notes: ../AGENTS.md#copying-to-the-team-root-creates-the-design-in-drafts
 
   @todo
   Scenario: A copy that cannot be tracked says so rather than looking finished
@@ -108,7 +108,7 @@ Feature: Copying a mirrored design
     When I copy it and Penpot cannot be reached
     Then the failure is logged with the file and the design it came from
     And the copy carries no "penpot_id"
-    # notes: AGENTS.md#a-copy-that-cannot-be-tracked-says-so-rather-than-looking-finished
+    # notes: ../AGENTS.md#a-copy-that-cannot-be-tracked-says-so-rather-than-looking-finished
 
     # ── the name ──────────────────────────────────────────────────────────────
 
@@ -136,7 +136,7 @@ Feature: Copying a mirrored design
     When I copy the file within its folder
     Then "duplicate-file" is called and a real new design is created
     And no export is ever performed
-    # notes: AGENTS.md#a-link-file-copies-exactly-like-a-sync-file
+    # notes: ../AGENTS.md#a-link-file-copies-exactly-like-a-sync-file
 
   @todo
   Scenario: A sync copy keeps its archive and is a valid file on its own
@@ -144,7 +144,7 @@ Feature: Copying a mirrored design
     When I copy the file within its folder
     Then the copy holds the full ".penpot" archive content
     And the copy is a valid ZIP that opens outside Nextcloud
-    # notes: AGENTS.md#a-sync-copy-keeps-its-archive-and-is-a-valid-file-on-its-own
+    # notes: ../AGENTS.md#a-sync-copy-keeps-its-archive-and-is-a-valid-file-on-its-own
 
     # ── where nothing is created ──────────────────────────────────────────────
 
@@ -155,7 +155,7 @@ Feature: Copying a mirrored design
     Then "duplicate-file" is never called
     And the copy keeps the original's "penpot_id" as a historical record
     And the copy is "unmapped" — no pull will ever refresh it
-    # notes: AGENTS.md#copying-outside-every-mapping-creates-nothing-in-penpot
+    # notes: ../AGENTS.md#copying-outside-every-mapping-creates-nothing-in-penpot
 
   @todo
   Scenario: Copying an untracked ".penpot" file changes nothing
@@ -181,7 +181,7 @@ Feature: Copying a mirrored design
     Then the Nextcloud copy still exists with its content intact
     And the copy carries no "penpot_id" rather than the original's
     And the failure is reported
-    # notes: AGENTS.md#a-failed-duplicate-leaves-the-nextcloud-copy-standing
+    # notes: ../AGENTS.md#a-failed-duplicate-leaves-the-nextcloud-copy-standing
 
   @todo
   Scenario: Exactly one file per design id under a project, always
@@ -189,7 +189,7 @@ Feature: Copying a mirrored design
     When the pull runs
     Then each file is refreshed against its own design
     And neither file is renamed, moved, or pruned because of the other
-    # notes: AGENTS.md#exactly-one-file-per-design-id-under-a-project-always
+    # notes: ../AGENTS.md#exactly-one-file-per-design-id-under-a-project-always
 
     # ── folders are still refused ─────────────────────────────────────────────
 
@@ -200,9 +200,9 @@ Feature: Copying a mirrored design
     When the user copies the design into "Client Work"
     Then a NEW design exists in "Client Work", with its own id
     And the original is untouched in the personal project
-    # notes: AGENTS.md#copying-a-design-across-two-mappings-makes-a-new-design-in-the-destination-team
+    # notes: ../AGENTS.md#copying-a-design-across-two-mappings-makes-a-new-design-in-the-destination-team
 
-  # notes: AGENTS.md#a-design-duplicated-in-penpot-is-mirrored-like-any-other-new-design
+  # notes: ../AGENTS.md#a-design-duplicated-in-penpot-is-mirrored-like-any-other-new-design
 
   @in-penpot @todo
   Scenario: A design duplicated in Penpot is mirrored like any other new design
@@ -219,4 +219,4 @@ Feature: Copying a mirrored design
     And the design "Original" is duplicated in Penpot
     When the team is mirrored again
     Then the file "Penpot/Shared Work/Original (copy).penpot" is in "link" mode
-    # notes: AGENTS.md#a-duplicate-made-in-penpot-inherits-the-mappings-mode-not-the-originals
+    # notes: ../AGENTS.md#a-duplicate-made-in-penpot-inherits-the-mappings-mode-not-the-originals

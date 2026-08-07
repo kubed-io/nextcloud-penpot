@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#create-design
+# Notes, decisions and history for this feature: ../AGENTS.md#create-design
 
 Feature: Creating a new Penpot design from Nextcloud
   As a Nextcloud user
@@ -11,7 +11,7 @@ Feature: Creating a new Penpot design from Nextcloud
     And the admin has configured the service-account token
     And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 
-    # notes: AGENTS.md#create-design-background
+    # notes: ../AGENTS.md#create-design-background
 
   @in-nextcloud @gesture
   Scenario: A new design file in a project folder becomes a design in that project
@@ -29,7 +29,7 @@ Feature: Creating a new Penpot design from Nextcloud
     And Penpot project "Anchor" holds no design named "Loose Idea"
     # Drafts is a state, not a folder (§6.35) — the file stays where it was made.
 
-    # notes: AGENTS.md#uploading-a-penpot-archive-does-not-create-an-empty-design
+    # notes: ../AGENTS.md#uploading-a-penpot-archive-does-not-create-an-empty-design
   @in-nextcloud @gesture
   Scenario: Uploading a ".penpot" archive does not create an empty design
     Given a mirrored project "No Invent"
@@ -48,7 +48,7 @@ Feature: Creating a new Penpot design from Nextcloud
 
     # ── where the action appears ─────────────────────────────────────────────────
 
-    # notes: AGENTS.md#filing-a-newly-created-draft-is-just-a-drag
+    # notes: ../AGENTS.md#filing-a-newly-created-draft-is-just-a-drag
 
   @todo
   Scenario: Filing a newly created draft is just a drag
@@ -122,7 +122,7 @@ Feature: Creating a new Penpot design from Nextcloud
     Then the mirrored file is in "link" mode
     And no archive is stored for it until it is promoted to "sync"
 
-  # notes: AGENTS.md#a-newly-created-design-follows-its-mappings-default-mode
+  # notes: ../AGENTS.md#a-newly-created-design-follows-its-mappings-default-mode
 
   @unbuilt
   Scenario: A design created in the user's own home lands in their personal Drafts
@@ -130,7 +130,7 @@ Feature: Creating a new Penpot design from Nextcloud
     When the user creates a new design file at the root of their home
     Then the design is created in their personal team's "Drafts" project
     And the file carries the new design's Penpot id
-    # notes: AGENTS.md#a-design-created-in-the-users-own-home-lands-in-their-personal-drafts
+    # notes: ../AGENTS.md#a-design-created-in-the-users-own-home-lands-in-their-personal-drafts
 
   @unbuilt
   Scenario: A design created in a plain folder in the user's home also lands in personal Drafts
@@ -141,6 +141,6 @@ Feature: Creating a new Penpot design from Nextcloud
     # Nearest-ancestor, unchanged: no project id on the way up, a team id at the
     # root. Exactly what a plain folder under a mapped Team Folder does.
 
-    # notes: AGENTS.md#a-design-created-in-a-plain-folder-in-the-users-home-also-lands-in-personal-drafts
+    # notes: ../AGENTS.md#a-design-created-in-a-plain-folder-in-the-users-home-also-lands-in-personal-drafts
 
     # ── modes and behaviour are identical to team projects ──────────────────────

@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#copy-project
+# Notes, decisions and history for this feature: ../AGENTS.md#copy-project
 
 Feature: Copying a Penpot project folder
   As a Nextcloud user
@@ -18,7 +18,7 @@ Feature: Copying a Penpot project folder
     And no new Penpot project is created
     And no duplicate project folder is left behind
     And copying an individual ".penpot" file remains unaffected
-    # notes: AGENTS.md#copying-a-project-folder-is-refused-unlike-copying-a-file
+    # notes: ../AGENTS.md#copying-a-project-folder-is-refused-unlike-copying-a-file
 
   @in-nextcloud @gesture @todo
   Scenario: Copying an ordinary folder inside a mapped folder is unaffected
@@ -26,4 +26,4 @@ Feature: Copying a Penpot project folder
     When I copy it
     Then the copy succeeds normally
     And Penpot is never contacted
-    # notes: AGENTS.md#copying-an-ordinary-folder-inside-a-mapped-folder-is-unaffected
+    # notes: ../AGENTS.md#copying-an-ordinary-folder-inside-a-mapped-folder-is-unaffected

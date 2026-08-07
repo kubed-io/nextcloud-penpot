@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#admin-connection
+# Notes, decisions and history for this feature: ../AGENTS.md#admin-connection
 
 Feature: Admin and per-user Penpot connection setup
   As a Nextcloud admin and as an individual Nextcloud user
@@ -19,7 +19,7 @@ Feature: Admin and per-user Penpot connection setup
     Then the stored URL has no trailing slash
     And the Penpot base URL is "https://penpot.example.com"
 
-  # notes: AGENTS.md#the-stored-url-is-normalised-so-later-callers-can-concatenate-paths
+  # notes: ../AGENTS.md#the-stored-url-is-normalised-so-later-callers-can-concatenate-paths
   Scenario Outline: A URL the app cannot build requests from is rejected
     When the admin sets the Penpot base URL to "<url>"
     Then setting the URL is rejected
@@ -33,7 +33,7 @@ Feature: Admin and per-user Penpot connection setup
   Scenario: The URL card carries no credential field
     Then no credential field exists on this card — tokens are configured elsewhere
 
-    # notes: AGENTS.md#the-url-card-carries-no-credential-field
+    # notes: ../AGENTS.md#the-url-card-carries-no-credential-field
 
   Scenario: A configured connection reports the teams the token can see
     Given the Penpot base URL points at the test instance
@@ -41,7 +41,7 @@ Feature: Admin and per-user Penpot connection setup
     When the connection is checked
     Then the connection succeeds
     And at least one Penpot team is listed
-    # notes: AGENTS.md#a-configured-connection-reports-the-teams-the-token-can-see
+    # notes: ../AGENTS.md#a-configured-connection-reports-the-teams-the-token-can-see
 
   Scenario: The connection check also lists projects, proving multi-record decoding
     Given the Penpot base URL points at the test instance
@@ -49,7 +49,7 @@ Feature: Admin and per-user Penpot connection setup
     When the connection is checked including files
     Then the connection succeeds
     And at least one Penpot project is listed
-    # notes: AGENTS.md#the-connection-check-also-lists-projects-proving-multi-record-decoding
+    # notes: ../AGENTS.md#the-connection-check-also-lists-projects-proving-multi-record-decoding
 
   Scenario: Without a token, the connection check fails and says why
     Given the Penpot base URL points at the test instance
@@ -82,7 +82,7 @@ Feature: Admin and per-user Penpot connection setup
     When the admin lists teams visible to the service account
     Then only "observe" and any other team it was explicitly invited into is visible
     And no other team on the Penpot instance is visible through this token
-    # notes: AGENTS.md#the-service-account-sees-only-the-teams-it-was-invited-into
+    # notes: ../AGENTS.md#the-service-account-sees-only-the-teams-it-was-invited-into
 
   Scenario: The connection test tells an unset token apart from a rejected one
     Given the Penpot base URL points at the test instance
@@ -94,7 +94,7 @@ Feature: Admin and per-user Penpot connection setup
     And the admin tests the connection
     Then the connection test reports a failure
     And the connection test says the token was rejected
-    # notes: AGENTS.md#the-connection-test-tells-an-unset-token-apart-from-a-rejected-one
+    # notes: ../AGENTS.md#the-connection-test-tells-an-unset-token-apart-from-a-rejected-one
 
   Scenario: A rejected token names the instance flag that is off by default
     Given the Penpot base URL points at the test instance
@@ -111,7 +111,7 @@ Feature: Admin and per-user Penpot connection setup
     When the admin tests the connection
     Then the connection test reports success
     And the connection test lists at least one Penpot team
-    # notes: AGENTS.md#a-successful-test-reports-the-teams-the-account-can-actually-see
+    # notes: ../AGENTS.md#a-successful-test-reports-the-teams-the-account-can-actually-see
 
   @blocked
   Scenario: A connection test surfaces the required Penpot instance flag
@@ -120,7 +120,7 @@ Feature: Admin and per-user Penpot connection setup
     When the admin tests the connection
     Then the connection test reports a failure
     And the connection test names the missing instance flag
-    # notes: AGENTS.md#a-connection-test-surfaces-the-required-penpot-instance-flag
+    # notes: ../AGENTS.md#a-connection-test-surfaces-the-required-penpot-instance-flag
 
     # ── the personal token: optional, per-user, attribution only ─────────────────
 
@@ -158,7 +158,7 @@ Feature: Admin and per-user Penpot connection setup
     # Deliberately closed (saga §6.18): letting personal tokens widen the mirror
     # would reintroduce exactly the dual-pull-path complexity §6.16 rejected.
 
-    # notes: AGENTS.md#a-write-rejected-because-of-the-personal-token-is-retried-as-the-service-account
+    # notes: ../AGENTS.md#a-write-rejected-because-of-the-personal-token-is-retried-as-the-service-account
 
   @unbuilt
   Scenario: A write rejected because of the personal token is retried as the service account
@@ -185,4 +185,87 @@ Feature: Admin and per-user Penpot connection setup
     When a write fails because Penpot is unreachable
     Then the write is NOT retried with the service-account token
     And the failure is reported as itself
-    # notes: AGENTS.md#only-an-authorisation-failure-falls-back-never-a-real-error
+    # notes: ../AGENTS.md#only-an-authorisation-failure-falls-back-never-a-real-error
+
+    # ── the user's own connection: a token, and nothing else ────────────────────
+    # notes: ../AGENTS.md#the-personal-connection
+
+  @todo
+  Scenario: A user finds a personal Penpot settings section
+    When the user opens their personal settings
+    Then a "Penpot" personal settings section is present
+    And it explains that the token is theirs alone, not shared instance-wide
+    And it explains the token is used to attribute their changes in Penpot
+    And it explains the app works without it
+
+  @todo
+  Scenario: A user sets their own personal access token
+    When the user enters their Penpot personal access token and saves
+    Then the token is stored for that user only
+    And the field renders blank on reload, the same "never echoed back" pattern both sibling apps use
+
+  @blocked
+  Scenario: A user's token never leaks to another Nextcloud user
+    Given user "dana" has set a personal Penpot token
+    When user "alex" opens their own personal Penpot settings
+    Then "alex" sees no token configured
+    And "alex" setting their own token never overwrites the token of "dana"
+
+  @blocked
+  Scenario: Testing the personal connection distinguishes unset from rejected
+    Given the user has not set a personal Penpot token
+    When the user tests their personal connection
+    Then the test reports a failure and says the token is not set
+    When the user sets an invalid personal Penpot token and tests again
+    Then the test reports a failure and says the token was rejected
+
+    # ── what happens without one: degraded attribution, never blocked work ───────
+
+  @blocked
+  Scenario: Clearing a personal token degrades attribution but breaks nothing
+    Given the user has a personal Penpot token stored
+    When the user clears the token field and saves
+    Then no personal token remains stored for that user
+    And their mapped folders keep pulling normally, as the service account
+    And their future write actions are attributed to the service account
+    # notes: ../AGENTS.md#clearing-a-personal-token-degrades-attribution-but-breaks-nothing
+
+  @blocked
+  Scenario: An expired personal token falls back rather than failing the action
+    Given the user's personal Penpot token has expired
+    When the user renames a mirrored file
+    Then the rename is still performed, using the service-account token
+    And the user is told their personal token expired and the change was attributed to the service account
+    # Penpot tokens expire (never / 30 / 60 / 90 / 180 days) with no auto-rotation
+    # — so expiry is a routine event to handle gracefully, not an error state.
+
+    # ── the boundary: this token reads nothing on the app's behalf ───────────────
+
+  @blocked
+  Scenario: A personal token is never used to mirror content
+    Given the user has a valid personal Penpot token
+    When the scheduled pull runs
+    Then the user's personal token is not used
+    And all mirroring is performed with the service-account token
+
+  @decision
+  Scenario: Users do not author their own team mappings
+    Given a user who is not an admin
+    Then they cannot map a Penpot team to a folder
+    # notes: ../AGENTS.md#users-do-not-author-their-own-team-mappings
+
+  @blocked
+  Scenario: A personal token does not grant the user new teams to map
+    Given the user's personal token can see a Penpot team the service account cannot
+    Then that team is not offered for mapping
+    And the app explains the service account must be invited to it first
+    # Saga §6.18 — the personal token's reach never widens the mirror.
+
+    # ── the documented assumption ────────────────────────────────────────────────
+
+  @blocked
+  Scenario: The app assumes one Nextcloud user maps to one Penpot account
+    Given the personal-settings page description
+    Then it documents the 1:1 (one Nextcloud user, one Penpot account) assumption
+    And it does not attempt to prevent two Nextcloud users from pasting the same token
+    # notes: ../AGENTS.md#the-app-assumes-one-nextcloud-user-maps-to-one-penpot-account

@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#rename-design
+# Notes, decisions and history for this feature: ../AGENTS.md#rename-design
 
 Feature: Renaming a mirrored Penpot design
   As a Nextcloud user
@@ -22,7 +22,7 @@ Feature: Renaming a mirrored Penpot design
       | penpot_mode | "sync"          |
       | content     | an archive      |
 
-    # notes: AGENTS.md#renaming-a-mirrored-file-renames-its-design-in-penpot
+    # notes: ../AGENTS.md#renaming-a-mirrored-file-renames-its-design-in-penpot
 
   @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull
@@ -39,7 +39,7 @@ Feature: Renaming a mirrored Penpot design
     Then the mirrored file is renamed
     And "export-binfile" was never called to detect or apply the rename
 
-    # notes: AGENTS.md#a-rename-is-picked-up-in-both-modes-without-an-export
+    # notes: ../AGENTS.md#a-rename-is-picked-up-in-both-modes-without-an-export
 
   @todo
   Scenario: Renaming a mirrored file in Nextcloud renames the Penpot file
@@ -49,14 +49,14 @@ Feature: Renaming a mirrored Penpot design
     And the Penpot file is named "New Name"
     And the ".penpot" extension is stripped before sending and re-added locally
     And the file's "penpot_id" is unchanged
-    # notes: AGENTS.md#renaming-a-mirrored-file-in-nextcloud-renames-the-penpot-file
+    # notes: ../AGENTS.md#renaming-a-mirrored-file-in-nextcloud-renames-the-penpot-file
 
   @todo
   Scenario: The rename call sends the file id under the plain "id" parameter
     When a mirrored file is renamed and the rename propagates
     Then "rename-file" is called with the id under the key "id"
     And not under "file-id"
-    # notes: AGENTS.md#the-rename-call-sends-the-file-id-under-the-plain-id-parameter
+    # notes: ../AGENTS.md#the-rename-call-sends-the-file-id-under-the-plain-id-parameter
 
   @blocked
   Scenario: A propagated rename is attributed to the acting user
@@ -64,7 +64,7 @@ Feature: Renaming a mirrored Penpot design
     When the user renames a mirrored file in the Files app
     Then "rename-file" is called using that user's own token
     And Penpot attributes the rename to that user, not to the service account
-    # notes: AGENTS.md#a-propagated-rename-is-attributed-to-the-acting-user
+    # notes: ../AGENTS.md#a-propagated-rename-is-attributed-to-the-acting-user
 
   @blocked
   Scenario: A propagated rename with no personal token uses the service account
@@ -82,7 +82,7 @@ Feature: Renaming a mirrored Penpot design
     And the next pull reconciles the name
     # Saga §6.18 rule 3 — a remote failure must never destroy local state.
 
-    # notes: AGENTS.md#an-empty-file-name-is-refused-before-it-is-sent
+    # notes: ../AGENTS.md#an-empty-file-name-is-refused-before-it-is-sent
 
   @todo
   Scenario: An empty file name is refused before it is sent
@@ -104,9 +104,9 @@ Feature: Renaming a mirrored Penpot design
     And the admin is told the file cannot be mirrored because "/" is not allowed in a file name
     And the message names the file so it can be renamed in Penpot
     And every other file in the same project is mirrored normally
-    # notes: AGENTS.md#a-penpot-file-whose-name-contains-a-slash-is-skipped-with-a-clear-reason
+    # notes: ../AGENTS.md#a-penpot-file-whose-name-contains-a-slash-is-skipped-with-a-clear-reason
 
-    # notes: AGENTS.md#renaming-never-breaks-the-penpot-link
+    # notes: ../AGENTS.md#renaming-never-breaks-the-penpot-link
 
   @in-nextcloud @gesture
   Scenario: Renaming never breaks the Penpot link
@@ -125,7 +125,7 @@ Feature: Renaming a mirrored Penpot design
     Then Penpot project "Copy Then Rename" holds a design named "Renamed Copy"
     And Penpot project "Copy Then Rename" holds a design named "Original"
     And the files "Penpot/Copy Then Rename/Original.penpot" and "Penpot/Copy Then Rename/Renamed Copy.penpot" carry different Penpot ids
-    # notes: AGENTS.md#renaming-a-design-that-was-just-copied-propagates-to-penpot
+    # notes: ../AGENTS.md#renaming-a-design-that-was-just-copied-propagates-to-penpot
 
   @in-nextcloud @gesture
   Scenario: Renaming an untracked ".penpot" file is not a failure
@@ -134,4 +134,4 @@ Feature: Renaming a mirrored Penpot design
     When I rename "Penpot/Untracked Rename/Dragged In.penpot" to "Renamed Anyway.penpot"
     Then the file "Penpot/Untracked Rename/Renamed Anyway.penpot" carries no Penpot id
     And Penpot project "Untracked Rename" holds no design named "Renamed Anyway"
-    # notes: AGENTS.md#renaming-an-untracked-penpot-file-is-not-a-failure
+    # notes: ../AGENTS.md#renaming-an-untracked-penpot-file-is-not-a-failure

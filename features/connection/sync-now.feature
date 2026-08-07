@@ -1,17 +1,17 @@
-# Notes, decisions and history for this feature: AGENTS.md#sync-now
+# Notes, decisions and history for this feature: ../AGENTS.md#sync-now
 
-Feature: Syncing a mapped Penpot team into Nextcloud
-  As an admin who has just mapped a team
-  I want the designs already in Penpot to appear in Nextcloud
-  So that the mirror starts out true, however the sync was started
+Feature: Syncing every mapping
+  As a Nextcloud admin
+  I want one sync to bring every mapped team up to date
+  So that the mirror stays true without anyone tending it
 
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
 
-  # ── one behaviour, four ways to start it ───────────────────────────────────
-  # notes: AGENTS.md#sync-now-scope
+  # ── one behaviour, two ways to start it across every mapping ───────────────
+  # notes: ../AGENTS.md#sync-now-scope
 
   Scenario Outline: A sync brings the team's projects and designs into Nextcloud
     Given a Penpot team named "Design Team" is mapped to the folder "<folder>"
@@ -41,11 +41,10 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | content         | empty           |
       | modified        | the design's    |
       | created         | the design's    |
-    # notes: AGENTS.md#a-sync-brings-the-teams-projects-and-designs-into-nextcloud
+    # notes: ../AGENTS.md#a-sync-brings-the-teams-projects-and-designs-into-nextcloud
 
-    Examples: every way a sync starts
+    Examples: both ways an instance-wide sync starts
       | actor        | scope         | folder       |
-      | the admin    | one mapping   | One Mapping  |
       | the admin    | every mapping | All Mappings |
       | the schedule | every mapping | On Schedule  |
 
@@ -54,7 +53,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
     Given the user has a personal Penpot token configured
     When the user syncs their personal team
     Then the designs their token can see are in their personal folder
-    # notes: AGENTS.md#a-user-syncs-their-own-personal-team-folder
+    # notes: ../AGENTS.md#a-user-syncs-their-own-personal-team-folder
 
   # ── what a first sync does with a tree that is already there ───────────────
 
@@ -71,7 +70,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | path                           | tagged |
       | Adopted/Handmade               | penpot |
       | Adopted/Handmade/Sketch.penpot | -      |
-    # notes: AGENTS.md#a-folder-already-named-like-a-penpot-project-is-adopted-not-duplicated
+    # notes: ../AGENTS.md#a-folder-already-named-like-a-penpot-project-is-adopted-not-duplicated
 
   # ── when a sync cannot finish ──────────────────────────────────────────────
 
@@ -88,7 +87,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | no service-account token is configured | token          |
       | the Penpot base URL points nowhere     | could not read |
 
-    # notes: AGENTS.md#a-sync-that-cannot-finish-says-so-and-says-why
+    # notes: ../AGENTS.md#a-sync-that-cannot-finish-says-so-and-says-why
 
   # ── still to specify ───────────────────────────────────────────────────────
 
@@ -102,4 +101,4 @@ Feature: Syncing a mapped Penpot team into Nextcloud
     When the admin syncs every mapping
     Then both are mirrored without a folder-name collision
     And the app reports the ambiguity so an admin can rename one in Penpot
-    # notes: AGENTS.md#two-penpot-projects-in-one-team-sharing-a-name-is-handled-not-crashed
+    # notes: ../AGENTS.md#two-penpot-projects-in-one-team-sharing-a-name-is-handled-not-crashed

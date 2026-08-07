@@ -60,7 +60,7 @@ while IFS=: read -r file line anchor; do
 		echo "    $file:$line -> #$anchor"
 	fi
 done < <(
-	grep -Hn '# *notes: *AGENTS\.md#' features/*.feature 2>/dev/null \
+	grep -Hrn --include='*.feature' '# *notes: *\(\.\./\)\?AGENTS\.md#' features 2>/dev/null \
 		| sed -E 's/^([^:]+):([0-9]+):.*AGENTS\.md#([A-Za-z0-9_-]+).*$/\1:\2:\3/' \
 		|| true
 )
@@ -84,7 +84,7 @@ def bread(s):   return s.startswith('# notes:')
 def status(s):  return re.match(r'^#\s*@(blocked|todo|unbuilt|decision)\b', s) is not None
 
 bad = []
-for f in sorted(pathlib.Path('features').glob('*.feature')):
+for f in sorted(pathlib.Path('features').rglob('*.feature')):
     lines = f.read_text().splitlines()
     i = 0
     while i < len(lines):
@@ -97,7 +97,7 @@ for f in sorted(pathlib.Path('features').glob('*.feature')):
             i += 1
         prose = [b for b in block if not (bread(b) or divider(b) or status(b))]
         if len(prose) > LIMIT:
-            bad.append((f.name, start + 1, len(prose)))
+            bad.append((f.relative_to('features'), start + 1, len(prose)))
 
 if bad:
     print(f'\u2718 COMMENT BUDGET \u2014 a block may carry at most {LIMIT} lines of prose;')

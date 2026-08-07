@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#set-mode
+# Notes, decisions and history for this feature: ../AGENTS.md#set-mode
 
 Feature: Storing and discarding a mirrored design's archive
   As an operator who has mapped a Penpot team
@@ -29,7 +29,7 @@ Feature: Storing and discarding a mirrored design's archive
       | penpot_mode     | "sync"          |
       | content         | an archive      |
 
-    # notes: AGENTS.md#promoting-a-mirrored-design-fetches-a-real-zip-from-penpot
+    # notes: ../AGENTS.md#promoting-a-mirrored-design-fetches-a-real-zip-from-penpot
 
   @admin @occ
   Scenario: A promoted file is not re-exported by the next pull
@@ -42,7 +42,7 @@ Feature: Storing and discarding a mirrored design's archive
       | penpot_id   | the design's id |
       | penpot_mode | "sync"          |
       | content     | an archive      |
-    # notes: AGENTS.md#a-promoted-file-is-not-re-exported-by-the-next-pull
+    # notes: ../AGENTS.md#a-promoted-file-is-not-re-exported-by-the-next-pull
 
   @admin @occ
   Scenario: Demoting throws the archive away and never contacts Penpot
@@ -58,12 +58,12 @@ Feature: Storing and discarding a mirrored design's archive
       | content         | empty           |
     And Penpot project "Demote Me" holds a design named "Sketch"
 
-    # notes: AGENTS.md#demoting-throws-the-archive-away-and-never-contacts-penpot
+    # notes: ../AGENTS.md#demoting-throws-the-archive-away-and-never-contacts-penpot
 
   # @blocked — no tty. Demotion asks for confirmation on stdin, and Behat has no
   # terminal to answer with; every other scenario here passes --force for exactly
   # that reason, which is what leaves the prompt itself unasserted.
-  # notes: AGENTS.md#demoting-asks-first-because-it-deletes-the-only-local-copy
+  # notes: ../AGENTS.md#demoting-asks-first-because-it-deletes-the-only-local-copy
   @blocked
   Scenario: Demoting asks first, because it deletes the only local copy
     Given a mirrored design "Precious" in the project "Stable"

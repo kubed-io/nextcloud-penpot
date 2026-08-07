@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#restore-design
+# Notes, decisions and history for this feature: ../AGENTS.md#restore-design
 
 Feature: Restoring a mirrored design
   As a Nextcloud user
@@ -18,7 +18,7 @@ Feature: Restoring a mirrored design
     Then the file "Penpot/Stay Put/Round Trip.penpot" carries a Penpot id
     And Penpot project "Stay Put" holds a design named "Round Trip"
     And the design "Round Trip" is not in Penpot's trash
-    # notes: AGENTS.md#restoring-a-design-brings-back-the-file-and-its-design-together
+    # notes: ../AGENTS.md#restoring-a-design-brings-back-the-file-and-its-design-together
 
   @in-nextcloud @gesture
   Scenario: Restoring a file that was never in Penpot leaves Penpot alone
@@ -27,7 +27,7 @@ Feature: Restoring a mirrored design
     When I restore "Loose Design.penpot" from the Nextcloud trash
     Then the file "Loose Design.penpot" is not in the Nextcloud trash
     And the file "Loose Design.penpot" carries no Penpot id
-    # notes: AGENTS.md#restoring-a-file-that-was-never-in-penpot-leaves-penpot-alone
+    # notes: ../AGENTS.md#restoring-a-file-that-was-never-in-penpot-leaves-penpot-alone
 
     # ── restore is never automatic ───────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ Feature: Restoring a mirrored design
     When I move the file into the "My Stuff" folder
     Then no restore is offered
     And Penpot is never contacted
-    # notes: AGENTS.md#an-untracked-file-is-never-restored-because-it-was-never-in-penpot
+    # notes: ../AGENTS.md#an-untracked-file-is-never-restored-because-it-was-never-in-penpot
 
     # ── the good case: the original still exists ─────────────────────────────────
 
@@ -83,7 +83,7 @@ Feature: Restoring a mirrored design
     But it says the design gets a NEW id, so old links stay broken
     And it says the edit history does not come back
     And nothing is sent to Penpot until I confirm
-    # notes: AGENTS.md#restoring-a-deleted-design-states-clearly-what-does-and-does-not-return
+    # notes: ../AGENTS.md#restoring-a-deleted-design-states-clearly-what-does-and-does-not-return
 
   @unbuilt
   Scenario: Confirming a restore of a deleted design creates a new file and re-points the mirror
@@ -112,7 +112,7 @@ Feature: Restoring a mirrored design
     And no import is performed
     And the design keeps its original id, revision, history and links
     And the app makes clear this restore lost nothing
-    # notes: AGENTS.md#a-design-still-in-penpots-trash-is-restored-losslessly-not-imported
+    # notes: ../AGENTS.md#a-design-still-in-penpots-trash-is-restored-losslessly-not-imported
 
   @unbuilt
   Scenario: A mirror in the Nextcloud trash is restored locally, not re-imported
@@ -180,7 +180,7 @@ Feature: Restoring a mirrored design
     When the restore stream answers with an empty set of ids
     Then the app does not report the design as restored
     And the local file stays where the user restored it
-    # notes: AGENTS.md#a-restore-that-penpot-did-not-actually-perform-is-never-reported-as-success
+    # notes: ../AGENTS.md#a-restore-that-penpot-did-not-actually-perform-is-never-reported-as-success
 
   @todo
   Scenario: A restore is confirmed against the listing the pull reads
@@ -190,7 +190,7 @@ Feature: Restoring a mirrored design
     And it checks again, once an in-flight delete has had time to land
     And a design that is not there yet is restored a second time
     And a design still missing after that is reported as a failure
-    # notes: AGENTS.md#a-restore-is-confirmed-against-the-listing-the-pull-reads
+    # notes: ../AGENTS.md#a-restore-is-confirmed-against-the-listing-the-pull-reads
 
   @in-nextcloud @gesture @blocked
   Scenario: A pull after a restore leaves exactly one mirror, in any mode
@@ -199,9 +199,9 @@ Feature: Restoring a mirrored design
     And a pull runs
     Then exactly one mirrored file exists for that design
     And the mirror is not trashed again
-    # notes: AGENTS.md#a-pull-after-a-restore-leaves-exactly-one-mirror-in-any-mode
+    # notes: ../AGENTS.md#a-pull-after-a-restore-leaves-exactly-one-mirror-in-any-mode
 
-    # notes: AGENTS.md#a-design-that-never-left-penpot-is-restored-locally-and-nothing-is-sent
+    # notes: ../AGENTS.md#a-design-that-never-left-penpot-is-restored-locally-and-nothing-is-sent
 
   @todo
   Scenario: A design that never left Penpot is restored locally and nothing is sent
@@ -217,7 +217,7 @@ Feature: Restoring a mirrored design
     Then the file is back where it was
     And no design is created in Penpot
     And the app reports that the design is gone and the mirror is now the only copy
-    # notes: AGENTS.md#a-design-that-is-gone-for-good-is-not-silently-recreated
+    # notes: ../AGENTS.md#a-design-that-is-gone-for-good-is-not-silently-recreated
 
   @unbuilt
   Scenario: An untracked file coming out of the trash is never restored into Penpot

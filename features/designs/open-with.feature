@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#open-with
+# Notes, decisions and history for this feature: ../AGENTS.md#open-with
 
 Feature: Opening a mirrored Penpot file (Open in Penpot only)
   As a Nextcloud user
@@ -22,7 +22,7 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
 
   # @blocked — no browser, as everything in this file is: a context menu and the
   # glyph in it are pixels, and the harness is occ + DAV.
-  # notes: AGENTS.md#the-open-in-penpot-glyph-is-drawn-for-a-menu
+  # notes: ../AGENTS.md#the-open-in-penpot-glyph-is-drawn-for-a-menu
   @blocked
   Scenario: The "Open in Penpot" glyph is drawn for a menu
     Given a mirrored ".penpot" file

@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#move-project
+# Notes, decisions and history for this feature: ../AGENTS.md#move-project
 
 Feature: Moving a Penpot project folder
   As a Nextcloud user
@@ -36,7 +36,7 @@ Feature: Moving a Penpot project folder
     When I try to move it outside its team folder
     Then the refusal explains a project cannot leave its team from Nextcloud
     And it explains that moving a project between teams must be done in Penpot
-    # notes: AGENTS.md#the-project-folder-refusal-explains-why-and-what-to-do-instead
+    # notes: ../AGENTS.md#the-project-folder-refusal-explains-why-and-what-to-do-instead
 
   @in-nextcloud @gesture @unbuilt
   Scenario: A project folder cannot be moved into a different team's folder
@@ -45,9 +45,9 @@ Feature: Moving a Penpot project folder
     Then the move is refused with the same explanation
     And neither team's mapping is modified
 
-    # notes: AGENTS.md#a-project-folder-cannot-be-moved-into-a-different-teams-folder
+    # notes: ../AGENTS.md#a-project-folder-cannot-be-moved-into-a-different-teams-folder
 
-  # notes: AGENTS.md#a-user-can-move-their-personal-project-folders-anywhere-in-their-home
+  # notes: ../AGENTS.md#a-user-can-move-their-personal-project-folders-anywhere-in-their-home
 
   @unbuilt
   Scenario: A user can move their personal project folders anywhere in their home

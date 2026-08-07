@@ -29,9 +29,9 @@ why — see [README.md](README.md).
 > behaviour, change the note that explains it in the same commit; a note that
 > describes the old behaviour is worse than no note.
 
-## admin-connection
+## connection/connection
 
-`features/admin-connection.feature`
+`features/connection/connection.feature`
 
 The "connect to Penpot" use case. The SHAPE is genuinely different from both
 sibling apps, and the reason took the whole survey to work out.
@@ -177,9 +177,67 @@ could apply a write twice — see errors.feature.
 
 ---
 
-## admin-mapping
+### The personal connection
 
-`features/admin-mapping.feature`
+FOLDED IN FROM `personal-settings.feature`. An admin connects the instance — a
+URL and a service-account token; a user connects only themselves — a token
+against the URL the admin already gave. Different pre-state, different end state,
+so they stay separate scenarios; the same act, so they are one file.
+
+
+The per-Nextcloud-user personal Penpot token page — genuinely NEW territory for
+this app family. Neither n8n nor Grafana has a per-user settings precedent:
+both store one admin-wide credential (IAppConfig, `sensitive`) and only read
+IUserSession inside listeners to know who's acting.
+
+WHAT THIS PAGE IS FOR, PRECISELY (saga §6.18): attribution. Nothing else.
+
+It is NOT how the app reads Penpot — the service account does all mirroring,
+always (admin-connection.feature). It is NOT required for anything to work. It
+exists so that when a human renames or restores a design from Nextcloud, Penpot
+records THAT HUMAN as having done it, rather than recording every action by
+every user as "nextcloud" forever. Penpot's file history is append-only from
+our side: a change attributed to a robot can never be re-attributed later.
+
+THIS IS A SMALL SURFACE BY DESIGN. Command's own observation — "renaming
+deleting and moving is really the only thing we could do from nextcloud as an
+action" — is what makes the whole model affordable. The complete list of writes
+is short and every entry is either non-destructive or explicitly confirmed by
+a human (saga §6.19): moving a file between projects, creating a design,
+restoring one, renaming a project folder, and deleting in Penpot. Exactly ONE
+RPC in the whole app destroys anything (`delete-file`), and it is only ever
+reached through a confirmed user action. A token used at that few call sites
+doesn't need elaborate machinery.
+
+WHAT'S STILL OPEN (saga open question #9): only the storage mechanism. The
+presumed answer is IConfig::setUserValue with the sensitive flag — the
+user-scoped analogue of both siblings' AppConfig pattern — but it isn't built.
+The scenarios below describe OBSERVABLE behaviour and don't assume a class.
+
+THE 1:1 ASSUMPTION (saga §6.9): one Nextcloud user, one Penpot account, one
+token. Stated as the assumed default, not enforced.
+
+@todo — no lib/Settings/PersonalSettings.php exists yet; this is a brand-new
+settings surface, not a port from either sibling.
+
+### Clearing a personal token degrades attribution but breaks nothing
+
+Contrast with an earlier draft, which said mapped folders "stop pulling
+until a token is set again." That was written under the superseded
+per-user-pull model (saga §6.9) — the pull never used personal tokens in
+the final design, so clearing one cannot affect it.
+
+### The app assumes one Nextcloud user maps to one Penpot account
+
+Sharing one Penpot login across Nextcloud users isn't precluded by anything
+the app enforces — it just defeats the page's only purpose, since both
+users' changes would then be attributed identically.
+
+---
+
+## team-mapping/create
+
+`features/team-mapping/create.feature`
 
 "Admin makes a mapping" — the team-mapping list in admin settings, driven over
 the CLI (the same operations the Settings panel performs).
@@ -592,9 +650,9 @@ that is never coming.
 
 ---
 
-## copy-design
+## designs/copy
 
-`features/copy-design.feature`
+`features/designs/copy.feature`
 
 THE LIVE HALF is driven over WebDAV against a real Penpot: copy in place, copy
 up to the team root, and the copy-then-rename chain.
@@ -741,9 +799,9 @@ modes, purely because of where the duplicate was made.
 
 ---
 
-## copy-project
+## projects/copy
 
-`features/copy-project.feature`
+`features/projects/copy.feature`
 
 COPYING A PROJECT — and the short answer is that you cannot.
 
@@ -778,9 +836,9 @@ on (create-project.feature).
 
 ---
 
-## create-design
+## designs/create
 
-`features/create-design.feature`
+`features/designs/create.feature`
 
 "New → Penpot design" in the Files app — the same New-menu affordance both
 sibling apps offer for workflows and dashboards.
@@ -913,13 +971,13 @@ team ancestor because a token was set.
 
 ---
 
-## create-project
+## projects/create
 
-`features/create-project.feature`
+`features/projects/create.feature`
 
 HOW A FOLDER BECOMES A PENPOT PROJECT — the creating half, from either side.
 
-## WHAT THIS FILE OWNS
+### WHAT THIS FILE OWNS
 
 A project's IDENTITY: how a folder acquires one, and the marker that says it
 has. Every VERB a project can be on the receiving end of lives with the other
@@ -945,7 +1003,7 @@ models can be read together.
 A PERSONAL project is created the same way, by the same tag, in the user's own
 home — personal-projects.feature owns only the who and the where.
 
-## THE ASYMMETRY (saga §C6.18)
+### THE ASYMMETRY (saga §C6.18)
 
     every Penpot project      →  a folder in Nextcloud     (automatic)
     SOME Nextcloud folders    →  a project in Penpot       (opt-in only)
@@ -968,7 +1026,7 @@ first-class gesture with an event (`TagAssignedEvent`), the sibling apps use it
 for exactly this kind of opt-in, and it survives a rename or a move in a way a
 name convention could not. It needs Nextcloud 32 — see appinfo/info.xml.
 
-## A NOTE ON THE BACKGROUND
+### A NOTE ON THE BACKGROUND
 
 It used to provision a Team Folder and mirror a project called "My Stuff" into
 it, and none of those steps had ever existed — harmless while the whole file
@@ -1032,15 +1090,15 @@ tag being missing is never a state the app has to repair specially.
 
 ---
 
-## delete-design
+## designs/delete
 
-`features/delete-design.feature`
+`features/designs/delete.feature`
 
 DELETING A DESIGN — both bins, both directions, and the one irreversible path.
 Deleting a PROJECT (the folder) is delete-project.feature: one call, not one
 per design, and a different set of guards.
 
-## TWO BINS, AND THEY ARE NOT SYMMETRIC (saga §C6.11)
+### TWO BINS, AND THEY ARE NOT SYMMETRIC (saga §C6.11)
 
 Nextcloud's trash and Penpot's trash are separate systems with separate
 retentions. An ordinary delete is SOFT on both sides — recoverable, and
@@ -1054,7 +1112,7 @@ own trash before permanently deleting, so the app reads the trash listing first
 and passes only ids that are in it. A design someone restored in Penpot between
 the two is therefore left alone.
 
-## A LINK HAS NOTHING TO DELETE
+### A LINK HAS NOTHING TO DELETE
 
 A `link` is zero bytes pointing at a design that lives elsewhere, so deleting
 one is a DISMISSAL, not a deletion — it hides the pointer and leaves the design
@@ -1267,9 +1325,9 @@ against the original's 5.
 
 ---
 
-## delete-project
+## projects/delete
 
-`features/delete-project.feature`
+`features/projects/delete.feature`
 
 DELETING A PROJECT — the folder, which is ONE Penpot call rather than one per
 design. Deleting a design is delete-design.feature.
@@ -1288,7 +1346,7 @@ project in it.
 The design-side rules about the two bins, the permanent-delete guard, and link
 dismissal all live in delete-design.feature and are not restated here.
 
-## A CORRECTION THIS FILE EXISTS TO CARRY (saga §C6.25)
+### A CORRECTION THIS FILE EXISTS TO CARRY (saga §C6.25)
 
 This spec used to say "deleting a personal project folder never touches
 Penpot". That was not a rule — it was the CURRENT DEFECT written up as one.
@@ -1303,7 +1361,7 @@ The mirror's whole premise is parity: a folder the user tagged into existence
 is one they can delete the same way, in a personal team exactly as in a mapped
 one. Only the credential differs.
 
-## WHAT PENPOT ACTUALLY DOES, measured (saga §C6.11)
+### WHAT PENPOT ACTUALLY DOES, measured (saga §C6.11)
 
   delete-project {id}   → HTTP 204, and it is ENTIRELY SOFT. Sets
                           project.deleted_at to now + deletion-delay (7 days by
@@ -1370,9 +1428,9 @@ see their personal team at all (personal-projects.feature).
 
 ---
 
-## edit-design
+## designs/edit
 
-`features/edit-design.feature`
+`features/designs/edit.feature`
 
 A DESIGN'S CONTENT CHANGING — and the only file in this app with one direction
 where both siblings have two.
@@ -1488,9 +1546,9 @@ is undecided — saga open question #38.
 
 ---
 
-## view-design
+## designs/view
 
-`features/view-design.feature`
+`features/designs/view.feature`
 
 LOOKING AT A MIRRORED DESIGN — the only part of "it is a real file type" that
 anyone actually performs.
@@ -1719,53 +1777,6 @@ only moves on a rename.
 
 ---
 
-## ignore
-
-`features/ignore.feature`
-
-The user-set ignore marker — "stop mirroring this file, but keep it."
-
-THE INSIGHT (saga §6.23): "tagged ignore" and "moved out of a mapped folder"
-are THE SAME STATE reached two different ways. Both mean: the archive is in
-Nextcloud, and this app is no longer mirroring it. Command put it exactly
-right — "adding a special ignore tag would simply treat it like it was
-unmapped … this just means the penpot file is on nxt but taken out of penpot."
-One state, one implementation, two entrances.
-
-"TAKEN OUT OF PENPOT" MEANS THE MIRRORING ENDS, NOT THE DESIGN DIES. Ignoring
-a file NEVER deletes anything in Penpot. Saga §6.1 is intact: this app has no
-destructive remote path at all. If the user wants the design gone from Penpot,
-they delete it in Penpot — this app will not do it for them, ever.
-
-IGNORE IS ONLY MEANINGFUL ON "sync" (Command's call, saga §6.23). A "link" file
-holds no archive — only a pointer. Ignoring one leaves an orphaned pointer with
-no content and no purpose, so it's refused with an offer to promote to "sync"
-first. This is the one place the two modes behave genuinely differently for a
-user action, and the reason is concrete: there's nothing to keep.
-
-THIS IS A TAG, NOT METADATA, AND THAT'S DELIBERATE. The mapping uses folder
-metadata because it's machine state (saga §6.21). The ignore marker is a
-HUMAN decision that a human needs to see and toggle in the Files app — being
-visible is the entire point. Same split both siblings use: Grafana's
-`grafana:ignore` is explicitly separate from its auto-managed ownership pills.
-
-@todo — no lib/Service/ exists yet.
-
----
-
-### An ignored file whose Penpot original is deleted is still kept
-
-The strongest form of the promise: ignore protects a file from the one operation
-that would otherwise remove it — the prune a pull performs when a design is
-deleted in Penpot (delete-design.feature).
-
-### Demoting an ignored file is refused
-
-THE MIRROR OF "Ignoring a link file is refused", and why both live here rather
-than with the mode: ignore is what is being protected in each. Ignoring a link is
-refused because there is no archive to keep; demoting an ignored file is refused
-because it would delete the archive the ignore tag exists to keep.
-
 ## lifecycle
 
 `features/lifecycle.feature`
@@ -1939,9 +1950,9 @@ rule to use is not yet decided — saga open question #30.
 
 ---
 
-## move-design
+## designs/move
 
-`features/move-design.feature`
+`features/designs/move.feature`
 
 MOVING A DESIGN — every way a design can change project, team, or Drafts state,
 from either side. Moving a PROJECT (the folder) is move-project.feature: a
@@ -1953,14 +1964,14 @@ reconcile.feature and the two scenarios CI could prove lived in a third file
 called gestures.feature. Three places, one behaviour. Now a move is a move,
 whoever performed it, and the sections below are ordered by where it happened.
 
-## THE GUIDING PRINCIPLE: DON'T LOSE DATA
+### THE GUIDING PRINCIPLE: DON'T LOSE DATA
 
 A move never destroys bytes, never contacts Penpot destructively, and never
 leaves a file in a state the user cannot get back out of. The closing invariant
 below is stated for files AND folders, and move-project.feature relies on it
 rather than restating it.
 
-## NEXTCLOUD OWNS LAYOUT, PENPOT OWNS MEMBERSHIP (saga §6.29)
+### NEXTCLOUD OWNS LAYOUT, PENPOT OWNS MEMBERSHIP (saga §6.29)
 
 A design may sit anywhere inside a folder that maps to its real project — the
 pull only ensures membership, never a particular path. That is what makes a
@@ -2049,9 +2060,9 @@ losing a `sync` file's archive on the way past.
 
 ---
 
-## move-project
+## projects/move
 
-`features/move-project.feature`
+`features/projects/move.feature`
 
 MOVING A PROJECT — the folder, and the one rule that makes it different from
 moving a design: a project folder's POSITION is constrained where a design's is
@@ -2094,9 +2105,9 @@ personal-projects.feature for what actually is special about them.
 
 ---
 
-## open-with
+## designs/open-with
 
-`features/open-with.feature`
+`features/designs/open-with.feature`
 
 "Open with" — the opener(s) offered for a mirrored ".penpot" file.
 
@@ -2198,7 +2209,7 @@ driver.
 
 PERSONAL PROJECTS — the WHO and the WHERE, and nothing else.
 
-## WHAT THIS FILE OWNS, AFTER THE DESIGN/PROJECT SPLIT
+### WHAT THIS FILE OWNS, AFTER THE DESIGN/PROJECT SPLIT
 
 A personal project is a project. Creating, renaming, moving, copying and
 deleting one behaves exactly as it does in a mapped team — so those scenarios
@@ -2235,63 +2246,9 @@ mapping rather than as a sync job.
 
 ---
 
-## personal-settings
+## designs/purge
 
-`features/personal-settings.feature`
-
-The per-Nextcloud-user personal Penpot token page — genuinely NEW territory for
-this app family. Neither n8n nor Grafana has a per-user settings precedent:
-both store one admin-wide credential (IAppConfig, `sensitive`) and only read
-IUserSession inside listeners to know who's acting.
-
-WHAT THIS PAGE IS FOR, PRECISELY (saga §6.18): attribution. Nothing else.
-
-It is NOT how the app reads Penpot — the service account does all mirroring,
-always (admin-connection.feature). It is NOT required for anything to work. It
-exists so that when a human renames or restores a design from Nextcloud, Penpot
-records THAT HUMAN as having done it, rather than recording every action by
-every user as "nextcloud" forever. Penpot's file history is append-only from
-our side: a change attributed to a robot can never be re-attributed later.
-
-THIS IS A SMALL SURFACE BY DESIGN. Command's own observation — "renaming
-deleting and moving is really the only thing we could do from nextcloud as an
-action" — is what makes the whole model affordable. The complete list of writes
-is short and every entry is either non-destructive or explicitly confirmed by
-a human (saga §6.19): moving a file between projects, creating a design,
-restoring one, renaming a project folder, and deleting in Penpot. Exactly ONE
-RPC in the whole app destroys anything (`delete-file`), and it is only ever
-reached through a confirmed user action. A token used at that few call sites
-doesn't need elaborate machinery.
-
-WHAT'S STILL OPEN (saga open question #9): only the storage mechanism. The
-presumed answer is IConfig::setUserValue with the sensitive flag — the
-user-scoped analogue of both siblings' AppConfig pattern — but it isn't built.
-The scenarios below describe OBSERVABLE behaviour and don't assume a class.
-
-THE 1:1 ASSUMPTION (saga §6.9): one Nextcloud user, one Penpot account, one
-token. Stated as the assumed default, not enforced.
-
-@todo — no lib/Settings/PersonalSettings.php exists yet; this is a brand-new
-settings surface, not a port from either sibling.
-
-### Clearing a personal token degrades attribution but breaks nothing
-
-Contrast with an earlier draft, which said mapped folders "stop pulling
-until a token is set again." That was written under the superseded
-per-user-pull model (saga §6.9) — the pull never used personal tokens in
-the final design, so clearing one cannot affect it.
-
-### The app assumes one Nextcloud user maps to one Penpot account
-
-Sharing one Penpot login across Nextcloud users isn't precluded by anything
-the app enforces — it just defeats the page's only purpose, since both
-users' changes would then be attributed identically.
-
----
-
-## purge
-
-`features/purge.feature`
+`features/designs/purge.feature`
 
 Purge — an admin-only button beside "Sync from Penpot" and "Test connection"
 (also `occ penpot_sync:purge`) that removes the mirrored ".penpot" files THIS
@@ -2325,9 +2282,9 @@ the app was never there).
 
 ---
 
-## remove-mapping
+## team-mapping/delete
 
-`features/remove-mapping.feature`
+`features/team-mapping/delete.feature`
 
 Removing a team mapping — the admin deletes a mapping from the list (or
 `occ penpot_sync:remove-mapping`). This is NOT the "Purge Nextcloud files"
@@ -2364,9 +2321,9 @@ teardown warns about this, because "removing a mapping deleted my backups" and
 
 ---
 
-## rename-design
+## designs/rename
 
-`features/rename-design.feature`
+`features/designs/rename.feature`
 
 Renaming a DESIGN — the mirror file and the Penpot file it points at.
 Renaming a PROJECT (the folder) is rename-project.feature: same gesture, but a
@@ -2503,9 +2460,9 @@ break the link. `the design's id` resolves through the NEW name, so one row
 asserts both halves: the design is called that now, and this file is still that
 design.
 
-## rename-project
+## projects/rename
 
-`features/rename-project.feature`
+`features/projects/rename.feature`
 
 Renaming a PROJECT — the folder in Nextcloud and the Penpot project it maps to.
 Renaming a DESIGN is rename-design.feature: same gesture in the Files app, but
@@ -2572,14 +2529,14 @@ something to fall back into because one name happened to contain a slash.
 
 ---
 
-## restore-design
+## designs/restore
 
-`features/restore-design.feature`
+`features/designs/restore.feature`
 
 RESTORING A DESIGN — out of the Nextcloud trash, out of Penpot's trash, or out
 of an archive when both are gone. Restoring a PROJECT is restore-project.feature.
 
-## THE ORDER IS THE FEATURE (saga §6.49/§C6.11)
+### THE ORDER IS THE FEATURE (saga §6.49/§C6.11)
 
 The app always offers Penpot's own trash BEFORE an archive import, and the
 difference is not cosmetic: a trash restore returns the SAME design — same id,
@@ -2587,13 +2544,13 @@ same revision, same history — while an import creates a new one that merely
 looks like it. Only once Penpot's grace window has closed is an import the best
 that remains, and the app says so rather than quietly producing a lookalike.
 
-## A RESTORE IS CONFIRMED, NEVER ASSUMED
+### A RESTORE IS CONFIRMED, NEVER ASSUMED
 
 Penpot's success event is not proof: the restore is re-read from the same
 listing the pull uses before it is reported as done. A restore that did not
 actually happen must never be announced as one.
 
-## A LINK HAS NOTHING TO RESTORE INTO PENPOT
+### A LINK HAS NOTHING TO RESTORE INTO PENPOT
 
 Restoring a dismissed `link` un-hides a pointer. It never pushes anything back
 into Penpot, in any circumstance.
@@ -2730,9 +2687,9 @@ thing that must not happen is quietly doing nothing.
 
 ---
 
-## restore-project
+## projects/restore
 
-`features/restore-project.feature`
+`features/projects/restore.feature`
 
 RESTORING A PROJECT — the folder, and everything that was in it. Restoring a
 design is restore-design.feature.
@@ -2770,9 +2727,9 @@ restored and points at nothing.
 
 ---
 
-## set-mode
+## team-mapping/set-mode
 
-`features/set-mode.feature`
+`features/team-mapping/set-mode.feature`
 
 Promoting and demoting a single file — the whole of the mode axis, now that
 `sync-mode.feature` is retired into it.
@@ -2816,7 +2773,7 @@ because "never contacts Penpot" is a claim about the far side.
 the file's record of which revision it held, so a later promotion knows whether
 what it fetches is new.
 
-## WHY THIS SUITE IS WORTH A LIVE PENPOT
+### WHY THIS SUITE IS WORTH A LIVE PENPOT
 
 Promotion is the app's only code path that moves real bytes out of Penpot, and
 it is four unmockable steps in a row (saga §5.1–§5.4, §C4.8):
@@ -2837,7 +2794,7 @@ So the assertion below is deliberately crude and physical: after a promotion
 the mirrored file **begins with a ZIP's magic bytes**. Not "the client was
 called" — a ZIP arrived.
 
-## THE CHEAP PATH IS ASSERTED TOO, BECAUSE IT IS THE WHOLE POINT
+### THE CHEAP PATH IS ASSERTED TOO, BECAUSE IT IS THE WHOLE POINT
 
 `link` mode's entire claim is that mirroring a team costs a listing and
 nothing else. A regression that quietly exported every file would still pass
@@ -2856,7 +2813,7 @@ It came from `sync-mode.feature`, which specified it and could not run it either
 The prompt is unit-tested where the answer can be scripted (SetModeTest); this is
 the end-to-end statement of the same promise, parked behind a named wall rather
 than behind a file nobody was going to run.
-## WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
+### WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
 
 STATED PLAINLY BECAUSE IT DIVERGED FROM THE DESIGN WITHOUT A DECISION: mode is
 PER FILE and MUTABLE. `occ penpot_sync:set-mode` takes a PATH, not a mapping,
@@ -2948,9 +2905,9 @@ TWO SCENARIOS SURVIVED, and both moved to the file that owns their subject:
 | Demoting a sync file to link warns before deleting the archive | `set-mode.feature` | the confirmation is really implemented (`--force` exists to skip it) and nothing asserted it — every live scenario passes `--force` |
 | Demoting an ignored file is refused | `ignore.feature` | the mirror of "Ignoring a link file is refused"; both are about what ignore protects |
 
-## sync-now
+## connection/sync-now
 
-`features/sync-now.feature`
+`features/connection/sync-now.feature`
 
 SYNC NOW — bringing what is already in Penpot into Nextcloud.
 
@@ -2979,7 +2936,7 @@ leaving a second folder beside the one someone made. From then on the id
 identifies the project, which is why a rename upstream moves this folder rather
 than making another.
 
-## THE RECONCILER IS NOT A FEATURE (saga §C6.28)
+### THE RECONCILER IS NOT A FEATURE (saga §C6.28)
 
 This file used to be `reconcile.feature`, and it had thirty-four scenarios. The
 reconciler is what carries every "from Penpot" change into Nextcloud — it is the
@@ -2992,7 +2949,7 @@ rename, and that it arrived via the reconciler is HOW, not WHAT.
 Half the file could not be built, and that was the tell rather than a coincidence:
 an unbuildable scenario is usually a scenario about the wrong thing.
 
-## TWO ACTORS, AND THAT IS THE WHOLE FILE
+### TWO ACTORS, AND THAT IS THE WHOLE FILE
 
     admin   syncs one mapping now, and waits for it
     admin   syncs everything now, which is a background job
@@ -3002,14 +2959,14 @@ Everything below is the OUTCOME of one of those. Mirroring a root, a project, a
 file, its dates; leaving an unchanged instance alone; pruning what Penpot no
 longer has — none of them is a separate behaviour, they are what a sync DOES.
 
-## THE FIRST SYNC IS ITS OWN SITUATION
+### THE FIRST SYNC IS ITS OWN SITUATION
 
 Whatever put these designs in Penpot happened before this app existed, so it is
 out of scope by definition. That makes "existing designs arrive for the first
 time" a real and independent thing to describe — and it needs one or two designs
 to describe it, not a catalogue of every state a design can be in.
 
-## A USER'S SYNC NOW IS THE SAME BEHAVIOUR
+### A USER'S SYNC NOW IS THE SAME BEHAVIOUR
 
 Scoped by what their token can see in Penpot and what they can see in Nextcloud,
 but the end state is identical, and a scenario that differs only in scope is the
@@ -3346,3 +3303,46 @@ ONE THING SIMPLER THAN BOTH SIBLINGS: reconnection here is PULL-ONLY. n8n and
 Grafana's reinstall story has to worry about a stray push racing the first pull
 after re-enable; this app never writes back (§6.1), so "reinstall reconciles in
 place" is strictly a read-side guarantee with no writeback half to reason about.
+
+## team-mapping/manage-groups
+
+`features/team-mapping/manage-groups.feature`
+
+THE ONE FIELD A MAPPING LETS YOU EDIT. Everything else — the team, the folder,
+the storage backend, the default mode — is fixed at creation, because changing it
+would force a live migration of already-mirrored content. Split out of
+`admin-mapping.feature` so the editable field is not buried among the immutable
+ones.
+
+The groups are the FOLDER'S, not the mapping's: the app applies them when it
+provisions, then reads back whatever the folder says. Re-share it from Files or
+with `occ` and this app reports the change; a sync never puts back a group you
+removed. Both storage backends get their own Examples block because the
+provisioning differs and the behaviour must not.
+
+## team-mapping/view
+
+`features/team-mapping/view.feature`
+
+Looking at what is mapped. Small today, and the interesting case is the one that
+is here: a team renamed in Penpot must not rename the folder an admin chose. The
+mapping is keyed on the team id, so it keeps resolving; the folder name was never
+Penpot's to set.
+
+## team-mapping/sync-now
+
+`features/team-mapping/sync-now.feature`
+
+THE CARD'S OWN BUTTON — one mapping, on demand.
+
+### Syncing one mapping brings its projects and designs into Nextcloud
+
+SPLIT OUT OF THE INSTANCE-WIDE OUTLINE, which used to carry it as a third
+Examples row beside "every mapping" and "the schedule". Same end state, and the
+row was honest — but the scope IS the difference, and a mapping-scoped action
+belongs with the mapping. `connection/sync-now.feature` keeps the two that walk
+everything.
+
+The folder differs from the instance-wide scenarios' on purpose: they clear the
+mapping store between runs, so distinct folders stop one file's leftovers reading
+as another's result.

@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Spec: the feature files are grouped by what they act on — `designs/`, `projects/`, `team-mapping/` and `connection/` — one verb per file, so a mapping gets the same treatment a design already had.
+
 - Moving or renaming a mirrored design is now proven not to re-download its archive.
 - Spec: what happens when a design is edited in Penpot is now written down; a mirror's metadata is specified as the end state of the action that changed it.
 - CI: the feature files' `# notes:` pointers are now checked to resolve, and their comments to stay within budget.

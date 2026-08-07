@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#move-design
+# Notes, decisions and history for this feature: ../AGENTS.md#move-design
 
 Feature: Moving a mirrored design
   As a Nextcloud user
@@ -49,7 +49,7 @@ Feature: Moving a mirrored design
       | penpot_mode    | "sync"          |
       | content        | an archive      |
 
-    # notes: AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
+    # notes: ../AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
   @in-nextcloud @gesture @blocked
   Scenario: A move between projects is attributed to the acting user
@@ -69,7 +69,7 @@ Feature: Moving a mirrored design
     And the next pull reconciles it
     # Saga §6.18 rule 3 — a remote failure never destroys local state.
 
-    # notes: AGENTS.md#filing-a-draft-dragging-from-the-team-root-into-a-project
+    # notes: ../AGENTS.md#filing-a-draft-dragging-from-the-team-root-into-a-project
 
   @in-nextcloud @gesture
   Scenario: Filing a draft — dragging from the team root into a project
@@ -86,7 +86,7 @@ Feature: Moving a mirrored design
     And "Penpot/Unfile Me/Going Loose.penpot" is a "sync" design
     When I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
     Then Penpot project "Unfile Me" holds no design named "Going Loose"
-    # notes: AGENTS.md#un-filing-dragging-from-a-project-out-to-the-team-root
+    # notes: ../AGENTS.md#un-filing-dragging-from-a-project-out-to-the-team-root
 
     # ── out of every mapping: the meaningful move ─────────────────────────────
 
@@ -99,8 +99,8 @@ Feature: Moving a mirrored design
     And the file keeps its full ".penpot" archive content and its "penpot_id"
     And the file becomes "unmapped" — this app stops mirroring it
     And the archive remains a valid, openable ".penpot" file on its own
-    # The "zip in nextcloud only" state (§6.23) — the same state the ignore tag
-    # produces. Moving it back in offers a restore; see restore-design.feature.
+    # The "zip in nextcloud only" state (§6.23). Moving it back in offers a
+    # restore; see restore.feature.
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Moving an unmapped tracked file back under a project offers a restore
@@ -121,7 +121,7 @@ Feature: Moving a mirrored design
     # Creating a design is a deliberate action (create-design.feature), never a
     # side effect of dragging a file somewhere.
 
-    # notes: AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project
+    # notes: ../AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Moving a design from a personal project into a mapped team project
@@ -152,9 +152,9 @@ Feature: Moving a mirrored design
     # The existing unmapped state (§6.23, above), reached from the personal side.
     # Nothing about the personal mapping changes what leaving a mapping means.
 
-    # notes: AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
+    # notes: ../AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
-  # notes: AGENTS.md#a-link-cannot-be-moved-out-of-the-project-it-points-into
+  # notes: ../AGENTS.md#a-link-cannot-be-moved-out-of-the-project-it-points-into
   @in-nextcloud @gesture
   Scenario Outline: A link cannot be moved out of the project it points into
     Given a mirrored design "Pointer" in the project "Confined"
@@ -211,7 +211,7 @@ Feature: Moving a mirrored design
     Then there is no node at "Penpot/Upstream From/Relocated.penpot"
     And the file "Penpot/Upstream To/Relocated.penpot" carries a Penpot id
     And the file "Penpot/Upstream To/Relocated.penpot" is not in the Nextcloud trash
-    # notes: AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
+    # notes: ../AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
 
   @in-penpot @todo
   Scenario: A design moved into Drafts in Penpot surfaces at the team root
