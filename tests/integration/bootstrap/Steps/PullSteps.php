@@ -47,9 +47,6 @@ trait PullSteps {
 	/** The Penpot id of the team the current scenario mapped. */
 	private string $pulledTeamId = '';
 
-	/** path -> the mtime/etag stamp noted before a pull. @var array<string, string> */
-	private array $notedStamps = [];
-
 	/**
 	 * Map a NAMED team to a NAMED folder, on WHICHEVER BACKEND this leg runs.
 	 *
@@ -508,42 +505,6 @@ trait PullSteps {
 	public function aMirroredProject(string $project): void {
 		$this->aPenpotProjectExistsInThatTeam($project);
 		$this->theAdminRunsAPull();
-	}
-
-	/**
-	 * The idempotency guard both siblings once failed (§C6.19).
-	 *
-	 * `nextcloud-n8n` and `nextcloud-grafana` each rewrote every mirrored file on
-	 * every run, so a pull with nothing changed upstream moved mtime and etag on all
-	 * of them — which tells every connected client to re-download the lot. Both are
-	 * fixed now; this app never had it, via two guards added for unrelated reasons
-	 * (`storeLink()`'s early return on an empty file, and `driftedOrMissing()`'s
-	 * revision gate), and neither is protected by any other scenario: making the
-	 * write unconditional would leave the rest of this suite green.
-	 *
-	 * Read over DAV rather than through the app deliberately — the question is
-	 * what a SYNC CLIENT would see, and the app's own view of a file cannot
-	 * answer that.
-	 *
-	 * @Given /^I note the mtime and etag of "([^"]*)"$/
-	 */
-	public function iNoteTheStampOf(string $path): void {
-		$this->notedStamps[$path] = $this->davStamp($path);
-	}
-
-	/** @Then /^"([^"]*)" has the same mtime and etag$/ */
-	public function hasTheSameStamp(string $path): void {
-		$before = $this->notedStamps[$path]
-			?? throw new \RuntimeException("nothing was noted for '{$path}' — the Given is missing");
-		$after = $this->davStamp($path);
-		if ($before !== $after) {
-			throw new \RuntimeException(
-				"'{$path}' was rewritten by a pull that changed nothing upstream.\n"
-				. "  before: {$before}\n  after:  {$after}\n"
-				. 'mtime and etag are what every sync client reads, so this makes every '
-				. 'device re-download the whole mapped folder after every scheduled pull.',
-			);
-		}
 	}
 
 	/**

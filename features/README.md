@@ -387,6 +387,26 @@ the file:
 The safe habit is simple: **never put an apostrophe next to a quoted parameter.**
 Rephrase the possessive instead.
 
+## Comments: two lines, then a breadcrumb
+
+A feature file is the specification, so a scenario has to be legible at a glance.
+A comment may add scope to a step; it may not carry the reasoning. **Two lines of
+prose per block is the budget**, and anything longer goes to
+[`AGENTS.md`](AGENTS.md) behind a one-line pointer:
+
+```gherkin
+    # notes: AGENTS.md#a-mapped-folder-shows-its-designs-as-designs
+```
+
+Dividers, a `@blocked` reason and the breadcrumbs themselves are not prose and do
+not count against it.
+
+`tests/integration/bin/check-notes-anchors.sh` enforces both halves in the
+quality job: every breadcrumb must resolve to a real heading, and no block may
+exceed the budget. Both failures are silent otherwise — a renamed scenario
+orphans its anchor with nothing to notice, and prose creeps back a line at a time
+until the spec is unreadable again.
+
 ## Metadata is a POST-STATE, never a subject
 
 A mirror's metadata is not something anyone does. It is what is true after
@@ -433,12 +453,6 @@ vocabulary the admin chose.
 **One canonical table, then deltas.** `view-design.feature` spells out the full
 property set once, because there LOOKING is the behaviour. Every other file shows
 only the rows its action touches or promises not to touch.
-
-**The one sanctioned "before".** `I note the mtime and etag of "…"` survives, in
-`edit-design.feature` alone. An mtime and an etag are not state a table can name
-absolutely — the claim is that a sync client sees no reason to re-download — so
-it is the one place a scenario records a value first. Everything else states what
-is, not what moved.
 
 ## Data tables: an input, or a different rule?
 

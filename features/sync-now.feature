@@ -11,23 +11,6 @@ Feature: Syncing a mapped Penpot team into Nextcloud
     And the admin has configured the service-account token
 
   # ── one behaviour, four ways to start it ───────────────────────────────────
-  #
-  #   actor    | scope
-  #   ---------+---------------------
-  #   admin    | one mapping          the card's "Sync now"
-  #   admin    | every mapping        the section's "Sync from Penpot"
-  #   schedule | every mapping        time as the actor
-  #   user     | their personal team  the personal "Sync now"
-  #
-  # Same pre-state, same post-state. The actor and the scope are the only things
-  # that differ, so they are COLUMNS rather than four scenarios. Whether a run is
-  # synchronous or queued is a mechanism, and is asserted nowhere.
-  #
-  # THIS FILE IS THE FIRST SYNC, AND ONLY THAT. A later run only has work to do
-  # because something changed in Penpot — and every one of those is a scenario
-  # about the change, not about the sync: a design deleted upstream belongs to
-  # delete-design.feature, a project renamed upstream to rename-project.feature.
-  # There is no "second sync" behaviour left to describe once those are theirs.
   # notes: AGENTS.md#sync-now-scope
 
   Scenario Outline: A sync brings the team's projects and designs into Nextcloud
@@ -58,16 +41,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | content         | empty           |
       | modified        | the design's    |
       | created         | the design's    |
-    # PROJECTS COME IN BY NAME AND WEAR THE TAG; designs come in beneath them.
-    # Every path in that table is named exactly as Penpot names the thing it
-    # mirrors, which is the whole of "project folder names match their projects".
-    #
-    # Drafts is the team's default project and gets no folder of its own — it IS
-    # the mapped folder (§6.35), so a loose design sits at the root.
-    #
-    # NOTHING ASSERTS "THE SYNC SUCCEEDED". The tree is the proof, and it is the
-    # only proof every trigger can offer: a command's exit code says nothing about
-    # a job that ran inside Nextcloud.
+    # notes: AGENTS.md#a-sync-brings-the-teams-projects-and-designs-into-nextcloud
 
     Examples: every way a sync starts
       | actor        | scope         | folder       |
@@ -97,11 +71,7 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | path                           | tagged |
       | Adopted/Handmade               | penpot |
       | Adopted/Handmade/Sketch.penpot | -      |
-    # THE NAME IS ALL THERE IS TO MATCH ON the first time — a hand-made folder
-    # carries no project id yet. Adopting it is what stops a first sync over an
-    # existing tree from leaving a second folder beside the one someone made.
-    # From then on it is the id that identifies the project, which is why a
-    # rename upstream moves this folder rather than making another.
+    # notes: AGENTS.md#a-folder-already-named-like-a-penpot-project-is-adopted-not-duplicated
 
   # ── when a sync cannot finish ──────────────────────────────────────────────
 
@@ -118,11 +88,6 @@ Feature: Syncing a mapped Penpot team into Nextcloud
       | no service-account token is configured | token          |
       | the Penpot base URL points nowhere     | could not read |
 
-    # UNBUILT, AND THE GAP IS REAL. `occ penpot_sync:sync` catches only
-    # OutOfBoundsException — an unknown mapping id. A PenpotApiException escapes
-    # uncaught, so today an unreachable Penpot produces a stack trace instead of a
-    # sentence naming the fix. Both front doors need the same answer, which is why
-    # this is one scenario rather than a CLI one and a UI one.
     # notes: AGENTS.md#a-sync-that-cannot-finish-says-so-and-says-why
 
   # ── still to specify ───────────────────────────────────────────────────────
@@ -137,7 +102,4 @@ Feature: Syncing a mapped Penpot team into Nextcloud
     When the admin syncs every mapping
     Then both are mirrored without a folder-name collision
     And the app reports the ambiguity so an admin can rename one in Penpot
-    # Penpot permits two projects with one name; Nextcloud does not permit two
-    # folders with one name in one parent. freeName() already picks a free one —
-    # what is unspecified is how the admin is TOLD, which is why this is @todo.
     # notes: AGENTS.md#two-penpot-projects-in-one-team-sharing-a-name-is-handled-not-crashed

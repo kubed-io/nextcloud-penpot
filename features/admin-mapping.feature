@@ -11,13 +11,6 @@ Feature: Admin configures team mappings
     And the admin has configured the service-account token
 
     # ── the mapping lifecycle: IMPLEMENTED, runs against a real Penpot ──────────
-    # These drive the same MappingService the settings panel calls, over occ.
-    #
-    # A mapping is ONE fact, so it is one sentence: "a mapping with the following values:" plus a
-    # table of what is in it. The fields are the same ones the creation form
-    # takes, so the pre-state and the action are described in one vocabulary, and
-    # a blank or absent row means the app's own default. It also names the team,
-    # so the rest of the scenario can say "it".
     # notes: AGENTS.md#the-preconditions
 
   Scenario Outline: Creating a mapping saves the form
@@ -64,9 +57,7 @@ Feature: Admin configures team mappings
     When the admin changes that mapping's groups to "<groups>"
     Then the mapping's groups are "<groups>"
 
-    # The folder name differs per storage kind ON PURPOSE. Removing a mapping
-    # deletes nothing, so a folder outlives the mapping that made it — and a
-    # later row reusing the name would inherit a folder of the wrong kind.
+    # notes: AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
 
     Examples: on a Team Folder
       | folder                  | storage     | groups             |
@@ -110,19 +101,6 @@ Feature: Admin configures team mappings
       | Northwind  | Elsewhere | already mapped |
       | Bundt Cake | Designs   | already used   |
 
-    # TWO RULES, AND THEY LOOKED LIKE ONE SCENARIO TWICE. Written apart, both read
-    # "a mapping exists, the admin maps one, it is refused" — the difference lived
-    # in whether a second team had been named, which is invisible on the page.
-    # Side by side the columns ARE the difference: row 1 reuses the team and takes
-    # a free folder, row 2 brings a fresh team to the taken folder.
-    #
-    # Naming a team re-points "it", so row 1 names the mapped team back again and
-    # row 2 names one that is not mapped at all.
-    #
-    # Why each is refused: a team is what a mapping IS, so mapping it twice would
-    # make two mappings mean the same thing. Two teams mirroring into one folder
-    # would interleave their project subfolders, and every sync would fight over
-    # the same names.
     # notes: AGENTS.md#a-mapping-may-not-reuse-a-team-or-a-folder
 
   Scenario: Removing a mapping deletes nothing

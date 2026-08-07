@@ -29,10 +29,7 @@ Feature: Storing and discarding a mirrored design's archive
       | penpot_mode     | "sync"          |
       | content         | an archive      |
 
-    # PROMOTION IS PURELY ADDITIVE, and the table is how that reads at a glance:
-    # the mode is now "sync" and there are real bytes, while the file still names
-    # the same design in the same team. An export never writes to Penpot and never
-    # re-stamps the id, which is what makes it safe to retry.
+    # notes: AGENTS.md#promoting-a-mirrored-design-fetches-a-real-zip-from-penpot
 
   @admin @occ
   Scenario: A promoted file is not re-exported by the next pull
@@ -45,10 +42,7 @@ Feature: Storing and discarding a mirrored design's archive
       | penpot_id   | the design's id |
       | penpot_mode | "sync"          |
       | content     | an archive      |
-    # Mode is stored PER FILE, and an unchanged revision means an unchanged
-    # archive — so staying in sync mode is free until the design actually moves.
-    # The one scenario here where the pull IS the subject, because "a second run
-    # does not undo the first" is a claim about running it twice.
+    # notes: AGENTS.md#a-promoted-file-is-not-re-exported-by-the-next-pull
 
   @admin @occ
   Scenario: Demoting throws the archive away and never contacts Penpot
@@ -64,14 +58,7 @@ Feature: Storing and discarding a mirrored design's archive
       | content         | empty           |
     And Penpot project "Demote Me" holds a design named "Sketch"
 
-    # DEMOTION DELETES A LOCAL BACKUP AND NOTHING ELSE. The bytes are gone and the
-    # mode says so, while the file still names the same design — and that design
-    # is still in Penpot, which is what the last line exists to say out loud,
-    # because "never contacts Penpot" is a claim about the far side.
-    #
-    # `penpot_revision | set` is deliberate: a demotion throws away the bytes but
-    # keeps the file's record of which revision it once held, so a later promotion
-    # knows whether what it fetches is new.
+    # notes: AGENTS.md#demoting-throws-the-archive-away-and-never-contacts-penpot
 
   # @blocked — no tty. Demotion asks for confirmation on stdin, and Behat has no
   # terminal to answer with; every other scenario here passes --force for exactly
@@ -84,9 +71,7 @@ Feature: Storing and discarding a mirrored design's archive
     When the admin demotes "Penpot/Stable/Precious.penpot" without --force
     Then the demotion asks for confirmation before anything is deleted
     And the file "Penpot/Stable/Precious.penpot" holds a real ".penpot" archive
-    # THE ARCHIVE IS THE POINT. Penpot is never contacted by a demotion, so the
-    # bytes it removes are the only copy this app was keeping — that is what makes
-    # the prompt worth having and worth specifying.
+    # notes: AGENTS.md#demoting-asks-first-because-it-deletes-the-only-local-copy
 
   @admin @occ
   Scenario: A folder has no mode to set

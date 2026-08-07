@@ -22,14 +22,7 @@ Feature: Renaming a mirrored Penpot design
       | penpot_mode | "sync"          |
       | content     | an archive      |
 
-    # Penpot's name never carries the ".penpot" extension (§6.4) — the assertion
-    # is on "New Name", not "New Name.penpot", and that is the whole rule.
-    #
-    # THE NAME IS NOT A ROW BECAUSE IT IS NOT STORED. A mirror is bound to its
-    # design by `penpot_id`, never by what it is called — which is why a rename
-    # cannot break the link. `the design's id` resolves through the NEW name, so
-    # the row asserts both halves at once: the design is called that now, and this
-    # file is still that design.
+    # notes: AGENTS.md#renaming-a-mirrored-file-renames-its-design-in-penpot
 
   @todo
   Scenario: Renaming a file in Penpot renames the mirrored file on the next pull
@@ -111,7 +104,7 @@ Feature: Renaming a mirrored Penpot design
     And the admin is told the file cannot be mirrored because "/" is not allowed in a file name
     And the message names the file so it can be renamed in Penpot
     And every other file in the same project is mirrored normally
-    # notes: AGENTS.md#in-nested-mode-a-penpot-file-whose-name-contains-a-slash-is-skipped-with-a-clear-reason
+    # notes: AGENTS.md#a-penpot-file-whose-name-contains-a-slash-is-skipped-with-a-clear-reason
 
     # notes: AGENTS.md#renaming-never-breaks-the-penpot-link
 

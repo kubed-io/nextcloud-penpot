@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Moving or renaming a mirrored design is now proven not to re-download its archive.
 - Spec: what happens when a design is edited in Penpot is now written down; a mirror's metadata is specified as the end state of the action that changed it.
+- CI: the feature files' `# notes:` pointers are now checked to resolve, and their comments to stay within budget.
 - The custom `.penpot` mimetype is now asserted in CI, on the install that registers it — a repair step that silently failed to merge the config used to look exactly like one that worked.
 - Spec: `file-type.feature` is gone. A mimetype is not something anyone does — it is what enabling the app left behind, so it is asserted on install; the context-menu glyph moved next to the action that draws it; and the rest became `view-design.feature`, about looking at a mirror. Four scenarios went with it that were already stated elsewhere.
 - The scheduled sync is now covered by the integration suite, alongside the two manual buttons — the same tree has to appear whichever one started it.
