@@ -56,7 +56,8 @@ default:
   suites:
     admin:
       paths:
-      - '%paths.base%/../../features/connection/connection.feature'
+      - '%paths.base%/../../features/connection/admin.feature'
+      - '%paths.base%/../../features/connection/personal.feature'
       - '%paths.base%/../../features/connection/sync-now.feature'
       - '%paths.base%/../../features/team-mapping/create.feature'
       - '%paths.base%/../../features/team-mapping/view.feature'

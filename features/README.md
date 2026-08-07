@@ -41,7 +41,7 @@ one of them acts on the same kind of thing:
 | [`designs/`](designs/) | a `.penpot` file | create, view, edit, copy, move, rename, delete, restore, purge, open-with |
 | [`projects/`](projects/) | a project folder | create, view, copy, move, rename, delete, restore |
 | [`team-mapping/`](team-mapping/) | a mapping | create, view, manage-groups, delete, sync-now, set-mode |
-| [`connection/`](connection/) | the instance | connection, sync-now |
+| [`connection/`](connection/) | the instance | admin, personal, sync-now |
 
 So `designs/move.feature` answers *"what happens when someone moves a design?"* —
 every way it can be moved, in either system, with the consequence on the other
@@ -55,9 +55,14 @@ be `admin-mapping.feature` — one file for five verbs, exactly the shape the
 design/project split had already been fixed out of.
 
 **`connection/` is the instance-wide half**, and it holds the personal token too:
-an admin connects the instance (a URL and a service-account token), a user
-connects only themselves (a token against the URL the admin gave). Different
-pre-state, different end state, so separate scenarios — the same act, so one file.
+an admin connects the instance (a URL, a credential and a schedule, as one form),
+a user connects only themselves (a token against the URL the admin gave).
+Different pre-state, different end state, so separate scenarios — the same act,
+so the same folder.
+
+**A connection is one fact, so it is one table.** The URL, the token and the
+schedule are inputs to "the app is connected", not three behaviours; an interval
+is a setting, not something anyone performs.
 
 What stays at the top level is what belongs to no single noun:
 `mapping-membership.feature` (the nearest-ancestor rule), `personal-projects.feature`,

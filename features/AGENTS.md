@@ -29,211 +29,75 @@ why — see [README.md](README.md).
 > behaviour, change the note that explains it in the same commit; a note that
 > describes the old behaviour is worse than no note.
 
-## connection/connection
+## connection/admin
 
-`features/connection/connection.feature`
+`features/connection/admin.feature`
 
-The "connect to Penpot" use case. The SHAPE is genuinely different from both
-sibling apps, and the reason took the whole survey to work out.
+CONFIGURING THE APP IS ONE ACT, and this file is two scenarios: it works, or it
+does not and says which field is wrong.
 
-THE ACCESS MODEL (saga §6.18, locked). The question "per-user tokens or one
-admin token?" was unanswerable for three sections of the saga because it was
-TWO questions being asked as one:
+### connection/admin
 
-    Who READS?  → the service account. Always. Required.
-    Who WRITES? → the acting user, if they've set a token. Optional.
+**This replaced a 31-scenario `connection.feature`** — itself
+`admin-connection.feature` with `personal-settings.feature` folded in. It broke
+almost every rule this suite has:
 
-Once split, both answers are obvious and neither fights the other.
+| | |
+|---|---|
+| five scenarios with **no `When` at all** | "The URL card carries no credential field", "Users do not author their own team mappings", "The app assumes one Nextcloud user maps to one Penpot account" — form structure, a capability that will never exist, and an assertion that a page's *prose documents an assumption* |
+| two scenarios with **two `When`s** | both "distinguishes unset from rejected", each rebuilding its pre-state by performing another action |
+| three duplicate pairs | the fold-in created them, and nothing deduped |
+| thirteen `@blocked` with no capability named | the one thing `README.md` requires of the tag |
 
-WHY THE SERVICE ACCOUNT IS REQUIRED (saga §6.16 found the reason, §6.18 acted
-on it): if the scheduled pull ran per-user, two Nextcloud users who are both
-members of the same Penpot team would resolve to the SAME Team Folder, and two
-uncoordinated jobs would write the same mirror file. That's a data race, not an
-inefficiency. One puller, one credential, one pass — the race cannot happen.
+THE CONNECTION IS ONE FACT, SO IT IS ONE TABLE. The URL, the credential and the
+schedule are all inputs to "the app is connected". They used to be three cards
+and a scenario each, which made configuring the app look like three behaviours.
+The schedule especially: an interval is a setting, not something a person
+performs — which is also why `admin-section.feature`'s two scheduled-pull
+scenarios went with it.
 
-WHY PER-USER TOKENS SURVIVE ANYWAY: attribution. Penpot attributes every
-mutation to whoever's token made it. If Nextcloud renames using the service
-account, Penpot's history says "nextcloud renamed this" for every rename by
-every user, forever. With a personal token it says the truth. That's the entire
-case for per-user tokens here, and it's a good one — but it only touches the
-small set of write paths (saga §6.19), so the personal token stays
-OPTIONAL. Requiring one before a user can rename a file would be a terrible
-first-run experience for zero functional gain.
+A cell names what KIND of value it is (`the test instance`, `a valid token`)
+rather than the value, because the real URL and token come from the environment
+the mint step built. A scenario cannot know them, and pinning them would tie the
+spec to one CI fixture.
 
-THE URL CARD IS URL-ONLY (saga §6.11, locked): modeled on n8n's
-InstanceSettings.php, not Grafana's bundled URL+token card. Grafana bundles
-because it has exactly one credential; here there are two, with different
-owners and different jobs, so the URL belongs to neither card.
+### An admin enters bad connection details
 
-PARTIALLY LIVE. The URL scenarios below run for real in CI — the base URL is
-the whole of the first implemented slice (saga §6.11: it's the one setting every
-version of this app needs regardless of how the credential model resolves, so
-it was built first). Every CREDENTIAL scenario is still @todo: no token storage
-exists yet.
+THE MESSAGE HAS TO NAME THE FIELD. "It did not work" is the failure this guards
+against: an admin looking at a URL, a token and a schedule needs to be told which
+one to fix, and the two token failures have different fixes — an absent token
+means finish configuring, a rejected one means mint a new one (or turn on
+`enable-access-tokens`, which is off by default upstream and whose absence looks
+exactly like a typo).
 
-### The stored URL is normalised so later callers can concatenate paths
+Both rows are token failures today because the URL is validated at *set* time,
+not at test time — `connection/admin.feature`'s own outline covers a malformed
+URL being refused before it is ever stored.
 
-ONE RULE, SEVERAL BAD INPUTS — so the rows are Examples, not scenarios. Every
-row asserts the identical outcome; only the input varies. That is the test
-for a table: if the rows are a list of VALUES it is an outline, and if they
-can only be written as a list of SENTENCES they are separate scenarios.
+### WHAT WENT, AND WHERE
 
-### The URL card carries no credential field
+The attribution and fallback scenarios — a write retried as the service account,
+a degraded attribution reported once, only an authorisation failure falling back
+— are **not connection scenarios**. Each one's `When` is a gesture ("the user
+renames a mirrored design"), so the behaviour is the gesture; attribution is its
+end state, and `designs/rename.feature` already owns it. They are recorded here
+rather than kept as a file of their own.
 
-── the live connection: the client, against a real Penpot — IMPLEMENTED ────
-These run against a real Penpot container in CI, with a token minted per run
-(saga §6.47). They are the ONLY place the wire format is asserted: the unit
-suite deliberately does not mock the transport, because a mock of a protocol
-we have repeatedly misread would only encode the misreading.
+## connection/personal
 
-### A configured connection reports the teams the token can see
+`features/connection/personal.feature`
 
-Reporting TEAMS rather than "OK" is the point (saga §6.12/§6.18): Penpot
-visibility is always membership-scoped, so which teams a token can see is
-the fact that decides what can be mapped.
+THE SAME ACT FROM THE OTHER END. An admin connects the instance — a URL, a
+credential and a schedule. A user connects only themselves — a token, against the
+URL the admin already gave. Different pre-state, different end state, so separate
+scenarios; the same act, so the same folder.
 
-### The connection check also lists projects, proving multi-record decoding
-
-A listing with several records is what exercises Transit's key cache —
-the second and later records are almost entirely back-references, and two
-real decoder bugs were invisible until exactly this shape was decoded.
-
-### The service account sees only the teams it was invited into
-
-Not a limitation we imposed — Penpot offers NO credential an instance-wide
-view (get-teams is membership-scoped, confirmed §6.12). Viewer is the right
-role: enough to list and export, no write access wanted.
-
-### The connection test tells an unset token apart from a rejected one
-
-These two need COMPLETELY different fixes — finish configuring, versus
-mint a new token — so collapsing them into "connection failed" sends
-people to the wrong one.
-
-### A successful test reports the teams the account can actually see
-
-Reporting TEAMS rather than "OK" is the point (saga §6.12/§6.18): Penpot
-visibility is always membership-scoped, so which teams the token can see is
-exactly the fact that decides what can be mapped.
-
-### A connection test surfaces the required Penpot instance flag
-
-"enable-webhooks" is NOT tested here: webhook delivery has never been
-observed working (saga §6.17, open question #19), so nothing in the current
-design depends on it. Adding it back is a saga decision, not a settings tweak.
-
-══ THE ATTRIBUTION RULE, IN ONE LINE ══════════════════════════════════════
-
-    READS are always the service account.
-    WRITES attribute to the acting user when there is one.
-
-Those are two different kinds of statement, and conflating them is what
-makes token handling feel complicated when it is not.
-
-READS — THE SERVICE ACCOUNT IS A REQUIREMENT, NOT A DEFAULT. Penpot has no
-admin scope; every token sees exactly the teams its account belongs to
-(§6.12). So the puller must be an account that is a member of every mapped
-team, and that is the whole reason a service account exists. Using a
-personal token to read would not merely attribute differently — it would
-change WHAT IS MIRRORED, per user, which is the dual-pull-path complexity
-§6.16 rejected and the shared-Team-Folder race with it.
-
-WRITES — ATTRIBUTION ONLY, AND IT CANNOT WIDEN ANYTHING. A write always
-targets something the service account already mirrored, so using the user's
-token changes the name in Penpot's history and nothing else. That is why it
-is safe to make it best-effort.
-
-THE ACTING USER IS WHOEVER THE SESSION SAYS (saga §C6.22). Every gesture —
-rename, move, copy, create, delete, restore, tag — runs inside the user's
-own HTTP request, so `IUserSession` has them and attribution just works. The
-scheduled pull has no session because NOBODY PERFORMED IT: it reconciles
-what Penpot already says. Attributing it to a user would be a fiction.
-
-A background job CAN act as a user when one is genuinely responsible —
-Nextcloud's own `IUserSession::setVolatileActiveUser()` (NC 29+) is exactly
-that, and core uses it so "event listeners can correctly work". This app has
-no such job today; §C6.22 records when it would want one.
-
-### A write rejected because of the personal token is retried as the service account
-
-── when attribution FAILS, the action must not ─────────────────────────────
-A personal token is not merely "sometimes expired". A Nextcloud user need
-not have a Penpot account at all, and if they do, they need not be a member
-of the Penpot team behind a shared Team Folder — the mapping only ever
-required the SERVICE ACCOUNT to be a member (§6.18). So "the acting user's
-token cannot write here" is an ORDINARY state, not an edge case.
-
-NOT BUILT, AND THE PROMISE IS ALREADY WRITTEN DOWN. `PersonalTokenService`
-says every caller "is expected to fall back to the service account and carry
-on", and the fall back that exists is the pre-flight one: no token → service
-account. There is no post-failure retry. A user whose token Penpot rejects
-loses the write entirely (§C6.22).
-
-### Only an authorisation failure falls back, never a real error
-
-The fallback answers "this token may not", not "this call did not work".
-Retrying a timeout as the service account would double every outage and
-could apply a write twice — see errors.feature.
-
----
-
-### The personal connection
-
-FOLDED IN FROM `personal-settings.feature`. An admin connects the instance — a
-URL and a service-account token; a user connects only themselves — a token
-against the URL the admin already gave. Different pre-state, different end state,
-so they stay separate scenarios; the same act, so they are one file.
-
-
-The per-Nextcloud-user personal Penpot token page — genuinely NEW territory for
-this app family. Neither n8n nor Grafana has a per-user settings precedent:
-both store one admin-wide credential (IAppConfig, `sensitive`) and only read
-IUserSession inside listeners to know who's acting.
-
-WHAT THIS PAGE IS FOR, PRECISELY (saga §6.18): attribution. Nothing else.
-
-It is NOT how the app reads Penpot — the service account does all mirroring,
-always (admin-connection.feature). It is NOT required for anything to work. It
-exists so that when a human renames or restores a design from Nextcloud, Penpot
-records THAT HUMAN as having done it, rather than recording every action by
-every user as "nextcloud" forever. Penpot's file history is append-only from
-our side: a change attributed to a robot can never be re-attributed later.
-
-THIS IS A SMALL SURFACE BY DESIGN. Command's own observation — "renaming
-deleting and moving is really the only thing we could do from nextcloud as an
-action" — is what makes the whole model affordable. The complete list of writes
-is short and every entry is either non-destructive or explicitly confirmed by
-a human (saga §6.19): moving a file between projects, creating a design,
-restoring one, renaming a project folder, and deleting in Penpot. Exactly ONE
-RPC in the whole app destroys anything (`delete-file`), and it is only ever
-reached through a confirmed user action. A token used at that few call sites
-doesn't need elaborate machinery.
-
-WHAT'S STILL OPEN (saga open question #9): only the storage mechanism. The
-presumed answer is IConfig::setUserValue with the sensitive flag — the
-user-scoped analogue of both siblings' AppConfig pattern — but it isn't built.
-The scenarios below describe OBSERVABLE behaviour and don't assume a class.
-
-THE 1:1 ASSUMPTION (saga §6.9): one Nextcloud user, one Penpot account, one
-token. Stated as the assumed default, not enforced.
-
-@todo — no lib/Settings/PersonalSettings.php exists yet; this is a brand-new
-settings surface, not a port from either sibling.
-
-### Clearing a personal token degrades attribution but breaks nothing
-
-Contrast with an earlier draft, which said mapped folders "stop pulling
-until a token is set again." That was written under the superseded
-per-user-pull model (saga §6.9) — the pull never used personal tokens in
-the final design, so clearing one cannot affect it.
-
-### The app assumes one Nextcloud user maps to one Penpot account
-
-Sharing one Penpot login across Nextcloud users isn't precluded by anything
-the app enforces — it just defeats the page's only purpose, since both
-users' changes would then be attributed identically.
-
----
+A personal token buys ATTRIBUTION and personal projects, nothing else. It never
+widens what the app mirrors and is never used for the scheduled pull (saga
+§6.18): one puller, always, or the shared-Team-Folder race returns. That is a
+property of the design rather than a behaviour anyone performs, so it is written
+here and not as four near-identical `@blocked` scenarios asserting a token was
+not used.
 
 ## team-mapping/create
 

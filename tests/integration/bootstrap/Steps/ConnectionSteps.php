@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
+use Behat\Gherkin\Node\TableNode;
+
 /**
  * Steps that exercise the client against a REAL Penpot.
  *
@@ -149,6 +151,103 @@ trait ConnectionSteps {
 		$res = $this->occ('penpot_sync:set-token ' . escapeshellarg('not-a-real-token'));
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("set-token refused a syntactically fine token:\n{$res['output']}");
+		}
+	}
+
+	/**
+	 * THE CONNECTION IS ONE FACT, so it is one sentence and a table.
+	 *
+	 * The URL, the credential and the schedule are all inputs to "the app is
+	 * connected" — they used to be three cards, and before that a scenario each,
+	 * which made configuring the app look like three behaviours instead of one.
+	 * The schedule rows especially: an interval is a setting, not something a
+	 * person performs.
+	 *
+	 * A cell names what KIND of value it is rather than the value itself, because
+	 * the real URL and the real token come from the environment the mint step
+	 * built — a scenario cannot know them, and pinning them would tie the spec to
+	 * one CI fixture.
+	 *
+	 * @When /^the admin fills in the connection details:$/
+	 */
+	public function theAdminFillsInTheConnectionDetails(TableNode $table): void {
+		foreach ($table->getRowsHash() as $field => $value) {
+			switch ($field) {
+				case 'url':
+					$this->occ('penpot_sync:set-url ' . escapeshellarg($this->urlFor($value)));
+					break;
+				case 'token':
+					if ($value === '') {
+						$this->noServiceAccountTokenIsConfigured();
+						break;
+					}
+					$this->occ('penpot_sync:set-token ' . escapeshellarg($this->tokenFor($value)));
+					break;
+				case 'enable sync':
+					$this->occ('config:app:set penpot_sync schedule_enabled --value=' . ($value === 'true' ? '1' : '0'));
+					break;
+				case 'schedule':
+					$this->occ('config:app:set penpot_sync schedule_interval --value=' . escapeshellarg($value));
+					break;
+				default:
+					throw new \RuntimeException("no connection field called '{$field}'");
+			}
+		}
+	}
+
+	/** A URL cell, resolved against what the running Penpot actually is. */
+	private function urlFor(string $value): string {
+		if ($value !== 'the test instance') {
+			return $value;
+		}
+		$url = getenv('PENPOT_URL');
+		if ($url === false || $url === '') {
+			throw new \RuntimeException('PENPOT_URL is not set — the Penpot service is not running.');
+		}
+		return $url;
+	}
+
+	/** A token cell. Only "a valid token" reaches for the minted one. */
+	private function tokenFor(string $value): string {
+		if ($value !== 'a valid token') {
+			return 'not-a-real-token';
+		}
+		$token = getenv('PENPOT_TOKEN');
+		if ($token === false || $token === '') {
+			throw new \RuntimeException('PENPOT_TOKEN is not set — the mint step did not run.');
+		}
+		return $token;
+	}
+
+	/** @Then the health check reports success */
+	public function theHealthCheckReportsSuccess(): void {
+		$this->theConnectionTestReportsSuccess();
+	}
+
+	/** @Then the health check reports an error */
+	public function theHealthCheckReportsAnError(): void {
+		$this->theConnectionTestReportsAFailure();
+	}
+
+	/** @Then the health check lists at least one Penpot team */
+	public function theHealthCheckListsATeam(): void {
+		$this->theConnectionTestListsATeam();
+	}
+
+	/**
+	 * The message must say WHICH field to go and fix.
+	 *
+	 * "It did not work" is the failure mode this asserts against: an admin with a
+	 * URL, a token and a schedule in front of them needs to be told which one is
+	 * wrong, and the two token failures (absent vs rejected) have different fixes.
+	 *
+	 * @Then /^the message names "([^"]*)" as the field causing it$/
+	 */
+	public function theMessageNamesTheField(string $field): void {
+		if (!str_contains(strtolower($this->lastOutput), strtolower($field))) {
+			throw new \RuntimeException(
+				"expected the failure to name the '{$field}' field, got:\n{$this->lastOutput}",
+			);
 		}
 	}
 

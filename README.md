@@ -741,7 +741,8 @@ The specs *are* the requirements, read before any code lands.
 | Folder / file | What it covers |
 |---|---|
 | **[`connection/`](features/connection/)** | |
-| [`connection.feature`](features/connection/connection.feature) | The URL, the required service token, and each user's optional personal one. |
+| [`admin.feature`](features/connection/admin.feature) | **Live.** The connection details as one form, and a failure that names the field. |
+| [`personal.feature`](features/connection/personal.feature) | A user's own token — attribution, and their personal team. |
 | [`sync-now.feature`](features/connection/sync-now.feature) | **Live.** The instance-wide sync: what every mapped folder holds once it has run. |
 | **[`team-mapping/`](features/team-mapping/)** | |
 | [`create.feature`](features/team-mapping/create.feature) | **Live.** Mapping a team, and every value a mapping may not take. |
@@ -774,7 +775,6 @@ The specs *are* the requirements, read before any code lands.
 | [`personal-projects.feature`](features/personal-projects.feature) | Personal projects at the user's home root. |
 | [`errors.feature`](features/errors.feature) | Every failure mode, and why none of them prune. |
 | [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
-| [`admin-section.feature`](features/admin-section.feature) | The settings panel itself — which cards exist and what each one owns. |
 | [`team-import.feature`](features/team-import.feature) | **Speculative** — importing a team from personal settings. |
 
 **The folders are the nouns.** A design and a project are two Penpot objects with
