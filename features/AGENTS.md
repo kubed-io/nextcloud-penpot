@@ -70,9 +70,14 @@ means finish configuring, a rejected one means mint a new one (or turn on
 `enable-access-tokens`, which is off by default upstream and whose absence looks
 exactly like a typo).
 
-Both rows are token failures today because the URL is validated at *set* time,
-not at test time — `connection/admin.feature`'s own outline covers a malformed
-URL being refused before it is ever stored.
+A URL row works differently from a token row, and that IS the behaviour. A URL
+the app cannot build requests from is refused at *set* time, so nothing is
+stored — and the health check then fails on a MISSING URL rather than on a
+malformed one. Same visible outcome for the admin: the message names the url.
+
+That is also why the Background starts from `nothing is configured yet`. An unset
+field has to mean unset rather than "whatever the row above stored", and the bad
+URL row is the case that forces it: it writes nothing at all.
 
 ### WHAT WENT, AND WHERE
 

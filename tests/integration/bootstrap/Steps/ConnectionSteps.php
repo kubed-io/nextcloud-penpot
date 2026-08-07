@@ -155,6 +155,22 @@ trait ConnectionSteps {
 	}
 
 	/**
+	 * A blank slate — no URL, no token.
+	 *
+	 * NEEDED BECAUSE A ROW MAY LEAVE A FIELD UNSET, and an unset field must mean
+	 * unset rather than "whatever the previous scenario stored". The bad-URL row
+	 * is the case that forces it: `set-url` REFUSES a URL it cannot build
+	 * requests from, so nothing is written, and the health check has to fail on a
+	 * missing URL rather than on one left behind by the row above.
+	 *
+	 * @Given /^nothing is configured yet$/
+	 */
+	public function nothingIsConfiguredYet(): void {
+		$this->occ('config:app:delete penpot_sync penpot_url');
+		$this->occ('config:app:delete penpot_sync penpot_token');
+	}
+
+	/**
 	 * THE CONNECTION IS ONE FACT, so it is one sentence and a table.
 	 *
 	 * The URL, the credential and the schedule are all inputs to "the app is
@@ -174,6 +190,10 @@ trait ConnectionSteps {
 		foreach ($table->getRowsHash() as $field => $value) {
 			switch ($field) {
 				case 'url':
+					// NOT asserted to succeed. A URL the app cannot build requests
+					// from is refused at SET time (see the outline above), so this
+					// row leaves no URL stored — which is exactly the state whose
+					// health check has to name the url field.
 					$this->occ('penpot_sync:set-url ' . escapeshellarg($this->urlFor($value)));
 					break;
 				case 'token':
@@ -207,9 +227,13 @@ trait ConnectionSteps {
 		return $url;
 	}
 
-	/** A token cell. Only "a valid token" reaches for the minted one. */
+	/**
+	 * A token cell. "a bad token" is the only marker that means an invalid one —
+	 * every other non-empty phrase reaches for the minted one, so a row exercising
+	 * a DIFFERENT field can say "a good token" and mean it.
+	 */
 	private function tokenFor(string $value): string {
-		if ($value !== 'a valid token') {
+		if ($value === 'a bad token') {
 			return 'not-a-real-token';
 		}
 		$token = getenv('PENPOT_TOKEN');

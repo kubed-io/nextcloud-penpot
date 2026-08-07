@@ -7,6 +7,7 @@ Feature: The main admin connection
 
   Background:
     Given the app is enabled
+    And nothing is configured yet
 
   Scenario: An admin enters valid connection details
     When the admin fills in the connection details:
@@ -29,8 +30,9 @@ Feature: The main admin connection
     And the message names "<field>" as the field causing it
 
     Examples: each field that can be wrong on its own
-      | url               | token       | field |
-      | the test instance |             | token |
-      | the test instance | a bad token | token |
+      | url               | token        | field |
+      | the test instance |              | token |
+      | the test instance | a bad token  | token |
+      | example.com       | a good token | url   |
 
     # notes: ../AGENTS.md#an-admin-enters-bad-connection-details
