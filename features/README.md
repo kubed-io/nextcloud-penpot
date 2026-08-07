@@ -65,8 +65,14 @@ schedule are inputs to "the app is connected", not three behaviours; an interval
 is a setting, not something anyone performs.
 
 What stays at the top level is what belongs to no single noun:
-`mapping-membership.feature` (the nearest-ancestor rule), `personal-projects.feature`,
-`lifecycle.feature` and `team-import.feature`.
+`personal-projects.feature`, `lifecycle.feature` and `team-import.feature`.
+
+**The nearest-ancestor rule has no file**, and that is deliberate. It is the
+app's most load-bearing decision, and it is a RULE — only ever observed through a
+gesture: you move something and it still belongs, you create something and it
+lands in Drafts. Every scenario that tried to test it directly turned out to be a
+move or a create that already existed elsewhere. The rule is written down in
+[`AGENTS.md`](AGENTS.md#mapping-membership--retired).
 
 ## The two nouns: a DESIGN and a PROJECT
 

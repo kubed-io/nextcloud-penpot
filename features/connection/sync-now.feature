@@ -82,6 +82,16 @@ Feature: Syncing every mapping
       | Adopted/Handmade/Sketch.penpot | -      |
     # notes: ../AGENTS.md#a-folder-already-named-like-a-penpot-project-is-adopted-not-duplicated
 
+  @in-nextcloud @occ
+  Scenario: A sync leaves content it does not manage alone
+    Given a mirrored design "Managed" in the project "Mixed Contents"
+    And I create an unrelated file at "Penpot/Mixed Contents/notes.txt"
+    When the team is mirrored again
+    Then the file "Penpot/Mixed Contents/notes.txt" is still there and untouched
+    And the file "Penpot/Mixed Contents/notes.txt" carries no Penpot id
+    # Pruning keys on metadata, never on extension or on where a file sits.
+    # notes: ../AGENTS.md#a-sync-leaves-content-it-does-not-manage-alone
+
   # ── when a sync cannot finish ──────────────────────────────────────────────
 
   @unbuilt

@@ -1669,141 +1669,87 @@ the one scenario that was already running.
 Its visible consequence (a mapped folder that looks like designs) belongs to
 `view-design.feature`; its removal is the "Removing the app" scenario below.
 
-## mapping-membership
+## mapping-membership — RETIRED
 
-`features/mapping-membership.feature`
+`features/mapping-membership.feature` is **gone**. The nearest-ancestor rule is
+this app's most load-bearing decision and it is still true; it was never a
+behaviour. A rule is only ever OBSERVED through a gesture — you move something
+and it still belongs, you create something and it lands in Drafts — so every
+honest scenario in the file was already a move or a create.
 
-Where a file "belongs" — resolved by walking UP the folder tree, reading folder
-metadata. This is the single most load-bearing rule in the app; almost every
-other feature file defers to it.
+Which is exactly why six of them had been rewritten elsewhere, word for word,
+without anyone noticing.
 
-THE RULE (saga §6.29, locked):
+### THE RULE, which now lives here instead of in a file
 
-  A .penpot file belongs to the Penpot project recorded on THE NEAREST ANCESTOR
-  FOLDER carrying a project id. A project folder belongs to the team recorded on
-  THE NEAREST ANCESTOR FOLDER carrying a team id. No such ancestor ⇒ no mapping.
+A file's project is **the nearest ancestor folder carrying a Penpot project id**,
+found by walking up; its team is the nearest ancestor carrying a team id, however
+far up that is. Nothing is cached on the file — a copy would go stale on the
+first move, which is the whole point (§C6.7). Penpot is flat; Nextcloud need not
+be (§6.29).
 
-THIS REPLACES THE OLD "EXACTLY ONE LEVEL, HARD CAP" RULE. Earlier drafts capped
-project folders at exactly one level below the team folder and treated anything
-deeper as an error-ish "tolerated content" state. That cap was a legibility
-guess made before we understood how cleanly folder metadata resolves — and it
-imposed Penpot's flatness on Nextcloud, which doesn't share it. Withdrawn.
+Two consequences worth stating once: a folder Penpot has no concept of is simply
+walked past, and a file under a team but under no project is in that team's
+Drafts — which is a state, not a folder (§6.35).
 
-WHY FREE NESTING IS THE RIGHT CALL: Penpot is flat and rigid (team → project →
-file, no sub-projects). Nextcloud is a file manager people organise however they
-like. Identity lives in METADATA, not in path — so a project folder works
-exactly the same at any depth, and a user can group five project folders under
-a "Clients/" folder that has no Penpot counterpart at all. That's real value
-Penpot itself can't offer, and it costs us nothing: "walk up until you find the
-key" is the same lookup as "check one level up," minus the early exit.
+### Six duplicates of scenarios that were already live
 
-THIS IS THE ONLY LAYOUT THERE IS. A mapping used to carry a folder mode, with
-a second `keyed` layout where a project's NAME would be its path and free
-nesting would not apply. It was designed, never built, and the field is gone
-(§C6.36) — so nothing here is conditional any more. The alternative survives
-as an open saga question (§6.53, #47), not as a value anyone can set.
+| it said | already asserted by |
+|---|---|
+| A file nested deeper inside a project folder still belongs to that project | `designs/move.feature` — same gesture, same `wip` subfolder, same assertion |
+| Project folders can be grouped under ordinary Nextcloud folders | `projects/move.feature` — which even asserts *"the folder still resolves to the same team, found further up"* |
+| A file with no project-id ancestor belongs to no mapping | `designs/create.feature` "A `.penpot` file created outside every mapping is an inert file" |
+| A file at the mapped folder's root is in that team's Drafts | `designs/create.feature` |
+| No folder is ever created to represent Drafts | `connection/sync-now.feature` — `there is no node at "<folder>/Drafts"`, in the tree table |
+| A folder opted in by tag resolves exactly like a mirrored one | `projects/create.feature` "A folder opted in late brings the designs already inside it" |
 
-THE MECHANISM IS CONFIRMED LIVE (saga §6.21): Files-Metadata attaches to
-folders exactly as to files — same Node type, same fileid space. Tested
-write/persist/read-back against a REAL production Team Folder (groupfolder 5),
-with an ordinary folder as control. Identical results.
+### Four with no `When` at all
 
-TWO MARKERS, TWO JOBS (saga §6.32):
-  - folder METADATA (penpot_project_id / penpot_team_id) is the authoritative
-    machine record — what every lookup below reads.
-  - a system TAG is the human-visible pill in the Files app, so a user can SEE
-    and SEARCH which folders are real Penpot projects. Under free nesting this
-    matters more than it would have under the cap: position no longer tells you.
+`A file's project is the nearest ancestor folder carrying a project id` was the
+file's own thesis restated as a test — and its third `Then` is already
+`designs/view.feature`'s. `A project folder's team is the nearest ancestor
+carrying a team id` and `A personal project folder has no team ancestor` are the
+same shape.
 
-MEMBERSHIP IS DERIVED, NEVER STORED ON THE FILE. No "penpot_mapping" key — the
-folders already know, and a stored copy would have to be rewritten on every
-move, which is exactly the drift an earlier move-design.feature tangled itself in.
+`Two folders carrying the same project id is a reported conflict` had a second
+problem: **nothing can produce that state.** `projects/copy.feature` refuses a
+project-folder copy precisely to prevent it, so the scenario specified recovery
+from a situation the app is built to make unreachable — there is no `Given` a
+test could arrange. It also carried the file's only `But`, which is a real
+Gherkin keyword and a pure synonym for `And`: keywords are ignored in step
+matching, so it reads as contrast and asserts nothing. Contrast is what you write
+when you are describing a situation rather than an outcome.
 
-BUILT AND NOW LIVE. `MembershipResolver` has existed since Course 3 and every
-other feature defers to it, but nothing in CI had ever asked it a question —
-the resolver was the most load-bearing rule in the app and the least tested.
-The scenarios below drive it through `occ penpot_sync:status`, which prints the
-resolved membership alongside the raw markers, so a failure says which of the
-two disagreed.
+### Three survived, two of them as Examples rows
 
-THE BACKGROUND WAS FICTION. It provisioned a Team Folder and mirrored a project
-called "My Stuff", and none of those steps had ever existed — harmless while
-the file was entirely @todo, an instant `--strict` failure the moment one
-scenario went live. Same trap as create-project.feature (§C6.18). It is now the
-standard Background: a PLAIN mapped folder, because Team Folder provisioning is
-not covered by this suite (features/README.md).
+| it said | where it went |
+|---|---|
+| The nearest project id wins when project folders are nested | a row on `projects/move.feature`'s "moved anywhere inside its team folder" — the destination is the only thing that differs |
+| A file in any plain folder under a team is also in Drafts | a row on `designs/create.feature`'s Drafts scenario — the same rule at a different depth |
+| Non-Penpot content inside a project folder is left alone | `connection/sync-now.feature`, as "A sync leaves content it does not manage alone" |
 
-### A file nested deeper inside a project folder still belongs to that project
+### A project folder can be moved anywhere inside its team folder
 
-The old cap called this "too deep" and orphaned the file. It is just a
-subfolder — Penpot has no opinion about it, so neither do we, and the
-design must not have moved project as a side effect of the drag.
+ONE RULE, TWO DESTINATIONS. A project folder may be filed under a plain folder —
+which Penpot has no concept of — or under another project folder, where the
+nearest id wins and the outer project does not swallow the inner one. Same
+gesture, same end state, so it is an `Examples` column rather than two scenarios.
 
-### The nearest project id wins when project folders are nested
+### A design created under the team but not under a project is a draft
 
-NEAREST ancestor, not outermost — this is what makes free nesting
-unambiguous, and it is only reachable now that a project folder can be
-moved inside another one. Nothing about the nesting reaches Penpot, where
-both projects stay flat.
+ONE RULE, AND DEPTH IS NOT PART OF IT. The team root and a plain folder three
+levels down are the same case: under a team, under no project, therefore Drafts.
+The second row came from `mapping-membership.feature`, where it read as a
+separate fact about nesting.
 
-### A file at the mapped folder's root is in that team's Drafts
+### A sync leaves content it does not manage alone
 
-── the Drafts state: a team ancestor but no project ancestor ───────────────
-Drafts is NEVER a folder (saga §6.35). It is the name Penpot gives to
-"belongs to a team, sits in no project" — exactly what the nearest-ancestor
-rule produces when it finds a team id but no project id on the way up.
+FROM THE RETIRED `mapping-membership.feature`. A `notes.txt` sitting in a project
+folder is not the app's business, and a sync must not touch it — pruning keys on
+metadata, never on a file extension or on where a file happens to sit.
 
-This boundary is where §C6.8, §C6.9 and §C6.10 all lived, every one of them
-the same mistake: reading "no project ancestor" as "outside every mapping"
-when it means Drafts — a real project with a real id.
-
-### A file in any plain folder under a team is also in Drafts
-
-This is where Nextcloud is MORE expressive than Penpot: any arrangement of
-ordinary folders under a team maps to the one Drafts bucket. Penpot has a
-single Drafts because a flat system has nowhere else to put an unfiled
-design; we can express the same state as a whole folder tree, for free.
-
-### A project folder carries a visible tag as well as its metadata
-
-Two markers, two jobs (§6.32): the metadata is what every lookup reads, the
-tag is what a user can see and search for. Under free nesting that matters
-more than it would have under the old depth cap — position no longer tells
-you which folders are projects.
-
-### A tagged folder's name always equals its Penpot project's name
-
-Under free nesting a project folder is otherwise indistinguishable from an
-ordinary folder someone named the same thing. Tag + matching name means a
-tagged folder called "Acme" IS the Penpot project "Acme" — no ambiguity.
-The rename half of the invariant is rename-design.feature's, where it is live.
-
-### A plain folder inside a mapped folder is tolerated, not adopted
-
-This is the whole point of the tag: ordinary folders can live among project
-folders without becoming projects. The opt-in that DOES make one a project
-is create-project.feature's, and it is live there.
-
-### A folder opted in by tag resolves exactly like a mirrored one
-
-The opt-in itself — what the tag DOES — is create-project.feature's, and it
-is live there. This is only the half this file owns: once stamped, nothing
-downstream can tell which direction the folder came from.
-
-### A personal project folder has no team ancestor, and that is valid
-
-The ONE exception to "walk up for a team" (saga §6.31) — a personal team
-gets no folder of its own, so its projects sit at the home root. Without
-this rule the natural implementation would treat every personal project as
-an error. See personal-projects.feature.
-
-### Two folders carrying the same project id is a reported conflict
-
-Free nesting makes this reachable (copy a project folder and you have two).
-The lookup stays well-defined; the WRITE target needs a tie-break. Which
-rule to use is not yet decided — saga open question #30.
-
----
+Filed with the sync rather than with membership because the actor is a sync: the
+question is what a run does to things it did not create.
 
 ## designs/move
 
@@ -2591,6 +2537,34 @@ Saying so is the whole behaviour — the alternative is a folder that looks
 restored and points at nothing.
 
 ---
+
+## projects/view
+
+`features/projects/view.feature`
+
+TELLING A PROJECT FOLDER FROM AN ORDINARY ONE. Created in the noun/verb
+restructure from scenarios that had been sitting in `mapping-membership.feature`
+— looking at a project is looking, and `designs/` already had a `view`.
+
+### A project folder carries a visible tag as well as its metadata
+
+Two markers, two jobs (§6.32): the metadata is what every lookup reads, the tag
+is what a user can see and search for. Under free nesting that matters more than
+it would under a depth cap — position no longer tells you which folders are
+projects.
+
+### A tagged folder's name always equals its Penpot project's name
+
+A project folder is otherwise indistinguishable from an ordinary folder someone
+named the same thing. Tag plus matching name means a tagged folder called "Acme"
+IS the Penpot project "Acme". The rename half of the invariant is
+`projects/rename.feature`'s, where it is live.
+
+### A plain folder inside a mapped folder is tolerated, not adopted
+
+The whole point of the tag: ordinary folders live among project folders without
+becoming projects. The opt-in that DOES make one a project is
+`projects/create.feature`'s, and it is live there.
 
 ## team-mapping/set-mode
 

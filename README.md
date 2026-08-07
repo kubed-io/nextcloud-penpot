@@ -771,7 +771,6 @@ The specs *are* the requirements, read before any code lands.
 | [`delete.feature`](features/projects/delete.feature) | Deleting a project — one call, not one per design. |
 | [`restore.feature`](features/projects/restore.feature) | Bringing a project back whole, and the one case that cannot be. |
 | **top level** | |
-| [`mapping-membership.feature`](features/mapping-membership.feature) | **Live.** The nearest-ancestor rule — the app's most load-bearing spec. |
 | [`personal-projects.feature`](features/personal-projects.feature) | Personal projects at the user's home root. |
 | [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
 | [`team-import.feature`](features/team-import.feature) | **Speculative** — importing a team from personal settings. |

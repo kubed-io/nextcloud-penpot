@@ -22,12 +22,20 @@ Feature: Creating a new Penpot design from Nextcloud
     # The Penpot name never carries the extension (§6.4).
 
   @in-nextcloud @gesture
-  Scenario: A new design file at the team root is created in Drafts
+  Scenario Outline: A design created under the team but not under a project is a draft
     Given a mirrored project "Anchor"
-    When I create a new design file at "Penpot/Loose Idea.penpot"
-    Then the file "Penpot/Loose Idea.penpot" carries a Penpot id
-    And Penpot project "Anchor" holds no design named "Loose Idea"
+    And I create a folder at "Penpot/Inbox"
+    When I create a new design file at "<path>"
+    Then the file "<path>" carries a Penpot id
+    And Penpot project "Anchor" holds no design named "<design>"
+
+    Examples: the team root, and a plain folder at any depth beneath it
+      | path                              | design        |
+      | Penpot/Loose Idea.penpot          | Loose Idea    |
+      | Penpot/Inbox/Filed By Hand.penpot | Filed By Hand |
+
     # Drafts is a state, not a folder (§6.35) — the file stays where it was made.
+    # notes: ../AGENTS.md#a-design-created-under-the-team-but-not-under-a-project-is-a-draft
 
     # notes: ../AGENTS.md#uploading-a-penpot-archive-does-not-create-an-empty-design
   @in-nextcloud @gesture

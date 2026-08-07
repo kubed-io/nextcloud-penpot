@@ -98,7 +98,6 @@ default:
 
     core:
       paths:
-      - '%paths.base%/../../features/mapping-membership.feature'
       - '%paths.base%/../../features/team-mapping/set-mode.feature'
       - '%paths.base%/../../features/lifecycle.feature'
       contexts: *contexts
