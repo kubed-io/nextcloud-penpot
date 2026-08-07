@@ -411,6 +411,17 @@ ensureRoot()'s, re-asserted on every sync", which was true of the design
 
 ---
 
+### Without a service-account token, nothing can be mapped
+
+FROM THE RETIRED `errors.feature`, and it was the last copy. The scenario had
+lived in `admin-connection.feature` too, and was dropped when that file was split
+into `connection/admin` and `connection/personal` — leaving `errors.feature`
+quietly holding the only statement of it.
+
+Refusing a mapping belongs with mapping. The service account is what reads, so
+without one there is nothing a mapping could do; refusing at creation says so at
+the moment the admin can act on it, rather than at the first sync.
+
 ## admin-section — RETIRED
 
 `features/admin-section.feature` is **gone**. It described the settings panel:
@@ -1290,55 +1301,105 @@ from a listing the sync already had; the bytes do not, because nobody asked for
 them. That is the economic argument for link being the default, stated as an end
 state rather than as a claim about call counts.
 
-## errors
+## errors — RETIRED
 
-`features/errors.feature`
+`features/errors.feature` is **gone**. "Failures never cost the user data" is an
+INVARIANT, not a behaviour: nobody performs an error. An error is what happens
+when something a person *did* goes wrong, so each one belongs with the behaviour
+that can fail — the same reasoning that retired `file-type` (a construct),
+`reconcile` (a mechanism) and `admin-section` (a panel).
 
-Failure behaviour. Neither sibling app needed a file like this; this one does,
-because Penpot's transport has more ways to fail than a plain JSON REST call.
+The `When` lines gave it away. Almost none had a human actor:
 
-THE GOVERNING RULE, FROM COMMAND (saga §6.25): DON'T LOSE DATA. A remote
-failure must never destroy local state. Every scenario below is an application
-of that one rule.
+    When an export stream closes with no "end" event      the transport
+    When the app exports any file                         the app itself
+    When "get-project-files" fails for that project       an RPC command, by name
+    When the pull is interrupted partway through          the reconciler again
 
-WHY THERE ARE MORE FAILURE SURFACES HERE (all confirmed live, saga §5.1/§6.20):
-  1. export-binfile and import-binfile are BOTH SSE — a stream of progress
-     events, then `end` or `error`.
-  2. HTTP 200 DOES NOT MEAN SUCCESS. An `event: error` arrives inside a 200
-     response — witnessed directly when importing into a deleted file id. The
-     status code lies; the stream is the truth.
-  3. The payload is TRANSIT-JSON even when Accept: application/json is sent
-     (`~:type`, `~u<uuid>`, `~#uri`), so errors must be decoded, not string-matched.
-  4. Fetching the actual bytes is a SECOND authenticated request to an asset URL
-     that 401s without the token.
-  5. A restore is TWO calls (import, then rename) because import ignores the
-     `name` param — so it has a genuine partial-success state.
+Twenty-one scenarios in, eight out.
 
-THE MOST DANGEROUS OPERATION IN THE APP IS PRUNING. A failed listing looks
-exactly like "every file was deleted." Getting this wrong deletes a user's
-backups because a token expired. It has its own scenarios below, and the answer
-is always the same: no clean listing, no pruning.
+### Where each one went
 
-@todo — no lib/Service/ exists yet.
+| scenario | disposition |
+|---|---|
+| An error inside a 200 response is treated as a failure | → `team-mapping/set-mode.feature`, row 1 of one outline |
+| A stream that ends without an end event | → same outline, row 2 |
+| A failed asset download never truncates the existing mirror | → same outline, row 3 |
+| An unauthenticated asset fetch is a credential failure | → same outline, row 4 |
+| A pull interrupted halfway leaves every written file valid | → `connection/sync-now.feature` |
+| A file that fails to export does not stop the rest of the pull | → `connection/sync-now.feature`, one outline with the row below |
+| Losing access to a team halts only that mapping | → same outline: one failure at mapping scale rather than file scale |
+| A failed project listing prunes nothing | → `designs/delete.feature`, row of one outline |
+| A failed team listing prunes nothing anywhere under it | → same outline |
+| An expired service token prunes nothing | → same outline |
+| The pull does not trust "get-projects" alone | → `projects/delete.feature` — the behaviour is a project deleted in Penpot |
+| A restore whose follow-up rename fails | → `designs/restore.feature` |
+| A missing service token blocks mapping | → `team-mapping/create.feature` |
 
-### The pull does not trust "get-projects" alone about which projects exist
+### And what was dropped, with the reason
 
-Confirmed live on Penpot 2.17.0: "get-projects" does NOT filter deleted_at,
-while "get-all-projects" does, "get-project" 404s, and "get-project-files"
-returns []. Files filter correctly everywhere — the bug is specific to the
-projects listing. Trusting it would resurrect deleted project folders on
-every pull.
+| scenario | why |
+|---|---|
+| Penpot error codes are decoded from Transit, not string-matched | "not string-matched" describes how the parser works. `tests/unit/TransitTest.php` |
+| The known-bad export flag combination is never sent | asserts a REQUEST PAYLOAD, which Behat cannot see. `tests/unit/PenpotClientTest.php` |
+| The inner signed storage URL is never persisted | an internal storage decision with no observable outcome at all |
+| A transient download failure is retried before giving up | backoff is a mechanism, and its end state is identical to the outline's |
+| A pruned file goes to the trash, never straight to deletion | duplicate — `designs/delete.feature` asserts it LIVE |
+| A design deleted in Penpot can still be rescued inside the grace window | duplicate — the snapshot and the window closing are both already there |
+| A failed rename leaves the local rename standing | duplicate — `designs/rename.feature` "A failed propagation never reverts the user's local rename" |
+| An invalid personal token falls back rather than blocking | belongs with the WRITE GESTURE, which is where its twin went when `connection.feature` was rewritten |
 
-### A design deleted in Penpot can still be rescued inside the grace window
+### THREE THINGS THIS FILE HID
 
-Confirmed live (saga §6.42): "export-binfile" still exports a soft-deleted
-file — 6496 real bytes from a file deleted moments earlier — even though it
-404s on get-file and is invisible to every listing. This turns the one
-genuinely unrecoverable case (a link file whose design is deleted) into a
-best-effort-restorable one. Whether this runs automatically or is offered
-is undecided — saga open question #38.
+**Its Background was fiction.** All three steps — `the app is connected to
+Penpot`, `a Team Folder mapped to the Penpot team …`, `the Penpot project … is
+mirrored as a folder inside it` — had never been written. The identical trio that
+had rotted in `remove-mapping.feature`, invisible for the same reason: every
+scenario in the file was tagged.
 
----
+**A missing token blocking a mapping existed ONLY here.** "Without a
+service-account token, nothing can be mapped" was dropped when `connection.feature`
+was split into `admin`/`personal`, and this file was quietly the last copy. It is
+now `team-mapping/create.feature`'s, where refusing a mapping belongs.
+
+**Four `@blocked` named no capability**, which is the one thing the tag exists to
+do.
+
+### A promotion that fails leaves the file as it was
+
+FOUR SCENARIOS, ONE RULE. Each described a different way the export can break on
+the wire and then asserted the same end state: the file is untouched. That is an
+`Examples` table, not four scenarios — the `reason` column carries the only thing
+that genuinely differs, which is what the admin is told.
+
+`@blocked` — **no fault injection.** Every row needs a real Penpot to fail in a
+specific way, and the harness can only ask it to succeed.
+
+FILED UNDER PROMOTION because promotion is what triggers an export. A pull
+re-exports too, but only for a design already in `sync` mode — so the first and
+riskiest export is always a `set-mode`, and that is where "it broke and you lost
+nothing" is worth stating.
+
+### An incomplete listing prunes nothing
+
+THE MOST IMPORTANT RULE IN THE APP, and it was four scenarios saying it four
+ways. Not knowing what Penpot holds is not evidence that anything was deleted —
+an expired token, a failed team listing and a failed project listing all mean the
+same thing, and all must mean "prune nothing".
+
+These are NOT the empty negatives this suite rejects elsewhere. Something did
+act: a sync ran, and a dangerous branch was available to it. The claim is that
+the branch did not fire, which is an outcome.
+
+`@todo` rather than `@blocked` because one row IS drivable today — a rejected
+token needs no fault injection, only a bad token — and it happens to be the row
+that matters most.
+
+### One failure never costs the rest of the sync
+
+TWO SCALES, ONE RULE: one design failing must not cost the other designs, and one
+team failing must not cost the other teams. They were two scenarios that shared
+every line but the noun.
 
 ## designs/view
 
@@ -2481,6 +2542,16 @@ thing that must not happen is quietly doing nothing.
 
 ---
 
+### A restore whose follow-up rename fails reports partial success
+
+FROM THE RETIRED `errors.feature`. A restore that cannot come back at its
+original id is an import plus a rename, and the two can part company.
+
+ROLLING BACK WOULD BE THE DATA LOSS. The import succeeded — a design the user
+asked for is now in Penpot. Deleting it to "clean up" a failed rename destroys
+the thing that just worked, so the app keeps it, records the new id against the
+local file, and says plainly that the design came back wearing the wrong name.
+
 ## projects/restore
 
 `features/projects/restore.feature`
@@ -2928,6 +2999,17 @@ orphaned when the admin removes the mapping underneath them. The personal
 team mapping stays automatic and singular.
 
 ---
+
+### A sync that dies halfway leaves every file whole
+
+FROM THE RETIRED `errors.feature`, where it read "a pull interrupted halfway" —
+the reconciler as the actor again. What matters is not that a pull was
+interrupted but that a sync can die at any moment, and no file may be left as a
+half-written archive.
+
+Every write is to a temp location and moved into place, so a file is its old
+version or its new one. `@blocked` — **no fault injection**: the run has to be
+killed mid-write.
 
 ## team-import
 

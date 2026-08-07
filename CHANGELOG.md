@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Spec: the failure file is gone — a failure is not a behaviour, so each one now sits with the thing that can fail; four "prunes nothing" scenarios became one rule, and four export failures another.
 - A personal Penpot token **cannot be tested** — there is no health check for it, so a rejected token is only discovered when a change is silently attributed to the service account. Specified, not yet built.
 - **`occ penpot_sync:sync` now records its run**, so "last run" no longer reports a scheduled sync while ignoring a CLI one minutes earlier.
 - Spec: the settings-panel file is gone — a panel is where behaviour is configured, not a behaviour. What was real in it already lived in `connection/`.

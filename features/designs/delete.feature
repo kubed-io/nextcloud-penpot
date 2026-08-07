@@ -93,6 +93,24 @@ Feature: Deleting a mirrored design
     And the file "Penpot/Left Alone/Twice Dead.penpot" is in the Nextcloud trash
     And there is no node at "Penpot/Left Alone/Twice Dead.penpot"
 
+  # THE MOST IMPORTANT RULE IN THE APP: not knowing is not evidence of deletion.
+  # notes: ../AGENTS.md#an-incomplete-listing-prunes-nothing
+  @in-penpot @todo
+  Scenario Outline: An incomplete listing prunes nothing
+    Given a mirrored design "Still Here" in the project "Intact"
+    And <the listing is incomplete>
+    When the team is mirrored again
+    Then the sync fails
+    And the pull pruned 0 mirrors
+    And "Penpot/Intact/Still Here.penpot" holds:
+      | penpot_id | the design's id |
+
+    Examples: every way the app can end up knowing less than it did
+      | the listing is incomplete                     |
+      | the service-account token has been rejected   |
+      | the team's project listing fails              |
+      | one project's file listing fails              |
+
     # ── the soft step: a delete reaches Penpot's trash ────────────────────────
 
   @todo

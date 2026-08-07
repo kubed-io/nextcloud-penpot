@@ -75,3 +75,12 @@ Feature: Mapping a Penpot team to a Nextcloud folder
       | Bundt Cake | Designs   | already used   |
 
     # notes: ../AGENTS.md#a-mapping-may-not-reuse-a-team-or-a-folder
+
+  # notes: ../AGENTS.md#without-a-service-account-token-nothing-can-be-mapped
+  @todo
+  Scenario: Without a service-account token, nothing can be mapped
+    Given no service-account token is configured
+    When the admin maps it with:
+      | folder | Designs |
+    Then the mapping is rejected
+    And the refusal explains "service-account token"

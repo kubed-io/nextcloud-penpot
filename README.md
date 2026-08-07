@@ -773,7 +773,6 @@ The specs *are* the requirements, read before any code lands.
 | **top level** | |
 | [`mapping-membership.feature`](features/mapping-membership.feature) | **Live.** The nearest-ancestor rule — the app's most load-bearing spec. |
 | [`personal-projects.feature`](features/personal-projects.feature) | Personal projects at the user's home root. |
-| [`errors.feature`](features/errors.feature) | Every failure mode, and why none of them prune. |
 | [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
 | [`team-import.feature`](features/team-import.feature) | **Speculative** — importing a team from personal settings. |
 

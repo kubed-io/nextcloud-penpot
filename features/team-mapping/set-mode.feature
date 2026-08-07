@@ -72,6 +72,24 @@ Feature: Storing and discarding a mirrored design's archive
     Then the demotion asks for confirmation before anything is deleted
     And the file "Penpot/Stable/Precious.penpot" holds a real ".penpot" archive
 
+  # @blocked — no fault injection. Every row needs a real Penpot to fail in a
+  # specific way, and the harness can only ask it to succeed.
+  # notes: ../AGENTS.md#a-promotion-that-fails-leaves-the-file-as-it-was
+  @blocked
+  Scenario Outline: A promotion that fails leaves the file as it was
+    Given a mirrored design "Fragile" in the project "Stable"
+    When the admin promotes "Penpot/Stable/Fragile.penpot" to "sync" mode, and <what fails>
+    Then the mode change fails
+    And the file "Penpot/Stable/Fragile.penpot" is left exactly as it was
+    And the failure is reported as "<reason>"
+
+    Examples: every way an export can fail on the wire
+      | what fails                                     | reason              |
+      | the export answers 200 with an error event     | the Penpot error    |
+      | the export stream ends with no "end" event     | an incomplete export |
+      | the asset download fails                       | a failed download   |
+      | the asset download is refused as unauthorised  | a credential problem |
+
   @admin @occ
   Scenario: A folder has no mode to set
     When the team is mirrored again

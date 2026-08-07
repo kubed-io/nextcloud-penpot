@@ -53,6 +53,15 @@ Feature: Deleting a Penpot project folder
 
     # ── the hard step: emptying the trash purges Penpot ───────────────────────
 
+  # Penpot keeps listing a deleted project (saga §6.42), so the listing alone is
+  # not proof it exists. notes: ../AGENTS.md#a-project-penpot-still-lists-after-deletion-is-not-mirrored
+  @in-penpot @todo
+  Scenario: A project Penpot still lists after deletion is not mirrored
+    Given a Penpot project that has been deleted
+    When the team is mirrored again
+    Then no folder is created for that project
+    And no design is mirrored into one
+
   @todo
   Scenario: Restoring a design also restores its project if that was deleted too
     Given a Penpot project that was deleted, containing a design

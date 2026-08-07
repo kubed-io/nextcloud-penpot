@@ -69,7 +69,7 @@ Feature: Personal Penpot projects in a user's own home
     And they are no longer refreshed
     And nothing is pruned or trashed
     # Don't-lose-data: losing a credential is never evidence that content is gone
-    # (the same rule errors.feature applies to the service account).
+    # (the same rule the service account follows).
 
     # notes: AGENTS.md#setting-a-personal-token-maps-the-personal-team-to-the-home-root
 

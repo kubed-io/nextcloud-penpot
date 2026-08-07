@@ -134,8 +134,8 @@ Feature: Restoring a mirrored design
     When I confirm a restore that creates a new Penpot file
     Then the created Penpot file is named "My firsty", from the archive manifest
     And the app issues a follow-up rename to reconcile the name
-    # The `name` param is ignored on import — confirmed live (saga §6.20). This
-    # is two RPC calls, and the second can fail on its own; see errors.feature.
+    # The `name` param is ignored on import (saga §6.20), so this is two calls.
+    # notes: ../AGENTS.md#a-restore-whose-follow-up-rename-fails-reports-partial-success
 
     # ── attribution ──────────────────────────────────────────────────────────────
 
@@ -218,6 +218,15 @@ Feature: Restoring a mirrored design
     And no design is created in Penpot
     And the app reports that the design is gone and the mirror is now the only copy
     # notes: ../AGENTS.md#a-design-that-is-gone-for-good-is-not-silently-recreated
+
+  # notes: ../AGENTS.md#a-restore-whose-follow-up-rename-fails-reports-partial-success
+  @unbuilt
+  Scenario: A restore whose follow-up rename fails reports partial success
+    Given a design that is gone from Penpot, and a mirrored file holding its archive
+    When the user restores it and the import succeeds but the rename does not
+    Then the app reports that the design came back but kept the wrong name
+    And the restored design is left in Penpot, not rolled back
+    And the file records the id of the design that was created
 
   @unbuilt
   Scenario: An untracked file coming out of the trash is never restored into Penpot

@@ -99,6 +99,30 @@ Feature: Syncing every mapping
 
     # notes: ../AGENTS.md#a-sync-that-cannot-finish-says-so-and-says-why
 
+  # @blocked — no fault injection: a sync has to be killed mid-write, and one
+  # design has to fail while its neighbours succeed.
+  # notes: ../AGENTS.md#one-failure-never-costs-the-rest-of-the-sync
+  @blocked
+  Scenario Outline: One failure never costs the rest of the sync
+    Given a mapped team whose designs are mirrored in "sync" mode
+    When <one thing fails> during a sync of every mapping
+    Then the failure is reported for <that one> alone
+    And everything else is mirrored as normal
+
+    Examples: the two scales a single failure can happen at
+      | one thing fails            | that one    |
+      | exporting one design       | that design |
+      | reaching one mapped team   | that team   |
+
+  # @blocked — no fault injection: the sync has to be killed mid-write.
+  # notes: ../AGENTS.md#a-sync-that-dies-halfway-leaves-every-file-whole
+  @blocked
+  Scenario: A sync that dies halfway leaves every file whole
+    Given a mapped team whose designs are mirrored in "sync" mode
+    When a sync of every mapping is killed partway through
+    Then every mirrored file is either its old version or its new one
+    And no file is left holding a half-written archive
+
   # ── still to specify ───────────────────────────────────────────────────────
 
   @todo

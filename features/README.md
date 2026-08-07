@@ -66,8 +66,7 @@ is a setting, not something anyone performs.
 
 What stays at the top level is what belongs to no single noun:
 `mapping-membership.feature` (the nearest-ancestor rule), `personal-projects.feature`,
-`errors.feature`, `lifecycle.feature`, `admin-section.feature` and
-`team-import.feature`.
+`lifecycle.feature` and `team-import.feature`.
 
 ## The two nouns: a DESIGN and a PROJECT
 
@@ -259,7 +258,7 @@ front of it.
 
 #### What makes something `@blocked` rather than `@todo`
 
-Name the missing capability, in the scenario or the section above it. The seven
+Name the missing capability, in the scenario or the section above it. The eight
 that exist today:
 
 * **no browser** — anything about a button, card, panel, icon, or menu entry;
@@ -267,6 +266,9 @@ that exist today:
   the confirmation a demotion asks for before it deletes a stored archive;
 * **no app removal** — `occ` enables and disables; removing an app and
   reinstalling it is a store operation this suite cannot perform;
+* **no fault injection** — anything that needs a real Penpot to fail in a
+  specific way (a broken export stream, a refused asset download, a listing that
+  errors) or a sync to be killed mid-write;
 * **no way to edit a design's content** — Penpot's `update-file` is the only RPC
   that changes what is inside a design, and its `changes` payload is unproven
   (saga §1); the harness creates, renames, moves and deletes, but cannot author;
