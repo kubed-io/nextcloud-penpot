@@ -9,14 +9,15 @@ Feature: The personal connection
     Given the app is enabled
     And a working admin connection to Penpot
 
-  @todo
-  Scenario: A user sets their own token
-    When the user sets their personal token
+  @unbuilt
+  Scenario: A user enters a valid token
+    When the user sets their personal token to a valid one
     And the user tests their personal connection
     Then the health check reports success
 
-  @todo
-  Scenario: A user's token is theirs alone
-    Given another user has set their own personal token
-    When the user sets their personal token
-    Then each user's token is stored against that user only
+  @unbuilt
+  Scenario: A user enters a bad token
+    When the user sets their personal token to a bad one
+    And the user tests their personal connection
+    Then the health check reports an error
+    And the message names "token" as the field causing it

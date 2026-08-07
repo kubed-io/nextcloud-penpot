@@ -104,6 +104,18 @@ property of the design rather than a behaviour anyone performs, so it is written
 here and not as four near-identical `@blocked` scenarios asserting a token was
 not used.
 
+**`@unbuilt`, not `@todo`, and the gap is real: there is no personal health check
+at all.** `PersonalTokenService` stores, reads and clears a token; nothing tests
+one. No `occ` command, no route. So a user can paste a token that Penpot would
+reject and find out only when a rename is silently attributed to the service
+account — which is precisely the case `connection/admin.feature` refuses to allow
+for the admin. Build the check and both scenarios go live.
+
+**"A user's token is theirs alone" was cut.** Per-user storage is how
+`IAppConfig`'s user scope works; the scenario asserted that a framework does what
+it does, and asserted it as an absence — dana's token not appearing for alex.
+Nothing acts on alex's token, so there is nothing to observe.
+
 ## team-mapping/create
 
 `features/team-mapping/create.feature`
