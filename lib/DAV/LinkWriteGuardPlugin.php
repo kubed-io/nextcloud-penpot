@@ -69,8 +69,8 @@ use Sabre\DAV\ServerPlugin;
  */
 final class LinkWriteGuardPlugin extends ServerPlugin {
 	public function __construct(
-		private PenpotMetadata $metadata,
-		private LoggerInterface $logger,
+		private readonly PenpotMetadata $metadata,
+		private readonly LoggerInterface $logger,
 	) {
 	}
 

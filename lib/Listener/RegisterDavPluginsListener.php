@@ -26,7 +26,7 @@ use OCP\EventDispatcher\IEventListener;
  */
 final class RegisterDavPluginsListener implements IEventListener {
 	public function __construct(
-		private LinkWriteGuardPlugin $linkWriteGuard,
+		private readonly LinkWriteGuardPlugin $linkWriteGuard,
 	) {
 	}
 
