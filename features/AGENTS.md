@@ -178,9 +178,11 @@ An earlier draft of this header said the folder name "tracks Penpot's team name
 via the pull". That was one name for a two-name object, and the scenarios below
 now contradict it outright.
 
-MODE IS A MAPPING DEFAULT, NOT A MAPPING PROPERTY (saga §6.22): a mapping
-carries the default mode its files get ("link" unless set otherwise), but any
-individual file can be promoted or demoted afterwards — see set-mode.feature.
+MODE IS THE MAPPING'S, AND ONLY THE MAPPING'S (saga §6.22, amended): a mapping
+carries the mode its files get ("link" unless set otherwise), and it is immutable
+once created. A file's mode follows entirely from the mapping it was mirrored
+under; changing it means removing the mapping and mapping the team again. There
+was once a per-file override — see "team-mapping/set-mode — RETIRED".
 
 WHAT'S DELIBERATELY NOT HERE: creating a NEW Penpot team or project FROM
 Nextcloud is a separate, still-open fork — see `## team-import — RETIRED`.
@@ -786,7 +788,22 @@ inside the My Stuff folder"), which described the same three outcomes a
 second time and had already drifted from them. Only the MENU SURFACE is
 this section's own, and that is what is left.
 
-### A newly created design follows its mapping's default mode
+### A newly created design is born in its mapping's mode
+
+THIS ONE WAS WRONG IN THE CODE, and removing `set-mode` is what exposed it.
+`CreationService` stamped `MODE_LINK` unconditionally, with the comment *"born a
+`link` … a promotion is one command away"*. Once the promotion command was gone,
+a design created under a **sync** mapping would have been a pointer nothing could
+ever turn into an archive, sitting in a folder whose every other design holds one.
+
+It is an outline over both modes because the mode is now the only variable —
+there is no per-file override left for a second scenario to describe.
+
+NO ARCHIVE IS STORED **YET**, in either mode, and the "yet" is doing real work.
+The design is created empty, so there is nothing worth exporting at that instant;
+no revision is stamped either, which is what makes the next pull's drift check run
+and fill a `sync` file's body in on the same self-healing path it uses for an
+archive that went missing.
 
 ── creating in a personal team ─────────────────────────────────────────────
 Same behaviour, different destination: the user's own Drafts rather than the
@@ -1411,10 +1428,12 @@ that genuinely differs, which is what the admin is told.
 `@blocked` — **no fault injection.** Every row needs a real Penpot to fail in a
 specific way, and the harness can only ask it to succeed.
 
-FILED UNDER PROMOTION because promotion is what triggers an export. A pull
-re-exports too, but only for a design already in `sync` mode — so the first and
-riskiest export is always a `set-mode`, and that is where "it broke and you lost
-nothing" is worth stating.
+FILED UNDER PROMOTION because promotion was what triggered the first export.
+⚠️ RETIRED WITH ITS FILE: promotion no longer exists, so the first and riskiest
+export is now the first pull under a `sync` mapping. The four export-failure rows
+below went with `set-mode.feature` and are asserted nowhere — they were `@blocked`
+on fault injection the harness cannot do, and they remain a real gap rather than
+a solved one.
 
 ### An incomplete listing prunes nothing
 
@@ -1611,8 +1630,8 @@ about export state rather than about DAV advertising the key set.
 a wire value differs from the name of the thing it carries, written down here
 because a client author reading only the README would look for "link".
 
-The mode axis — what promotion changes about that body — is `set-mode.feature`'s,
-not this file's.
+The mode axis — whether that body is an archive or nothing at all — belongs to
+the MAPPING, not to this file and not to any per-file action.
 
 ### A file carries the team its design belongs to, but never a project
 
@@ -1827,9 +1846,10 @@ plain subfolder a legitimate place to file work.
 
 ### Dragging a sync design into another project re-files it in Penpot
 
-Promoted to sync first because a `link` is confined to its project (§6.43)
-and the guard refuses this drag before it happens — that refusal is its own
-scenario below, and needs a different assertion.
+Mapped in `sync` mode because a `link` is confined to its project (§6.43) and the
+guard refuses this drag before it happens — that refusal is its own scenario
+below, and needs a different assertion. The scenario re-states the mapping rather
+than promoting one file, which is the only way to get a real archive now.
 
 ### Filing a draft — dragging from the team root into a project
 
@@ -1874,8 +1894,9 @@ The re-stamp matters because the workspace deep link is built from it
 A "sync" file is a real archive, so moving it anywhere leaves the user
 holding something valuable. A "link" is a POINTER — move it out and they
 hold an empty husk that looks like a design and isn't. So links are
-confined, and every refusal offers the same escape: promote to "sync" first.
-That is not a fob-off; it is exactly the action that makes the move safe.
+confined. The refusal used to end "promote to sync first"; it no longer does,
+because there is no per-file promotion and re-mapping a whole team is not advice
+to give someone mid-drag. It names the rule and stops, as both siblings' do.
 
 ONE RULE, THREE DESTINATIONS — which is why these are Examples rather than
 three scenarios. The destination is an INPUT; the outcome is identical for
@@ -2617,183 +2638,54 @@ The whole point of the tag: ordinary folders live among project folders without
 becoming projects. The opt-in that DOES make one a project is
 `projects/create.feature`'s, and it is live there.
 
-## team-mapping/set-mode
+## team-mapping/set-mode — RETIRED (and `sync-mode` with it)
 
-`features/team-mapping/set-mode.feature`
+`features/team-mapping/set-mode.feature` is **gone**, and so is the
+`occ penpot_sync:set-mode` command it specified. The whole per-file mode axis has
+been removed from the app.
 
-Promoting and demoting a single file — the whole of the mode axis, now that
-`sync-mode.feature` is retired into it.
+**THE SECTION THIS REPLACES CALLED ITS OWN SHOT.** It was headed *"WHOSE DECISION
+IS THIS, AND WAS IT EVER ASKED FOR?"*, recorded that per-file mutable mode
+*"diverged from the design without a decision"*, that *"nobody asked for per-file
+switching — it arrived because the move guard needed an escape hatch to offer"*,
+and named the exact price of undoing it: *"the lever goes, the move guard loses
+the escape it offers, and every 'promote to sync first' refusal in move.feature
+needs a different answer."* That is precisely what was paid.
 
-THE AXIS MEANS SOMETHING DIFFERENT HERE THAN IN EITHER SIBLING (saga §6.22).
-In n8n and Grafana, `sync` vs `link` decides which way edits flow. This app never
-writes design content back at all (§6.1), so the axis decides only WHETHER WE
-STORE THE BYTES:
+THE RULE NOW, AND IT IS THE SIBLINGS' RULE: **the mapping alone decides the
+mode.** It is an immutable field of the mapping, exactly like the folder name and
+the Team Folder flag. A design's mode follows from the mapping it was mirrored
+under, and changing it means removing the mapping and mapping the team again —
+which re-mirrors the same designs, by the same ids, into the same folder.
 
-    link  — a pointer. No archive stored. Never calls export-binfile.
-    sync  — a real backup. The .penpot archive is downloaded and stored.
+Neither `nextcloud-grafana` nor `nextcloud-n8n` ever had a per-file lever. This
+app growing one made "the mapping says link" quietly untrue, and gave a third
+place for the same question to be answered differently.
 
-A `sync` file is still a read-only mirror. LINK IS THE DEFAULT, which is a safety
-property as much as a performance one: the expensive path is opt-in, so a newly
-mapped team of 500 files costs a listing rather than 500 exports. A `.penpot`
-export is a full ZIP with embedded binaries, not a JSON diff — most designs need
-to be findable and clickable, not duplicated.
+WHAT WENT WHERE:
 
-### Promoting a mirrored design fetches a real ZIP from Penpot
-
-PROMOTION IS PURELY ADDITIVE, which is what the table shows at a glance: the mode
-is "sync" and there are real bytes, while the file still names the same design in
-the same team. An export never writes to Penpot and never re-stamps the id, which
-is what makes it safe to retry.
-
-### A promoted file is not re-exported by the next pull
-
-Mode is stored PER FILE, and an unchanged revision means an unchanged archive, so
-staying in sync mode is free until the design actually moves.
-
-The one scenario here where a pull IS the subject, because "a second run does not
-undo the first" is a claim about running it twice.
-
-### Demoting throws the archive away and never contacts Penpot
-
-The bytes are gone and the mode says so, while the file still names the same
-design — and that design is still in Penpot, which the last line says out loud
-because "never contacts Penpot" is a claim about the far side.
-
-`penpot_revision | set` is deliberate: a demotion throws away the bytes but keeps
-the file's record of which revision it held, so a later promotion knows whether
-what it fetches is new.
-
-### WHY THIS SUITE IS WORTH A LIVE PENPOT
-
-Promotion is the app's only code path that moves real bytes out of Penpot, and
-it is four unmockable steps in a row (saga §5.1–§5.4, §C4.8):
-
-  1. POST `export-binfile` — the response is an **SSE stream**, not JSON;
-  2. the stream's `end` event carries a Transit **tagged map**, `{"~#uri": …}`,
-     a form the decoder originally mistook for plain JSON;
-  3. that URI needs a **second authenticated GET** to a different path entirely;
-  4. and only then are there ZIP bytes.
-
-Every one of those was discovered by watching a real instance rather than by
-reading its source, and every one would happily pass a mocked test while
-failing on the wire — a proxy that buffers the stream, an event that gets
-renamed, or an asset URL unreachable from inside the cluster (§5.3: an nginx
-resolver bug made exactly this fetch 502 while the export itself "succeeded").
-
-So the assertion below is deliberately crude and physical: after a promotion
-the mirrored file **begins with a ZIP's magic bytes**. Not "the client was
-called" — a ZIP arrived.
-
-### THE CHEAP PATH IS ASSERTED TOO, BECAUSE IT IS THE WHOLE POINT
-
-`link` mode's entire claim is that mirroring a team costs a listing and
-nothing else. A regression that quietly exported every file would still pass
-every other scenario in this suite, and would first be noticed as a bandwidth
-bill — so the zero is asserted, not assumed.
-
-### Demoting asks first, because it deletes the only local copy
-
-`@blocked` — **no tty**. Behat has no terminal to answer a confirmation prompt,
-which is why every other scenario here passes `--force`, and why the prompt
-itself went unasserted until now. The consequence IS asserted, in the demote
-scenario: the archive is gone, the file is empty again, and Penpot was never
-contacted. What was missing is that the app asks at all.
-
-It came from `sync-mode.feature`, which specified it and could not run it either.
-The prompt is unit-tested where the answer can be scripted (SetModeTest); this is
-the end-to-end statement of the same promise, parked behind a named wall rather
-than behind a file nobody was going to run.
-### WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
-
-STATED PLAINLY BECAUSE IT DIVERGED FROM THE DESIGN WITHOUT A DECISION: mode is
-PER FILE and MUTABLE. `occ penpot_sync:set-mode` takes a PATH, not a mapping,
-and a file can be flipped `sync` ⇄ `link` any number of times. The mapping's
-mode is only the default a NEW mirror inherits.
-
-The expectation was the opposite — mode set on the team-folder mapping and
-IMMUTABLE there, the way the folder name and the Team Folder flag are. Nobody
-asked for per-file switching;
-it arrived because the move guard needed an escape hatch to offer. A `link` is
-confined to its project (§6.43), so "promote it to sync first" is the only
-advice a refusal can give that leads anywhere — and that advice needs a lever.
-
-So it exists, it is load-bearing, and it is specified here rather than left as
-an undocumented capability. Two consequences the scenarios below hold to:
-
-  1. IT IS AN ADMIN ACTION. Changing a file's mode decides whether Nextcloud
-     stores a real archive or a pointer — a storage-and-recovery decision about
-     someone else's team folder. There is no per-user surface for it.
-  2. DEMOTION DESTROYS A LOCAL BACKUP. `sync` → `link` deletes the archive
-     Penpot is not keeping for you. It is the one direction that loses
-     something, and it confirms before it does.
-
-IF IMMUTABILITY IS WANTED INSTEAD, this is the file that changes: the lever
-goes, the move guard loses the escape it offers, and every "promote to sync
-first" refusal in move-design.feature needs a different answer. That is a design
-decision, not a spec tidy-up.
-
----
-
-## sync-mode — RETIRED
-
-`features/sync-mode.feature` is **gone**. Its subject was real; the file was not.
-
-The per-file "do we store the bytes?" choice belongs to **`set-mode.feature`**,
-which owns the action a person performs and runs live against a real Penpot.
-`sync-mode.feature` was written first, before the engine existed, and then never
-shrank when `set-mode.feature` came along and proved half of it for real — so the
-repo carried sixteen `@todo` scenarios restating five live ones.
-
-FOURTEEN OF THE SIXTEEN WERE ALREADY COVERED, ELSEWHERE, VERBATIM:
-
-| it said | already asserted by |
+| it said | where it went |
 |---|---|
-| A team of link files costs no exports at all | `set-mode.feature`, same sentence, **live** |
-| Promoting a link file to sync fetches the archive | `set-mode.feature` "Promoting a mirrored design fetches a real ZIP", **live** |
-| Promotion survives future pulls | `set-mode.feature` "A promoted file is not re-exported by the next pull", **live** |
-| Confirming a demotion deletes the archive and keeps the pointer | `set-mode.feature` "Demoting throws the archive away and never contacts Penpot", **live** |
-| A sync file holds the real archive | the promote scenario's own `Then`, **live** |
-| A link file is a pointer with no stored content | `view-design.feature` + the demote scenario, **live** |
-| A link file holds nothing at all | same |
-| A link is never a small placeholder archive | a restatement of "holds no content at all" with no action of its own |
-| A link file is confined to its own project | `move-design.feature` — and the scenario said so itself: *"Detail lives in move-design.feature and ignore.feature; this is the summary"* |
-| Promotion lifts every link restriction at once | `move-design.feature` "Promoting a link first makes the move work normally" |
-| Personal projects support the same link and sync modes | no action, no actor — a claim that a thing behaves normally |
-| Files inherit their mapping's default mode | see below; the operation it describes does not exist |
-| A leftover body from an older version is truncated by the next pull | `When the pull runs` — the reconciler as the subject |
-| An already-empty link is left strictly alone | an mtime and an etag, about the reconciler |
+| Promoting a mirrored design fetches a real ZIP from Penpot | the export is still proven live — a `sync` **mapping** pulls, and `move.feature` / `rename.feature` / `edit.feature` assert real ZIP bytes on disk |
+| A promoted file is not re-exported by the next pull | the revision check it rested on is `edit.feature`'s subject, where an edit in Penpot is the action |
+| Demoting throws the archive away and never contacts Penpot | deleted — the action does not exist |
+| Demoting asks first, because it deletes the only local copy | deleted with the prompt, the `--force` flag and `SetModeTest` |
+| A link refusal offers to promote the file to "sync" mode first | deleted — the refusal now names the rule and stops, like both siblings' |
+| Promoting a link first makes the move work normally | deleted — there is no promoting |
 
-**A summary of other files is not a scenario.** Two of them said outright that
-the real coverage lived elsewhere. A reader who wants to know what a link cannot
-do is better served by the file where each refusal is actually exercised, and a
-summary that drifts from those files is worse than nothing because it will be
-believed.
+`features/sync-mode.feature` had already been retired *into* `set-mode.feature`,
+so its note is folded in here rather than left pointing at a file that no longer
+exists. Its own diagnosis still stands and now reads as the earlier half of this
+one: it was sixteen `@todo` scenarios restating live ones, its
+*"files inherit their mapping's default mode"* scenario described a bulk mode flip
+that has never existed, and two of its scenarios named the pull as the actor —
+the same defect that retired `reconcile.feature` in the Grafana sibling.
 
-**"Files inherit their mapping's default mode" described an operation that does
-not exist.** Its second half is *"the admin changes the mapping's default mode to
-sync"* — but a mapping's mode is fixed at creation (`admin-mapping.feature`:
-everything except the groups is immutable, deliberately, because changing it
-would force a live migration of already-mirrored content). Here that is sharper
-than elsewhere: flipping a mapping's mode in bulk would either delete every
-downloaded archive under it or export every file at once. There is no such
-control, so there was nothing to test.
+HOW A SCENARIO GETS A REAL ARCHIVE NOW: it asks for a sync mapping —
+`Given a Penpot team named "…" is mapped to the folder "…" in "sync" mode` — and
+lets the pull export. The step resets the mappings first, so a scenario stating
+it is doing exactly what a person would do: mapping the team the other way.
 
-It was also a **two-`When` scenario**, which is the tell: a second `When` is a
-scenario trying to rebuild a pre-state by performing another behaviour, instead
-of stating how the world is in a `Given`.
-
-**"A leftover body from an older version" and "An already-empty link is left
-strictly alone" both named the pull as the actor.** That is the same defect that
-retired `reconcile.feature` in the Grafana sibling: nobody runs a reconciler, and
-an mtime is a result rather than a behaviour. The end state each was reaching for
-— a link holds nothing — is asserted where a link is made.
-
-TWO SCENARIOS SURVIVED, and both moved to the file that owns their subject:
-
-| it said | where it went | why it survived |
-|---|---|---|
-| Demoting a sync file to link warns before deleting the archive | `set-mode.feature` | the confirmation is really implemented (`--force` exists to skip it) and nothing asserted it — every live scenario passes `--force` |
-| Demoting an ignored file is refused | `ignore.feature` | the mirror of "Ignoring a link file is refused"; both are about what ignore protects |
 
 ## connection/sync-now
 

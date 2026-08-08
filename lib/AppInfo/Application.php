@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\AppInfo;
 
+use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 use OCA\PenpotSync\BackgroundJob\ScheduledPullJob;
@@ -19,6 +20,7 @@ use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
 use OCA\PenpotSync\Listener\ProjectTagListener;
+use OCA\PenpotSync\Listener\RegisterDavPluginsListener;
 use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Listener\TrashPurgeHook;
 use OCA\PenpotSync\Service\PenpotMetadata;
@@ -122,6 +124,17 @@ final class Application extends App implements IBootstrap {
 		// (a cross-team reparent in Penpot) nor ignoring it (a silent desync) is
 		// acceptable. Aborting the event shows the user why, at the moment they try.
 		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveGuardListener::class);
+
+		// A LINK IS READ-ONLY ON DISK, and here that needs saying out loud: a link
+		// mirror is a ZERO-BYTE file, so nothing about it stops a desktop client, a
+		// `curl` PUT, or an archive dragged on top of it from filling it with bytes
+		// the app will never read and the next pull will silently empty again.
+		// RegisterDavPluginsListener attaches LinkWriteGuardPlugin, which refuses the
+		// write with a 403 before it lands. Sabre is the only reliable choke — core's
+		// BeforeNodeWrittenEvent is emitted from File::put() *only* on the
+		// non-part-file branch, so an ordinary PUT slips past it. Our own writes go
+		// through the Node API and never reach Sabre. Both siblings do exactly this.
+		$context->registerEventListener(SabrePluginAddEvent::class, RegisterDavPluginsListener::class);
 
 		// A COPY IS ITS OWN EVENT. NodeCopiedEvent fires for neither a write nor a
 		// rename, so without this a copied design is simply never noticed. It

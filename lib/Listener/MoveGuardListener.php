@@ -51,16 +51,20 @@ use OCP\IL10N;
  * something genuinely valuable. **A `link` file is a pointer** — move it out of
  * its project and they hold an empty husk that looks like a design and is not.
  * So a link moves freely *within* its project (including into plain subfolders,
- * which Penpot cannot even see) and every project-changing move is refused, with
- * the same escape hatch each time: **promote it to `sync` first.** That is not a
- * fob-off — it is precisely the action that converts the pointer into something
- * able to survive the gesture being attempted.
+ * which Penpot cannot even see) and every project-changing move is refused.
+ *
+ * ## THE REFUSAL NO LONGER OFFERS A WAY OUT, BECAUSE THERE ISN'T ONE
+ *
+ * It used to end "switch it to sync mode first (occ penpot_sync:set-mode)". That
+ * command is gone: the mode is an immutable field of the MAPPING, and a per-file
+ * override was a fourth way of deciding the same thing that neither sibling app
+ * had. Changing a team's mode now means removing the mapping and mapping the team
+ * again, which is far too large a thing to suggest to someone mid-drag — so the
+ * message names the rule and the reason, and stops. Both siblings' guards say
+ * exactly as much and no more ("Move it within that folder instead").
  *
  * `sync` files earn their freedom by holding real content, so they are not
- * constrained here at all; `MotionService` re-files them in Penpot. The escape
- * hatch the refusal offers is real and reachable today:
- * `occ penpot_sync:set-mode <path> sync` fetches the archive, after which the
- * file moves like any other.
+ * constrained here at all; `MotionService` re-files them in Penpot.
  *
  * ## THE TWO MESSAGES ARE TRANSLATED, AND THAT IS NOT CEREMONY
  *
@@ -156,9 +160,8 @@ final class MoveGuardListener implements IEventListener {
 
 		throw new AbortedEventException($this->l->t(
 			'"%s" is a link to a design that lives in Penpot — it holds no copy of the design '
-			. 'itself, so moving it out of its project would leave you with an empty file. Switch '
-			. 'it to "sync" mode first (occ penpot_sync:set-mode) and Nextcloud will keep the real '
-			. 'archive, which can be moved anywhere.',
+			. 'itself, so moving it out of its project would leave you with an empty file. '
+			. 'Move it within its own project instead.',
 			[$source->getName()],
 		));
 	}

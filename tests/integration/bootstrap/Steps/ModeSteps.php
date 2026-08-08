@@ -10,11 +10,24 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
 /**
- * `occ penpot_sync:set-mode`, end-to-end (saga §6.22, §C4.8).
+ * What a mirror's mode LEFT ON DISK — observed, never changed.
  *
- * ## THIS IS THE ONE THING THE UNIT SUITE CANNOT FAKE
+ * ## THERE IS NO LONGER ANY WAY TO CHANGE A FILE'S MODE, AND THAT IS THE POINT
  *
- * Promotion is the app's only code path that moves real bytes out of Penpot, and
+ * This trait used to drive `occ penpot_sync:set-mode`, promoting and demoting
+ * single files. That command is gone. The mode is an immutable field of the
+ * MAPPING, so a design's mode follows entirely from the mapping it was mirrored
+ * under, and the only way to change it is to remove the mapping and map the team
+ * again. A per-file override was a fourth way to decide the same thing, existed
+ * in neither sibling app, and quietly made "the mapping says link" untrue.
+ *
+ * So a scenario that needs a real archive on disk asks for a **sync mapping** —
+ * `a Penpot team named "…" is mapped to the folder "…" in "sync" mode`
+ * ({@see PullSteps}) — and the pull does the exporting.
+ *
+ * ## THE EXPORT IS STILL THE THING THE UNIT SUITE CANNOT FAKE
+ *
+ * An export is the app's only code path that moves real bytes out of Penpot, and
  * it is four unmockable steps in a row: a POST whose response is an **SSE
  * stream**, a Transit payload in *tagged-map form* buried in the `end` event, a
  * **second authenticated GET** to a completely different URL for the ZIP itself,
@@ -25,16 +38,16 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * asset URL the app cannot reach from inside the cluster (§5.3, an nginx
  * resolver bug that made exactly this fetch 502 while the export "succeeded").
  *
- * So the assertion that matters here is deliberately crude and physical: after
- * a promotion the mirrored file **starts with `PK\x03\x04`**. Not "the mock was
- * called" — the bytes are a ZIP.
+ * So the assertion that matters here stays deliberately crude and physical: the
+ * mirrored file **starts with `PK\x03\x04`**. Not "the mock was called" — the
+ * bytes are a ZIP.
  *
  * ## AND THE CHEAP PATH IS ASSERTED TOO, WHICH IS THE POINT OF THE MODE
  *
  * `link` mode's whole claim is that mirroring costs a listing and nothing else.
- * A scenario below maps a team, pulls, and asserts **0 archives exported** —
- * because a regression that quietly exported every file would still pass every
- * other test in this suite, and would only be noticed as a bandwidth bill.
+ * A scenario maps a team, pulls, and asserts **0 archives exported** — because a
+ * regression that quietly exported every file would still pass every other test
+ * in this suite, and would only be noticed as a bandwidth bill.
  *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}; reuses
  * the occ transport, the `status` reader and the direct Penpot RPC seed channel
@@ -47,61 +60,6 @@ trait ModeSteps {
 			'project-id' => $this->projectIdNamed($project),
 			'name' => $name,
 		]);
-	}
-
-	/**
-	 * ## THE ACTION PHRASING AND THE STATE PHRASING, ONE FUNCTION
-	 *
-	 * A mode change is the behaviour under test in `sync-mode.feature`, and mere
-	 * setup everywhere else — a `link` is confined to its project (§6.43), so any
-	 * scenario about MOVING a design has to start from a `sync` one.
-	 *
-	 * Written as "the admin promotes X" in a Given, it reads as though an admin
-	 * were standing by to prepare each file before a user touches it. The state
-	 * phrasing says what is true instead of who made it true, which is what a
-	 * precondition is for.
-	 *
-	 * @When /^the admin promotes "([^"]*)" to "sync" mode$/
-	 * @Given /^"([^"]*)" is a "sync" design$/
-	 */
-	public function theAdminPromotesTo(string $path): void {
-		$this->occ('penpot_sync:set-mode ' . escapeshellarg($path) . ' sync');
-	}
-
-	/**
-	 * @When /^the admin demotes "([^"]*)" to "link" mode$/
-	 * @Given /^"([^"]*)" is a "link" design$/
-	 */
-	public function theAdminDemotesTo(string $path): void {
-		// --force because Behat has no tty to answer the confirmation. The prompt
-		// itself is covered in the unit suite, where the answer can be scripted.
-		$this->occ('penpot_sync:set-mode ' . escapeshellarg($path) . ' link --force');
-	}
-
-	/** @When /^the admin sets the mode of "([^"]*)" to "([^"]*)"$/ */
-	public function theAdminSetsTheModeOf(string $path, string $mode): void {
-		$this->occ('penpot_sync:set-mode ' . escapeshellarg($path) . ' ' . escapeshellarg($mode) . ' --force');
-	}
-
-	/** @Then /^the mode change succeeds$/ */
-	public function theModeChangeSucceeds(): void {
-		if ($this->lastExit !== 0) {
-			throw new \RuntimeException("set-mode failed (exit {$this->lastExit}):\n{$this->lastOutput}");
-		}
-	}
-
-	/** @Then /^the mode change is refused$/ */
-	public function theModeChangeIsRefused(): void {
-		if ($this->lastExit === 0) {
-			throw new \RuntimeException("expected set-mode to be refused, but it succeeded:\n{$this->lastOutput}");
-		}
-	}
-
-	/** @Then /^the refusal mentions "([^"]*)"$/ */
-	public function theRefusalMentions(string $phrase): void {
-		if (!str_contains($this->lastOutput, $phrase)) {
-			throw new \RuntimeException("expected the refusal to mention '{$phrase}', got:\n{$this->lastOutput}");
-		}
 	}
 
 	/** @Then /^the file "([^"]*)" is in "([^"]*)" mode$/ */

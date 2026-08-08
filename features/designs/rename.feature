@@ -12,8 +12,8 @@ Feature: Renaming a mirrored Penpot design
 
   @in-nextcloud @gesture
   Scenario: Renaming a mirrored file renames its design in Penpot
-    Given a mirrored design "Old Name" in the project "Rename Live"
-    And "Penpot/Rename Live/Old Name.penpot" is a "sync" design
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a mirrored design "Old Name" in the project "Rename Live"
     When I rename "Penpot/Rename Live/Old Name.penpot" to "New Name.penpot"
     Then Penpot project "Rename Live" holds a design named "New Name"
     And Penpot project "Rename Live" holds no design named "Old Name"

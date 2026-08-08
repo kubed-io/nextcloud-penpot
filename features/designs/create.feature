@@ -124,13 +124,18 @@ Feature: Creating a new Penpot design from Nextcloud
     # ── mode ─────────────────────────────────────────────────────────────────────
 
   @todo
-  Scenario: A newly created design follows its mapping's default mode
-    Given the "Northwind" mapping has default mode "link"
+  Scenario Outline: A newly created design is born in its mapping's mode
+    Given the "Northwind" mapping has mode "<mode>"
     When I create a new design in the "My Stuff" folder
-    Then the mirrored file is in "link" mode
-    And no archive is stored for it until it is promoted to "sync"
+    Then the mirrored file is in "<mode>" mode
+    And no archive is stored for it yet
 
-  # notes: ../AGENTS.md#a-newly-created-design-follows-its-mappings-default-mode
+    Examples: the mapping decides, and there is no per-file override
+      | mode |
+      | link |
+      | sync |
+
+  # notes: ../AGENTS.md#a-newly-created-design-is-born-in-its-mappings-mode
 
   @unbuilt
   Scenario: A design created in the user's own home lands in their personal Drafts

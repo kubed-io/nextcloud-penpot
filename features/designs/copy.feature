@@ -214,8 +214,8 @@ Feature: Copying a mirrored design
 
   @in-penpot @todo
   Scenario: A duplicate made in Penpot inherits the mapping's mode, not the original's
-    Given a mirrored design "Original" in the project "Shared Work"
-    And "Penpot/Shared Work/Original.penpot" is a "sync" design
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a mirrored design "Original" in the project "Shared Work"
     And the design "Original" is duplicated in Penpot
     When the team is mirrored again
     Then the file "Penpot/Shared Work/Original (copy).penpot" is in "link" mode

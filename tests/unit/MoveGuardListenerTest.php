@@ -163,7 +163,12 @@ final class MoveGuardListenerTest extends TestCase {
 		$this->givenPositions(new Membership(self::PROJECT, self::TEAM), Membership::none());
 
 		$this->expectException(AbortedEventException::class);
-		$this->expectExceptionMessageMatches('/sync/');
+		// The refusal used to be asserted on the word "sync", because it ended
+		// "switch it to sync mode first". There is no per-file mode change any
+		// more, so it names the rule and the reason and stops — as both siblings'
+		// guards already did. What must survive is that it explains WHY, which is
+		// the pointer having no copy of the design.
+		$this->expectExceptionMessageMatches('/holds no copy of the design/');
 
 		$this->listener->handle($this->move($this->file(), $this->destination()));
 	}

@@ -60,6 +60,74 @@ namespace OCA\Files_Trashbin\Events {
 	}
 }
 
+namespace Sabre\DAV {
+	// The Sabre/DAV server surface LinkWriteGuardPlugin builds on. Sabre ships
+	// inside a running Nextcloud, not in nextcloud/ocp, so the unit suite has to
+	// declare the three symbols the plugin touches: the node interface it type-
+	// checks against, the server it hooks `beforeWriteContent` on, and the plugin
+	// base it extends. Declarations only — the real behaviour is exercised by the
+	// integration suite against a live server.
+	if (!interface_exists(INode::class, false)) {
+		interface INode {
+			public function getName(): string;
+		}
+	}
+	if (!class_exists(Server::class, false)) {
+		class Server {
+			public function on(string $eventName, callable $callBack, int $priority = 100): bool {
+				return true;
+			}
+
+			public function addPlugin(ServerPlugin $plugin): void {
+			}
+		}
+	}
+	if (!class_exists(ServerPlugin::class, false)) {
+		abstract class ServerPlugin {
+			abstract public function initialize(Server $server): void;
+		}
+	}
+}
+
+namespace Sabre\DAV\Exception {
+	// The native deny. Sabre turns a thrown Forbidden into a clean 403 and never
+	// writes the bytes, which is the whole mechanism behind the link write guard.
+	if (!class_exists(Forbidden::class, false)) {
+		class Forbidden extends \Exception {
+		}
+	}
+}
+
+namespace OCA\DAV\Connector\Sabre {
+	// Nextcloud's own Sabre file node — the concrete type LinkWriteGuardPlugin
+	// narrows to before asking for a file id, since a plain Sabre INode has no id
+	// and nothing to look metadata up by.
+	if (!class_exists(File::class, false)) {
+		class File implements \Sabre\DAV\INode {
+			public function getName(): string {
+				return '';
+			}
+
+			public function getId(): int {
+				return 0;
+			}
+		}
+	}
+}
+
+namespace OCA\DAV\Events {
+	// Fired by the bundled DAV app while assembling each Sabre server. It is the
+	// supported seam for a third-party app to attach its own ServerPlugin, and
+	// what RegisterDavPluginsListener listens for.
+	if (!class_exists(SabrePluginAddEvent::class, false)) {
+		class SabrePluginAddEvent extends \OCP\EventDispatcher\Event {
+			public function getServer(): \Sabre\DAV\Server {
+				return new \Sabre\DAV\Server();
+			}
+		}
+	}
+}
+
 namespace OC\Core\Command\Maintenance\Mimetype {
 	// The generator behind `occ maintenance:mimetype:update-js`. It lives in
 	// core/, so it is neither public API nor a Composer package — but it is the

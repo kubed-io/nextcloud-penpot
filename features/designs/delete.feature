@@ -60,8 +60,8 @@ Feature: Deleting a mirrored design
 
   @in-penpot
   Scenario: A design that already had its archive needs no second export
-    Given a mirrored design "Backup" in the project "Kept"
-    And "Penpot/Kept/Backup.penpot" is a "sync" design
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a mirrored design "Backup" in the project "Kept"
     And the design "Backup" is deleted in Penpot
     When the team is mirrored again
     Then the pull succeeds

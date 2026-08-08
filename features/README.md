@@ -40,7 +40,7 @@ one of them acts on the same kind of thing:
 |---|---|---|
 | [`designs/`](designs/) | a `.penpot` file | create, view, edit, copy, move, rename, delete, restore, purge, open-with |
 | [`projects/`](projects/) | a project folder | create, view, copy, move, rename, delete, restore |
-| [`team-mapping/`](team-mapping/) | a mapping | create, view, manage-groups, delete, sync-now, set-mode |
+| [`team-mapping/`](team-mapping/) | a mapping | create, view, manage-groups, delete, sync-now |
 | [`connection/`](connection/) | the instance | admin, personal, sync-now |
 
 So `designs/move.feature` answers *"what happens when someone moves a design?"* —

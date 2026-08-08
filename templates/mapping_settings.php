@@ -14,8 +14,12 @@
  *
  * Two fields fewer than the Grafana card: no Format, because a `.penpot` archive
  * has exactly one shape, and no Folder mode, which was a designed-but-unbuilt
- * fork rendered as a permanently-"(fixed)" label (§C6.36). Everything else —
+ * fork rendered as a permanently-immutable label (§C6.36). Everything else —
  * including Groups and Team Folder — sits where the siblings put it.
+ *
+ * An immutable field is rendered as plain text, and that is the whole signal. It
+ * used to carry a "(fixed)" tag as well, in all three apps; the tag was a note
+ * about the design rather than something a reader of the card needed.
  *
  * Groups is the one editable control on a saved card, and the only one whose
  * value is not stored: it is read from the mapped folder as this renders and
@@ -140,9 +144,7 @@ $info = static function (string $tip) use ($icon): string {
 								 the whole mirrored tree and re-stamp every file's metadata.
 								 Shown as text for the same reason folder mode is: a disabled
 								 input invites typing and implies it might save. */ ?>
-						<span class="penpot-sync-fixed"><?php p((string)($m['nc_folder'] ?? '')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
+						<span class="penpot-sync-fixed"><?php p((string)($m['nc_folder'] ?? '')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-mode">
 						<label><?php p($l->t('Mode'));
@@ -154,9 +156,7 @@ $info = static function (string $tip) use ($icon): string {
 						<?php /* The SAME localised labels the add-card offers — a saved card
 								 showing raw "link"/"sync" while a new one says "Link"/"Sync"
 								 is both inconsistent and untranslatable. */ ?>
-						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
+						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-tf">
 						<label><?php p($l->t('Team Folder'));
@@ -164,9 +164,7 @@ $info = static function (string $tip) use ($icon): string {
 						<?php /* Immutable: switching backend would have to migrate the
 								 provisioned folder and all its shares. Both siblings lock
 								 this too. */ ?>
-						<span class="penpot-sync-fixed"><?php p($useTf ? $l->t('yes') : $l->t('no')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
+						<span class="penpot-sync-fixed"><?php p($useTf ? $l->t('yes') : $l->t('no')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-groups">
 						<label><?php p($l->t('Groups'));
