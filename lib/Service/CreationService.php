@@ -56,6 +56,7 @@ final class CreationService {
 		private readonly MembershipResolver $resolver,
 		private readonly DestinationResolver $destinations,
 		private readonly ArchiveService $archives,
+		private readonly MappingService $mappings,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -117,12 +118,21 @@ final class CreationService {
 			return;
 		}
 
-		// Born a `link`: the design is empty, so there is nothing worth storing,
-		// and a promotion is one command away. No revision is stamped — the file
-		// has never been pulled, so the next pull's drift check must run.
+		// BORN IN ITS MAPPING'S MODE. It used to be born a `link` unconditionally,
+		// justified by "a promotion is one command away" — and that command is gone.
+		// Under a `sync` mapping the file would have been a pointer nothing could
+		// ever turn into an archive, sitting in a folder whose every other design
+		// holds one. The mapping decides the mode; a file created inside it is no
+		// exception.
+		//
+		// NO ARCHIVE IS EXPORTED HERE, and none is needed. The design was created
+		// empty a few lines above, so there is nothing yet worth storing, and no
+		// revision is stamped — which means the next pull's drift check runs and
+		// {@see ArchiveService} fills the body in on the same self-healing path it
+		// uses for a `sync` file whose archive went missing.
 		$this->metadata->writeFile($node->getId(), [
 			PenpotMetadata::KEY_ID => $newId,
-			PenpotMetadata::KEY_MODE => Mapping::MODE_LINK,
+			PenpotMetadata::KEY_MODE => $this->modeFor($membership),
 			PenpotMetadata::KEY_TEAM_ID => $membership->teamId ?? '',
 		]);
 
@@ -132,6 +142,22 @@ final class CreationService {
 			'project' => $project,
 			'name' => $name,
 		]);
+	}
+
+	/**
+	 * The mode a design created here is born in — its mapping's.
+	 *
+	 * Falls back to `link` when the team resolves to no mapping, which is the safe
+	 * direction: `link` stores nothing, so guessing it costs nothing, while
+	 * guessing `sync` would promise an archive no mapping asked for.
+	 */
+	private function modeFor(Membership $membership): string {
+		$teamId = $membership->teamId ?? '';
+		if ($teamId === '') {
+			return Mapping::MODE_LINK;
+		}
+
+		return $this->mappings->getByTeamId($teamId)?->mode ?? Mapping::MODE_LINK;
 	}
 
 	/** The filename as a Penpot name: extension off (§6.4), capped at the schema's 250. */

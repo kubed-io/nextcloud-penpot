@@ -13,6 +13,7 @@ use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\CreationService;
 use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
@@ -41,6 +42,7 @@ final class CreationServiceTest extends TestCase {
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
 	private ArchiveService $archives;
+	private MappingService $mappings;
 	private CreationService $creations;
 
 	protected function setUp(): void {
@@ -49,6 +51,12 @@ final class CreationServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->archives = $this->createMock(ArchiveService::class);
+		$this->mappings = $this->createMock(MappingService::class);
+
+		// A design is born in its MAPPING's mode, so every test needs a mapping to
+		// resolve to. `link` is the default here because it is the app's default;
+		// the sync case gets its own test below.
+		$this->mappings->method('getByTeamId')->willReturn($this->mapping(Mapping::MODE_LINK));
 
 		$this->creations = new CreationService(
 			$this->client,
@@ -58,8 +66,14 @@ final class CreationServiceTest extends TestCase {
 			// lookup is exercised rather than assumed away (§C6.10's lesson).
 			new DestinationResolver($this->client, new NullLogger()),
 			$this->archives,
+			$this->mappings,
 			new NullLogger(),
 		);
+	}
+
+	/** A mapping carrying nothing but the one field these tests read. */
+	private function mapping(string $mode): Mapping {
+		return new Mapping('m1', self::TEAM, 'Design Team', 'Penpot', false, $mode);
 	}
 
 	// ── where a design is created ───────────────────────────────────────────
@@ -80,6 +94,76 @@ final class CreationServiceTest extends TestCase {
 		);
 
 		$this->creations->onWritten($this->file());
+	}
+
+	/**
+	 * THE MODE COMES FROM THE MAPPING, and this is the case that used to be wrong.
+	 *
+	 * A new design was born a `link` unconditionally, on the reasoning that "a
+	 * promotion is one command away". `occ penpot_sync:set-mode` is gone, so under
+	 * a `sync` mapping that would have left a pointer nothing could ever turn into
+	 * an archive, sitting in a folder whose every other design holds one.
+	 *
+	 * No archive is exported here — the design was just created empty. Stamping no
+	 * revision is what makes the next pull's drift check fill the body in.
+	 */
+	public function testADesignCreatedUnderASyncMappingIsBornSync(): void {
+		$this->givenUntrackedEmptyFile();
+		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
+		$this->client->method('createFile')->willReturn(['id' => self::NEW_ID]);
+
+		$mappings = $this->createMock(MappingService::class);
+		$mappings->method('getByTeamId')->willReturn($this->mapping(Mapping::MODE_SYNC));
+		$creations = new CreationService(
+			$this->client,
+			$this->metadata,
+			$this->resolver,
+			new DestinationResolver($this->client, new NullLogger()),
+			$this->archives,
+			$mappings,
+			new NullLogger(),
+		);
+
+		$this->metadata->expects($this->once())->method('writeFile')->with(
+			30,
+			[
+				PenpotMetadata::KEY_ID => self::NEW_ID,
+				PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC,
+				PenpotMetadata::KEY_TEAM_ID => self::TEAM,
+			],
+		);
+
+		$creations->onWritten($this->file());
+	}
+
+	/** No mapping to read a mode from: `link`, because it promises nothing. */
+	public function testADesignWhoseTeamResolvesToNoMappingIsBornLink(): void {
+		$this->givenUntrackedEmptyFile();
+		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
+		$this->client->method('createFile')->willReturn(['id' => self::NEW_ID]);
+
+		$mappings = $this->createMock(MappingService::class);
+		$mappings->method('getByTeamId')->willReturn(null);
+		$creations = new CreationService(
+			$this->client,
+			$this->metadata,
+			$this->resolver,
+			new DestinationResolver($this->client, new NullLogger()),
+			$this->archives,
+			$mappings,
+			new NullLogger(),
+		);
+
+		$this->metadata->expects($this->once())->method('writeFile')->with(
+			30,
+			[
+				PenpotMetadata::KEY_ID => self::NEW_ID,
+				PenpotMetadata::KEY_MODE => Mapping::MODE_LINK,
+				PenpotMetadata::KEY_TEAM_ID => self::TEAM,
+			],
+		);
+
+		$creations->onWritten($this->file());
 	}
 
 	/**

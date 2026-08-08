@@ -788,7 +788,22 @@ inside the My Stuff folder"), which described the same three outcomes a
 second time and had already drifted from them. Only the MENU SURFACE is
 this section's own, and that is what is left.
 
-### A newly created design follows its mapping's default mode
+### A newly created design is born in its mapping's mode
+
+THIS ONE WAS WRONG IN THE CODE, and removing `set-mode` is what exposed it.
+`CreationService` stamped `MODE_LINK` unconditionally, with the comment *"born a
+`link` … a promotion is one command away"*. Once the promotion command was gone,
+a design created under a **sync** mapping would have been a pointer nothing could
+ever turn into an archive, sitting in a folder whose every other design holds one.
+
+It is an outline over both modes because the mode is now the only variable —
+there is no per-file override left for a second scenario to describe.
+
+NO ARCHIVE IS STORED **YET**, in either mode, and the "yet" is doing real work.
+The design is created empty, so there is nothing worth exporting at that instant;
+no revision is stamped either, which is what makes the next pull's drift check run
+and fill a `sync` file's body in on the same self-healing path it uses for an
+archive that went missing.
 
 ── creating in a personal team ─────────────────────────────────────────────
 Same behaviour, different destination: the user's own Drafts rather than the

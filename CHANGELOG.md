@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The admin cards no longer tag every immutable field with "(fixed)". The value renders as plain text rather than a control, which already says it cannot be edited.
+- **A design you create is now stored the way its mapping says.** A new design was always born a pointer, on the reasoning that you could promote it afterwards — so under a `sync` mapping it was the one design in the folder whose archive was never kept. It now takes its mapping's mode, and the next sync fills the archive in.
 - **`occ penpot_sync:set-mode` is gone, and with it any way to change one file's mode.** The mode belongs to the mapping and is fixed once created — as it already was in both sibling integrations — so a per-file promote/demote was a second answer to a question the mapping had already settled. To change a team's mode, remove the mapping and map the team again; the same designs come back, by the same ids, into the same folder.
 - **A link file can no longer be written to over WebDAV** — a desktop client, a `curl` PUT, or an archive dragged on top of one is refused with a `403` instead of filling a pointer with bytes nothing reads and the next sync throws away. Both sibling apps have refused this for a while; this one never did.
 
