@@ -171,6 +171,16 @@ final class MappingController extends Controller {
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function sync(string $id): JSONResponse {
+		// THE SAME GUARD THE SECTION'S BUTTON HAS. A card sync and an
+		// instance-wide one race over the same folder tree exactly as two
+		// instance-wide ones would — the scope does not make it safe.
+		if ($this->status->isBusy()) {
+			return new JSONResponse(
+				['status' => 'already-running'] + $this->status->get(),
+				Http::STATUS_CONFLICT,
+			);
+		}
+
 		$this->status->markStarted();
 		try {
 			$result = $this->pull->pull($id);

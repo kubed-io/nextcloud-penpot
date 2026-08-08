@@ -59,6 +59,12 @@ final class Sync extends Command {
 				InputOption::VALUE_REQUIRED,
 				'Restrict the run to a single mapping id (see penpot_sync:list-mappings). Default: every mapping.',
 				'',
+			)
+			->addOption(
+				'force',
+				'f',
+				InputOption::VALUE_NONE,
+				'Run even if another sync is recorded as still going. Use when a previous run was killed.',
 			);
 	}
 
@@ -72,6 +78,24 @@ final class Sync extends Command {
 		}
 
 		$mappingId = (string)$input->getOption('mapping');
+
+		// ONE PULLER AT A TIME: two runs over one folder tree race on the same
+		// files. The section's button and the scheduled job already refuse; so
+		// does this now.
+		//
+		// WITH AN ESCAPE HATCH, because a CLI is not a button. `isBusy()` reads a
+		// STORED flag, so a run killed outright — SIGKILL, an evicted pod — leaves
+		// it stuck at `running` forever, and the CLI is the headless door an
+		// operator reaches for when the UI is the thing misbehaving. Refusing
+		// without a way through would wedge the one tool that could unwedge it.
+		if (!$input->getOption('force') && $this->status->isBusy()) {
+			$output->writeln(
+				'<error>A sync is already running. Wait for it to finish, or re-run with '
+				. '--force if a previous run was killed and left this stuck.</error>',
+			);
+
+			return 1;
+		}
 
 		// THE RUN IS RECORDED WHATEVER STARTED IT. The scheduled job and the
 		// admin panel both stamp {@see PullStatus}, and the CLI did not — so

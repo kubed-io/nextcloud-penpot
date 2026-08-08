@@ -471,6 +471,22 @@ duplication visible.
 
 ### A second sync started while one is running does not queue another
 
+FOUR DOORS, AND THEY ALL HOLD THE SAME LINE NOW: the section's button, the
+scheduled job, the card's button and `occ penpot_sync:sync`. Two pulls over one
+folder tree race on the same files, and the scope of each does not make it safe —
+a card sync and an instance-wide one collide exactly as two instance-wide ones do.
+
+THE CLI GETS AN ESCAPE HATCH THE BUTTONS DO NOT NEED. `isBusy()` reads a STORED
+flag, so a run killed outright — SIGKILL, an evicted pod — leaves it at `running`
+forever. A button can wait for the admin to try again later; the CLI is the
+headless door someone reaches for when the UI is the thing misbehaving, so
+refusing it without a way through would wedge the one tool that could unwedge
+things. `--force` runs anyway.
+
+`@blocked` on the scenario itself — no fault injection, and no way to hold a run
+open while a second is issued. The CLI half is the one that could be driven (set
+the status, run the command, assert the refusal); it is not written yet.
+
 `@blocked` — **no browser**, and no way to hold a run open while a second is
 issued. Two concurrent pulls over one folder tree would race on the same files,
 which is the only reason this is worth stating.
