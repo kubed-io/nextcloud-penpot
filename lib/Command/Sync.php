@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Command;
 
 use OCA\PenpotSync\Service\PullService;
+use OCA\PenpotSync\Service\PullStatus;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -36,6 +37,7 @@ final class Sync extends Command {
 
 	public function __construct(
 		private PullService $pull,
+		private PullStatus $status,
 	) {
 		parent::__construct();
 	}
@@ -57,6 +59,12 @@ final class Sync extends Command {
 				InputOption::VALUE_REQUIRED,
 				'Restrict the run to a single mapping id (see penpot_sync:list-mappings). Default: every mapping.',
 				'',
+			)
+			->addOption(
+				'force',
+				'f',
+				InputOption::VALUE_NONE,
+				'Run even if another sync is recorded as still going. Use when a previous run was killed.',
 			);
 	}
 
@@ -71,13 +79,51 @@ final class Sync extends Command {
 
 		$mappingId = (string)$input->getOption('mapping');
 
-		try {
-			$result = $this->pull->pull($mappingId === '' ? null : $mappingId);
-		} catch (\OutOfBoundsException $e) {
-			$output->writeln('<error>' . $e->getMessage() . '</error>');
+		// ONE PULLER AT A TIME: two runs over one folder tree race on the same
+		// files. The section's button and the scheduled job already refuse; so
+		// does this now.
+		//
+		// WITH AN ESCAPE HATCH, because a CLI is not a button. `isBusy()` reads a
+		// STORED flag, so a run killed outright — SIGKILL, an evicted pod — leaves
+		// it stuck at `running` forever, and the CLI is the headless door an
+		// operator reaches for when the UI is the thing misbehaving. Refusing
+		// without a way through would wedge the one tool that could unwedge it.
+		if (!$input->getOption('force') && $this->status->isBusy()) {
+			$output->writeln(
+				'<error>A sync is already running. Wait for it to finish, or re-run with '
+				. '--force if a previous run was killed and left this stuck.</error>',
+			);
 
 			return 1;
 		}
+
+		// THE RUN IS RECORDED WHATEVER STARTED IT. The scheduled job and the
+		// admin panel both stamp {@see PullStatus}, and the CLI did not — so
+		// `show-config` reported the last SCHEDULED run as "the last run" while a
+		// CLI sync minutes earlier left no trace. One store, every trigger.
+		$this->status->markStarted();
+
+		// EVERY EXIT FROM HERE CLEARS `running`, which is why this catches
+		// \Throwable rather than the one exception with a nice message. A
+		// PenpotApiException genuinely does escape `pull()` today — an unreachable
+		// Penpot or a rejected token — and leaving the status stuck at `running`
+		// would make `isBusy()` true forever, so the panel would refuse to start
+		// another sync until the value was cleared by hand.
+		try {
+			$result = $this->pull->pull($mappingId === '' ? null : $mappingId);
+		} catch (\OutOfBoundsException $e) {
+			$this->status->markFailed($e->getMessage());
+			$output->writeln('<error>' . $e->getMessage() . '</error>');
+
+			return 1;
+		} catch (\Throwable $e) {
+			$this->status->markFailed($e->getMessage());
+			$output->writeln('<error>The sync failed: ' . $e->getMessage() . '</error>');
+
+			return 1;
+		}
+
+		$this->status->markFinished($result);
 
 		$output->writeln(sprintf(
 			'Pulled %d project(s): %d folder(s), %d file(s), %d archive(s) exported, %d skipped.',

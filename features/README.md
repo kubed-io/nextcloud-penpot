@@ -29,33 +29,56 @@ It does not answer *"what does the pull do?"*, because a user does not think in
 pulls.
 
 That distinction is the whole layout. Before it, finding "how does move work"
-meant reading `move-design.feature` for the Nextcloud half, `reconcile.feature` for the
+meant reading `move-design.feature` (now `designs/move.feature`) for the Nextcloud half, `reconcile.feature` for the
 Penpot half, and `gestures.feature` for the two that CI could actually prove.
 Three files, one behaviour, and no single place that told you the shape of it.
 
-**Behaviour files** — the answer to "what happens when…":
+**The folder is the noun; the file is the verb.** Four folders, and everything in
+one of them acts on the same kind of thing:
 
-| File | Owns |
-|---|---|
-| `create-design.feature` | A design coming into existence, on either side |
-| `copy-design.feature` | Duplicating a design |
-| `move-design.feature` | A design changing project, team, or Drafts state |
-| `rename-design.feature` | A design changing name, either side, and the file-name guards |
-| `edit-design.feature` | A design's CONTENT changing — Penpot-side only, because Nextcloud cannot author one |
-| `delete-design.feature` | Everything that removes a design: both trashes, the purge, link dismissal |
-| `restore-design.feature` | Everything that brings a design back: both trashes, the archive |
-| `create-project.feature` | How a folder BECOMES a project, and the `penpot` tag that marks one |
-| `copy-project.feature` | Why copying a project is refused rather than half-done |
-| `move-project.feature` | Where a project folder may and may not be dragged |
-| `rename-project.feature` | A project changing name, and the project-name guards |
-| `delete-project.feature` | Deleting a project — one call, not one per design |
-| `restore-project.feature` | Bringing a project back whole, and the one case that cannot be |
-| `personal-projects.feature` | Only the WHO and WHERE of a personal team — every verb lives with its verb |
-| `mapping-membership.feature` | Which files a mapping owns, and what "unmapped" means |
-| `set-mode.feature` | `sync` ⇄ `link`: storing a design's archive, and throwing it away |
-| `ignore.feature` | Excluding a file from the sync |
-| `open-with.feature` / `view-design.feature` | The Files-app surface of a mirror |
-| `admin-*.feature` | Reaching Penpot at all, and configuring what is mapped |
+| Folder | The noun | The verbs |
+|---|---|---|
+| [`designs/`](designs/) | a `.penpot` file | create, view, edit, copy, move, rename, delete, restore, purge, open-with |
+| [`projects/`](projects/) | a project folder | create, view, copy, move, rename, delete, restore |
+| [`team-mapping/`](team-mapping/) | a mapping | create, view, manage-groups, delete, sync-now, set-mode |
+| [`connection/`](connection/) | the instance | admin, personal, sync-now |
+
+So `designs/move.feature` answers *"what happens when someone moves a design?"* —
+every way it can be moved, in either system, with the consequence on the other
+side. There is no file that answers *"what does the pull do?"*, because nobody
+thinks in pulls.
+
+**A mapping is configuration, not content**, which is why it gets the same verb
+treatment as a noun: creating one, looking at one, changing the one field that is
+editable, tearing one down, and the two things you can ask one to do. It used to
+be `admin-mapping.feature` — one file for five verbs, exactly the shape the
+design/project split had already been fixed out of.
+
+**`connection/` is the instance-wide half**, and it holds the personal token too:
+an admin connects the instance (a URL, a credential and a schedule, as one form),
+a user connects only themselves (a token against the URL the admin gave).
+Different pre-state, different end state, so separate scenarios — the same act,
+so the same folder.
+
+**A connection is one fact, so it is one table.** The URL, the token and the
+schedule are inputs to "the app is connected", not three behaviours; an interval
+is a setting, not something anyone performs.
+
+What stays at the top level is `lifecycle.feature` alone — the app enabling,
+disabling and being removed belongs to no noun in the app.
+
+**Personal projects have no folder of their own**, deliberately. They are the
+ordinary rules with a different mapping: a design in a personal project is
+created, moved, renamed and deleted by exactly the scenarios in `designs/`. The
+only thing that differs is that setting a personal token maps the user's home
+root to their personal team — which is `connection/personal.feature`'s.
+
+**The nearest-ancestor rule has no file**, and that is deliberate. It is the
+app's most load-bearing decision, and it is a RULE — only ever observed through a
+gesture: you move something and it still belongs, you create something and it
+lands in Drafts. Every scenario that tried to test it directly turned out to be a
+move or a create that already existed elsewhere. The rule is written down in
+[`AGENTS.md`](AGENTS.md#mapping-membership--retired).
 
 ## The two nouns: a DESIGN and a PROJECT
 
@@ -74,9 +97,10 @@ behaviours rather than one with a branch:
 | delete | one design | one call that takes the whole project with it |
 | restore | the same design, id intact | the project *and* everything in it, or not at all |
 
-A **personal** project is still a project: the verbs behave identically, so only
-the who (the user's own token) and the where (their home root) are special, and
-that is all `personal-projects.feature` keeps.
+A **personal** project is still a project: the verbs behave identically, so the
+only special things are the who (the user's own token) and the where (their home
+root) — and both are settled the moment the token is saved, which is why they
+live in `connection/personal.feature` and not in a file of their own.
 
 Splitting them is also what makes the CI suites possible — the filename is the
 matrix axis (`tests/integration/behat.dist.yml`), because a **path partition
@@ -104,20 +128,18 @@ one, and the marker that says so.
 
 | File | Owns |
 |---|---|
-| `sync-now.feature` | Someone asking for a sync, and the schedule doing it unasked: what one run covers, that a second changes nothing, and what it reports |
+| `connection/sync-now.feature` | An instance-wide sync — the section's button, and the schedule doing it unasked |
+| `team-mapping/sync-now.feature` | The card's own button: one mapping, on demand |
 
-A scenario belongs in `sync-now.feature` only when someone ASKED for a sync. "A
-design renamed in Penpot reaches Nextcloud" is a rename — it lives in
-`rename-design.feature`, where the sync is how the news travels, not the point.
+A scenario belongs in either only when someone ASKED for a sync. "A design
+renamed in Penpot reaches Nextcloud" is a rename — it lives in
+`designs/rename.feature`, where the sync is how the news travels, not the point.
 
-This file used to be `reconcile.feature`, named after the code that runs it. That
-was a mechanism wearing a feature file, and it collected 34 scenarios that mostly
-belonged to the behaviours they travelled through — see AGENTS.md.
-
-**Configuration files** — the admin and per-user surface: `admin-connection`,
-`admin-mapping`, `admin-section`, `personal-settings`, `remove-mapping`,
-`mapping-membership`, `personal-projects`, `team-import`, `lifecycle`,
-`uninstall`, `errors`.
+These were one file, and before that `reconcile.feature`, named after the code
+that runs it. That was a mechanism wearing a feature file, and it collected 34
+scenarios that mostly belonged to the behaviours they travelled through. The
+split into two is by SCOPE, which is the only thing that differs between them —
+see AGENTS.md.
 
 ## Tags
 
@@ -184,7 +206,7 @@ installed always — and the "plain" rows would then be exercising a plain folde
 matrix varies the SERVER; a table can only vary the mapping.
 
 That this was never covered is not theoretical: the structural scenarios in
-`reconcile.feature` mapped a Team Folder and passed only because of where they sat
+`sync-now.feature` mapped a Team Folder and passed only because of where they sat
 in the run. Moved, the folder resolved to nothing — Team Folder provisioning had
 never actually been covered. More scenarios would not have caught that; running
 the existing ones against both backends does.
@@ -249,7 +271,7 @@ front of it.
 
 #### What makes something `@blocked` rather than `@todo`
 
-Name the missing capability, in the scenario or the section above it. The seven
+Name the missing capability, in the scenario or the section above it. The eight
 that exist today:
 
 * **no browser** — anything about a button, card, panel, icon, or menu entry;
@@ -257,6 +279,9 @@ that exist today:
   the confirmation a demotion asks for before it deletes a stored archive;
 * **no app removal** — `occ` enables and disables; removing an app and
   reinstalling it is a store operation this suite cannot perform;
+* **no fault injection** — anything that needs a real Penpot to fail in a
+  specific way (a broken export stream, a refused asset download, a listing that
+  errors) or a sync to be killed mid-write;
 * **no way to edit a design's content** — Penpot's `update-file` is the only RPC
   that changes what is inside a design, and its `changes` payload is unproven
   (saga §1); the harness creates, renames, moves and deletes, but cannot author;

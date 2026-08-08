@@ -30,7 +30,7 @@ A scenario is only real if a step definition matches every one of its lines.
 
 | What | Where |
 |---|---|
-| The scenarios | `features/*.feature` (repo root, deliberately — they are docs) |
+| The scenarios | `features/<noun>/<verb>.feature` — `designs/`, `projects/`, `team-mapping/`, `connection/` |
 | The step definitions | `tests/integration/bootstrap/Steps/*.php` |
 | The context that composes them | `tests/integration/bootstrap/FeatureContext.php` |
 | Transports (occ, WebDAV) | `tests/integration/bootstrap/Support/` |
@@ -321,9 +321,9 @@ files carried fictional Backgrounds for months (`a Team Folder mapped to the
 Penpot team "Northwind"` — a step that had never been written). **If a PR
 promotes a scenario to live, verify the Background is real.**
 
-**A scenario borrowing another file's setup habits.** `sync-now.feature`
+**A scenario borrowing another file's setup habits.** `connection/sync-now.feature`
 deliberately maps nothing in its Background — every scenario names its own folder
-so one scenario's leftovers cannot become another's prune. `move-design.feature` maps a
+so one scenario's leftovers cannot become another's prune. `designs/move.feature` maps a
 shared `Penpot` folder in its Background. Copying a scenario between them
 silently breaks it. **Check the file's own Background before assuming a path
 resolves.**

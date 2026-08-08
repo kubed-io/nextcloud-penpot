@@ -29,157 +29,116 @@ why — see [README.md](README.md).
 > behaviour, change the note that explains it in the same commit; a note that
 > describes the old behaviour is worse than no note.
 
-## admin-connection
+## connection/admin
 
-`features/admin-connection.feature`
+`features/connection/admin.feature`
 
-The "connect to Penpot" use case. The SHAPE is genuinely different from both
-sibling apps, and the reason took the whole survey to work out.
+CONFIGURING THE APP IS ONE ACT, and this file is two scenarios: it works, or it
+does not and says which field is wrong.
 
-THE ACCESS MODEL (saga §6.18, locked). The question "per-user tokens or one
-admin token?" was unanswerable for three sections of the saga because it was
-TWO questions being asked as one:
+### connection/admin
 
-    Who READS?  → the service account. Always. Required.
-    Who WRITES? → the acting user, if they've set a token. Optional.
+**This replaced a 31-scenario `connection.feature`** — itself
+`admin-connection.feature` with `personal-settings.feature` folded in. It broke
+almost every rule this suite has:
 
-Once split, both answers are obvious and neither fights the other.
+| | |
+|---|---|
+| five scenarios with **no `When` at all** | "The URL card carries no credential field", "Users do not author their own team mappings", "The app assumes one Nextcloud user maps to one Penpot account" — form structure, a capability that will never exist, and an assertion that a page's *prose documents an assumption* |
+| two scenarios with **two `When`s** | both "distinguishes unset from rejected", each rebuilding its pre-state by performing another action |
+| three duplicate pairs | the fold-in created them, and nothing deduped |
+| thirteen `@blocked` with no capability named | the one thing `README.md` requires of the tag |
 
-WHY THE SERVICE ACCOUNT IS REQUIRED (saga §6.16 found the reason, §6.18 acted
-on it): if the scheduled pull ran per-user, two Nextcloud users who are both
-members of the same Penpot team would resolve to the SAME Team Folder, and two
-uncoordinated jobs would write the same mirror file. That's a data race, not an
-inefficiency. One puller, one credential, one pass — the race cannot happen.
+THE CONNECTION IS ONE FACT, SO IT IS ONE TABLE. The URL, the credential and the
+schedule are all inputs to "the app is connected". They used to be three cards
+and a scenario each, which made configuring the app look like three behaviours.
+The schedule especially: an interval is a setting, not something a person
+performs — which is also why `admin-section.feature`'s two scheduled-pull
+scenarios went with it.
 
-WHY PER-USER TOKENS SURVIVE ANYWAY: attribution. Penpot attributes every
-mutation to whoever's token made it. If Nextcloud renames using the service
-account, Penpot's history says "nextcloud renamed this" for every rename by
-every user, forever. With a personal token it says the truth. That's the entire
-case for per-user tokens here, and it's a good one — but it only touches the
-small set of write paths (saga §6.19), so the personal token stays
-OPTIONAL. Requiring one before a user can rename a file would be a terrible
-first-run experience for zero functional gain.
+A cell names what KIND of value it is (`the test instance`, `a valid token`)
+rather than the value, because the real URL and token come from the environment
+the mint step built. A scenario cannot know them, and pinning them would tie the
+spec to one CI fixture.
 
-THE URL CARD IS URL-ONLY (saga §6.11, locked): modeled on n8n's
-InstanceSettings.php, not Grafana's bundled URL+token card. Grafana bundles
-because it has exactly one credential; here there are two, with different
-owners and different jobs, so the URL belongs to neither card.
+### An admin enters bad connection details
 
-PARTIALLY LIVE. The URL scenarios below run for real in CI — the base URL is
-the whole of the first implemented slice (saga §6.11: it's the one setting every
-version of this app needs regardless of how the credential model resolves, so
-it was built first). Every CREDENTIAL scenario is still @todo: no token storage
-exists yet.
+THE MESSAGE HAS TO NAME THE FIELD. "It did not work" is the failure this guards
+against: an admin looking at a URL, a token and a schedule needs to be told which
+one to fix, and the two token failures have different fixes — an absent token
+means finish configuring, a rejected one means mint a new one (or turn on
+`enable-access-tokens`, which is off by default upstream and whose absence looks
+exactly like a typo).
 
-### The stored URL is normalised so later callers can concatenate paths
+A URL row works differently from a token row, and that IS the behaviour. A URL
+the app cannot build requests from is refused at *set* time, so nothing is
+stored — and the health check then fails on a MISSING URL rather than on a
+malformed one. Same visible outcome for the admin: the message names the url.
 
-ONE RULE, SEVERAL BAD INPUTS — so the rows are Examples, not scenarios. Every
-row asserts the identical outcome; only the input varies. That is the test
-for a table: if the rows are a list of VALUES it is an outline, and if they
-can only be written as a list of SENTENCES they are separate scenarios.
+That is also why the Background starts from `nothing is configured yet`. An unset
+field has to mean unset rather than "whatever the row above stored", and the bad
+URL row is the case that forces it: it writes nothing at all.
 
-### The URL card carries no credential field
+### WHAT WENT, AND WHERE
 
-── the live connection: the client, against a real Penpot — IMPLEMENTED ────
-These run against a real Penpot container in CI, with a token minted per run
-(saga §6.47). They are the ONLY place the wire format is asserted: the unit
-suite deliberately does not mock the transport, because a mock of a protocol
-we have repeatedly misread would only encode the misreading.
+The attribution and fallback scenarios — a write retried as the service account,
+a degraded attribution reported once, only an authorisation failure falling back
+— are **not connection scenarios**. Each one's `When` is a gesture ("the user
+renames a mirrored design"), so the behaviour is the gesture; attribution is its
+end state, and `designs/rename.feature` already owns it. They are recorded here
+rather than kept as a file of their own.
 
-### A configured connection reports the teams the token can see
+## connection/personal
 
-Reporting TEAMS rather than "OK" is the point (saga §6.12/§6.18): Penpot
-visibility is always membership-scoped, so which teams a token can see is
-the fact that decides what can be mapped.
+`features/connection/personal.feature`
 
-### The connection check also lists projects, proving multi-record decoding
+THE SAME ACT FROM THE OTHER END. An admin connects the instance — a URL, a
+credential and a schedule. A user connects only themselves — a token, against the
+URL the admin already gave. Different pre-state, different end state, so separate
+scenarios; the same act, so the same folder.
 
-A listing with several records is what exercises Transit's key cache —
-the second and later records are almost entirely back-references, and two
-real decoder bugs were invisible until exactly this shape was decoded.
+A personal token buys ATTRIBUTION and personal projects, nothing else. It never
+widens what the app mirrors and is never used for the scheduled pull (saga
+§6.18): one puller, always, or the shared-Team-Folder race returns. That is a
+property of the design rather than a behaviour anyone performs, so it is written
+here and not as four near-identical `@blocked` scenarios asserting a token was
+not used.
 
-### The service account sees only the teams it was invited into
+**`@unbuilt`, not `@todo`, and the gap is real: there is no personal health check
+at all.** `PersonalTokenService` stores, reads and clears a token; nothing tests
+one. No `occ` command, no route. So a user can paste a token that Penpot would
+reject and find out only when a rename is silently attributed to the service
+account — which is precisely the case `connection/admin.feature` refuses to allow
+for the admin. Build the check and both scenarios go live.
 
-Not a limitation we imposed — Penpot offers NO credential an instance-wide
-view (get-teams is membership-scoped, confirmed §6.12). Viewer is the right
-role: enough to list and export, no write access wanted.
+**"A user's token is theirs alone" was cut.** Per-user storage is how
+`IAppConfig`'s user scope works; the scenario asserted that a framework does what
+it does, and asserted it as an absence — dana's token not appearing for alex.
+Nothing acts on alex's token, so there is nothing to observe.
 
-### The connection test tells an unset token apart from a rejected one
+### A user enters a valid token
 
-These two need COMPLETELY different fixes — finish configuring, versus
-mint a new token — so collapsing them into "connection failed" sends
-people to the wrong one.
+THE MAPPING IS THE TOKEN'S SHADOW. Setting a token is the whole of "connect me" —
+there is no folder to name, no team to pick and no mapping to configure, because
+there is exactly one personal team and exactly one place it can go. A visible
+mapping would be a choice with one possible answer.
 
-### A successful test reports the teams the account can actually see
+That end state is why `personal-projects.feature` is retired: once the home root
+carries the team, every other personal behaviour is the ordinary one.
 
-Reporting TEAMS rather than "OK" is the point (saga §6.12/§6.18): Penpot
-visibility is always membership-scoped, so which teams the token can see is
-exactly the fact that decides what can be mapped.
+### A user clears their token
 
-### A connection test surfaces the required Penpot instance flag
+THE MAPPING CANNOT OUTLIVE THE TOKEN, and nothing is deleted when it goes. The
+folders and their archives stay exactly where they are — losing a credential is
+never evidence that content is gone, the same rule the service account follows.
 
-"enable-webhooks" is NOT tested here: webhook delivery has never been
-observed working (saga §6.17, open question #19), so nothing in the current
-design depends on it. Adding it back is a saga decision, not a settings tweak.
+The third `And` is what makes it a real end state rather than a tidy-up: a new
+`.penpot` file made at the home root is inert again, exactly as it was before the
+token existed. The mapping is gone, not merely idle.
 
-══ THE ATTRIBUTION RULE, IN ONE LINE ══════════════════════════════════════
+## team-mapping/create
 
-    READS are always the service account.
-    WRITES attribute to the acting user when there is one.
-
-Those are two different kinds of statement, and conflating them is what
-makes token handling feel complicated when it is not.
-
-READS — THE SERVICE ACCOUNT IS A REQUIREMENT, NOT A DEFAULT. Penpot has no
-admin scope; every token sees exactly the teams its account belongs to
-(§6.12). So the puller must be an account that is a member of every mapped
-team, and that is the whole reason a service account exists. Using a
-personal token to read would not merely attribute differently — it would
-change WHAT IS MIRRORED, per user, which is the dual-pull-path complexity
-§6.16 rejected and the shared-Team-Folder race with it.
-
-WRITES — ATTRIBUTION ONLY, AND IT CANNOT WIDEN ANYTHING. A write always
-targets something the service account already mirrored, so using the user's
-token changes the name in Penpot's history and nothing else. That is why it
-is safe to make it best-effort.
-
-THE ACTING USER IS WHOEVER THE SESSION SAYS (saga §C6.22). Every gesture —
-rename, move, copy, create, delete, restore, tag — runs inside the user's
-own HTTP request, so `IUserSession` has them and attribution just works. The
-scheduled pull has no session because NOBODY PERFORMED IT: it reconciles
-what Penpot already says. Attributing it to a user would be a fiction.
-
-A background job CAN act as a user when one is genuinely responsible —
-Nextcloud's own `IUserSession::setVolatileActiveUser()` (NC 29+) is exactly
-that, and core uses it so "event listeners can correctly work". This app has
-no such job today; §C6.22 records when it would want one.
-
-### A write rejected because of the personal token is retried as the service account
-
-── when attribution FAILS, the action must not ─────────────────────────────
-A personal token is not merely "sometimes expired". A Nextcloud user need
-not have a Penpot account at all, and if they do, they need not be a member
-of the Penpot team behind a shared Team Folder — the mapping only ever
-required the SERVICE ACCOUNT to be a member (§6.18). So "the acting user's
-token cannot write here" is an ORDINARY state, not an edge case.
-
-NOT BUILT, AND THE PROMISE IS ALREADY WRITTEN DOWN. `PersonalTokenService`
-says every caller "is expected to fall back to the service account and carry
-on", and the fall back that exists is the pre-flight one: no token → service
-account. There is no post-failure retry. A user whose token Penpot rejects
-loses the write entirely (§C6.22).
-
-### Only an authorisation failure falls back, never a real error
-
-The fallback answers "this token may not", not "this call did not work".
-Retrying a timeout as the service account would double every outage and
-could apply a write twice — see errors.feature.
-
----
-
-## admin-mapping
-
-`features/admin-mapping.feature`
+`features/team-mapping/create.feature`
 
 "Admin makes a mapping" — the team-mapping list in admin settings, driven over
 the CLI (the same operations the Settings panel performs).
@@ -224,7 +183,7 @@ carries the default mode its files get ("link" unless set otherwise), but any
 individual file can be promoted or demoted afterwards — see set-mode.feature.
 
 WHAT'S DELIBERATELY NOT HERE: creating a NEW Penpot team or project FROM
-Nextcloud is a separate, still-open fork — see team-import.feature.
+Nextcloud is a separate, still-open fork — see `## team-import — RETIRED`.
 
 PARTIALLY LIVE. The MAPPING LIFECYCLE — add, refuse, list, remove, and the
 defaults a new mapping gets — runs for real in CI against a real Penpot, and
@@ -472,129 +431,69 @@ ensureRoot()'s, re-asserted on every sync", which was true of the design
 
 ---
 
-## admin-section
+### Without a service-account token, nothing can be mapped
 
-`features/admin-section.feature`
+FROM THE RETIRED `errors.feature`, and it was the last copy. The scenario had
+lived in `admin-connection.feature` too, and was dropped when that file was split
+into `connection/admin` and `connection/personal` — leaving `errors.feature`
+quietly holding the only statement of it.
 
-The SHAPE of the admin section, and the actions in it.
+Refusing a mapping belongs with mapping. The service account is what reads, so
+without one there is nothing a mapping could do; refusing at creation says so at
+the moment the admin can act on it, rather than at the first sync.
 
-WHY THIS FILE EXISTS AT ALL. Every other feature file specifies what the app
-DOES; this one specifies what the admin SEES, because in this app family that
-is a deliberate, load-bearing decision rather than an incidental one.
+## admin-section — RETIRED
 
-THE FAMILY LAYOUT (settled on the n8n master, inherited by nextcloud-grafana,
-and matched here). All three apps present the same four panels in the same
-order, so an admin who has configured one already knows where to look:
+`features/admin-section.feature` is **gone**. It described the settings panel:
+which cards exist, what order they appear in, which fields each holds, where the
+buttons live. Twelve scenarios, none of them a thing anyone does.
 
-  Instance (5)       where it is + how we authenticate — ONE card
-  Sync Settings (20) how syncing behaves automatically
-  Team mappings (30) the repeating list — one card per mapping
-  Sync Actions (45)  EVERY button in the section, rendered last
+| it said | why it went |
+|---|---|
+| The section presents four panels in the family's order | panel ORDER is an implementation detail of the UI |
+| The Instance card holds both the URL and the service-account token | the structure of a form — those fields are the INPUT to connecting, not a behaviour |
+| The token field never echoes a stored token back | already asserted verbatim in `connection/connection.feature`, as the end state of saving a token: *the token is stored as a sensitive value* |
+| Every button in the section lives in Sync Actions | a UI nuance, and `@blocked` because nobody is testing whether the layout looks good |
+| Test connection works today and reports what the account can see | `connection/connection.feature`'s, and already there |
+| "Sync from Penpot" queues a background job and says so | `connection/sync-now.feature`'s — and whether a run is queued or synchronous is a mechanism this suite asserts nowhere, deliberately |
+| The panel reports the outcome of the last run | an END STATE of syncing → moved onto the sync outline as `And the run is recorded with when it ran and what it did` |
+| A second click while a sync is running does not start another | a real edge case → moved to `connection/sync-now.feature` |
+| The scheduled pull uses the interval from Sync Settings | implementation detail. The interval and the enable toggle are connection settings — inputs, which Gherkin need not describe. The schedule already appears as an actor row in the sync outline |
+| Turning the schedule off stops the runs | a negative with nothing to observe: the only honest test is that every `@in-penpot` behaviour stops arriving, which is a test that waits forever |
+| There is no "Sync to Penpot" button, ever | a negative check on a feature that will never exist |
+| Purge is offered but disabled until the delete machine exists | pins the presence and disabled-ness of a button; if it is anything it is `designs/purge.feature`'s |
 
-The last rule is the one most easily lost. Nextcloud's declarative settings
-cannot host buttons, and giving each button its own panel beside its data card
-turns the section into a stack of thin strips. So: one classic panel for every
-button, at the bottom, beneath the data it acts on.
+THE PATTERN WORTH REMEMBERING: a settings panel is where a behaviour is
+*configured*, not a behaviour. Its fields are inputs to the thing they configure,
+and its layout is not specification at all. Everything real in this file already
+had a home in `connection/` — which is why the folder split is what made the
+duplication visible.
 
-WHY THE INSTANCE CARD IS *ONE* CARD. An earlier cut of this app split the URL
-and the token onto separate cards, reasoning that Penpot has two credentials
-(saga §6.18). It does — but the second is PER-USER and lives on the personal
-page, so the admin section has exactly one credential, like Grafana. The split
-expressed a distinction the admin never sees, and produced a section shaped
-unlike either sibling.
+### A second sync started while one is running does not queue another
 
-HONEST BUTTONS. Buttons whose engines are not built are rendered but disabled,
-or answer with a plain "not available yet" — never absent, and never silently
-inert. Present-but-disabled keeps the finished shape of the section visible
-from the first release, and enabling one later is deleting an attribute rather
-than redesigning the page.
+FOUR DOORS, AND THEY ALL HOLD THE SAME LINE NOW: the section's button, the
+scheduled job, the card's button and `occ penpot_sync:sync`. Two pulls over one
+folder tree race on the same files, and the scope of each does not make it safe —
+a card sync and an instance-wide one collide exactly as two instance-wide ones do.
 
-SCOPE, AND WHERE THE REST LIVES. This file covers the section's SHAPE and the
-buttons' presence/honesty. It deliberately does NOT specify what the buttons
-do — that lives with the behaviour, exactly as in the siblings:
+THE CLI GETS AN ESCAPE HATCH THE BUTTONS DO NOT NEED. `isBusy()` reads a STORED
+flag, so a run killed outright — SIGKILL, an evicted pod — leaves it at `running`
+forever. A button can wait for the admin to try again later; the CLI is the
+headless door someone reaches for when the UI is the thing misbehaving, so
+refusing it without a way through would wedge the one tool that could unwedge
+things. `--force` runs anyway.
 
-  the pull, and the per-mapping "Sync now"  → reconcile.feature
-  purge                                     → purge.feature
-  the connection test's failure modes       → admin-connection.feature
-  the mapping cards' fields                 → admin-mapping.feature
+`@blocked` on the scenario itself — no fault injection, and no way to hold a run
+open while a second is issued. The CLI half is the one that could be driven (set
+the status, run the command, assert the refusal); it is not written yet.
 
-NEITHER SIBLING HAS A FILE LIKE THIS. Their layout is settled by review rather
-than written down — which is exactly how this app drifted out of alignment in
-the first place, and why the rule is worth stating once, here.
+`@blocked` — **no browser**, and no way to hold a run open while a second is
+issued. Two concurrent pulls over one folder tree would race on the same files,
+which is the only reason this is worth stating.
 
-PARTIALLY LIVE. The scenarios that can be driven over occ run for real; the
-ones that assert on rendered markup are @todo until there is a browser-driving
-harness (neither sibling has one either).
+## designs/copy
 
-### The Instance card holds both the URL and the service-account token
-
-One card, because the admin section has exactly one credential. The
-optional per-user token is on the PERSONAL page — see
-personal-settings.feature.
-
-### Test connection works today and reports what the account can see
-
-The one action that is fully live. It reports TEAMS rather than "OK"
-because Penpot visibility is membership-scoped (saga §6.12/§6.18), so that
-list is exactly what decides which teams can be mapped.
-
-@todo here means "not run FROM THIS FILE", not "unimplemented": the exact
-same steps run for real in admin-connection.feature, and duplicating a
-live scenario would just execute it twice. It is restated here so this
-file reads as the complete inventory of the section's actions.
-
-### "Sync from Penpot" queues a background job and says so
-
-── the three ways a pull is triggered ────────────────────────────────────
-
-These five are @todo — the documented spec, not yet driven from Behat.
-Driving them needs the harness to be able to RUN A QUEUED JOB (and to fake
-a cron tick for the timed one), which the suite cannot do yet. Each tag sits
-on its own scenario deliberately: a tag floating above this comment block
-binds to whichever scenario happens to come next, which is exactly how the
-first of these was silently excluded while the other four ran undefined.
-
-Until now there was exactly ONE: `occ penpot_sync:sync pull`. The button was
-rendered disabled with a "later release" tooltip, and the interval in Sync
-Settings was read by nothing at all — so a design renamed in Penpot stayed
-renamed only in Penpot until someone ran occ by hand. The pull itself was
-never the problem; it has followed renames since Course 3.
-
-Both siblings have all three, and the split between them is deliberate:
-
-  per-mapping "Sync now"  SYNCHRONOUS — one mapping, bounded, instant answer
-  "Sync from Penpot"      ASYNC       — every mapping, a queued job, polled
-  the schedule            a TimedJob  — the same work, unattended
-
-WHY THE BULK ONE CANNOT BE SYNCHRONOUS: it walks every mapped team and, for
-`sync` files whose revision moved, exports each archive. On a real instance
-that outlives a PHP request, and a request that dies half way leaves no
-record of how far it got. A queued job survives the admin navigating away,
-which is the actual user behaviour being designed for.
-
-WHY THE PER-MAPPING ONE SHOULD NOT BE ASYNC: it is one team, usually a
-handful of files, and the admin is looking at that card waiting for an
-answer. Queuing it would replace a two-second wait with a spinner and a poll.
-
-### The panel reports the outcome of the last run
-
-Same record for every trigger, so a scheduled run is visible here too —
-otherwise the schedule is a setting with no observable effect, which is
-exactly what it was.
-
-### There is no "Sync to Penpot" button, ever
-
-THE ONE PLACE THIS APP'S LAYOUT DELIBERATELY DIVERGES FROM ITS SIBLINGS,
-and the divergence is load-bearing. Both of them have a push button. This
-app is read-only for file CONTENT (saga §6.1) — a permanent boundary, not
-a phase-ordering gap — so a disabled push button would promise a feature
-that is never coming.
-
----
-
-## copy-design
-
-`features/copy-design.feature`
+`features/designs/copy.feature`
 
 THE LIVE HALF is driven over WebDAV against a real Penpot: copy in place, copy
 up to the team root, and the copy-then-rename chain.
@@ -696,7 +595,7 @@ The cross-team copy is the ordinary copy path — `duplicate-file` then
 team. `move-files` carries the team, so nothing extra is needed.
 
 @unbuilt for the personal half only: a user's home root becomes a mapping
-when they set a personal token (personal-projects.feature), and none of
+when they set a personal token (`connection/personal.feature`), and none of
 that exists in `lib/` yet. Team-to-team copying is built.
 
 ### A design duplicated in Penpot is mirrored like any other new design
@@ -741,9 +640,9 @@ modes, purely because of where the duplicate was made.
 
 ---
 
-## copy-project
+## projects/copy
 
-`features/copy-project.feature`
+`features/projects/copy.feature`
 
 COPYING A PROJECT — and the short answer is that you cannot.
 
@@ -778,9 +677,9 @@ on (create-project.feature).
 
 ---
 
-## create-design
+## designs/create
 
-`features/create-design.feature`
+`features/designs/create.feature`
 
 "New → Penpot design" in the Files app — the same New-menu affordance both
 sibling apps offer for workflows and dashboards.
@@ -868,7 +767,7 @@ so "somewhere" means a resolvable Penpot home:
     inside a project folder    →  that project
     under a mapped team        →  that team's Drafts        (§6.35)
     at the user's own root     →  their PERSONAL team's Drafts
-                                  (personal-projects.feature — needs a
+                                  (`connection/personal.feature` — needs a
                                    personal token, and is not built)
     anywhere else              →  NOTHING HAPPENS
 
@@ -891,7 +790,7 @@ this section's own, and that is what is left.
 
 ── creating in a personal team ─────────────────────────────────────────────
 Same behaviour, different destination: the user's own Drafts rather than the
-team's. personal-projects.feature owns why that destination differs.
+team's. `connection/personal.feature` owns why that destination differs.
 
 ### A design created in the user's own home lands in their personal Drafts
 
@@ -913,13 +812,13 @@ team ancestor because a token was set.
 
 ---
 
-## create-project
+## projects/create
 
-`features/create-project.feature`
+`features/projects/create.feature`
 
 HOW A FOLDER BECOMES A PENPOT PROJECT — the creating half, from either side.
 
-## WHAT THIS FILE OWNS
+### WHAT THIS FILE OWNS
 
 A project's IDENTITY: how a folder acquires one, and the marker that says it
 has. Every VERB a project can be on the receiving end of lives with the other
@@ -943,9 +842,9 @@ left is creation, so it sits beside create-design.feature where the two opt-in
 models can be read together.
 
 A PERSONAL project is created the same way, by the same tag, in the user's own
-home — personal-projects.feature owns only the who and the where.
+home — `connection/personal.feature` owns the token that puts it there.
 
-## THE ASYMMETRY (saga §C6.18)
+### THE ASYMMETRY (saga §C6.18)
 
     every Penpot project      →  a folder in Nextcloud     (automatic)
     SOME Nextcloud folders    →  a project in Penpot       (opt-in only)
@@ -968,7 +867,7 @@ first-class gesture with an event (`TagAssignedEvent`), the sibling apps use it
 for exactly this kind of opt-in, and it survives a rename or a move in a way a
 name convention could not. It needs Nextcloud 32 — see appinfo/info.xml.
 
-## A NOTE ON THE BACKGROUND
+### A NOTE ON THE BACKGROUND
 
 It used to provision a Team Folder and mirror a project called "My Stuff" into
 it, and none of those steps had ever existed — harmless while the whole file
@@ -1032,15 +931,15 @@ tag being missing is never a state the app has to repair specially.
 
 ---
 
-## delete-design
+## designs/delete
 
-`features/delete-design.feature`
+`features/designs/delete.feature`
 
 DELETING A DESIGN — both bins, both directions, and the one irreversible path.
 Deleting a PROJECT (the folder) is delete-project.feature: one call, not one
 per design, and a different set of guards.
 
-## TWO BINS, AND THEY ARE NOT SYMMETRIC (saga §C6.11)
+### TWO BINS, AND THEY ARE NOT SYMMETRIC (saga §C6.11)
 
 Nextcloud's trash and Penpot's trash are separate systems with separate
 retentions. An ordinary delete is SOFT on both sides — recoverable, and
@@ -1054,7 +953,7 @@ own trash before permanently deleting, so the app reads the trash listing first
 and passes only ids that are in it. A design someone restored in Penpot between
 the two is therefore left alone.
 
-## A LINK HAS NOTHING TO DELETE
+### A LINK HAS NOTHING TO DELETE
 
 A `link` is zero bytes pointing at a design that lives elsewhere, so deleting
 one is a DISMISSAL, not a deletion — it hides the pointer and leaves the design
@@ -1267,9 +1166,9 @@ against the original's 5.
 
 ---
 
-## delete-project
+## projects/delete
 
-`features/delete-project.feature`
+`features/projects/delete.feature`
 
 DELETING A PROJECT — the folder, which is ONE Penpot call rather than one per
 design. Deleting a design is delete-design.feature.
@@ -1288,7 +1187,7 @@ project in it.
 The design-side rules about the two bins, the permanent-delete guard, and link
 dismissal all live in delete-design.feature and are not restated here.
 
-## A CORRECTION THIS FILE EXISTS TO CARRY (saga §C6.25)
+### A CORRECTION THIS FILE EXISTS TO CARRY (saga §C6.25)
 
 This spec used to say "deleting a personal project folder never touches
 Penpot". That was not a rule — it was the CURRENT DEFECT written up as one.
@@ -1303,7 +1202,7 @@ The mirror's whole premise is parity: a folder the user tagged into existence
 is one they can delete the same way, in a personal team exactly as in a mapped
 one. Only the credential differs.
 
-## WHAT PENPOT ACTUALLY DOES, measured (saga §C6.11)
+### WHAT PENPOT ACTUALLY DOES, measured (saga §C6.11)
 
   delete-project {id}   → HTTP 204, and it is ENTIRELY SOFT. Sets
                           project.deleted_at to now + deletion-delay (7 days by
@@ -1366,13 +1265,13 @@ SAME RULE AS A TEAM PROJECT, different credential. A personal project is
 not a read-only view of Penpot — the whole point of the mirror is parity,
 so a folder the user tagged into existence is one they can delete the same
 way. The user's own token performs it, because the service account cannot
-see their personal team at all (personal-projects.feature).
+see their personal team at all (`connection/personal.feature`).
 
 ---
 
-## edit-design
+## designs/edit
 
-`features/edit-design.feature`
+`features/designs/edit.feature`
 
 A DESIGN'S CONTENT CHANGING — and the only file in this app with one direction
 where both siblings have two.
@@ -1438,59 +1337,109 @@ from a listing the sync already had; the bytes do not, because nobody asked for
 them. That is the economic argument for link being the default, stated as an end
 state rather than as a claim about call counts.
 
-## errors
+## errors — RETIRED
 
-`features/errors.feature`
+`features/errors.feature` is **gone**. "Failures never cost the user data" is an
+INVARIANT, not a behaviour: nobody performs an error. An error is what happens
+when something a person *did* goes wrong, so each one belongs with the behaviour
+that can fail — the same reasoning that retired `file-type` (a construct),
+`reconcile` (a mechanism) and `admin-section` (a panel).
 
-Failure behaviour. Neither sibling app needed a file like this; this one does,
-because Penpot's transport has more ways to fail than a plain JSON REST call.
+The `When` lines gave it away. Almost none had a human actor:
 
-THE GOVERNING RULE, FROM COMMAND (saga §6.25): DON'T LOSE DATA. A remote
-failure must never destroy local state. Every scenario below is an application
-of that one rule.
+    When an export stream closes with no "end" event      the transport
+    When the app exports any file                         the app itself
+    When "get-project-files" fails for that project       an RPC command, by name
+    When the pull is interrupted partway through          the reconciler again
 
-WHY THERE ARE MORE FAILURE SURFACES HERE (all confirmed live, saga §5.1/§6.20):
-  1. export-binfile and import-binfile are BOTH SSE — a stream of progress
-     events, then `end` or `error`.
-  2. HTTP 200 DOES NOT MEAN SUCCESS. An `event: error` arrives inside a 200
-     response — witnessed directly when importing into a deleted file id. The
-     status code lies; the stream is the truth.
-  3. The payload is TRANSIT-JSON even when Accept: application/json is sent
-     (`~:type`, `~u<uuid>`, `~#uri`), so errors must be decoded, not string-matched.
-  4. Fetching the actual bytes is a SECOND authenticated request to an asset URL
-     that 401s without the token.
-  5. A restore is TWO calls (import, then rename) because import ignores the
-     `name` param — so it has a genuine partial-success state.
+Twenty-one scenarios in, eight out.
 
-THE MOST DANGEROUS OPERATION IN THE APP IS PRUNING. A failed listing looks
-exactly like "every file was deleted." Getting this wrong deletes a user's
-backups because a token expired. It has its own scenarios below, and the answer
-is always the same: no clean listing, no pruning.
+### Where each one went
 
-@todo — no lib/Service/ exists yet.
+| scenario | disposition |
+|---|---|
+| An error inside a 200 response is treated as a failure | → `team-mapping/set-mode.feature`, row 1 of one outline |
+| A stream that ends without an end event | → same outline, row 2 |
+| A failed asset download never truncates the existing mirror | → same outline, row 3 |
+| An unauthenticated asset fetch is a credential failure | → same outline, row 4 |
+| A pull interrupted halfway leaves every written file valid | → `connection/sync-now.feature` |
+| A file that fails to export does not stop the rest of the pull | → `connection/sync-now.feature`, one outline with the row below |
+| Losing access to a team halts only that mapping | → same outline: one failure at mapping scale rather than file scale |
+| A failed project listing prunes nothing | → `designs/delete.feature`, row of one outline |
+| A failed team listing prunes nothing anywhere under it | → same outline |
+| An expired service token prunes nothing | → same outline |
+| The pull does not trust "get-projects" alone | → `projects/delete.feature` — the behaviour is a project deleted in Penpot |
+| A restore whose follow-up rename fails | → `designs/restore.feature` |
+| A missing service token blocks mapping | → `team-mapping/create.feature` |
 
-### The pull does not trust "get-projects" alone about which projects exist
+### And what was dropped, with the reason
 
-Confirmed live on Penpot 2.17.0: "get-projects" does NOT filter deleted_at,
-while "get-all-projects" does, "get-project" 404s, and "get-project-files"
-returns []. Files filter correctly everywhere — the bug is specific to the
-projects listing. Trusting it would resurrect deleted project folders on
-every pull.
+| scenario | why |
+|---|---|
+| Penpot error codes are decoded from Transit, not string-matched | "not string-matched" describes how the parser works. `tests/unit/TransitTest.php` |
+| The known-bad export flag combination is never sent | asserts a REQUEST PAYLOAD, which Behat cannot see. `tests/unit/PenpotClientTest.php` |
+| The inner signed storage URL is never persisted | an internal storage decision with no observable outcome at all |
+| A transient download failure is retried before giving up | backoff is a mechanism, and its end state is identical to the outline's |
+| A pruned file goes to the trash, never straight to deletion | duplicate — `designs/delete.feature` asserts it LIVE |
+| A design deleted in Penpot can still be rescued inside the grace window | duplicate — the snapshot and the window closing are both already there |
+| A failed rename leaves the local rename standing | duplicate — `designs/rename.feature` "A failed propagation never reverts the user's local rename" |
+| An invalid personal token falls back rather than blocking | belongs with the WRITE GESTURE, which is where its twin went when `connection.feature` was rewritten |
 
-### A design deleted in Penpot can still be rescued inside the grace window
+### THREE THINGS THIS FILE HID
 
-Confirmed live (saga §6.42): "export-binfile" still exports a soft-deleted
-file — 6496 real bytes from a file deleted moments earlier — even though it
-404s on get-file and is invisible to every listing. This turns the one
-genuinely unrecoverable case (a link file whose design is deleted) into a
-best-effort-restorable one. Whether this runs automatically or is offered
-is undecided — saga open question #38.
+**Its Background was fiction.** All three steps — `the app is connected to
+Penpot`, `a Team Folder mapped to the Penpot team …`, `the Penpot project … is
+mirrored as a folder inside it` — had never been written. The identical trio that
+had rotted in `remove-mapping.feature`, invisible for the same reason: every
+scenario in the file was tagged.
 
----
+**A missing token blocking a mapping existed ONLY here.** "Without a
+service-account token, nothing can be mapped" was dropped when `connection.feature`
+was split into `admin`/`personal`, and this file was quietly the last copy. It is
+now `team-mapping/create.feature`'s, where refusing a mapping belongs.
 
-## view-design
+**Four `@blocked` named no capability**, which is the one thing the tag exists to
+do.
 
-`features/view-design.feature`
+### A promotion that fails leaves the file as it was
+
+FOUR SCENARIOS, ONE RULE. Each described a different way the export can break on
+the wire and then asserted the same end state: the file is untouched. That is an
+`Examples` table, not four scenarios — the `reason` column carries the only thing
+that genuinely differs, which is what the admin is told.
+
+`@blocked` — **no fault injection.** Every row needs a real Penpot to fail in a
+specific way, and the harness can only ask it to succeed.
+
+FILED UNDER PROMOTION because promotion is what triggers an export. A pull
+re-exports too, but only for a design already in `sync` mode — so the first and
+riskiest export is always a `set-mode`, and that is where "it broke and you lost
+nothing" is worth stating.
+
+### An incomplete listing prunes nothing
+
+THE MOST IMPORTANT RULE IN THE APP, and it was four scenarios saying it four
+ways. Not knowing what Penpot holds is not evidence that anything was deleted —
+an expired token, a failed team listing and a failed project listing all mean the
+same thing, and all must mean "prune nothing".
+
+These are NOT the empty negatives this suite rejects elsewhere. Something did
+act: a sync ran, and a dangerous branch was available to it. The claim is that
+the branch did not fire, which is an outcome.
+
+`@todo` rather than `@blocked` because one row IS drivable today — a rejected
+token needs no fault injection, only a bad token — and it happens to be the row
+that matters most.
+
+### One failure never costs the rest of the sync
+
+TWO SCALES, ONE RULE: one design failing must not cost the other designs, and one
+team failing must not cost the other teams. They were two scenarios that shared
+every line but the noun.
+
+## designs/view
+
+`features/designs/view.feature`
 
 LOOKING AT A MIRRORED DESIGN — the only part of "it is a real file type" that
 anyone actually performs.
@@ -1719,53 +1668,6 @@ only moves on a rename.
 
 ---
 
-## ignore
-
-`features/ignore.feature`
-
-The user-set ignore marker — "stop mirroring this file, but keep it."
-
-THE INSIGHT (saga §6.23): "tagged ignore" and "moved out of a mapped folder"
-are THE SAME STATE reached two different ways. Both mean: the archive is in
-Nextcloud, and this app is no longer mirroring it. Command put it exactly
-right — "adding a special ignore tag would simply treat it like it was
-unmapped … this just means the penpot file is on nxt but taken out of penpot."
-One state, one implementation, two entrances.
-
-"TAKEN OUT OF PENPOT" MEANS THE MIRRORING ENDS, NOT THE DESIGN DIES. Ignoring
-a file NEVER deletes anything in Penpot. Saga §6.1 is intact: this app has no
-destructive remote path at all. If the user wants the design gone from Penpot,
-they delete it in Penpot — this app will not do it for them, ever.
-
-IGNORE IS ONLY MEANINGFUL ON "sync" (Command's call, saga §6.23). A "link" file
-holds no archive — only a pointer. Ignoring one leaves an orphaned pointer with
-no content and no purpose, so it's refused with an offer to promote to "sync"
-first. This is the one place the two modes behave genuinely differently for a
-user action, and the reason is concrete: there's nothing to keep.
-
-THIS IS A TAG, NOT METADATA, AND THAT'S DELIBERATE. The mapping uses folder
-metadata because it's machine state (saga §6.21). The ignore marker is a
-HUMAN decision that a human needs to see and toggle in the Files app — being
-visible is the entire point. Same split both siblings use: Grafana's
-`grafana:ignore` is explicitly separate from its auto-managed ownership pills.
-
-@todo — no lib/Service/ exists yet.
-
----
-
-### An ignored file whose Penpot original is deleted is still kept
-
-The strongest form of the promise: ignore protects a file from the one operation
-that would otherwise remove it — the prune a pull performs when a design is
-deleted in Penpot (delete-design.feature).
-
-### Demoting an ignored file is refused
-
-THE MIRROR OF "Ignoring a link file is refused", and why both live here rather
-than with the mode: ignore is what is being protected in each. Ignoring a link is
-refused because there is no archive to keep; demoting an ignored file is refused
-because it would delete the archive the ignore tag exists to keep.
-
 ## lifecycle
 
 `features/lifecycle.feature`
@@ -1803,145 +1705,102 @@ the one scenario that was already running.
 Its visible consequence (a mapped folder that looks like designs) belongs to
 `view-design.feature`; its removal is the "Removing the app" scenario below.
 
-## mapping-membership
+## mapping-membership — RETIRED
 
-`features/mapping-membership.feature`
+`features/mapping-membership.feature` is **gone**. The nearest-ancestor rule is
+this app's most load-bearing decision and it is still true; it was never a
+behaviour. A rule is only ever OBSERVED through a gesture — you move something
+and it still belongs, you create something and it lands in Drafts — so every
+honest scenario in the file was already a move or a create.
 
-Where a file "belongs" — resolved by walking UP the folder tree, reading folder
-metadata. This is the single most load-bearing rule in the app; almost every
-other feature file defers to it.
+Which is exactly why six of them had been rewritten elsewhere, word for word,
+without anyone noticing.
 
-THE RULE (saga §6.29, locked):
+### THE RULE, which now lives here instead of in a file
 
-  A .penpot file belongs to the Penpot project recorded on THE NEAREST ANCESTOR
-  FOLDER carrying a project id. A project folder belongs to the team recorded on
-  THE NEAREST ANCESTOR FOLDER carrying a team id. No such ancestor ⇒ no mapping.
+A file's project is **the nearest ancestor folder carrying a Penpot project id**,
+found by walking up; its team is the nearest ancestor carrying a team id, however
+far up that is. Nothing is cached on the file — a copy would go stale on the
+first move, which is the whole point (§C6.7). Penpot is flat; Nextcloud need not
+be (§6.29).
 
-THIS REPLACES THE OLD "EXACTLY ONE LEVEL, HARD CAP" RULE. Earlier drafts capped
-project folders at exactly one level below the team folder and treated anything
-deeper as an error-ish "tolerated content" state. That cap was a legibility
-guess made before we understood how cleanly folder metadata resolves — and it
-imposed Penpot's flatness on Nextcloud, which doesn't share it. Withdrawn.
+Two consequences worth stating once: a folder Penpot has no concept of is simply
+walked past, and a file under a team but under no project is in that team's
+Drafts — which is a state, not a folder (§6.35).
 
-WHY FREE NESTING IS THE RIGHT CALL: Penpot is flat and rigid (team → project →
-file, no sub-projects). Nextcloud is a file manager people organise however they
-like. Identity lives in METADATA, not in path — so a project folder works
-exactly the same at any depth, and a user can group five project folders under
-a "Clients/" folder that has no Penpot counterpart at all. That's real value
-Penpot itself can't offer, and it costs us nothing: "walk up until you find the
-key" is the same lookup as "check one level up," minus the early exit.
+### Six duplicates of scenarios that were already live
 
-THIS IS THE ONLY LAYOUT THERE IS. A mapping used to carry a folder mode, with
-a second `keyed` layout where a project's NAME would be its path and free
-nesting would not apply. It was designed, never built, and the field is gone
-(§C6.36) — so nothing here is conditional any more. The alternative survives
-as an open saga question (§6.53, #47), not as a value anyone can set.
+| it said | already asserted by |
+|---|---|
+| A file nested deeper inside a project folder still belongs to that project | `designs/move.feature` — same gesture, same `wip` subfolder, same assertion |
+| Project folders can be grouped under ordinary Nextcloud folders | `projects/move.feature` — which even asserts *"the folder still resolves to the same team, found further up"* |
+| A file with no project-id ancestor belongs to no mapping | `designs/create.feature` "A `.penpot` file created outside every mapping is an inert file" |
+| A file at the mapped folder's root is in that team's Drafts | `designs/create.feature` |
+| No folder is ever created to represent Drafts | `connection/sync-now.feature` — `there is no node at "<folder>/Drafts"`, in the tree table |
+| A folder opted in by tag resolves exactly like a mirrored one | `projects/create.feature` "A folder opted in late brings the designs already inside it" |
 
-THE MECHANISM IS CONFIRMED LIVE (saga §6.21): Files-Metadata attaches to
-folders exactly as to files — same Node type, same fileid space. Tested
-write/persist/read-back against a REAL production Team Folder (groupfolder 5),
-with an ordinary folder as control. Identical results.
+### Four with no `When` at all
 
-TWO MARKERS, TWO JOBS (saga §6.32):
-  - folder METADATA (penpot_project_id / penpot_team_id) is the authoritative
-    machine record — what every lookup below reads.
-  - a system TAG is the human-visible pill in the Files app, so a user can SEE
-    and SEARCH which folders are real Penpot projects. Under free nesting this
-    matters more than it would have under the cap: position no longer tells you.
+`A file's project is the nearest ancestor folder carrying a project id` was the
+file's own thesis restated as a test — and its third `Then` is already
+`designs/view.feature`'s. `A project folder's team is the nearest ancestor
+carrying a team id` and `A personal project folder has no team ancestor` are the
+same shape.
 
-MEMBERSHIP IS DERIVED, NEVER STORED ON THE FILE. No "penpot_mapping" key — the
-folders already know, and a stored copy would have to be rewritten on every
-move, which is exactly the drift an earlier move-design.feature tangled itself in.
+`Two folders carrying the same project id is a reported conflict` had a second
+problem: **nothing can produce that state.** `projects/copy.feature` refuses a
+project-folder copy precisely to prevent it, so the scenario specified recovery
+from a situation the app is built to make unreachable — there is no `Given` a
+test could arrange. It also carried the file's only `But`, which is a real
+Gherkin keyword and a pure synonym for `And`: keywords are ignored in step
+matching, so it reads as contrast and asserts nothing. Contrast is what you write
+when you are describing a situation rather than an outcome.
 
-BUILT AND NOW LIVE. `MembershipResolver` has existed since Course 3 and every
-other feature defers to it, but nothing in CI had ever asked it a question —
-the resolver was the most load-bearing rule in the app and the least tested.
-The scenarios below drive it through `occ penpot_sync:status`, which prints the
-resolved membership alongside the raw markers, so a failure says which of the
-two disagreed.
+### Three survived, two of them as Examples rows
 
-THE BACKGROUND WAS FICTION. It provisioned a Team Folder and mirrored a project
-called "My Stuff", and none of those steps had ever existed — harmless while
-the file was entirely @todo, an instant `--strict` failure the moment one
-scenario went live. Same trap as create-project.feature (§C6.18). It is now the
-standard Background: a PLAIN mapped folder, because Team Folder provisioning is
-not covered by this suite (features/README.md).
+| it said | where it went |
+|---|---|
+| The nearest project id wins when project folders are nested | a row on `projects/move.feature`'s "moved anywhere inside its team folder" — the destination is the only thing that differs |
+| A file in any plain folder under a team is also in Drafts | a row on `designs/create.feature`'s Drafts scenario — the same rule at a different depth |
+| Non-Penpot content inside a project folder is left alone | `connection/sync-now.feature`, as "A sync leaves content it does not manage alone" |
 
-### A file nested deeper inside a project folder still belongs to that project
+### A project folder can be moved anywhere inside its team folder
 
-The old cap called this "too deep" and orphaned the file. It is just a
-subfolder — Penpot has no opinion about it, so neither do we, and the
-design must not have moved project as a side effect of the drag.
+ONE RULE, TWO DESTINATIONS. A project folder may be filed under a plain folder —
+which Penpot has no concept of — or under another project folder, where the
+nearest id wins and the outer project does not swallow the inner one. Same
+gesture, same end state, so it is an `Examples` column rather than two scenarios.
 
-### The nearest project id wins when project folders are nested
+### A design created under the team but not under a project is a draft
 
-NEAREST ancestor, not outermost — this is what makes free nesting
-unambiguous, and it is only reachable now that a project folder can be
-moved inside another one. Nothing about the nesting reaches Penpot, where
-both projects stay flat.
+ONE RULE, AND DEPTH IS NOT PART OF IT. The team root and a plain folder three
+levels down are the same case: under a team, under no project, therefore Drafts.
+The second row came from `mapping-membership.feature`, where it read as a
+separate fact about nesting.
 
-### A file at the mapped folder's root is in that team's Drafts
+### A sync leaves content it does not manage alone
 
-── the Drafts state: a team ancestor but no project ancestor ───────────────
-Drafts is NEVER a folder (saga §6.35). It is the name Penpot gives to
-"belongs to a team, sits in no project" — exactly what the nearest-ancestor
-rule produces when it finds a team id but no project id on the way up.
+FROM THE RETIRED `mapping-membership.feature`. A `notes.txt` sitting in a project
+folder is not the app's business, and a sync must not touch it — pruning keys on
+metadata, never on a file extension or on where a file happens to sit.
 
-This boundary is where §C6.8, §C6.9 and §C6.10 all lived, every one of them
-the same mistake: reading "no project ancestor" as "outside every mapping"
-when it means Drafts — a real project with a real id.
+Filed with the sync rather than with membership because the actor is a sync: the
+question is what a run does to things it did not create.
 
-### A file in any plain folder under a team is also in Drafts
+IT ARRIVED BROKEN, in the way this suite documents and I still walked into. It
+came from `mapping-membership.feature`, whose Background maps a shared `Penpot`
+folder — and `sync-now.feature` deliberately maps NOTHING, so every scenario here
+names its own folder and cannot inherit another's leftovers. Pasted across
+unchanged, the `PUT` for `notes.txt` 404'd on a parent that did not exist. It now
+maps `Untouched` itself, like everything else in this file.
 
-This is where Nextcloud is MORE expressive than Penpot: any arrangement of
-ordinary folders under a team maps to the one Drafts bucket. Penpot has a
-single Drafts because a flat system has nowhere else to put an unfiled
-design; we can express the same state as a whole folder tree, for free.
+`.github/instructions/gherkin.instructions.md` names this trap and names these
+two files as the pair it happens between. Check the destination's Background
+before moving a scenario into it.
 
-### A project folder carries a visible tag as well as its metadata
+## designs/move
 
-Two markers, two jobs (§6.32): the metadata is what every lookup reads, the
-tag is what a user can see and search for. Under free nesting that matters
-more than it would have under the old depth cap — position no longer tells
-you which folders are projects.
-
-### A tagged folder's name always equals its Penpot project's name
-
-Under free nesting a project folder is otherwise indistinguishable from an
-ordinary folder someone named the same thing. Tag + matching name means a
-tagged folder called "Acme" IS the Penpot project "Acme" — no ambiguity.
-The rename half of the invariant is rename-design.feature's, where it is live.
-
-### A plain folder inside a mapped folder is tolerated, not adopted
-
-This is the whole point of the tag: ordinary folders can live among project
-folders without becoming projects. The opt-in that DOES make one a project
-is create-project.feature's, and it is live there.
-
-### A folder opted in by tag resolves exactly like a mirrored one
-
-The opt-in itself — what the tag DOES — is create-project.feature's, and it
-is live there. This is only the half this file owns: once stamped, nothing
-downstream can tell which direction the folder came from.
-
-### A personal project folder has no team ancestor, and that is valid
-
-The ONE exception to "walk up for a team" (saga §6.31) — a personal team
-gets no folder of its own, so its projects sit at the home root. Without
-this rule the natural implementation would treat every personal project as
-an error. See personal-projects.feature.
-
-### Two folders carrying the same project id is a reported conflict
-
-Free nesting makes this reachable (copy a project folder and you have two).
-The lookup stays well-defined; the WRITE target needs a tie-break. Which
-rule to use is not yet decided — saga open question #30.
-
----
-
-## move-design
-
-`features/move-design.feature`
+`features/designs/move.feature`
 
 MOVING A DESIGN — every way a design can change project, team, or Drafts state,
 from either side. Moving a PROJECT (the folder) is move-project.feature: a
@@ -1953,14 +1812,14 @@ reconcile.feature and the two scenarios CI could prove lived in a third file
 called gestures.feature. Three places, one behaviour. Now a move is a move,
 whoever performed it, and the sections below are ordered by where it happened.
 
-## THE GUIDING PRINCIPLE: DON'T LOSE DATA
+### THE GUIDING PRINCIPLE: DON'T LOSE DATA
 
 A move never destroys bytes, never contacts Penpot destructively, and never
 leaves a file in a state the user cannot get back out of. The closing invariant
 below is stated for files AND folders, and move-project.feature relies on it
 rather than restating it.
 
-## NEXTCLOUD OWNS LAYOUT, PENPOT OWNS MEMBERSHIP (saga §6.29)
+### NEXTCLOUD OWNS LAYOUT, PENPOT OWNS MEMBERSHIP (saga §6.29)
 
 A design may sit anywhere inside a folder that maps to its real project — the
 pull only ensures membership, never a particular path. That is what makes a
@@ -1989,7 +1848,7 @@ Penpot here, and that is the point of the rule.
 
 ── across two mappings: personal ⇄ a shared team ──────────────────────────
 A user's home root and a mapped Team Folder are two mappings to two
-DIFFERENT Penpot teams (personal-projects.feature — setting a personal token
+DIFFERENT Penpot teams (`connection/personal.feature` — setting a personal token
 maps the personal team to the home root, implicitly). So a drag between them
 is a real cross-team move, and Penpot supports it directly: `move-files`
 carries the destination's team with it, proven live in §6.27/§6.34.
@@ -2049,9 +1908,9 @@ losing a `sync` file's archive on the way past.
 
 ---
 
-## move-project
+## projects/move
 
-`features/move-project.feature`
+`features/projects/move.feature`
 
 MOVING A PROJECT — the folder, and the one rule that makes it different from
 moving a design: a project folder's POSITION is constrained where a design's is
@@ -2090,13 +1949,13 @@ is the source of truth changing.
 ── the same rule in a personal team ────────────────────────────────────────
 A personal project is a project. The WHO (the user's own token) and the WHERE
 (their home root, no team-folder ancestor) differ; the rule does not — see
-personal-projects.feature for what actually is special about them.
+`## personal-projects — RETIRED` for what actually is special about them.
 
 ---
 
-## open-with
+## designs/open-with
 
-`features/open-with.feature`
+`features/designs/open-with.feature`
 
 "Open with" — the opener(s) offered for a mirrored ".penpot" file.
 
@@ -2192,106 +2051,56 @@ driver.
 
 ---
 
-## personal-projects
+## personal-projects — RETIRED
 
-`features/personal-projects.feature`
+`features/personal-projects.feature` is **gone**. Personal projects are not a
+feature: they are **the ordinary rules with a different mapping**. A design in a
+personal project is created, viewed, moved, renamed, deleted and restored by
+exactly the scenarios in `designs/`; a personal project folder behaves exactly as
+`projects/` says. The file existed because "personal" felt like a category — the
+same error that produced `errors`, `mapping-membership` and `file-type`.
 
-PERSONAL PROJECTS — the WHO and the WHERE, and nothing else.
+Only two things are genuinely different, and both are end states of setting a
+token, so both went to `connection/personal.feature`:
 
-## WHAT THIS FILE OWNS, AFTER THE DESIGN/PROJECT SPLIT
+| it said | where it went |
+|---|---|
+| Setting a personal token maps the personal team to the home root | a `Then` on "A user enters a valid token" |
+| Clearing the token removes the implicit mapping | a new scenario, "A user clears their token" |
 
-A personal project is a project. Creating, renaming, moving, copying and
-deleting one behaves exactly as it does in a mapped team — so those scenarios
-live with their verb (create-project.feature, rename-project.feature, and so
-on), where a reader comparing the personal case against the team case sees both
-answers in one table instead of hunting two files. That is the same rule the
-whole `-design` / `-project` split rests on: organise by BEHAVIOUR, not by the
-kind of thing acted on.
+### The rest, and why none of it survived
 
-What genuinely differs is not the behaviour but its two coordinates:
+| it said | why |
+|---|---|
+| One user's personal projects never appear in another user's home | a negative on the impossible. Nextcloud homes and per-user tokens make it so; nothing acts on the other user |
+| Clearing a personal token stops personal pulls without deleting anything | the "nothing deleted" half is now one `And` on the clear scenario, where it is a post-state rather than a scenario of its own |
+| The personal team itself gets no folder | see the correction below — it is the same fact as the mapping, stated backwards |
+| A user's personal projects mount at their home root | the first sync of the personal mapping, which `connection/sync-now.feature`'s "A user syncs their own personal team" already owns |
+| Personal projects are pulled with the user's own token, never the service account | implied by the above: the service account cannot see a personal team, so the projects appearing at all IS the proof |
+| Without a personal token, no personal projects appear at all | the inverse of the mapping end state, and asserted by the clear scenario's "inert, as it was before the token" |
+| A personal project folder resolves without a team ancestor | **not true** — see below |
 
-  WHO    the user's OWN personal token, never the service account. No token,
-         no personal projects at all — and clearing one stops the pull without
-         deleting anything.
-  WHERE  the user's home root, with NO team-folder ancestor. The personal team
-         itself gets no folder, which is why the membership resolver has to
-         cope with a project folder that has no team above it (saga §6.29).
+### TWO CORRECTIONS THIS FILE WAS CARRYING
 
-Those two are what this file is for, plus the isolation that follows from them:
-one user's personal projects never appear in another user's home.
+**"The personal team itself gets no folder" was only half true.** The mapping's
+folder is the user's home root. `/` is a folder — it is simply the one every user
+sees as theirs — so the honest statement is that the personal team maps to `/`,
+with the team's name and the folder's name never needing to agree because nobody
+names either. "No folder is created" and "mapped to the home root" are the same
+fact, and only the second one is useful.
 
-THE ONE PLACE THE PERSONAL CASE REALLY DIVERGES — deleting a personal project
-folder does not touch Penpot — is stated in delete-project.feature, beside the
-team answer it contradicts. A divergence hidden in a file nobody opens while
-holding the question is a divergence nobody finds.
+**"Resolves without a team ancestor" claimed an exception that does not exist.**
+The scenario called itself *"the explicit exception to saga §6.29's team
+lookup"* — but the team ancestor of a personal project IS the personal team, sat
+on the home root. `MembershipResolver` walks ancestors looking for markers and
+has no special case for any of this, because it needs none: put the team id on
+the home root and the ordinary rule resolves it. A spec that invents an exception
+the code does not have is worse than a silent one, because the next person builds
+the exception.
 
-### Setting a personal token maps the personal team to the home root
+## designs/purge
 
-── the implicit mapping, and what it makes possible ────────────────────────
-These are the scenarios the "home root IS the mapping" reading adds. They
-are not a second pull pathway; they are what having a team ancestor at the
-root means for every OTHER feature, which is the point of framing it as a
-mapping rather than as a sync job.
-
----
-
-## personal-settings
-
-`features/personal-settings.feature`
-
-The per-Nextcloud-user personal Penpot token page — genuinely NEW territory for
-this app family. Neither n8n nor Grafana has a per-user settings precedent:
-both store one admin-wide credential (IAppConfig, `sensitive`) and only read
-IUserSession inside listeners to know who's acting.
-
-WHAT THIS PAGE IS FOR, PRECISELY (saga §6.18): attribution. Nothing else.
-
-It is NOT how the app reads Penpot — the service account does all mirroring,
-always (admin-connection.feature). It is NOT required for anything to work. It
-exists so that when a human renames or restores a design from Nextcloud, Penpot
-records THAT HUMAN as having done it, rather than recording every action by
-every user as "nextcloud" forever. Penpot's file history is append-only from
-our side: a change attributed to a robot can never be re-attributed later.
-
-THIS IS A SMALL SURFACE BY DESIGN. Command's own observation — "renaming
-deleting and moving is really the only thing we could do from nextcloud as an
-action" — is what makes the whole model affordable. The complete list of writes
-is short and every entry is either non-destructive or explicitly confirmed by
-a human (saga §6.19): moving a file between projects, creating a design,
-restoring one, renaming a project folder, and deleting in Penpot. Exactly ONE
-RPC in the whole app destroys anything (`delete-file`), and it is only ever
-reached through a confirmed user action. A token used at that few call sites
-doesn't need elaborate machinery.
-
-WHAT'S STILL OPEN (saga open question #9): only the storage mechanism. The
-presumed answer is IConfig::setUserValue with the sensitive flag — the
-user-scoped analogue of both siblings' AppConfig pattern — but it isn't built.
-The scenarios below describe OBSERVABLE behaviour and don't assume a class.
-
-THE 1:1 ASSUMPTION (saga §6.9): one Nextcloud user, one Penpot account, one
-token. Stated as the assumed default, not enforced.
-
-@todo — no lib/Settings/PersonalSettings.php exists yet; this is a brand-new
-settings surface, not a port from either sibling.
-
-### Clearing a personal token degrades attribution but breaks nothing
-
-Contrast with an earlier draft, which said mapped folders "stop pulling
-until a token is set again." That was written under the superseded
-per-user-pull model (saga §6.9) — the pull never used personal tokens in
-the final design, so clearing one cannot affect it.
-
-### The app assumes one Nextcloud user maps to one Penpot account
-
-Sharing one Penpot login across Nextcloud users isn't precluded by anything
-the app enforces — it just defeats the page's only purpose, since both
-users' changes would then be attributed identically.
-
----
-
-## purge
-
-`features/purge.feature`
+`features/designs/purge.feature`
 
 Purge — an admin-only button beside "Sync from Penpot" and "Test connection"
 (also `occ penpot_sync:purge`) that removes the mirrored ".penpot" files THIS
@@ -2325,9 +2134,9 @@ the app was never there).
 
 ---
 
-## remove-mapping
+## team-mapping/delete
 
-`features/remove-mapping.feature`
+`features/team-mapping/delete.feature`
 
 Removing a team mapping — the admin deletes a mapping from the list (or
 `occ penpot_sync:remove-mapping`). This is NOT the "Purge Nextcloud files"
@@ -2364,9 +2173,9 @@ teardown warns about this, because "removing a mapping deleted my backups" and
 
 ---
 
-## rename-design
+## designs/rename
 
-`features/rename-design.feature`
+`features/designs/rename.feature`
 
 Renaming a DESIGN — the mirror file and the Penpot file it points at.
 Renaming a PROJECT (the folder) is rename-project.feature: same gesture, but a
@@ -2503,9 +2312,9 @@ break the link. `the design's id` resolves through the NEW name, so one row
 asserts both halves: the design is called that now, and this file is still that
 design.
 
-## rename-project
+## projects/rename
 
-`features/rename-project.feature`
+`features/projects/rename.feature`
 
 Renaming a PROJECT — the folder in Nextcloud and the Penpot project it maps to.
 Renaming a DESIGN is rename-design.feature: same gesture in the Files app, but
@@ -2572,14 +2381,14 @@ something to fall back into because one name happened to contain a slash.
 
 ---
 
-## restore-design
+## designs/restore
 
-`features/restore-design.feature`
+`features/designs/restore.feature`
 
 RESTORING A DESIGN — out of the Nextcloud trash, out of Penpot's trash, or out
 of an archive when both are gone. Restoring a PROJECT is restore-project.feature.
 
-## THE ORDER IS THE FEATURE (saga §6.49/§C6.11)
+### THE ORDER IS THE FEATURE (saga §6.49/§C6.11)
 
 The app always offers Penpot's own trash BEFORE an archive import, and the
 difference is not cosmetic: a trash restore returns the SAME design — same id,
@@ -2587,13 +2396,13 @@ same revision, same history — while an import creates a new one that merely
 looks like it. Only once Penpot's grace window has closed is an import the best
 that remains, and the app says so rather than quietly producing a lookalike.
 
-## A RESTORE IS CONFIRMED, NEVER ASSUMED
+### A RESTORE IS CONFIRMED, NEVER ASSUMED
 
 Penpot's success event is not proof: the restore is re-read from the same
 listing the pull uses before it is reported as done. A restore that did not
 actually happen must never be announced as one.
 
-## A LINK HAS NOTHING TO RESTORE INTO PENPOT
+### A LINK HAS NOTHING TO RESTORE INTO PENPOT
 
 Restoring a dismissed `link` un-hides a pointer. It never pushes anything back
 into Penpot, in any circumstance.
@@ -2626,7 +2435,7 @@ business.
 ### Restoring a file that was never in Penpot leaves Penpot alone
 
 A restore only ever puts BACK something this app mirrored out. Inventing a
-design for a file that never had one is team-import.feature's open fork, and
+design for a file that never had one is still an open fork, and
 it must not happen by accident on the way out of the trash.
 
 THE OLD VERSION ASSUMED SOMETHING THE APP DOES NOT ALLOW. It staged a
@@ -2649,7 +2458,7 @@ file is genuinely untracked today, and the assertions are about it alone.
 ### An untracked file is never restored, because it was never in Penpot
 
 Creating brand-new Penpot files from Nextcloud is a separate, still-open
-fork (team-import.feature) — restore only ever puts BACK something that
+fork — restore only ever puts BACK something that
 this app previously mirrored out.
 
 ### Restoring a deleted design states clearly what does and does not return
@@ -2730,9 +2539,19 @@ thing that must not happen is quietly doing nothing.
 
 ---
 
-## restore-project
+### A restore whose follow-up rename fails reports partial success
 
-`features/restore-project.feature`
+FROM THE RETIRED `errors.feature`. A restore that cannot come back at its
+original id is an import plus a rename, and the two can part company.
+
+ROLLING BACK WOULD BE THE DATA LOSS. The import succeeded — a design the user
+asked for is now in Penpot. Deleting it to "clean up" a failed rename destroys
+the thing that just worked, so the app keeps it, records the new id against the
+local file, and says plainly that the design came back wearing the wrong name.
+
+## projects/restore
+
+`features/projects/restore.feature`
 
 RESTORING A PROJECT — the folder, and everything that was in it. Restoring a
 design is restore-design.feature.
@@ -2770,9 +2589,37 @@ restored and points at nothing.
 
 ---
 
-## set-mode
+## projects/view
 
-`features/set-mode.feature`
+`features/projects/view.feature`
+
+TELLING A PROJECT FOLDER FROM AN ORDINARY ONE. Created in the noun/verb
+restructure from scenarios that had been sitting in `mapping-membership.feature`
+— looking at a project is looking, and `designs/` already had a `view`.
+
+### A project folder carries a visible tag as well as its metadata
+
+Two markers, two jobs (§6.32): the metadata is what every lookup reads, the tag
+is what a user can see and search for. Under free nesting that matters more than
+it would under a depth cap — position no longer tells you which folders are
+projects.
+
+### A tagged folder's name always equals its Penpot project's name
+
+A project folder is otherwise indistinguishable from an ordinary folder someone
+named the same thing. Tag plus matching name means a tagged folder called "Acme"
+IS the Penpot project "Acme". The rename half of the invariant is
+`projects/rename.feature`'s, where it is live.
+
+### A plain folder inside a mapped folder is tolerated, not adopted
+
+The whole point of the tag: ordinary folders live among project folders without
+becoming projects. The opt-in that DOES make one a project is
+`projects/create.feature`'s, and it is live there.
+
+## team-mapping/set-mode
+
+`features/team-mapping/set-mode.feature`
 
 Promoting and demoting a single file — the whole of the mode axis, now that
 `sync-mode.feature` is retired into it.
@@ -2816,7 +2663,7 @@ because "never contacts Penpot" is a claim about the far side.
 the file's record of which revision it held, so a later promotion knows whether
 what it fetches is new.
 
-## WHY THIS SUITE IS WORTH A LIVE PENPOT
+### WHY THIS SUITE IS WORTH A LIVE PENPOT
 
 Promotion is the app's only code path that moves real bytes out of Penpot, and
 it is four unmockable steps in a row (saga §5.1–§5.4, §C4.8):
@@ -2837,7 +2684,7 @@ So the assertion below is deliberately crude and physical: after a promotion
 the mirrored file **begins with a ZIP's magic bytes**. Not "the client was
 called" — a ZIP arrived.
 
-## THE CHEAP PATH IS ASSERTED TOO, BECAUSE IT IS THE WHOLE POINT
+### THE CHEAP PATH IS ASSERTED TOO, BECAUSE IT IS THE WHOLE POINT
 
 `link` mode's entire claim is that mirroring a team costs a listing and
 nothing else. A regression that quietly exported every file would still pass
@@ -2856,7 +2703,7 @@ It came from `sync-mode.feature`, which specified it and could not run it either
 The prompt is unit-tested where the answer can be scripted (SetModeTest); this is
 the end-to-end statement of the same promise, parked behind a named wall rather
 than behind a file nobody was going to run.
-## WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
+### WHOSE DECISION IS THIS, AND WAS IT EVER ASKED FOR?
 
 STATED PLAINLY BECAUSE IT DIVERGED FROM THE DESIGN WITHOUT A DECISION: mode is
 PER FILE and MUTABLE. `occ penpot_sync:set-mode` takes a PATH, not a mapping,
@@ -2948,9 +2795,9 @@ TWO SCENARIOS SURVIVED, and both moved to the file that owns their subject:
 | Demoting a sync file to link warns before deleting the archive | `set-mode.feature` | the confirmation is really implemented (`--force` exists to skip it) and nothing asserted it — every live scenario passes `--force` |
 | Demoting an ignored file is refused | `ignore.feature` | the mirror of "Ignoring a link file is refused"; both are about what ignore protects |
 
-## sync-now
+## connection/sync-now
 
-`features/sync-now.feature`
+`features/connection/sync-now.feature`
 
 SYNC NOW — bringing what is already in Penpot into Nextcloud.
 
@@ -2979,7 +2826,7 @@ leaving a second folder beside the one someone made. From then on the id
 identifies the project, which is why a rename upstream moves this folder rather
 than making another.
 
-## THE RECONCILER IS NOT A FEATURE (saga §C6.28)
+### THE RECONCILER IS NOT A FEATURE (saga §C6.28)
 
 This file used to be `reconcile.feature`, and it had thirty-four scenarios. The
 reconciler is what carries every "from Penpot" change into Nextcloud — it is the
@@ -2992,7 +2839,7 @@ rename, and that it arrived via the reconciler is HOW, not WHAT.
 Half the file could not be built, and that was the tell rather than a coincidence:
 an unbuildable scenario is usually a scenario about the wrong thing.
 
-## TWO ACTORS, AND THAT IS THE WHOLE FILE
+### TWO ACTORS, AND THAT IS THE WHOLE FILE
 
     admin   syncs one mapping now, and waits for it
     admin   syncs everything now, which is a background job
@@ -3002,14 +2849,14 @@ Everything below is the OUTCOME of one of those. Mirroring a root, a project, a
 file, its dates; leaving an unchanged instance alone; pruning what Penpot no
 longer has — none of them is a separate behaviour, they are what a sync DOES.
 
-## THE FIRST SYNC IS ITS OWN SITUATION
+### THE FIRST SYNC IS ITS OWN SITUATION
 
 Whatever put these designs in Penpot happened before this app existed, so it is
 out of scope by definition. That makes "existing designs arrive for the first
 time" a real and independent thing to describe — and it needs one or two designs
 to describe it, not a catalogue of every state a design can be in.
 
-## A USER'S SYNC NOW IS THE SAME BEHAVIOUR
+### A USER'S SYNC NOW IS THE SAME BEHAVIOUR
 
 Scoped by what their token can see in Penpot and what they can see in Nextcloud,
 but the end state is identical, and a scenario that differs only in scope is the
@@ -3162,12 +3009,6 @@ The two rows are the two ways the connection can be wrong, and they are the two
 missing token versus unreachable host. A sync should not collapse them, for the
 same reason the test does not: they send an operator to different fixes.
 
-### A user syncs their own personal team folder
-
-SAME BEHAVIOUR, DIFFERENT SCOPE (§C6.28). No mapping card exists for this —
-the personal team mapping is automatic, so there is exactly one folder to
-sync and nothing to choose.
-
 ### Users do not author their own team mappings
 
 DELIBERATELY NOT BUILT, not merely unwritten. Letting users author mappings
@@ -3178,128 +3019,85 @@ team mapping stays automatic and singular.
 
 ---
 
-## team-import
+### A sync that dies halfway leaves every file whole
 
-`features/team-import.feature`
+FROM THE RETIRED `errors.feature`, where it read "a pull interrupted halfway" —
+the reconciler as the actor again. What matters is not that a pull was
+interrupted but that a sync can die at any moment, and no file may be left as a
+half-written archive.
 
-SPECULATIVE — this file documents a PROPOSAL (saga §6.15), not a locked
-design, and it directly touches an open architectural fork. Do not read any
-scenario below as decided behaviour; every one of them is written to make the
-open questions visible, the same "design, not wired" convention both sibling
-apps use for their own undecided slices (compare Grafana's tag-sync.feature
-header, or n8n's speculative-fork write-ups).
+Every write is to a temp location and moved into place, so a file is its old
+version or its new one. `@blocked` — **no fault injection**: the run has to be
+killed mid-write.
 
-THE PROPOSAL: from wherever a user's Penpot token is configured
-(personal-settings.feature), query that account's visible Penpot teams, show
-which already correspond to an existing Nextcloud Team Folder and which
-don't, and let the user opt to "import" one — provisioning a Team Folder that
-becomes a team mapping (admin-mapping.feature). This reuses §6.13's
-ownership-pill/tag mechanism for a SECOND purpose: pulling FROM Penpot, a
-project becomes/matches a same-named subfolder by ordinary name-matching
-(fine, because §6.13 already locked mapped-folder naming as
-Penpot-authoritative on the pull direction — see admin-mapping.feature). Going
-the OTHER way — a user makes a plain folder inside a mapped Team Folder and
-wants it to BECOME a new Penpot project — name-matching alone can't
-disambiguate "this is meant to be a project" from "this is just reference
-material sitting in the folder" (§6.13's tolerated-content rule), so the
-proposal is a dedicated app-owned tag as the creation signal: tag present ⇒
-create the project in Penpot (via `create-project`, confirmed real in §6.5) on
-the next pull cycle; tag absent ⇒ ordinary tolerated content, untouched.
+### A user syncs their own personal team
 
-WHY THIS IS STILL OPEN, NOT LOCKED (do not resolve these here):
+THE PER-MAPPING SYNC, FOR THE ONE MAPPING A USER OWNS. It is the same shape as
+`team-mapping/sync-now.feature`'s card button — one mapping, on demand, filling
+immediately — and it is here rather than there because the personal mapping is
+not a team mapping. It has no card, no admin, and no row in the mapping list: it
+exists because a token does (`connection/personal.feature`).
 
-  1. THIS REOPENS §6.1, NOT JUST EXTENDS IT (saga §6.7/§6.15). §6.1 locked
-     Nextcloud as read-only — no writeback, no Nextcloud-originated content.
-     "New Penpot project from a tagged Nextcloud folder" is Nextcloud
-     ORIGINATING a Penpot object. That's not disqualifying, but it means this
-     proposal is really asking for a narrower carve-out than blanket
-     read-only: existing files/projects stay strictly read-only; CREATION
-     would be a distinct, separately-decided path. Nothing in this app should
-     treat that carve-out as granted until a saga chapter says so explicitly.
+THE TREE IS THE PROOF, exactly as it is for a team. Two differences, and both
+fall out of where the mapping points rather than from anything special about
+personal work:
 
-  2. TEAM FOLDER CREATION PERMISSIONS (saga §6.15, the one genuinely NEW open
-     point raised by this section specifically): Team Folders are
-     admin-configured by default; a non-admin, non-delegated user checking an
-     "import as Team Folder" box has nothing behind that checkbox to act on,
-     on this cluster today. Whether the UI greys the box out, routes to an
-     admin-approval step, or something else is explicitly undecided.
+  - the mapped folder is the user's HOME ROOT, so a project folder sits at the
+    top of their files and a Drafts design sits beside it;
+  - the sync runs on the USER'S OWN TOKEN, because the service account cannot see
+    a personal team at all (saga §6.12) — which is why the designs appearing is
+    itself the proof of whose credential ran.
 
-  3. `import-binfile` IS NOW CONFIRMED WORKING (saga §6.20 — open question #6
-     closed). Both the create-new and in-place variants were exercised live.
-     So this fork is no longer blocked on "does the mechanism exist"; it's
-     blocked purely on the §6.1 policy question in point 1. Three practical
-     facts came out of that testing and apply here: the call is SSE, its params
-     are kebab-case (`project-id`, not `projectId`), and its `name` parameter
-     is IGNORED — an imported file takes the name from its archive manifest, so
-     any create path needs a follow-up `rename-file`.
+Everything else — the `penpot` tag on project folders, links holding no bytes,
+dates coming from Penpot — is the ordinary behaviour, asserted with the ordinary
+table.
 
-  4. THE SERVICE ACCOUNT MUST ALREADY BE ON THE TEAM (saga §6.18, new since
-     this file was written): a team can't be mapped at all unless the service
-     account holds a `viewer` invite. That changes this feature's framing —
-     "import a team I can see" is really "import a team BOTH I and the service
-     account can see." A user's personal token showing them a team is not
-     sufficient for it to be importable, and the UI must say which of the two
-     is missing rather than just failing.
+## team-import — RETIRED
 
-CI SKIPS THIS ENTIRE FILE. Nothing here should be implemented against until a
-future saga chapter either ratifies §6.7/§6.15's creation carve-out or
-explicitly rejects it in favour of the plainer "map only what already exists
-in Penpot" shape (admin-mapping.feature).
+`features/team-import.feature` is **gone**. "Importing a team" was mapping a team
+and syncing it, stated differently — `team-mapping/create.feature` and
+`connection/sync-now.feature` own both halves. What the file added beyond them
+was a listing UI and three refusals, and none of the four survived contact:
 
-### team-import: Background
+| it said | why it went |
+|---|---|
+| A team already mapped is detected, not re-imported | a status label on a listing. The BEHAVIOUR — a team may be mapped once — is `team-mapping/create.feature`'s "A mapping may not reuse a team or a folder", live |
+| Importing an unmapped team requires Team Folder rights | a permission gate on an operation users do not have. Mapping is admin-only, which is the premise of `team-mapping/` — there is no user-facing import to gate |
+| A team the service account cannot see is not importable | a negative on the impossible: a team the service account cannot see cannot be mapped at all, which is `team-mapping/create.feature`'s precondition |
+| The import surface explains that tagging a folder creates a project | no `When`. Its first half is `projects/view.feature`'s live "A plain folder inside a mapped folder is tolerated, not adopted"; its second asserts UI copy |
 
-NOTE: only the IMPORT-AN-EXISTING-TEAM half of this feature is proposed as
-buildable-once-ratified; the tag-triggers-project-CREATION half is
-additionally gated on the still-open §6.1 read-only-scope question above.
+### THE FORK THIS FILE GUARDED IS CLOSED, AND WAS CLOSED BY SHIPPING
 
-── the "already imported, shows up automatically" half — confirmed workable ──
-Confirmed against the groupfolders README + live behaviour (saga §6.15): a
-Team Folder "shows up in the home folder for each user in the configured
-groups" automatically once granted — there's no separate pending state to
-build. So detecting "is this already imported" is a read-only match, not a
-grant action.
+The section used to say, at length, that "a new Penpot project from a tagged
+Nextcloud folder" reopens §6.1's read-only lock, that the carve-out was **not
+granted**, and that *"nothing here should be implemented against until a future
+saga chapter ratifies it"*.
 
-### Importing an unmapped team as a Team Folder requires Team Folder rights
+`projects/create.feature`'s "Tagging a folder `penpot` creates the project in
+Penpot" is **live and green in CI**. The carve-out was taken. The prose warning
+against it survived the decision by some months, which is its own lesson: a note
+that describes the old world is worse than no note, because it will be believed.
 
-Which of "refused with an explanation" vs "routed to an admin step" is
-correct is explicitly undecided (saga §6.15) — this scenario only asserts
-that the checkbox is NOT allowed to silently no-op or silently succeed
-for a user who lacks the underlying permission.
+### WHAT IS STILL OPEN, AND STILL WORTH KNOWING
 
-### A team the service account cannot see is shown as not importable
+**Creating a Penpot design for a local file that never had one** — the
+import-as-restore path — remains undecided, and `designs/restore.feature` rows 3
+and 4 are where it bites. That is a narrower question than the one above:
+creating an EMPTY project is cheap and reversible; importing an archive mints a
+design with a new id, no history, and no way back to the original.
 
-── the OTHER gate, new since saga §6.18: service-account visibility ────────
-A user seeing a team through their personal token is NOT sufficient. The
-service account does all mirroring, so it must be able to see the team too,
-or the resulting mapping would pull nothing forever.
+Three facts from the live `import-binfile` testing (saga §6.20) apply whenever it
+is built, and are the reason `designs/restore.feature` needs a follow-up rename:
 
-Two distinct gates now exist — Team Folder rights and service-account
-visibility. Failing to say WHICH one blocked the import turns a fixable
-setup step into a mystery.
+  - the call is SSE, not a plain request;
+  - its params are kebab-case (`project-id`, never `projectId`);
+  - its `name` parameter is IGNORED — an imported file takes the name from its
+    archive manifest.
 
-── creation-via-tag: DECIDED AND SHIPPED (§C6.18) ──────────────────────────
-This section used to be headed "the speculative, explicitly-not-decided
-creation-via-tag mechanism", with a tag "name TBD", an "open fork against
-§6.1", and a scenario that deliberately asserted nothing. All three are
-settled: the tag is `penpot`, the fork closed the same way §6.33 closed for
-files (creating a CONTAINER is not pushing CONTENT), and the behaviour is
-live in create-project.feature.
-
-It happens on the TAG EVENT, not on the next pull — the pull never
-originates anything in Penpot, and making it the actor would have meant a
-user's gesture taking up to five minutes to have an effect.
-
-What is left for this file is the import surface's view of it: an admin
-looking at a team they have not mapped should be told what tagging would do,
-not left to discover it.
-
-### The import surface explains that tagging a folder creates a project
-
-The behaviour itself is asserted in create-project.feature, where it is
-live. Duplicating the assertion here would be the two-files-one-behaviour
-mistake features/README.md exists to prevent.
-
----
+**The service account must already be on the team.** A user's personal token
+showing them a team is not sufficient for it to be mappable (saga §6.18); the
+service account needs its own `viewer` invite. That is `team-mapping/create.feature`'s
+precondition now, not a property of an import screen.
 
 ## uninstall — RETIRED, folded into `lifecycle.feature`
 
@@ -3346,3 +3144,46 @@ ONE THING SIMPLER THAN BOTH SIBLINGS: reconnection here is PULL-ONLY. n8n and
 Grafana's reinstall story has to worry about a stray push racing the first pull
 after re-enable; this app never writes back (§6.1), so "reinstall reconciles in
 place" is strictly a read-side guarantee with no writeback half to reason about.
+
+## team-mapping/manage-groups
+
+`features/team-mapping/manage-groups.feature`
+
+THE ONE FIELD A MAPPING LETS YOU EDIT. Everything else — the team, the folder,
+the storage backend, the default mode — is fixed at creation, because changing it
+would force a live migration of already-mirrored content. Split out of
+`admin-mapping.feature` so the editable field is not buried among the immutable
+ones.
+
+The groups are the FOLDER'S, not the mapping's: the app applies them when it
+provisions, then reads back whatever the folder says. Re-share it from Files or
+with `occ` and this app reports the change; a sync never puts back a group you
+removed. Both storage backends get their own Examples block because the
+provisioning differs and the behaviour must not.
+
+## team-mapping/view
+
+`features/team-mapping/view.feature`
+
+Looking at what is mapped. Small today, and the interesting case is the one that
+is here: a team renamed in Penpot must not rename the folder an admin chose. The
+mapping is keyed on the team id, so it keeps resolving; the folder name was never
+Penpot's to set.
+
+## team-mapping/sync-now
+
+`features/team-mapping/sync-now.feature`
+
+THE CARD'S OWN BUTTON — one mapping, on demand.
+
+### Syncing one mapping brings its projects and designs into Nextcloud
+
+SPLIT OUT OF THE INSTANCE-WIDE OUTLINE, which used to carry it as a third
+Examples row beside "every mapping" and "the schedule". Same end state, and the
+row was honest — but the scope IS the difference, and a mapping-scoped action
+belongs with the mapping. `connection/sync-now.feature` keeps the two that walk
+everything.
+
+The folder differs from the instance-wide scenarios' on purpose: they clear the
+mapping store between runs, so distinct folders stop one file's leftovers reading
+as another's result.

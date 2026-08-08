@@ -508,6 +508,35 @@ trait PullSteps {
 	}
 
 	/**
+	 * A finished run leaves a record of itself.
+	 *
+	 * AN END STATE OF SYNCING, which is why it rides the outline rather than
+	 * having a scenario. It came from a retired `admin-section.feature` scenario
+	 * — "the panel reports the outcome of the last run" — which described a panel
+	 * rather than an outcome. The panel and the API read the same stored status
+	 * ({@see \OCA\PenpotSync\Service\PullStatus}); `show-config` is simply the
+	 * surface this harness can reach.
+	 *
+	 * The timestamp and the counts are asserted as PRESENT, not as values: a
+	 * clock and a tally are the run's own bookkeeping, and pinning either would
+	 * assert the engine's internals instead of the fact that it kept a record.
+	 *
+	 * @Then /^the run is recorded with when it ran and what it did$/
+	 */
+	public function theRunIsRecorded(): void {
+		$res = $this->occ('penpot_sync:show-config');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("show-config failed:\n{$res['output']}");
+		}
+		if (preg_match('/last run: ok at \S+ \(\d+ processed, \d+ exported\)/', $res['output']) !== 1) {
+			throw new \RuntimeException(
+				"the sync left no usable record of itself. `show-config` said:\n{$res['output']}\n"
+				. 'Expected a "last run:" line naming the outcome, when it finished, and what it processed.',
+			);
+		}
+	}
+
+	/**
 	 * TWO PHRASINGS, ONE FUNCTION. "The sync succeeds" is the word the product
 	 * uses — the button says Sync, the command is `penpot_sync:sync`, the file is
 	 * sync-now.feature. "The pull succeeds" is the mechanism's word and is kept

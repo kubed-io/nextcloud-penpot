@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#edit-design
+# Notes, decisions and history for this feature: ../AGENTS.md#edit-design
 
 Feature: Editing a design
   As someone whose designs are mirrored into Nextcloud
@@ -13,7 +13,7 @@ Feature: Editing a design
 
   # Penpot-side only: a ".penpot" archive cannot be authored from Nextcloud.
   # @blocked throughout — the harness cannot edit a design's content.
-  # notes: AGENTS.md#edit-design
+  # notes: ../AGENTS.md#edit-design
   @in-penpot @blocked
   Scenario: An edit in Penpot reaches the stored archive
     Given a mirrored design "Cover" in the project "Brand"
@@ -28,7 +28,7 @@ Feature: Editing a design
       | content         | an archive      |
       | modified        | the design's    |
 
-    # notes: AGENTS.md#an-edit-in-penpot-reaches-the-stored-archive
+    # notes: ../AGENTS.md#an-edit-in-penpot-reaches-the-stored-archive
 
   # @blocked — same wall.
   @in-penpot @blocked
@@ -43,6 +43,6 @@ Feature: Editing a design
       | content         | empty           |
       | modified        | the design's    |
 
-    # notes: AGENTS.md#an-edit-in-penpot-costs-a-link-nothing-but-its-dates
+    # notes: ../AGENTS.md#an-edit-in-penpot-costs-a-link-nothing-but-its-dates
 
   # @blocked — same wall.

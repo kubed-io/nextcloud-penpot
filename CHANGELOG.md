@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Spec: the personal-projects file is gone — personal projects follow every ordinary rule, and the only thing that differs is that a personal token maps your home root to your personal team.
+- Spec: the team-import file is gone — importing a team was mapping a team and syncing it, stated differently, and the read-only carve-out it warned against had already shipped.
+- Spec: the membership file is gone — the nearest-ancestor rule is a rule, not a behaviour, and six of its scenarios were already live word-for-word as moves and creates.
+- Spec: the failure file is gone — a failure is not a behaviour, so each one now sits with the thing that can fail; four "prunes nothing" scenarios became one rule, and four export failures another.
+- **Two syncs can no longer race over the same folders.** The card's own sync button and `occ penpot_sync:sync` now refuse while another run is going, as the section's button and the scheduled job already did; the command takes `--force` for the case where a previous run was killed and left the status stuck.
+- A personal Penpot token **cannot be tested** — there is no health check for it, so a rejected token is only discovered when a change is silently attributed to the service account. Specified, not yet built.
+- **`occ penpot_sync:sync` now records its run**, so "last run" no longer reports a scheduled sync while ignoring a CLI one minutes earlier.
+- Spec: the settings-panel file is gone — a panel is where behaviour is configured, not a behaviour. What was real in it already lived in `connection/`.
+- Spec: the feature files are grouped by what they act on — `designs/`, `projects/`, `team-mapping/` and `connection/` — one verb per file, so a mapping gets the same treatment a design already had.
+
 - Moving or renaming a mirrored design is now proven not to re-download its archive.
 - Spec: what happens when a design is edited in Penpot is now written down; a mirror's metadata is specified as the end state of the action that changed it.
 - CI: the feature files' `# notes:` pointers are now checked to resolve, and their comments to stay within budget.

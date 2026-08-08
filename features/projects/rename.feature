@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#rename-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsrename
 
 Feature: Renaming a Penpot project
   As a Nextcloud user
@@ -10,7 +10,7 @@ Feature: Renaming a Penpot project
     And the admin has configured the service-account token
     And a Penpot team named "Design Team" is mapped to the folder "Penpot"
 
-  # notes: AGENTS.md#rename-project-background
+  # notes: ../AGENTS.md#rename-project-background
   @in-nextcloud @gesture
   Scenario: Renaming a project folder renames the project in Penpot
     Given a mirrored design "Inside" in the project "Old Project Name"
@@ -24,7 +24,7 @@ Feature: Renaming a Penpot project
     When I rename "Penpot/Renamed Around It" to "Renamed Around It v2"
     Then Penpot project "Renamed Around It v2" holds a design named "Untouched Design"
     And the file "Penpot/Renamed Around It v2/Untouched Design.penpot" carries a Penpot id
-    # notes: AGENTS.md#renaming-a-project-folder-does-not-touch-the-designs-inside-it
+    # notes: ../AGENTS.md#renaming-a-project-folder-does-not-touch-the-designs-inside-it
 
   @in-nextcloud @gesture @todo
   Scenario: A failed project rename leaves the local rename standing
@@ -34,7 +34,7 @@ Feature: Renaming a Penpot project
     And Penpot is unchanged
     And the divergence is reported
     And the next pull reconciles the name
-    # notes: AGENTS.md#a-failed-project-rename-leaves-the-local-rename-standing
+    # notes: ../AGENTS.md#a-failed-project-rename-leaves-the-local-rename-standing
 
   @in-nextcloud @gesture @blocked
   Scenario: A project rename is attributed to the acting user
@@ -72,7 +72,7 @@ Feature: Renaming a Penpot project
   Scenario: The app never sends a slash to Penpot
     When a project is created or renamed through this app
     Then the resulting Penpot project name never contains "/"
-    # notes: AGENTS.md#the-app-never-sends-a-slash-to-penpot
+    # notes: ../AGENTS.md#the-app-never-sends-a-slash-to-penpot
 
   @in-penpot @todo
   Scenario: A project whose name contains a slash is skipped with a clear reason
@@ -104,6 +104,6 @@ Feature: Renaming a Penpot project
     And a Penpot project named "Has/Slash"
     When the pull runs
     Then no folder named "Has-Slash" or "Has Slash" is created for it
-    # notes: AGENTS.md#the-app-never-invents-a-substitute-name
+    # notes: ../AGENTS.md#the-app-never-invents-a-substitute-name
 
     # ── the invariant, true under either branch ─────────────────────────────────

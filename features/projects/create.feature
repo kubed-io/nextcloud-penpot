@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#create-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectscreate
 
 Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
   As a Nextcloud user
@@ -38,7 +38,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     And I create a new design file at "Penpot/Late Opt In/Moodboard.penpot"
     When I assign the "penpot" tag to "Penpot/Late Opt In"
     Then Penpot project "Late Opt In" holds a design named "Moodboard"
-    # notes: AGENTS.md#a-folder-opted-in-late-brings-the-designs-already-inside-it
+    # notes: ../AGENTS.md#a-folder-opted-in-late-brings-the-designs-already-inside-it
 
   @in-nextcloud @occ
   Scenario: Tagging a folder that is already a project changes nothing
@@ -46,7 +46,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     When I assign the "penpot" tag to "Penpot/Already Mine"
     Then the folder "Penpot/Already Mine" carries a Penpot project id
     And Penpot holds a project named "Already Mine"
-    # notes: AGENTS.md#tagging-a-folder-that-is-already-a-project-changes-nothing
+    # notes: ../AGENTS.md#tagging-a-folder-that-is-already-a-project-changes-nothing
 
   @in-nextcloud @occ @todo
   Scenario: A folder tagged as a project must have a usable name first
@@ -55,7 +55,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     Then the app refuses and explains what is wrong with the name
     And the tag is not left applied
     And no Penpot project is created
-    # notes: AGENTS.md#a-folder-tagged-as-a-project-must-have-a-usable-name-first
+    # notes: ../AGENTS.md#a-folder-tagged-as-a-project-must-have-a-usable-name-first
 
   @in-nextcloud @occ @todo
   Scenario: Tagging a folder outside every mapping does nothing at all
@@ -63,7 +63,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     When I assign the "penpot" tag to it
     Then Penpot is never contacted
     And the tag is left where the user put it
-    # notes: AGENTS.md#tagging-a-folder-outside-every-mapping-does-nothing-at-all
+    # notes: ../AGENTS.md#tagging-a-folder-outside-every-mapping-does-nothing-at-all
 
     # ── opting out does not destroy anything ────────────────────────────────────
 
@@ -74,7 +74,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     When I remove the "penpot" tag from "Penpot/Keep Me"
     Then Penpot holds a project named "Keep Me"
     And the folder "Penpot/Keep Me" carries a Penpot project id
-    # notes: AGENTS.md#removing-the-penpot-tag-does-not-delete-the-project
+    # notes: ../AGENTS.md#removing-the-penpot-tag-does-not-delete-the-project
 
     # ── the tag as the shared marker ────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     When the team is mirrored again
     Then the folder "Penpot/Bubbles" carries a Penpot project id
     And the folder "Penpot/Bubbles" carries the "penpot" tag
-    # notes: AGENTS.md#a-project-created-in-penpot-arrives-as-a-tagged-folder
+    # notes: ../AGENTS.md#a-project-created-in-penpot-arrives-as-a-tagged-folder
 
   @in-penpot
   Scenario: A project folder that lost its tag gets it back on the next pull
@@ -92,4 +92,4 @@ Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
     And I remove the "penpot" tag from "Penpot/Retagged"
     When the team is mirrored again
     Then the folder "Penpot/Retagged" carries the "penpot" tag
-    # notes: AGENTS.md#a-project-folder-that-lost-its-tag-gets-it-back-on-the-next-pull
+    # notes: ../AGENTS.md#a-project-folder-that-lost-its-tag-gets-it-back-on-the-next-pull

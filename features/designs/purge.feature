@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#purge
+# Notes, decisions and history for this feature: ../AGENTS.md#designspurge
 
 Feature: Purge the app's mirrored files from Nextcloud
   As a Nextcloud admin
@@ -32,14 +32,6 @@ Feature: Purge the app's mirrored files from Nextcloud
     Given a ".penpot" file with no "penpot_id" (never tracked)
     When the admin purges the Nextcloud files
     Then that untracked file is left in place
-
-  @unbuilt
-  Scenario: Purge keeps an ignored file — the ignore tag is a keep request
-    Given a mirrored ".penpot" file tagged as ignored in the "My Stuff" subfolder
-    When the admin purges the Nextcloud files
-    Then the ignored file is left in place with its archive intact
-    # Ignore exists precisely to say "this archive is mine now" (ignore.feature).
-    # A purge that deleted ignored files would defeat the tag's only purpose.
 
   @unbuilt
   Scenario: A purge warns what is actually being deleted

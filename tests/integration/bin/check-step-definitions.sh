@@ -39,7 +39,7 @@ import re, sys, pathlib
 
 root = pathlib.Path(sys.argv[1])
 bootstrap = root / 'tests' / 'integration' / 'bootstrap'
-features = sorted((root / 'features').glob('*.feature'))
+features = sorted((root / 'features').rglob('*.feature'))
 
 # Scenarios carrying any of these are specification, not implementation.
 UNRUN = {'@todo', '@unbuilt', '@blocked', '@decision'}

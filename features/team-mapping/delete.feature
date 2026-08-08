@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#remove-mapping
+# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingdelete
 
 Feature: Removing a mapping tears down the connection without ever touching Penpot
   As a Nextcloud admin
@@ -6,13 +6,17 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
   So that I never lose data and Penpot is never contacted by a purely local action
 
   Background:
-    Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Northwind"
-    And the Penpot project "My Stuff" is mirrored as a folder inside it
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+
+    # THE BACKGROUND WAS FICTION until the live scenario below joined this file:
+    # its three steps had never been written. notes: ../AGENTS.md#team-mappingdelete
 
   @unbuilt
   Scenario: Removing the team mapping trashes its mirrored files and leaves standalone files alone
-    Given a mirrored ".penpot" file in the "My Stuff" folder
+    Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
+    And a mirrored ".penpot" file in the "My Stuff" folder
     And an untracked standalone ".penpot" file also sitting in the "My Stuff" folder
     When the admin removes the "Northwind" mapping
     Then the mirrored file is moved to the Nextcloud trash
@@ -31,7 +35,8 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
 
   @todo
   Scenario: Removing a mapping warns about what is actually being trashed
-    Given 3 mirrored files in "sync" mode and 10 in "link" mode under the mapping
+    Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
+    And 3 mirrored files in "sync" mode and 10 in "link" mode under the mapping
     When the admin removes the "Northwind" mapping
     Then the confirmation names how many files hold real archives
     And it explains that link files hold no content to lose
@@ -39,7 +44,8 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
 
   @todo
   Scenario: Trashed mirrored files keep their identity so they can reconnect
-    Given a mirrored ".penpot" file in the "My Stuff" folder
+    Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
+    And a mirrored ".penpot" file in the "My Stuff" folder
     When the admin removes the "Northwind" mapping
     Then the trashed file keeps its "penpot_id" metadata
     And it keeps its archive content if it was in "sync" mode
@@ -56,15 +62,6 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # than duplicated — the same id-matching guarantee sync-now.feature asserts.
 
   @todo
-  Scenario: An ignored file under a removed mapping is still trashed, not destroyed
-    Given a mirrored ".penpot" file tagged as ignored in the "My Stuff" folder
-    When the admin removes the "Northwind" mapping
-    Then the file is moved to the trash with its archive intact
-    And it is recoverable from the trash
-    # Ignore protects a file from the PULL (ignore.feature). It doesn't exempt it
-    # from an explicit admin teardown — but trash, never destroy, still holds.
-
-  @todo
   Scenario: Removing a mapping never contacts Penpot, even for cleanup
     Given the "Northwind" mapping with mirrored files
     When the admin removes the mapping
@@ -73,3 +70,12 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And no webhook, project, or design is deleted on the Penpot side
     # Penpot deletion only ever happens on an explicit "Delete in Penpot" action
     # (delete-design.feature for a design, delete-project.feature for a project). Tearing down a mapping is a purely Nextcloud-side act.
+
+  Scenario: Removing a mapping deletes nothing
+    Given a mapping with the following values:
+      | team   | Northwind    |
+      | folder | Design Files |
+    When the admin removes that mapping
+    Then there are exactly 0 configured team mappings
+    And removing it reported that nothing was deleted
+    # notes: ../AGENTS.md#removing-a-mapping-deletes-nothing

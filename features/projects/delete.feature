@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: AGENTS.md#delete-project
+# Notes, decisions and history for this feature: ../AGENTS.md#projectsdelete
 
 Feature: Deleting a Penpot project folder
   As a Nextcloud user
@@ -18,7 +18,7 @@ Feature: Deleting a Penpot project folder
     And Penpot no longer lists a project named "Doomed"
     And the design "Inside" is in Penpot's trash
     And the folder is recoverable from the Nextcloud trash
-    # notes: AGENTS.md#deleting-a-project-folder-deletes-the-project-in-penpot
+    # notes: ../AGENTS.md#deleting-a-project-folder-deletes-the-project-in-penpot
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Deleting a project folder does not need a per-design call
@@ -26,7 +26,7 @@ Feature: Deleting a Penpot project folder
     When I delete the "Doomed" project folder
     Then "delete-file" is never called
     And exactly one "delete-project" call is made
-    # notes: AGENTS.md#deleting-a-project-folder-does-not-need-a-per-design-call
+    # notes: ../AGENTS.md#deleting-a-project-folder-does-not-need-a-per-design-call
 
   @in-nextcloud @gesture @todo
   Scenario: A plain folder inside a mapped folder deletes without touching Penpot
@@ -40,7 +40,7 @@ Feature: Deleting a Penpot project folder
   Scenario: The team root is never deletable as a project
     When I try to delete the mapped folder itself
     Then "delete-project" is never called for the team's Drafts project
-    # notes: AGENTS.md#the-team-root-is-never-deletable-as-a-project
+    # notes: ../AGENTS.md#the-team-root-is-never-deletable-as-a-project
 
   @in-penpot @todo
   Scenario: A project deleted in Penpot leaves no folder claiming its id
@@ -49,9 +49,18 @@ Feature: Deleting a Penpot project folder
     And the team is mirrored again
     Then the mirror of "Orphan" is in the Nextcloud trash
     And the folder does not still carry the dead project's id
-    # notes: AGENTS.md#a-project-deleted-in-penpot-leaves-no-folder-claiming-its-id
+    # notes: ../AGENTS.md#a-project-deleted-in-penpot-leaves-no-folder-claiming-its-id
 
     # ── the hard step: emptying the trash purges Penpot ───────────────────────
+
+  # Penpot keeps listing a deleted project (saga §6.42), so the listing alone is
+  # not proof it exists. notes: ../AGENTS.md#a-project-penpot-still-lists-after-deletion-is-not-mirrored
+  @in-penpot @todo
+  Scenario: A project Penpot still lists after deletion is not mirrored
+    Given a Penpot project that has been deleted
+    When the team is mirrored again
+    Then no folder is created for that project
+    And no design is mirrored into one
 
   @todo
   Scenario: Restoring a design also restores its project if that was deleted too
@@ -61,7 +70,7 @@ Feature: Deleting a Penpot project folder
     And the project folder reappears on the next pull
     # Penpot's restore clears deleted_at on the project as well as the file.
 
-  # notes: AGENTS.md#deleting-a-personal-project-folder-deletes-that-project-in-penpot
+  # notes: ../AGENTS.md#deleting-a-personal-project-folder-deletes-that-project-in-penpot
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Deleting a personal project folder deletes that project in Penpot
