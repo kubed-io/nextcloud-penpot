@@ -163,7 +163,7 @@ carries the default mode its files get ("link" unless set otherwise), but any
 individual file can be promoted or demoted afterwards — see set-mode.feature.
 
 WHAT'S DELIBERATELY NOT HERE: creating a NEW Penpot team or project FROM
-Nextcloud is a separate, still-open fork — see team-import.feature.
+Nextcloud is a separate, still-open fork — see `## team-import — RETIRED`.
 
 PARTIALLY LIVE. The MAPPING LIFECYCLE — add, refuse, list, remove, and the
 defaults a new mapping gets — runs for real in CI against a real Penpot, and
@@ -2395,7 +2395,7 @@ business.
 ### Restoring a file that was never in Penpot leaves Penpot alone
 
 A restore only ever puts BACK something this app mirrored out. Inventing a
-design for a file that never had one is team-import.feature's open fork, and
+design for a file that never had one is still an open fork, and
 it must not happen by accident on the way out of the trash.
 
 THE OLD VERSION ASSUMED SOMETHING THE APP DOES NOT ALLOW. It staged a
@@ -2418,7 +2418,7 @@ file is genuinely untracked today, and the assertions are about it alone.
 ### An untracked file is never restored, because it was never in Penpot
 
 Creating brand-new Penpot files from Nextcloud is a separate, still-open
-fork (team-import.feature) — restore only ever puts BACK something that
+fork — restore only ever puts BACK something that
 this app previously mirrored out.
 
 ### Restoring a deleted design states clearly what does and does not return
@@ -2996,128 +2996,52 @@ Every write is to a temp location and moved into place, so a file is its old
 version or its new one. `@blocked` — **no fault injection**: the run has to be
 killed mid-write.
 
-## team-import
+## team-import — RETIRED
 
-`features/team-import.feature`
+`features/team-import.feature` is **gone**. "Importing a team" was mapping a team
+and syncing it, stated differently — `team-mapping/create.feature` and
+`connection/sync-now.feature` own both halves. What the file added beyond them
+was a listing UI and three refusals, and none of the four survived contact:
 
-SPECULATIVE — this file documents a PROPOSAL (saga §6.15), not a locked
-design, and it directly touches an open architectural fork. Do not read any
-scenario below as decided behaviour; every one of them is written to make the
-open questions visible, the same "design, not wired" convention both sibling
-apps use for their own undecided slices (compare Grafana's tag-sync.feature
-header, or n8n's speculative-fork write-ups).
+| it said | why it went |
+|---|---|
+| A team already mapped is detected, not re-imported | a status label on a listing. The BEHAVIOUR — a team may be mapped once — is `team-mapping/create.feature`'s "A mapping may not reuse a team or a folder", live |
+| Importing an unmapped team requires Team Folder rights | a permission gate on an operation users do not have. Mapping is admin-only, which is the premise of `team-mapping/` — there is no user-facing import to gate |
+| A team the service account cannot see is not importable | a negative on the impossible: a team the service account cannot see cannot be mapped at all, which is `team-mapping/create.feature`'s precondition |
+| The import surface explains that tagging a folder creates a project | no `When`. Its first half is `projects/view.feature`'s live "A plain folder inside a mapped folder is tolerated, not adopted"; its second asserts UI copy |
 
-THE PROPOSAL: from wherever a user's Penpot token is configured
-(personal-settings.feature), query that account's visible Penpot teams, show
-which already correspond to an existing Nextcloud Team Folder and which
-don't, and let the user opt to "import" one — provisioning a Team Folder that
-becomes a team mapping (admin-mapping.feature). This reuses §6.13's
-ownership-pill/tag mechanism for a SECOND purpose: pulling FROM Penpot, a
-project becomes/matches a same-named subfolder by ordinary name-matching
-(fine, because §6.13 already locked mapped-folder naming as
-Penpot-authoritative on the pull direction — see admin-mapping.feature). Going
-the OTHER way — a user makes a plain folder inside a mapped Team Folder and
-wants it to BECOME a new Penpot project — name-matching alone can't
-disambiguate "this is meant to be a project" from "this is just reference
-material sitting in the folder" (§6.13's tolerated-content rule), so the
-proposal is a dedicated app-owned tag as the creation signal: tag present ⇒
-create the project in Penpot (via `create-project`, confirmed real in §6.5) on
-the next pull cycle; tag absent ⇒ ordinary tolerated content, untouched.
+### THE FORK THIS FILE GUARDED IS CLOSED, AND WAS CLOSED BY SHIPPING
 
-WHY THIS IS STILL OPEN, NOT LOCKED (do not resolve these here):
+The section used to say, at length, that "a new Penpot project from a tagged
+Nextcloud folder" reopens §6.1's read-only lock, that the carve-out was **not
+granted**, and that *"nothing here should be implemented against until a future
+saga chapter ratifies it"*.
 
-  1. THIS REOPENS §6.1, NOT JUST EXTENDS IT (saga §6.7/§6.15). §6.1 locked
-     Nextcloud as read-only — no writeback, no Nextcloud-originated content.
-     "New Penpot project from a tagged Nextcloud folder" is Nextcloud
-     ORIGINATING a Penpot object. That's not disqualifying, but it means this
-     proposal is really asking for a narrower carve-out than blanket
-     read-only: existing files/projects stay strictly read-only; CREATION
-     would be a distinct, separately-decided path. Nothing in this app should
-     treat that carve-out as granted until a saga chapter says so explicitly.
+`projects/create.feature`'s "Tagging a folder `penpot` creates the project in
+Penpot" is **live and green in CI**. The carve-out was taken. The prose warning
+against it survived the decision by some months, which is its own lesson: a note
+that describes the old world is worse than no note, because it will be believed.
 
-  2. TEAM FOLDER CREATION PERMISSIONS (saga §6.15, the one genuinely NEW open
-     point raised by this section specifically): Team Folders are
-     admin-configured by default; a non-admin, non-delegated user checking an
-     "import as Team Folder" box has nothing behind that checkbox to act on,
-     on this cluster today. Whether the UI greys the box out, routes to an
-     admin-approval step, or something else is explicitly undecided.
+### WHAT IS STILL OPEN, AND STILL WORTH KNOWING
 
-  3. `import-binfile` IS NOW CONFIRMED WORKING (saga §6.20 — open question #6
-     closed). Both the create-new and in-place variants were exercised live.
-     So this fork is no longer blocked on "does the mechanism exist"; it's
-     blocked purely on the §6.1 policy question in point 1. Three practical
-     facts came out of that testing and apply here: the call is SSE, its params
-     are kebab-case (`project-id`, not `projectId`), and its `name` parameter
-     is IGNORED — an imported file takes the name from its archive manifest, so
-     any create path needs a follow-up `rename-file`.
+**Creating a Penpot design for a local file that never had one** — the
+import-as-restore path — remains undecided, and `designs/restore.feature` rows 3
+and 4 are where it bites. That is a narrower question than the one above:
+creating an EMPTY project is cheap and reversible; importing an archive mints a
+design with a new id, no history, and no way back to the original.
 
-  4. THE SERVICE ACCOUNT MUST ALREADY BE ON THE TEAM (saga §6.18, new since
-     this file was written): a team can't be mapped at all unless the service
-     account holds a `viewer` invite. That changes this feature's framing —
-     "import a team I can see" is really "import a team BOTH I and the service
-     account can see." A user's personal token showing them a team is not
-     sufficient for it to be importable, and the UI must say which of the two
-     is missing rather than just failing.
+Three facts from the live `import-binfile` testing (saga §6.20) apply whenever it
+is built, and are the reason `designs/restore.feature` needs a follow-up rename:
 
-CI SKIPS THIS ENTIRE FILE. Nothing here should be implemented against until a
-future saga chapter either ratifies §6.7/§6.15's creation carve-out or
-explicitly rejects it in favour of the plainer "map only what already exists
-in Penpot" shape (admin-mapping.feature).
+  - the call is SSE, not a plain request;
+  - its params are kebab-case (`project-id`, never `projectId`);
+  - its `name` parameter is IGNORED — an imported file takes the name from its
+    archive manifest.
 
-### team-import: Background
-
-NOTE: only the IMPORT-AN-EXISTING-TEAM half of this feature is proposed as
-buildable-once-ratified; the tag-triggers-project-CREATION half is
-additionally gated on the still-open §6.1 read-only-scope question above.
-
-── the "already imported, shows up automatically" half — confirmed workable ──
-Confirmed against the groupfolders README + live behaviour (saga §6.15): a
-Team Folder "shows up in the home folder for each user in the configured
-groups" automatically once granted — there's no separate pending state to
-build. So detecting "is this already imported" is a read-only match, not a
-grant action.
-
-### Importing an unmapped team as a Team Folder requires Team Folder rights
-
-Which of "refused with an explanation" vs "routed to an admin step" is
-correct is explicitly undecided (saga §6.15) — this scenario only asserts
-that the checkbox is NOT allowed to silently no-op or silently succeed
-for a user who lacks the underlying permission.
-
-### A team the service account cannot see is shown as not importable
-
-── the OTHER gate, new since saga §6.18: service-account visibility ────────
-A user seeing a team through their personal token is NOT sufficient. The
-service account does all mirroring, so it must be able to see the team too,
-or the resulting mapping would pull nothing forever.
-
-Two distinct gates now exist — Team Folder rights and service-account
-visibility. Failing to say WHICH one blocked the import turns a fixable
-setup step into a mystery.
-
-── creation-via-tag: DECIDED AND SHIPPED (§C6.18) ──────────────────────────
-This section used to be headed "the speculative, explicitly-not-decided
-creation-via-tag mechanism", with a tag "name TBD", an "open fork against
-§6.1", and a scenario that deliberately asserted nothing. All three are
-settled: the tag is `penpot`, the fork closed the same way §6.33 closed for
-files (creating a CONTAINER is not pushing CONTENT), and the behaviour is
-live in create-project.feature.
-
-It happens on the TAG EVENT, not on the next pull — the pull never
-originates anything in Penpot, and making it the actor would have meant a
-user's gesture taking up to five minutes to have an effect.
-
-What is left for this file is the import surface's view of it: an admin
-looking at a team they have not mapped should be told what tagging would do,
-not left to discover it.
-
-### The import surface explains that tagging a folder creates a project
-
-The behaviour itself is asserted in create-project.feature, where it is
-live. Duplicating the assertion here would be the two-files-one-behaviour
-mistake features/README.md exists to prevent.
-
----
+**The service account must already be on the team.** A user's personal token
+showing them a team is not sufficient for it to be mappable (saga §6.18); the
+service account needs its own `viewer` invite. That is `team-mapping/create.feature`'s
+precondition now, not a property of an import screen.
 
 ## uninstall — RETIRED, folded into `lifecycle.feature`
 

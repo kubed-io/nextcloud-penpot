@@ -234,4 +234,4 @@ Feature: Restoring a mirrored design
     When I restore it from the Nextcloud trash
     Then Penpot is never contacted
     # Restore only ever puts BACK something this app mirrored out. Inventing a
-    # design for a file that never had one is team-import.feature's open fork.
+    # design for a file that never had one is still an open fork.

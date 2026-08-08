@@ -773,7 +773,6 @@ The specs *are* the requirements, read before any code lands.
 | **top level** | |
 | [`personal-projects.feature`](features/personal-projects.feature) | Personal projects at the user's home root. |
 | [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
-| [`team-import.feature`](features/team-import.feature) | **Speculative** — importing a team from personal settings. |
 
 **The folders are the nouns.** A design and a project are two Penpot objects with
 different calls, different failure modes and different blast radii, so each gets

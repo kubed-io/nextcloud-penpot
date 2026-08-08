@@ -65,7 +65,7 @@ schedule are inputs to "the app is connected", not three behaviours; an interval
 is a setting, not something anyone performs.
 
 What stays at the top level is what belongs to no single noun:
-`personal-projects.feature`, `lifecycle.feature` and `team-import.feature`.
+`personal-projects.feature` and `lifecycle.feature`.
 
 **The nearest-ancestor rule has no file**, and that is deliberate. It is the
 app's most load-bearing decision, and it is a RULE — only ever observed through a
