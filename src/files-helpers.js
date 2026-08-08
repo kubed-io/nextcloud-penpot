@@ -84,9 +84,16 @@ export function getPenpotTeamId(node) {
  * is not reachable either: the prune moves a vanished design's mirror to the
  * Nextcloud trash (C5.1) rather than leaving it in the tree.
  *
- * So no mode is consulted when deciding to show the action. This is kept because
- * the wire translation is real knowledge, and because the mode-pill and
- * download-guard slices both need the mode on the listing.
+ * So no mode is consulted when deciding to show the action, and files.js does not
+ * call this at all today.
+ *
+ * IT IS KEPT ANYWAY, and honestly: an earlier version of this docblock justified
+ * it by pointing at "the mode-pill and download-guard slices", neither of which
+ * was ever built. The real reason is narrower. The wire translation
+ * (`reference` → `link`) is knowledge that lives nowhere else in the frontend,
+ * and both siblings need it the moment they gate an opener on the mode. Deleting
+ * it would mean rediscovering the PROPFIND crash the next time this app grows a
+ * second action.
  *
  * @param {{attributes?: Record<string, unknown>}} [node]
  * @return {string}  '' | 'sync' | 'link'

@@ -67,8 +67,7 @@ use Psr\Log\LoggerInterface;
  * This service was written before `sync` mode existed, and was dormant until it
  * did: the classification below is the part that has to be right, and it was far
  * easier to get right against the resolver alone than retrofitted alongside an
- * archive download. Promoting a file with `occ penpot_sync:set-mode` is now what
- * wakes it up.
+ * archive download. A mapping made in `sync` mode is what wakes it up.
  *
  * ## SCOPE — SAME-STORAGE MOVES ONLY (inherited from both siblings)
  *

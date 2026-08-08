@@ -128,7 +128,7 @@ Feature: Creating a new Penpot design from Nextcloud
     Given the "Northwind" mapping has default mode "link"
     When I create a new design in the "My Stuff" folder
     Then the mirrored file is in "link" mode
-    And no archive is stored for it until it is promoted to "sync"
+    And no archive is stored for it
 
   # notes: ../AGENTS.md#a-newly-created-design-follows-its-mappings-default-mode
 

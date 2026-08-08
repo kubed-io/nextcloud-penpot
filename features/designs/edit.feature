@@ -3,7 +3,7 @@
 Feature: Editing a design
   As someone whose designs are mirrored into Nextcloud
   I want work I do in Penpot to reach the backup
-  So that a "sync" file is the design as it is now, not as it was when I promoted it
+  So that a "sync" file is the design as it is now, not as it was when it was first mirrored
 
   Background:
     Given the app is enabled
@@ -16,8 +16,8 @@ Feature: Editing a design
   # notes: ../AGENTS.md#edit-design
   @in-penpot @blocked
   Scenario: An edit in Penpot reaches the stored archive
-    Given a mirrored design "Cover" in the project "Brand"
-    And "Penpot/Brand/Cover.penpot" is a "sync" design
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a mirrored design "Cover" in the project "Brand"
     When the design "Cover" is edited in Penpot
     Then "Penpot/Brand/Cover.penpot" holds the design as it is now
     And "Penpot/Brand/Cover.penpot" holds:

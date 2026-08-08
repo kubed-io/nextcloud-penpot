@@ -140,9 +140,7 @@ $info = static function (string $tip) use ($icon): string {
 								 the whole mirrored tree and re-stamp every file's metadata.
 								 Shown as text for the same reason folder mode is: a disabled
 								 input invites typing and implies it might save. */ ?>
-						<span class="penpot-sync-fixed"><?php p((string)($m['nc_folder'] ?? '')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
+						<span class="penpot-sync-fixed"><?php p((string)($m['nc_folder'] ?? '')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-mode">
 						<label><?php p($l->t('Mode'));
@@ -154,9 +152,7 @@ $info = static function (string $tip) use ($icon): string {
 						<?php /* The SAME localised labels the add-card offers — a saved card
 								 showing raw "link"/"sync" while a new one says "Link"/"Sync"
 								 is both inconsistent and untranslatable. */ ?>
-						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
+						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-tf">
 						<label><?php p($l->t('Team Folder'));
@@ -164,9 +160,7 @@ $info = static function (string $tip) use ($icon): string {
 						<?php /* Immutable: switching backend would have to migrate the
 								 provisioned folder and all its shares. Both siblings lock
 								 this too. */ ?>
-						<span class="penpot-sync-fixed"><?php p($useTf ? $l->t('yes') : $l->t('no')); ?>
-							<span class="penpot-sync-hint"><?php p($l->t('(fixed)')); ?></span>
-						</span>
+						<span class="penpot-sync-fixed"><?php p($useTf ? $l->t('yes') : $l->t('no')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-groups">
 						<label><?php p($l->t('Groups'));

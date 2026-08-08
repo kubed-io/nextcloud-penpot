@@ -299,8 +299,11 @@ markers saying so.
 - **§6.43 — `link` files are confined to their project.** Movable within it
   (including plain subfolders); refused into another project, to the team root,
   or out of the mapping; can't be ignore-tagged. A local delete **hides** them
-  and the pull must not recreate them. Every refusal offers "promote to `sync`
-  first". `sync` files have none of these limits.
+  and the pull must not recreate them. `sync` files have none of these limits.
+  ⚠️ AMENDED: the refusals used to end "promote to `sync` first", pointing at
+  `occ penpot_sync:set-mode`. That command is gone — the mode is the mapping's
+  and nothing overrides it per file — so a refusal now names the rule and stops,
+  as both siblings' already did.
 - **§6.44 — A trashed Nextcloud file is fully reachable** (tested live): the
   **fileid is preserved**, metadata survives and is **writable**, content is
   readable **and writable**, and the trash is enumerable via
@@ -312,7 +315,9 @@ markers saying so.
   content is never touched for any reason.
 - **§6.46 — Take a final snapshot before pruning a `link`.** `export-binfile`
   still works on a soft-deleted file for ~7 days, and trashed-file content is
-  writable — so export, write the archive in, promote to `sync`, *then* trash it.
+  writable — so export, write the archive in, stamp the mode as `sync`, *then*
+  trash it. (An internal stamp on the way to the trash, not a user action: there
+  is no command that changes a file's mode.)
   Also: a design restored in **Penpot's own UI** reappears under its original id,
   and the trash-aware reconciler re-adopts the trashed mirror automatically —
   the best restore path in the app, costing no new mechanism.

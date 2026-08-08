@@ -75,7 +75,7 @@ Feature: Opening a mirrored Penpot file (Open in Penpot only)
     Then downloading it yields the real ".penpot" archive
     Given a mirrored ".penpot" file in "link" mode
     Then the app does not offer the file as a downloadable archive
-    And it explains the file is a pointer, offering to switch it to "sync" mode
+    And it explains the file is a pointer to a design that lives in Penpot
     # Handing a user an empty or placeholder file that looks like a design export
     # would be the same kind of quiet lie restore-design.feature exists to avoid.
 

@@ -33,12 +33,11 @@ folder tree you can organise however you like.
 >   (a project folder leaving its team folder; a `link` file changing project),
 >   and moving a stored design between project folders re-files it in Penpot for
 >   real via `move-files`.
-> - **`sync` mode — real archives.** `occ penpot_sync:set-mode <path> sync`
->   exports a design from Penpot and stores the actual `.penpot` ZIP in
->   Nextcloud; `… link` empties the file again (after confirming, as that
->   deletes a local backup). A pull re-exports a `sync` file only when its
->   Penpot revision moved or its archive went missing, so **a team of links
->   costs zero exports.**
+> - **`sync` mode — real archives.** A mapping made with `--mode=sync` exports
+>   each design from Penpot and stores the actual `.penpot` ZIP in Nextcloud; a
+>   `link` mapping stores nothing but the pointer. A pull re-exports a `sync`
+>   file only when its Penpot revision moved or its archive went missing, so
+>   **a team of links costs zero exports.**
 > - **The prune, with a parachute.** A design deleted in Penpot no longer leaves
 >   a mirror that opens nothing: the pull moves it to the **Nextcloud trash** —
 >   never a hard delete — and a pointer gets one last export on the way out, so
@@ -102,16 +101,17 @@ is still a read-only mirror.
 Why: a `.penpot` export is a full archive with embedded images and fonts, not a
 small JSON document. Backing up every design in a large team would be expensive
 and mostly pointless — most designs need to be *findable and clickable*, not
-duplicated. So `link` is the default, and you promote the ones worth keeping.
+duplicated. So `link` is the default, and a team worth backing up is mapped with
+`--mode=sync` instead.
 
 **Links stay where Penpot put them.** A `link` file holds no bytes, so moving one
 out of its project would hand you an empty husk that looks like a design and
 isn't. Links can be filed freely *within* their own project — including into
 plain subfolders — but can't be moved to another project, out to Drafts, or out
-of the mapping entirely. Deleting one just hides it. Every restriction offers the
-same escape: **promote it to `sync`**, which is exactly the action that makes the
-gesture safe. `sync` files have none of these limits, because they hold something
-real.
+of the mapping entirely. Deleting one just hides it. `sync` files have none of
+these limits, because they hold something real — which is a property of the
+mapping they were mirrored under, not something a single file can be switched
+into.
 
 ### Read-only, on purpose
 
@@ -289,11 +289,11 @@ right thing on either backend, not a separate source of truth — which also mea
 two of these integrations can point at the same folder without fighting over its
 sharing.
 
-The **default mode** is the one place this app is stricter than the Grafana
-integration, which leaves its mode editable. Here the axis decides whether the
-app *holds the bytes*, so flipping it in bulk would either delete every
-downloaded archive under the mapping or export every file at once. Promote or
-demote individual files instead.
+The **mode** is immutable, exactly as it is in both sibling integrations. It
+decides whether the app *holds the bytes*, so flipping it on a live mapping would
+either delete every downloaded archive under it or export every file at once. To
+change it, remove the mapping and map the team again — the same designs come back,
+by the same ids, into the same folder.
 
 Non-Penpot content inside a mapped folder is expected and never touched. The pull
 only acts on files it recognizes by their metadata.
@@ -454,9 +454,9 @@ This is the same state as moving a file out of every mapped folder — one
 mechanism, two entrances. Either way, **nothing is deleted in Penpot.** "Taken out
 of Penpot" describes the mirroring relationship ending, not a remote deletion.
 
-Ignoring is refused on `link` files, with an offer to promote them to `sync`
-first: a `link` file holds no archive, so an "ignored link" is a pointer to
-something nobody is tracking — it looks like a backup and isn't one.
+Ignoring is refused on `link` files: a `link` file holds no archive, so an
+"ignored link" is a pointer to something nobody is tracking — it looks like a
+backup and isn't one.
 
 ### Restore — putting a design back
 
@@ -707,8 +707,7 @@ per-user token page. Every control persists and has an `occ` twin
 
 On top of that, **the mirror itself**: `sync pull` walks a mapped team into a
 plain Nextcloud folder, `status` inspects any node (metadata, resolved
-membership, and whether the file holds a real archive or a pointer), `set-mode`
-promotes a design to a stored `.penpot` archive or demotes it back, a move
+membership, and whether the file holds a real archive or a pointer), a move
 between project folders is either refused or propagated to Penpot, and a design
 deleted in Penpot has its mirror snapshotted and moved to the Nextcloud trash.
 Covered by unit tests and by Behat scenarios that install the app on a real
@@ -750,7 +749,6 @@ The specs *are* the requirements, read before any code lands.
 | [`manage-groups.feature`](features/team-mapping/manage-groups.feature) | **Live.** The one field of a mapping that is editable. |
 | [`delete.feature`](features/team-mapping/delete.feature) | Tearing a mapping down; Penpot is never contacted. |
 | [`sync-now.feature`](features/team-mapping/sync-now.feature) | **Live.** The card's own button — one mapping, on demand. |
-| [`set-mode.feature`](features/team-mapping/set-mode.feature) | **Live.** `sync` ⇄ `link`: promotion leaves ZIP bytes, links cost zero exports. |
 | **[`designs/`](features/designs/)** | |
 | [`create.feature`](features/designs/create.feature) | New → Penpot design, and Drafts semantics. |
 | [`view.feature`](features/designs/view.feature) | Looking at a mirror: its file type, and the metadata it publishes. |

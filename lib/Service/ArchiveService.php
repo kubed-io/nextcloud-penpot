@@ -29,12 +29,16 @@ use Psr\Log\LoggerInterface;
  *
  * ## WHY THIS IS ITS OWN SERVICE
  *
- * Two callers need the same two answers, and they are not the same caller:
- * {@see PullService} sets a file's content while walking a team, and the
- * per-file mode change ({@see \OCA\PenpotSync\Command\SetMode}) sets exactly one
- * on demand. Keeping "what is a link" and "what is an archive" in one place is
- * what stopped the two paths from disagreeing about it — and is why flipping a
- * link from a JSON body to zero bytes (§C6.6) was a one-method change.
+ * {@see PullService} sets a file's content while walking a team, and it needs
+ * both answers on every file it touches: store the archive when the mapping is
+ * `sync`, truncate the body when it is `link`. Keeping "what is a link" and
+ * "what is an archive" in one place is what stops those two paths from
+ * disagreeing about it — and is why flipping a link from a JSON body to zero
+ * bytes (§C6.6) was a one-method change.
+ *
+ * It had a second caller once, `occ penpot_sync:set-mode`, which promoted or
+ * demoted a single file. That command is gone: the mode belongs to the mapping
+ * and nothing overrides it per file.
  *
  * ## THE DEMOTION IS THE ONLY LOSSY OPERATION IN THIS APP
  *

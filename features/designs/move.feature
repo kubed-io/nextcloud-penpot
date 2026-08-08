@@ -35,11 +35,11 @@ Feature: Moving a mirrored design
 
   @in-nextcloud @gesture
   Scenario: Dragging a sync design into another project re-files it in Penpot
-    Given a Penpot project named "Move From" exists in that team
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a Penpot project named "Move From" exists in that team
     And a Penpot project named "Move To" exists in that team
     And a Penpot file named "Travelling" exists in the project "Move From"
     And the team has been mirrored into Nextcloud
-    And "Penpot/Move From/Travelling.penpot" is a "sync" design
     When I move "Penpot/Move From/Travelling.penpot" to "Penpot/Move To/Travelling.penpot"
     Then Penpot project "Move To" holds a design named "Travelling"
     And Penpot project "Move From" holds no design named "Travelling"
@@ -73,17 +73,17 @@ Feature: Moving a mirrored design
 
   @in-nextcloud @gesture
   Scenario: Filing a draft — dragging from the team root into a project
-    Given a mirrored project "File Me"
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a mirrored project "File Me"
     And I create a new design file at "Penpot/Loose Draft.penpot"
-    And "Penpot/Loose Draft.penpot" is a "sync" design
     When I move "Penpot/Loose Draft.penpot" to "Penpot/File Me/Loose Draft.penpot"
     Then Penpot project "File Me" holds a design named "Loose Draft"
     # Created at the root, so it starts life in Drafts; the drag files it.
 
   @in-nextcloud @gesture
   Scenario: Un-filing — dragging from a project out to the team root
-    Given a mirrored design "Going Loose" in the project "Unfile Me"
-    And "Penpot/Unfile Me/Going Loose.penpot" is a "sync" design
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
+    And a mirrored design "Going Loose" in the project "Unfile Me"
     When I move "Penpot/Unfile Me/Going Loose.penpot" to "Penpot/Going Loose.penpot"
     Then Penpot project "Unfile Me" holds no design named "Going Loose"
     # notes: ../AGENTS.md#un-filing-dragging-from-a-project-out-to-the-team-root
@@ -170,33 +170,16 @@ Feature: Moving a mirrored design
       | Penpot/Pointer.penpot                |
       | Pointer.penpot                       |
 
-  @in-nextcloud @gesture @todo
-  Scenario: A link refusal offers to promote the file to "sync" mode first
-    Given a mirrored design "Pointer" in the project "Confined"
-    When I try to move it into a different project folder
-    Then the refusal offers to promote the file to "sync" mode first
-    # Split from the outline above because it asserts on the MESSAGE, which the
-    # DAV status alone cannot carry — it needs the exception body surfaced.
-
   @in-nextcloud @gesture
   Scenario: A link moves freely inside its own project
-    Given a mirrored design "Pointer" in the project "Confined"
-    And "Penpot/Confined/Pointer.penpot" is a "link" design
+    Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "link" mode
+    And a mirrored design "Pointer" in the project "Confined"
     And I create a folder at "Penpot/Confined/wip"
     When I move "Penpot/Confined/Pointer.penpot" to "Penpot/Confined/wip/Pointer.penpot"
     Then the file "Penpot/Confined/wip/Pointer.penpot" still carries its Penpot id
     And Penpot project "Confined" holds a design named "Pointer"
     # The negative case that gives the rule its edge: confinement is to the
     # PROJECT, not to a folder.
-
-  @in-nextcloud @gesture @todo
-  Scenario: Promoting a link first makes the move work normally
-    Given a "link" design at "Penpot/Confined/Pointer.penpot"
-    And the admin has promoted it to "sync" mode
-    When I move it to a folder outside every mapping
-    Then the move succeeds
-    And the file keeps its full ".penpot" archive content and its "penpot_id"
-    # The escape hatch every refusal above offers, exercised.
 
     # ── moving PROJECT FOLDERS: free inside the team, refused outside ─────────
 

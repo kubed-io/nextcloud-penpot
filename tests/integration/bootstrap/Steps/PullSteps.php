@@ -76,9 +76,20 @@ trait PullSteps {
 	 * calls noPenpotTeamsAreMapped() itself. A Background is pre-state: it says how
 	 * the world IS so the scenario is doable, not what was done to get there.
 	 *
+	 * ## THE MODE IS THE MAPPING'S, AND ONLY THE MAPPING'S
+	 *
+	 * The optional `in "sync" mode` tail is how a scenario gets a design whose
+	 * archive is really on disk. It used to get one by promoting a single file with
+	 * `occ penpot_sync:set-mode`, which no longer exists and should never have: the
+	 * mode is an immutable field of the MAPPING, so a file's mode is decided
+	 * entirely by the mapping it was mirrored under. To change it you remove the
+	 * mapping and map the team again — which is exactly what a scenario re-stating
+	 * this Given does, since the step resets the mappings first.
+	 *
 	 * @Given /^a Penpot team named "([^"]*)" is mapped to the folder "([^"]*)"$/
+	 * @Given /^a Penpot team named "([^"]*)" is mapped to the folder "([^"]*)" in "(sync|link)" mode$/
 	 */
-	public function aPenpotTeamNamedIsMappedToTheFolder(string $team, string $folder): void {
+	public function aPenpotTeamNamedIsMappedToTheFolder(string $team, string $folder, string $mode = ''): void {
 		$this->noPenpotTeamsAreMapped();
 
 		// NAMES THE TEAM as well as mapping it, so a scenario that starts from this
@@ -89,10 +100,11 @@ trait PullSteps {
 		$this->pulledTeamId = $this->namedTeamId;
 
 		$res = $this->occ(sprintf(
-			'penpot_sync:add-mapping %s --folder=%s %s',
+			'penpot_sync:add-mapping %s --folder=%s %s%s',
 			escapeshellarg($this->pulledTeamId),
 			escapeshellarg($folder),
 			$this->backendFlags(),
+			$mode === '' ? '' : ' --mode=' . escapeshellarg($mode),
 		));
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("could not map \"{$team}\" to the folder \"{$folder}\":\n{$res['output']}");
