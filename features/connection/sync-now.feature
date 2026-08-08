@@ -60,10 +60,30 @@ Feature: Syncing every mapping
 
   @unbuilt
   Scenario: A user syncs their own personal team
-    Given the user has a personal Penpot token configured
+    Given the user has set a valid personal Penpot token
+    And their personal Penpot team already contains:
+      | project  | design     |
+      | Sketches | Logo       |
+      | Sketches | Wordmark   |
+      | Drafts   | Loose Idea |
     When the user syncs their personal team
-    Then the designs their token can see are in their personal folder
-    # notes: ../AGENTS.md#a-user-syncs-their-own-personal-team-folder
+    Then their home root carries the personal team's Penpot id
+    And their home holds:
+      | path                     | tagged |
+      | Sketches                 | penpot |
+      | Sketches/Logo.penpot     | -      |
+      | Sketches/Wordmark.penpot | -      |
+      | Loose Idea.penpot        | -      |
+    And there is no node at "Drafts"
+    And "Sketches/Logo.penpot" holds:
+      | penpot_id       | the design's id |
+      | penpot_team_id  | the team's id   |
+      | penpot_revision | set             |
+      | penpot_mode     | "link"          |
+      | content         | empty           |
+      | modified        | the design's    |
+      | created         | the design's    |
+    # notes: ../AGENTS.md#a-user-syncs-their-own-personal-team
 
   # ── what a first sync does with a tree that is already there ───────────────
 

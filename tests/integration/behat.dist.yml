@@ -92,7 +92,6 @@ default:
       - '%paths.base%/../../features/projects/move.feature'
       - '%paths.base%/../../features/projects/rename.feature'
       - '%paths.base%/../../features/projects/restore.feature'
-      - '%paths.base%/../../features/personal-projects.feature'
       contexts: *contexts
 
     core:

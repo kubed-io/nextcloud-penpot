@@ -116,6 +116,26 @@ for the admin. Build the check and both scenarios go live.
 it does, and asserted it as an absence — dana's token not appearing for alex.
 Nothing acts on alex's token, so there is nothing to observe.
 
+### A user enters a valid token
+
+THE MAPPING IS THE TOKEN'S SHADOW. Setting a token is the whole of "connect me" —
+there is no folder to name, no team to pick and no mapping to configure, because
+there is exactly one personal team and exactly one place it can go. A visible
+mapping would be a choice with one possible answer.
+
+That end state is why `personal-projects.feature` is retired: once the home root
+carries the team, every other personal behaviour is the ordinary one.
+
+### A user clears their token
+
+THE MAPPING CANNOT OUTLIVE THE TOKEN, and nothing is deleted when it goes. The
+folders and their archives stay exactly where they are — losing a credential is
+never evidence that content is gone, the same rule the service account follows.
+
+The third `And` is what makes it a real end state rather than a tidy-up: a new
+`.penpot` file made at the home root is inert again, exactly as it was before the
+token existed. The mapping is gone, not merely idle.
+
 ## team-mapping/create
 
 `features/team-mapping/create.feature`
@@ -559,7 +579,7 @@ The cross-team copy is the ordinary copy path — `duplicate-file` then
 team. `move-files` carries the team, so nothing extra is needed.
 
 @unbuilt for the personal half only: a user's home root becomes a mapping
-when they set a personal token (personal-projects.feature), and none of
+when they set a personal token (`connection/personal.feature`), and none of
 that exists in `lib/` yet. Team-to-team copying is built.
 
 ### A design duplicated in Penpot is mirrored like any other new design
@@ -731,7 +751,7 @@ so "somewhere" means a resolvable Penpot home:
     inside a project folder    →  that project
     under a mapped team        →  that team's Drafts        (§6.35)
     at the user's own root     →  their PERSONAL team's Drafts
-                                  (personal-projects.feature — needs a
+                                  (`connection/personal.feature` — needs a
                                    personal token, and is not built)
     anywhere else              →  NOTHING HAPPENS
 
@@ -754,7 +774,7 @@ this section's own, and that is what is left.
 
 ── creating in a personal team ─────────────────────────────────────────────
 Same behaviour, different destination: the user's own Drafts rather than the
-team's. personal-projects.feature owns why that destination differs.
+team's. `connection/personal.feature` owns why that destination differs.
 
 ### A design created in the user's own home lands in their personal Drafts
 
@@ -806,7 +826,7 @@ left is creation, so it sits beside create-design.feature where the two opt-in
 models can be read together.
 
 A PERSONAL project is created the same way, by the same tag, in the user's own
-home — personal-projects.feature owns only the who and the where.
+home — `connection/personal.feature` owns the token that puts it there.
 
 ### THE ASYMMETRY (saga §C6.18)
 
@@ -1229,7 +1249,7 @@ SAME RULE AS A TEAM PROJECT, different credential. A personal project is
 not a read-only view of Penpot — the whole point of the mirror is parity,
 so a folder the user tagged into existence is one they can delete the same
 way. The user's own token performs it, because the service account cannot
-see their personal team at all (personal-projects.feature).
+see their personal team at all (`connection/personal.feature`).
 
 ---
 
@@ -1812,7 +1832,7 @@ Penpot here, and that is the point of the rule.
 
 ── across two mappings: personal ⇄ a shared team ──────────────────────────
 A user's home root and a mapped Team Folder are two mappings to two
-DIFFERENT Penpot teams (personal-projects.feature — setting a personal token
+DIFFERENT Penpot teams (`connection/personal.feature` — setting a personal token
 maps the personal team to the home root, implicitly). So a drag between them
 is a real cross-team move, and Penpot supports it directly: `move-files`
 carries the destination's team with it, proven live in §6.27/§6.34.
@@ -1913,7 +1933,7 @@ is the source of truth changing.
 ── the same rule in a personal team ────────────────────────────────────────
 A personal project is a project. The WHO (the user's own token) and the WHERE
 (their home root, no team-folder ancestor) differ; the rule does not — see
-personal-projects.feature for what actually is special about them.
+`## personal-projects — RETIRED` for what actually is special about them.
 
 ---
 
@@ -2015,48 +2035,52 @@ driver.
 
 ---
 
-## personal-projects
+## personal-projects — RETIRED
 
-`features/personal-projects.feature`
+`features/personal-projects.feature` is **gone**. Personal projects are not a
+feature: they are **the ordinary rules with a different mapping**. A design in a
+personal project is created, viewed, moved, renamed, deleted and restored by
+exactly the scenarios in `designs/`; a personal project folder behaves exactly as
+`projects/` says. The file existed because "personal" felt like a category — the
+same error that produced `errors`, `mapping-membership` and `file-type`.
 
-PERSONAL PROJECTS — the WHO and the WHERE, and nothing else.
+Only two things are genuinely different, and both are end states of setting a
+token, so both went to `connection/personal.feature`:
 
-### WHAT THIS FILE OWNS, AFTER THE DESIGN/PROJECT SPLIT
+| it said | where it went |
+|---|---|
+| Setting a personal token maps the personal team to the home root | a `Then` on "A user enters a valid token" |
+| Clearing the token removes the implicit mapping | a new scenario, "A user clears their token" |
 
-A personal project is a project. Creating, renaming, moving, copying and
-deleting one behaves exactly as it does in a mapped team — so those scenarios
-live with their verb (create-project.feature, rename-project.feature, and so
-on), where a reader comparing the personal case against the team case sees both
-answers in one table instead of hunting two files. That is the same rule the
-whole `-design` / `-project` split rests on: organise by BEHAVIOUR, not by the
-kind of thing acted on.
+### The rest, and why none of it survived
 
-What genuinely differs is not the behaviour but its two coordinates:
+| it said | why |
+|---|---|
+| One user's personal projects never appear in another user's home | a negative on the impossible. Nextcloud homes and per-user tokens make it so; nothing acts on the other user |
+| Clearing a personal token stops personal pulls without deleting anything | the "nothing deleted" half is now one `And` on the clear scenario, where it is a post-state rather than a scenario of its own |
+| The personal team itself gets no folder | see the correction below — it is the same fact as the mapping, stated backwards |
+| A user's personal projects mount at their home root | the first sync of the personal mapping, which `connection/sync-now.feature`'s "A user syncs their own personal team" already owns |
+| Personal projects are pulled with the user's own token, never the service account | implied by the above: the service account cannot see a personal team, so the projects appearing at all IS the proof |
+| Without a personal token, no personal projects appear at all | the inverse of the mapping end state, and asserted by the clear scenario's "inert, as it was before the token" |
+| A personal project folder resolves without a team ancestor | **not true** — see below |
 
-  WHO    the user's OWN personal token, never the service account. No token,
-         no personal projects at all — and clearing one stops the pull without
-         deleting anything.
-  WHERE  the user's home root, with NO team-folder ancestor. The personal team
-         itself gets no folder, which is why the membership resolver has to
-         cope with a project folder that has no team above it (saga §6.29).
+### TWO CORRECTIONS THIS FILE WAS CARRYING
 
-Those two are what this file is for, plus the isolation that follows from them:
-one user's personal projects never appear in another user's home.
+**"The personal team itself gets no folder" was only half true.** The mapping's
+folder is the user's home root. `/` is a folder — it is simply the one every user
+sees as theirs — so the honest statement is that the personal team maps to `/`,
+with the team's name and the folder's name never needing to agree because nobody
+names either. "No folder is created" and "mapped to the home root" are the same
+fact, and only the second one is useful.
 
-THE ONE PLACE THE PERSONAL CASE REALLY DIVERGES — deleting a personal project
-folder does not touch Penpot — is stated in delete-project.feature, beside the
-team answer it contradicts. A divergence hidden in a file nobody opens while
-holding the question is a divergence nobody finds.
-
-### Setting a personal token maps the personal team to the home root
-
-── the implicit mapping, and what it makes possible ────────────────────────
-These are the scenarios the "home root IS the mapping" reading adds. They
-are not a second pull pathway; they are what having a team ancestor at the
-root means for every OTHER feature, which is the point of framing it as a
-mapping rather than as a sync job.
-
----
+**"Resolves without a team ancestor" claimed an exception that does not exist.**
+The scenario called itself *"the explicit exception to saga §6.29's team
+lookup"* — but the team ancestor of a personal project IS the personal team, sat
+on the home root. `MembershipResolver` walks ancestors looking for markers and
+has no special case for any of this, because it needs none: put the team id on
+the home root and the ordinary rule resolves it. A spec that invents an exception
+the code does not have is worse than a silent one, because the next person builds
+the exception.
 
 ## designs/purge
 
@@ -2969,12 +2993,6 @@ The two rows are the two ways the connection can be wrong, and they are the two
 missing token versus unreachable host. A sync should not collapse them, for the
 same reason the test does not: they send an operator to different fixes.
 
-### A user syncs their own personal team folder
-
-SAME BEHAVIOUR, DIFFERENT SCOPE (§C6.28). No mapping card exists for this —
-the personal team mapping is automatic, so there is exactly one folder to
-sync and nothing to choose.
-
 ### Users do not author their own team mappings
 
 DELIBERATELY NOT BUILT, not merely unwritten. Letting users author mappings
@@ -2995,6 +3013,28 @@ half-written archive.
 Every write is to a temp location and moved into place, so a file is its old
 version or its new one. `@blocked` — **no fault injection**: the run has to be
 killed mid-write.
+
+### A user syncs their own personal team
+
+THE PER-MAPPING SYNC, FOR THE ONE MAPPING A USER OWNS. It is the same shape as
+`team-mapping/sync-now.feature`'s card button — one mapping, on demand, filling
+immediately — and it is here rather than there because the personal mapping is
+not a team mapping. It has no card, no admin, and no row in the mapping list: it
+exists because a token does (`connection/personal.feature`).
+
+THE TREE IS THE PROOF, exactly as it is for a team. Two differences, and both
+fall out of where the mapping points rather than from anything special about
+personal work:
+
+  - the mapped folder is the user's HOME ROOT, so a project folder sits at the
+    top of their files and a Drafts design sits beside it;
+  - the sync runs on the USER'S OWN TOKEN, because the service account cannot see
+    a personal team at all (saga §6.12) — which is why the designs appearing is
+    itself the proof of whose credential ran.
+
+Everything else — the `penpot` tag on project folders, links holding no bytes,
+dates coming from Penpot — is the ordinary behaviour, asserted with the ordinary
+table.
 
 ## team-import — RETIRED
 

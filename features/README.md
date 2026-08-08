@@ -64,8 +64,14 @@ so the same folder.
 schedule are inputs to "the app is connected", not three behaviours; an interval
 is a setting, not something anyone performs.
 
-What stays at the top level is what belongs to no single noun:
-`personal-projects.feature` and `lifecycle.feature`.
+What stays at the top level is `lifecycle.feature` alone — the app enabling,
+disabling and being removed belongs to no noun in the app.
+
+**Personal projects have no folder of their own**, deliberately. They are the
+ordinary rules with a different mapping: a design in a personal project is
+created, moved, renamed and deleted by exactly the scenarios in `designs/`. The
+only thing that differs is that setting a personal token maps the user's home
+root to their personal team — which is `connection/personal.feature`'s.
 
 **The nearest-ancestor rule has no file**, and that is deliberate. It is the
 app's most load-bearing decision, and it is a RULE — only ever observed through a
@@ -91,9 +97,10 @@ behaviours rather than one with a branch:
 | delete | one design | one call that takes the whole project with it |
 | restore | the same design, id intact | the project *and* everything in it, or not at all |
 
-A **personal** project is still a project: the verbs behave identically, so only
-the who (the user's own token) and the where (their home root) are special, and
-that is all `personal-projects.feature` keeps.
+A **personal** project is still a project: the verbs behave identically, so the
+only special things are the who (the user's own token) and the where (their home
+root) — and both are settled the moment the token is saved, which is why they
+live in `connection/personal.feature` and not in a file of their own.
 
 Splitting them is also what makes the CI suites possible — the filename is the
 matrix axis (`tests/integration/behat.dist.yml`), because a **path partition

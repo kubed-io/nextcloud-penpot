@@ -81,7 +81,7 @@ Feature: Creating a new Penpot design from Nextcloud
     When I choose "New → Penpot design" inside that folder
     Then the design is created in that personal project
     And the creation uses the user's personal token
-    # The service account cannot see a personal team at all (personal-projects.feature).
+    # The service account cannot see a personal team at all.
 
     # ── attribution ──────────────────────────────────────────────────────────────
 

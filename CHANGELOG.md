@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Spec: the personal-projects file is gone — personal projects follow every ordinary rule, and the only thing that differs is that a personal token maps your home root to your personal team.
 - Spec: the team-import file is gone — importing a team was mapping a team and syncing it, stated differently, and the read-only carve-out it warned against had already shipped.
 - Spec: the membership file is gone — the nearest-ancestor rule is a rule, not a behaviour, and six of its scenarios were already live word-for-word as moves and creates.
 - Spec: the failure file is gone — a failure is not a behaviour, so each one now sits with the thing that can fail; four "prunes nothing" scenarios became one rule, and four export failures another.

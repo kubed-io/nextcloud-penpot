@@ -771,7 +771,6 @@ The specs *are* the requirements, read before any code lands.
 | [`delete.feature`](features/projects/delete.feature) | Deleting a project — one call, not one per design. |
 | [`restore.feature`](features/projects/restore.feature) | Bringing a project back whole, and the one case that cannot be. |
 | **top level** | |
-| [`personal-projects.feature`](features/personal-projects.feature) | Personal projects at the user's home root. |
 | [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
 
 **The folders are the nouns.** A design and a project are two Penpot objects with
