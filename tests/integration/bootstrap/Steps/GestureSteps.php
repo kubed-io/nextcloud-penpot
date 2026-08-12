@@ -328,28 +328,6 @@ trait GestureSteps {
 	}
 
 	/**
-	 * The Team Folder counterpart: the design is STILL there, because the purge
-	 * could not be observed at all (delete-design.feature, saga §C6.27).
-	 *
-	 * Deliberately NOT a poll. The other three wait for a state to arrive; this one
-	 * asserts a state that is not going to change, so waiting would only make the
-	 * suite slower and would turn a genuine future FIX into a ten-second failure
-	 * instead of an instant one.
-	 *
-	 * @Then /^the design "([^"]*)" is still in Penpot's trash$/
-	 */
-	public function theDesignIsStillInPenpotsTrash(string $name): void {
-		if (!in_array($name, $this->penpotTrashNames(), true)) {
-			throw new \RuntimeException(sprintf(
-				"expected '%s' to STILL be in Penpot's trash on a Team Folder, but it is gone — "
-				. 'if the purge now reaches Penpot, this gap is closed and the @team-folder '
-				. 'scenario should be deleted in favour of the @plain-folder one.',
-				$name,
-			));
-		}
-	}
-
-	/**
 	 * The assertion that separates a soft delete from a destroyed one — and the
 	 * one the purge guard exists to keep honest.
 	 *

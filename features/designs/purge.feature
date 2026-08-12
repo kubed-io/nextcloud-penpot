@@ -30,25 +30,6 @@ Feature: Emptying the trash
     # The one irreversible thing this app can cause, reached only by the one
     # irreversible gesture Nextcloud offers.
 
-  # notes: ../AGENTS.md#emptying-a-team-folders-trash-cannot-reach-penpot-and-says-nothing
-  @in-nextcloud @gesture
-  Scenario: Empty the trash of a Team Folder
-    Given a mapping with the following values:
-      | team    | Shared Team |
-      | folder  | Shared      |
-      | mode    | sync        |
-      | storage | team folder |
-      | groups  | admin       |
-    And a mirrored design "Gone For Good" in the project "Purge Me"
-    And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
-    And the design "Gone For Good" is in Penpot's trash
-    When I purge "Shared/Purge Me/Gone For Good.penpot" from the Nextcloud trash
-    Then the design "Gone For Good" is still in Penpot's trash
-    And the file "Shared/Purge Me/Gone For Good.penpot" is gone from the Nextcloud trash
-
-    # A Team Folder's trash raises no event this app can hear, so the design is left
-    # in Penpot's trash to age out on its own rather than be destroyed unseen.
-
     # ── RULE: the purge destroys only what it can still see in Penpot's trash ─
     # notes: ../AGENTS.md#a-purge-only-destroys-what-is-still-in-penpots-trash
 

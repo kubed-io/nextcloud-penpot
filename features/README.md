@@ -217,7 +217,10 @@ then the two rows would *not* be identical — and it carries `@plain-folder` or
 
 - **§C6.16** — on a shared mapping a pruned mirror goes to the **owner's** trash,
   not the acting user's.
-- **§C6.27** — emptying a Team Folder's trash cannot reach Penpot at all.
+- ~~**§C6.27** — emptying a Team Folder's trash cannot reach Penpot at all.~~
+  DISPROVED: with Team Folders installed on every leg and the storage stated in
+  the mapping table, the Team Folder purge reached Penpot exactly like the plain
+  one. See features/AGENTS.md#a-team-folders-trash-reaches-penpot-after-all.
   groupfolders registers its own `ITrashBackend` whose `removeItem()` emits
   nothing — no typed event, no legacy hook — so no app can observe it. It
   self-corrects, because Penpot's own trash expires after 7 days, so the

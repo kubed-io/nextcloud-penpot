@@ -2427,6 +2427,23 @@ revision and history, and the file lands in the Nextcloud trash keeping its
 metadata. Nothing here is irreversible, which is what makes it safe to do without
 asking — the irreversible half is the purge.
 
+### A Team Folder's trash reaches Penpot after all
+
+`purge.feature` carried two scenarios for one gesture: emptying the trash of a
+plain folder destroyed the design in Penpot, while emptying a Team Folder's trash
+did not — groupfolders was believed to raise no event this app could hear, so the
+design was left in Penpot's trash to age out.
+
+**Installing Team Folders on every leg disproved it.** With the storage stated in
+the mapping table rather than decided by the CI leg, the two cases ran in the same
+suite for the first time, and the Team Folder purge reached Penpot exactly like the
+plain one. The step guarding the gap said what to do if that ever happened, and it
+happened the first time the two were run together.
+
+So there is one scenario now. This is the nuance the storage change was made to
+catch, and it caught it immediately: a limitation the specs had recorded as fact,
+provable only by running both halves in one place.
+
 ### A purge only destroys what is still in Penpot's trash
 
 **Penpot's permanent delete does not check that a design is in the trash.** Hand it
