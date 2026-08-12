@@ -10,13 +10,13 @@ Feature: Creating a design
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And a mapping with the following values:
-      | team   | Design Team |
-      | folder | Penpot      |
-      | mode   | sync        |
-    And a mapping with the following values:
       | team   | Reference Team |
       | folder | Pointers       |
       | mode   | link           |
+    And a mapping with the following values:
+      | team   | Design Team |
+      | folder | Penpot      |
+      | mode   | sync        |
 
   # notes: ../AGENTS.md#create-design-background
 
@@ -100,7 +100,8 @@ Feature: Creating a design
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Create a design in a link-mapped folder
-    Given a mirrored project "Read Only"
+    Given a Penpot team named "Reference Team" exists
+    And a mirrored project "Read Only"
     When I try to create a new design file at "Pointers/Read Only/Fresh Idea.penpot"
     Then the creation is refused with a message
     And Penpot project "Read Only" holds no design named "Fresh Idea"

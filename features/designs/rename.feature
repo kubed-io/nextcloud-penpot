@@ -10,13 +10,13 @@ Feature: Renaming a design
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And a mapping with the following values:
-      | team   | Design Team |
-      | folder | Penpot      |
-      | mode   | sync        |
-    And a mapping with the following values:
       | team   | Reference Team |
       | folder | Pointers       |
       | mode   | link           |
+    And a mapping with the following values:
+      | team   | Design Team |
+      | folder | Penpot      |
+      | mode   | sync        |
 
     # ── RULE: a name is one value living in two places ────────────────────────
     # notes: ../AGENTS.md#renaming-a-mirrored-file-renames-its-design-in-penpot

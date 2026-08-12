@@ -10,13 +10,13 @@ Feature: Trashing a design
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And a mapping with the following values:
-      | team   | Design Team |
-      | folder | Penpot      |
-      | mode   | sync        |
-    And a mapping with the following values:
       | team   | Reference Team |
       | folder | Pointers       |
       | mode   | link           |
+    And a mapping with the following values:
+      | team   | Design Team |
+      | folder | Penpot      |
+      | mode   | sync        |
 
     # ── RULE: a delete is soft on both sides ──────────────────────────────────
     # notes: ../AGENTS.md#deleting-a-mirror-moves-the-design-into-penpots-trash
@@ -48,7 +48,8 @@ Feature: Trashing a design
 
   @in-nextcloud @gesture @unbuilt
   Scenario: Trash a link
-    Given a mirrored design "Pointer" in the project "Confined"
+    Given a Penpot team named "Reference Team" exists
+    And a mirrored design "Pointer" in the project "Confined"
     When I try to delete "Pointers/Confined/Pointer.penpot"
     Then the delete is refused
     And Penpot project "Confined" holds a design named "Pointer"

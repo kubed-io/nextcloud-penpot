@@ -10,17 +10,17 @@ Feature: Moving a design
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And a mapping with the following values:
-      | team   | Design Team |
-      | folder | Penpot      |
-      | mode   | sync        |
+      | team   | Reference Team |
+      | folder | Pointers       |
+      | mode   | link           |
     And a mapping with the following values:
       | team   | Second Team |
       | folder | Shared      |
       | mode   | sync        |
     And a mapping with the following values:
-      | team   | Reference Team |
-      | folder | Pointers       |
-      | mode   | link           |
+      | team   | Design Team |
+      | folder | Penpot      |
+      | mode   | sync        |
 
     # ── RULE: a design belongs to the project its file sits in ────────────────
     # notes: ../AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
@@ -49,16 +49,17 @@ Feature: Moving a design
   # notes: ../AGENTS.md#a-subfolder-is-nextclouds-layout-not-penpots
   @in-nextcloud @gesture
   Scenario Outline: Move a design into a plain subfolder of its own project
-    Given a mirrored design "Wanderer" in the project "<project>"
+    Given a Penpot team named "<team>" exists
+    And a mirrored design "Wanderer" in the project "<project>"
     And a folder at "<folder>/<project>/wip" that is not a project
     When I move "<folder>/<project>/Wanderer.penpot" to "<folder>/<project>/wip/Wanderer.penpot"
     Then Penpot project "<project>" holds a design named "Wanderer"
     And the file "<folder>/<project>/wip/Wanderer.penpot" still carries its Penpot id
 
     Examples: Nextcloud owns layout, and Penpot has no concept of a subfolder
-      | folder   | project      |
-      | Penpot   | Stays Put    |
-      | Pointers | Also Confined |
+      | team           | folder   | project       |
+      | Design Team    | Penpot   | Stays Put     |
+      | Reference Team | Pointers | Also Confined |
 
     # Confinement is to the PROJECT, not to a folder — which is why a link may be
     # filed away in a subfolder too.
@@ -68,7 +69,8 @@ Feature: Moving a design
 
   @in-nextcloud @gesture
   Scenario Outline: Move a link out of its project
-    Given a mirrored design "Pointer" in the project "Confined"
+    Given a Penpot team named "Reference Team" exists
+    And a mirrored design "Pointer" in the project "Confined"
     And a mirrored project "Elsewhere"
     When I try to move "Pointers/Confined/Pointer.penpot" to "<destination>"
     Then the move is refused
