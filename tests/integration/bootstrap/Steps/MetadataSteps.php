@@ -114,6 +114,8 @@ trait MetadataSteps {
 
 		switch ($expected) {
 			case 'the id it had before the rename':
+			case 'the id it had before the move':
+			case 'the id it had before it was trashed':
 				// STRONGER THAN `the design's id`, which resolves the id of whatever
 				// design now carries that name — and so cannot tell a rename from a
 				// delete-and-recreate. This one pins the identity across the gesture.

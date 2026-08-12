@@ -57,6 +57,16 @@ trait GestureSteps {
 	 */
 	private string $idBeforeGesture = '';
 
+	/**
+	 * Read the design's id BEFORE a gesture, which is the last moment the old path
+	 * resolves. Every claim of the form "the id it had before …" rests on this, so
+	 * every gesture those specs cover has to record it: a rename, a move, and a
+	 * trashing all promise the design survived rather than being replaced.
+	 */
+	private function captureIdBeforeGesture(string $path): void {
+		$this->idBeforeGesture = (string)$this->davReadMetadata($path, 'penpot_id');
+	}
+
 	// ── the gestures ────────────────────────────────────────────────────────
 
 	/** @When /^I copy "([^"]*)" to "([^"]*)"$/ */
@@ -70,6 +80,7 @@ trait GestureSteps {
 
 	/** @When /^I move "([^"]*)" to "([^"]*)"$/ */
 	public function iMoveTo(string $from, string $to): void {
+		$this->captureIdBeforeGesture($from);
 		$this->davMove($from, $to);
 		$this->gestureTarget = $to;
 	}
@@ -82,10 +93,7 @@ trait GestureSteps {
 	 * @When /^I rename "([^"]*)" to "([^"]*)"$/
 	 */
 	public function iRenameTo(string $path, string $newName): void {
-		// THE ID BEFORE THE GESTURE, so a Then can claim the design MOVED rather than
-		// being replaced by a new one wearing the new name. Resolving the id from the
-		// new name afterwards cannot tell those apart.
-		$this->idBeforeGesture = (string)$this->davReadMetadata($path, 'penpot_id');
+		$this->captureIdBeforeGesture($path);
 		$parent = dirname($path);
 		$target = ($parent === '.' || $parent === '') ? $newName : $parent . '/' . $newName;
 		$this->davMove($path, $target);
@@ -155,6 +163,7 @@ trait GestureSteps {
 	 * @Given /^"([^"]*)" is in the trash$/
 	 */
 	public function iDelete(string $path): void {
+		$this->captureIdBeforeGesture($path);
 		$this->davDelete($path);
 		$this->gestureTarget = $path;
 	}
