@@ -36,6 +36,24 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * from {@see PullSteps}.
  */
 trait PruneSteps {
+	/**
+	 * Deleting a design in Penpot, WITH THE SYNC FOLDED IN — nobody deletes a design
+	 * in order to run a reconciler. The bare `the design "X" is deleted in Penpot`
+	 * below stages the far side only, for scenarios that go on to do something else.
+	 *
+	 * @When /^someone deletes the design "([^"]*)" in Penpot$/
+	 */
+	public function someoneDeletesTheDesignInPenpot(string $name): void {
+		$this->theDesignIsDeletedInPenpot($name);
+		$this->theAdminRunsAPull();
+	}
+
+	/** @When /^someone permanently deletes the design "([^"]*)" in Penpot$/ */
+	public function someonePermanentlyDeletesTheDesignInPenpot(string $name): void {
+		$this->theDesignIsPermanentlyDeletedInPenpot($name);
+		$this->theAdminRunsAPull();
+	}
+
 	/** @When /^the design "([^"]*)" is deleted in Penpot$/ */
 	public function theDesignIsDeletedInPenpot(string $name): void {
 		// `delete-file` is a SOFT delete — it moves the design into Penpot's own

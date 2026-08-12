@@ -113,6 +113,18 @@ trait MetadataSteps {
 		}
 
 		switch ($expected) {
+			case 'the id it had before the rename':
+			case 'the id it had before the move':
+			case 'the id it had before it was trashed':
+				// STRONGER THAN `the design's id`, which resolves the id of whatever
+				// design now carries that name — and so cannot tell a rename from a
+				// delete-and-recreate. This one pins the identity across the gesture.
+				if ($this->idBeforeGesture === '') {
+					return 'the gesture captured no id to compare against';
+				}
+				return $actual === $this->idBeforeGesture
+					? null : "expected the id it already had ({$this->idBeforeGesture}), found '{$actual}'";
+
 			case "the design's id":
 				$want = $this->fileIdNamed($this->designNameOf($path));
 				return $actual === $want
@@ -140,6 +152,15 @@ trait MetadataSteps {
 					? null : "expected zero bytes, the file is '{$actual}'";
 
 			default:
+				// LITERALS ARE QUOTED by this table's convention, so an unquoted value
+				// reaching here is vocabulary nobody implemented. Comparing it as a
+				// literal asserts the wrong thing and reports it as an app failure.
+				if (!str_starts_with($expected, '"') || !str_ends_with($expected, '"')) {
+					throw new \RuntimeException(
+						"the table says '{$expected}', which is not a value this vocabulary knows."
+						. ' Quote it to mean a literal, or add a case for it.',
+					);
+				}
 				$literal = trim($expected, '"');
 				return $actual === $literal
 					? null : "expected '{$literal}', found '{$actual}'";

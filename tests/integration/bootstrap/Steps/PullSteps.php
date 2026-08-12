@@ -266,7 +266,11 @@ trait PullSteps {
 
 	/** @Given /^a Penpot project named "([^"]*)" exists in that team$/ */
 	public function aPenpotProjectExistsInThatTeam(string $name): void {
-		$teamId = $this->pulledTeamId !== '' ? $this->pulledTeamId : $this->firstVisibleTeamId();
+		// "THAT TEAM" IS THE ONE MOST RECENTLY NAMED, which is what lets a scenario
+		// step outside the Background's default mapping by naming another team first.
+		$teamId = $this->namedTeamId !== ''
+			? $this->namedTeamId
+			: ($this->pulledTeamId !== '' ? $this->pulledTeamId : $this->firstVisibleTeamId());
 		$this->penpotRpc('create-project', ['team-id' => $teamId, 'name' => $name]);
 	}
 

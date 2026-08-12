@@ -101,6 +101,14 @@ trait MappingSteps {
 		$this->namedTeam = $team;
 	}
 
+	/** Whether this scenario has already reset the mapping store. */
+	private bool $mappingsDeclared = false;
+
+	/** @BeforeScenario */
+	public function armMappingReset(): void {
+		$this->mappingsDeclared = false;
+	}
+
 	/** The team the scenario last named, and its Penpot id. */
 	private string $namedTeam = '';
 	private string $namedTeamId = '';
@@ -158,8 +166,20 @@ trait MappingSteps {
 			throw new \RuntimeException('a mapping needs a team — add a "team" row to the table');
 		}
 
-		$this->noPenpotTeamsAreMapped();
+		// RESET ONCE PER SCENARIO, on the first mapping declared. Resetting on every
+		// call meant a Background could only ever describe ONE mapping, and silently:
+		// the second table wiped the first. The sibling n8n and grafana apps were both
+		// fixed the same way.
+		if (!$this->mappingsDeclared) {
+			$this->noPenpotTeamsAreMapped();
+			$this->mappingsDeclared = true;
+		}
 		$this->aPenpotTeamNamedExists($team);
+		// THE TEAM THE SCENARIO IS NOW TALKING ABOUT. The prose form of this step sets
+		// it too; without it every "…in that team" arrange fell back to whichever team
+		// Penpot listed first, and built its projects somewhere the mapping did not
+		// point — which is why every path under the mapped folder 404'd.
+		$this->pulledTeamId = $this->namedTeamId;
 
 		$flags = [];
 		foreach ($fields as $field => $value) {

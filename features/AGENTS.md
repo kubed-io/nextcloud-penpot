@@ -2313,6 +2313,350 @@ file and looked like the bug (saga §C6.9). Kept in rename-design.feature as wel
 as copy-design.feature on purpose: the symptom appeared at THIS gesture, so this
 is where someone will come looking.
 
+### A duplicate made in Penpot is not a copy we can see
+
+Penpot's duplicate leaves no trace this app can read. From Nextcloud's side a new
+design simply exists in a project — identical in every observable way to one that
+was created from scratch — so there is nothing a copy scenario could assert that
+`connection/sync-now.feature` does not already prove when it mirrors a design the
+app has never seen.
+
+The scenario is gone rather than converted. A spec that cannot distinguish its
+subject from something already covered is not testing the subject.
+
+### A duplicate made in Penpot is two designs, not one
+
+**The gesture is invisible to us.** Penpot's duplicate leaves no trace this app can
+read: a new design simply exists in a project, indistinguishable from one created
+from scratch. Written as "a new file appears with its own id", the scenario tests
+the create path a second time and earns nothing.
+
+It earns its keep on a different claim. A duplicate arrives with NEAR-IDENTICAL
+CONTENT AND A DERIVED NAME — `Original` and `Original (copy)`, the same bytes — and
+those are exactly the conditions under which an app matching mirrors by name or by
+content would fold the two into one file, or overwrite the original's mirror. A
+create with a distinct name never exercises that.
+
+So the end state is "two designs are still two files, with different ids", not "a
+new file appeared". The subject is the id-based matching, which is the only thing
+about a duplicate that is ours to get wrong.
+
+### A design has to have somewhere to go
+
+Penpot's `create-file` needs a project id, and there is no rootless design. So a
+`.penpot` file created where no team can be resolved is refused outright, with a
+message — not accepted and left inert.
+
+This replaced two scenarios that circled the same thing without saying it. One
+asserted the file "is an inert file" and "resolves to no Penpot mapping at all",
+which describes a state the app should never have allowed. The other asserted that
+the New-menu action "is not offered" — a negative about a menu, checking that
+something was never built, which no assertion can fail on.
+
+Not offering the action is still right; it is just not a behaviour with an end
+state. What IS a behaviour is what happens when a file arrives there anyway, by
+WebDAV or by a desktop client, and that is the scenario now.
+
+### A created design is attributed to the acting user when possible
+
+Authorship is a durable property of a design rather than a line in its history,
+which is why this matters more at creation than for any other write. With a
+personal token the design is the user's; without one it is the service account's.
+
+TWO SCENARIOS, NOT TWO EXAMPLES ROWS — the same call as `designs/restore.feature`,
+for the same reason: the end states are not the same shape. Without a token the app
+also TELLS the user who the design will be authored by, and a row cannot carry a
+post-condition the other row does not have. Squeezing them into Examples meant
+dropping that sentence, which is the half a user would actually notice.
+
+The old file had three scenarios on this theme; the third was the same rule stated
+for a personal project folder.
+
+### Creating: what this feature stopped claiming
+
+- **"Filing a newly created draft is just a drag"** was a MOVE, in create.feature,
+  with an action in its post-state (`the design is moved from Drafts into …`).
+  `designs/move.feature` owns that gesture.
+- **"Uploading a `.penpot` archive does not create an empty design"** is not a
+  create at all. A file arriving with content already in it is a move-in or a
+  restore, and whatever should happen to it belongs to those features.
+- **"A failed creation leaves no orphaned local file"** asserted the absence of a
+  file nothing writes.
+- **"A created design appears exactly once after the next pull"** ran a pull to
+  prove the local file already carries the real id — which is what the create
+  scenario's own table says.
+- **"A newly created design is born in its mapping's mode"** as an outline over
+  sync and link: the mode is in the create outline's table, and the only part of
+  `link` worth its own scenario is that it refuses the write.
+
+### A restore is attributed to the acting user
+
+Two scenarios rather than two Examples rows, because the end states are not the
+same shape: with a personal token the restore is simply the user's, while without
+one it is the service account's AND the user is told so. That extra sentence is a
+post-condition the first case does not have.
+
+A missing token never blocks the restore. Attribution is the personal token's only
+job, and the app says whose name went on the change rather than leaving the user to
+find out from Penpot's history.
+
+### A design file arriving in a project becomes a design
+
+**A mapping that ignores a design sitting inside it is not a mapping.** A `.penpot`
+archive dragged into a mapped project is imported and becomes a real design, and the
+file is stamped with the id it comes back with.
+
+The old scenario claimed the opposite — the file "carries no Penpot id" and the
+project "holds no design named Uploaded" — on the reasoning that creating a design
+should be deliberate rather than a side effect of a drag. That reasoning does not
+survive contact with what a mapping is for: the whole point of the folder is that
+what is in it is in Penpot.
+
+The one file that stays untracked is one PENPOT will not take. That is not a rule
+the app invents; it is an error it catches from the import and reports, naming what
+came back. Best-effort in, honest about failure.
+
+This also settles the question `designs/create.feature` raised and pushed away: a
+file arriving with content already in it is not a create, it is an import — and
+this is where it belongs.
+
+### Deleting a mirror moves the design into Penpot's trash
+
+Both sides go soft together: the design lands in Penpot's own trash keeping its id,
+revision and history, and the file lands in the Nextcloud trash keeping its
+metadata. Nothing here is irreversible, which is what makes it safe to do without
+asking — the irreversible half is the purge.
+
+### A Team Folder's trash reaches Penpot after all
+
+`purge.feature` carried two scenarios for one gesture: emptying the trash of a
+plain folder destroyed the design in Penpot, while emptying a Team Folder's trash
+did not — groupfolders was believed to raise no event this app could hear, so the
+design was left in Penpot's trash to age out.
+
+**Installing Team Folders on every leg disproved it.** With the storage stated in
+the mapping table rather than decided by the CI leg, the two cases ran in the same
+suite for the first time, and the Team Folder purge reached Penpot exactly like the
+plain one. The step guarding the gap said what to do if that ever happened, and it
+happened the first time the two were run together.
+
+So there is one scenario now. This is the nuance the storage change was made to
+catch, and it caught it immediately: a limitation the specs had recorded as fact,
+provable only by running both halves in one place.
+
+### A purge only destroys what is still in Penpot's trash
+
+**Penpot's permanent delete does not check that a design is in the trash.** Hand it
+a live design's id and the design is destroyed — proven live (saga §C6.11). The
+trashed mirror still carries that id, so a purge that simply forwards it is one
+rescue away from silently destroying live work.
+
+So the purge reads Penpot's trash listing and destroys only ids it finds there. The
+case that matters is a design someone rescued in Penpot while its mirror sat in the
+Nextcloud trash: the local file goes, and the design is left alone.
+
+That is stated as behaviour — the design survives — rather than as the mechanism the
+old scenario asserted ("the app reads Penpot's trash listing first", "it passes only
+ids found in that listing", "an id absent from that listing is never passed").
+
+### RETIRED — the admin purge
+
+`purge.feature` described an admin button that removed every `.penpot` file the app
+had mirrored, across every mapping, on the promise that a later sync would bring
+them back. Six scenarios, four of them about which files it spared and how to undo
+it.
+
+Removed for the reason it was removed from n8n and from grafana: it deleted a great
+deal on a promise that only held for files that were faithful mirrors, and the ones
+that were not are exactly the ones you would miss. It was never built here — every
+scenario was @unbuilt or @blocked — so retiring it is a matter of deleting the spec.
+
+Purge now means the same thing in all three apps: emptying the Nextcloud trash,
+which finishes the delete the trash gesture started.
+
+### A link is never deleted from Nextcloud
+
+A link is a pointer at a design Penpot owns. Deleting the pointer removes nothing,
+and the next sync writes it straight back — so the gesture is refused rather than
+half-honoured. The same rule the sibling n8n and grafana apps settled on.
+
+**This retires the "hidden link" model**, which was six scenarios: deleting a link
+"hid" it, the pull had to recognise a dismissed link by the `penpot_id` on its
+trashed file and leave it hidden, restoring un-hid it, and emptying the trash
+un-hid it too — the last one recorded as an open question because it is incoherent
+from the user's side. All of it existed to make a delete that should not happen
+behave tolerably.
+
+### Trashing: what this feature stopped claiming
+
+`delete.feature` held 33 scenarios and was three features under one name.
+
+**Purging belongs to `designs/purge.feature`** — "Emptying the Nextcloud trash
+destroys the design", "A purge only ever passes ids that are in Penpot's trash
+listing", "Purging a mirror whose design was restored in Penpot destroys nothing",
+"Permanent deletion is a separate, explicit action".
+
+**Restoring belongs to `designs/restore.feature`** — "Restoring from Penpot's trash
+returns the design completely intact", "A restore is confirmed by re-reading",
+"The app always offers Penpot's trash before an archive import", "Once the grace
+window passes, only a best-effort import remains".
+
+**Three pairs said the same thing twice**, once live and once as @todo: trashing a
+mirror, deleting an untracked file, and emptying the trash.
+
+**The internals went.** `"delete-file" is called`, `"permanently-delete-team-files"
+is called` / `is never called`, `the app reads Penpot's trash listing first`, `it
+passes only ids found in that listing`, `the pull exported 0 archives`. Which calls
+the app makes is how it keeps the promise, not the promise.
+
+**Both confirmation scenarios went**, each carrying two `When`s — "I choose Delete
+in Penpot and confirm", "the app warns this cannot be undone / When I confirm".
+
+**"Both modes delete identically"** contradicted the link rule above and is gone
+with it. **"There is no app-managed trash-bin setting"** is a decision, and belongs
+here rather than as a scenario asserting a setting does not exist.
+
+### A subfolder is Nextcloud's layout, not Penpot's
+
+Penpot has no concept of a subfolder, so filing a design into `wip/` changes
+nothing on its side — and a pull must not undo it, because Nextcloud owns layout.
+Those were two scenarios saying one thing; the second only added a pull to prove
+the first still held.
+
+Confinement is to the PROJECT, not to a folder, which is why a LINK may be filed
+away in a subfolder too. That is the same rule read from the strict end, so it is
+an Examples row rather than its own scenario.
+
+### A design moved to another team in Penpot leaves this mapping
+
+From this mapping's point of view the design is simply gone, and a vanished
+design's mirror is trashed like any other. If the other team is mapped as well, its
+own sync mirrors the design there — nothing about this scenario needs to know that.
+
+### Moving: what this feature stopped claiming
+
+- **"Filing a draft" and "Un-filing"** were the same move as project-to-project,
+  with the team root at one end. The team root IS Drafts, so all three are Examples
+  rows of one outline rather than three scenarios and two vocabularies.
+- **"Moving an unmapped tracked file back under a project offers a restore"** was
+  the confirmation model `designs/restore.feature` shed for the same reason: no
+  such thing exists in n8n or grafana, and a move is not a restore.
+- **"No move, of any file or folder, ever deletes anything in Penpot"** had
+  `When I move either of them anywhere at all` — not a gesture, and an assertion
+  about every possible gesture cannot fail.
+- **"A move between projects is attributed to the acting user"** asserted
+  `"move-files" is called using that user's own token`. Attribution is real, but it
+  is a property of the change in Penpot, not of which call carried it.
+- **`Penpot is never contacted`** appeared twice with no step definition behind it.
+- **`the next pull reconciles it`** ended the failure scenario: the mechanism, not
+  the behaviour.
+
+The Background also mapped ONE folder and then re-declared it per scenario, twice
+as `sync` and once as `link` — the same folder in two modes, depending which
+scenario you read. There are two mappings now, and no scenario restates a mode.
+
+### The three layers a restore can land in
+
+This is the one place penpot differs from n8n and grafana in kind, not just in
+vocabulary: **Penpot has its own trash, with a grace window.** So the far side can
+be in three states when a mirror comes back, and each needs something different:
+
+1. **In Penpot's trash** — restore it there. Lossless: the same id, revision,
+   history and links. Nothing is imported.
+2. **Already back** — someone rescued it in Penpot first. Nothing was lost
+   remotely, so nothing is sent; a second restore would be a second design.
+3. **Gone for good** — past the grace window there is nothing to put back. The
+   mirror still holds the archive, so the content is not lost, but importing it
+   would make a NEW design with a new id and no history. That is a different
+   gesture, and not one a restore performs on the user's behalf.
+
+Different end states, so three scenarios rather than three Examples rows.
+
+### Restoring: what this feature stopped claiming
+
+`restore.feature` held 23 scenarios and was two features under one name.
+
+**Half of it was a MOVE.** Seven scenarios opened `Given an unmapped ".penpot"
+file … When I move the file into the "My Stuff" folder`, and described a
+confirmation dialog offering to "restore" the file into Penpot. Moving a file into
+a mapping is `designs/move.feature`'s gesture, and neither n8n nor grafana has any
+such confirmation model — a restore is the trash gesture undone, nothing more.
+
+**The confirm-and-explain scenarios went with it.** "Restoring is always confirmed,
+never silent", "Restoring a deleted design states clearly what does and does not
+return", "The app never silently resurrects a deleted design", "Confirming a restore
+of a deleted design…". Several carried two `When`s, which is two scenarios wearing
+one title.
+
+**A link cannot be in the trash at all.** "A file with no archive cannot be
+restored" arranged a link file being moved in; links are never trashed here, in
+grafana, or in n8n.
+
+**The internals went.** Which RPC restores the design, whether the restore stream
+answers with an empty set of ids, that the app re-checks the project listing and
+retries, that an import ignores the `name` param so a follow-up rename is needed —
+all of it is how the app keeps its promise, not the promise.
+
+**Attribution stayed**, as two scenarios — see the section above for why they are
+not Examples rows.
+
+### The copy belongs to where it lands
+
+A copy is never the original's design. What decides which PROJECT it becomes is the
+folder it landed in — the same project, another project, or the team root, which is
+Drafts. So the destination is an Examples column and the rule is one scenario.
+
+### Copying: the @todo block was the live block, rewritten as RPC calls
+
+`copy.feature` carried 23 scenarios, and roughly half of them said what the other
+half already said. "Copying up to the team root" appeared THREE times — once live,
+twice as @todo. "A copy is tracked the moment it exists" was "A copy can be renamed
+immediately" under another name. "Copying outside every mapping creates nothing" and
+"Copying an untracked file changes nothing" were both the live never-contacts-Penpot
+scenario.
+
+The duplicates differed in one way: they asserted the RPC rather than the behaviour —
+`"duplicate-file" is called with the original's "penpot_id"`, `"move-files" is never
+called, because the project did not change`. Which calls the app makes to get there
+is the app's business; a reader needs to know a new design exists in the right
+project with its own id, which the live scenarios already said.
+
+Both `"move-files" is never called` claims also had no step definition at all. They
+passed the guard because the scenarios were skipped, and would have had nothing to
+run if they were not.
+
+### A failed propagation never reverts the user's local rename
+
+Nextcloud has already renamed the file by the time the app tries to tell Penpot.
+Undoing that would fight the user over a gesture that succeeded locally, so the
+local name stands, the failure is reported, and the file keeps its `penpot_id` —
+which is what lets a later sync finish the job rather than read the file as new.
+
+The scenario used to end `And the next pull reconciles the name`. That is the
+mechanism, not the behaviour, and it belongs to whatever the next sync does.
+
+### Renaming: what this feature stopped claiming
+
+Six scenarios were removed rather than converted.
+
+**Three were the same behaviour twice.** "Renaming a mirrored file in Nextcloud
+renames the Penpot file" said what the live scenario above it already said;
+"Renaming never breaks the Penpot link" asserted post-state that now rides the
+rename's own table; and "Renaming a design that was just copied propagates to
+Penpot" is a rename of a file that happens to have arrived by copy — the copy is
+decoration, exactly like renaming a file that happens to live in a subfolder.
+
+**Three asserted the API call rather than the behaviour.** `"rename-file" is
+called with the id under the key "id"` and `not under "file-id"` is a spec for a
+JSON key; `the ".penpot" extension is stripped before sending and re-added
+locally` is how the call is built; `"export-binfile" was never called` is both an
+internal and a negative. What a reader needs to know is that the design ends up
+named "New Name" and keeps its id, which the remaining scenarios say.
+
+The slash-in-a-name scenario also left: it is about the PULL creating a mirror for
+a design whose name cannot be a filename, which is `designs/create.feature`'s
+subject, not renaming. It was also malformed — an `And` with no `Given` before it.
+
 ### Renaming an untracked ".penpot" file is not a failure
 
 This is correct behaviour and must stay — a file we do not track is not
