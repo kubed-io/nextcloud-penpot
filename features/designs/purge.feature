@@ -34,17 +34,17 @@ Feature: Emptying the trash
   @in-nextcloud @gesture
   Scenario: Empty the trash of a Team Folder
     Given a mapping with the following values:
-      | team    | Design Team |
-      | folder  | Penpot      |
+      | team    | Shared Team |
+      | folder  | Shared      |
       | mode    | sync        |
       | storage | team folder |
       | groups  | admin       |
     And a mirrored design "Gone For Good" in the project "Purge Me"
     And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
     And the design "Gone For Good" is in Penpot's trash
-    When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
+    When I purge "Shared/Purge Me/Gone For Good.penpot" from the Nextcloud trash
     Then the design "Gone For Good" is still in Penpot's trash
-    And the file "Penpot/Purge Me/Gone For Good.penpot" is gone from the Nextcloud trash
+    And the file "Shared/Purge Me/Gone For Good.penpot" is gone from the Nextcloud trash
 
     # A Team Folder's trash raises no event this app can hear, so the design is left
     # in Penpot's trash to age out on its own rather than be destroyed unseen.

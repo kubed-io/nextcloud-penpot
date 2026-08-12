@@ -37,14 +37,23 @@ Feature: Moving a design
       | penpot_mode    | "sync"                        |
       | content        | an archive                    |
 
-    Examples: filing and un-filing are the same move, with Drafts at one end
-      | from             | to               | lands in  |
-      | Penpot/Move From | Penpot/Move To   | Move To   |
-      | Penpot/Move From | Penpot           | Drafts    |
-      | Penpot           | Penpot/Move To   | Move To   |
+    Examples: a project, or the team root — which is Drafts
+      | from             | to             | lands in |
+      | Penpot/Move From | Penpot/Move To | Move To  |
+      | Penpot/Move From | Penpot         | Drafts   |
 
     # The team root IS Drafts, so dragging in or out of a project is one behaviour
     # rather than a "file" gesture and an "un-file" gesture.
+
+  @in-nextcloud @gesture
+  Scenario: Move a draft into a project
+    Given a mirrored project "File Me"
+    And I create a new design file at "Penpot/Loose Draft.penpot"
+    When I move "Penpot/Loose Draft.penpot" to "Penpot/File Me/Loose Draft.penpot"
+    Then Penpot project "File Me" holds a design named "Loose Draft"
+
+    # The other direction needs its own arrange: a design only starts in Drafts if
+    # it was made at the team root.
 
   # notes: ../AGENTS.md#a-subfolder-is-nextclouds-layout-not-penpots
   @in-nextcloud @gesture

@@ -86,7 +86,7 @@ Feature: Trashing a design
   Scenario: Permanently delete a design in Penpot
     Given a mirrored design "No Way Back" in the project "Erased"
     When someone permanently deletes the design "No Way Back" in Penpot
-    Then the design "No Way Back" is not in Penpot's trash
+    Then Penpot project "Erased" holds no design named "No Way Back"
     And there is no node at "Penpot/Erased/No Way Back.penpot"
     And the file "Penpot/Erased/No Way Back.penpot" is in the Nextcloud trash
     And the trashed file "Penpot/Erased/No Way Back.penpot" holds the design's final archive

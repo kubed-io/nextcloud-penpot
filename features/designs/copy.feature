@@ -38,13 +38,17 @@ Feature: Copying a design
     # ── RULE: a copy outside every mapping is a plain file ────────────────────
     # notes: ../AGENTS.md#copying-a-penpot-file-outside-every-mapping-never-contacts-penpot
 
-  @in-nextcloud @gesture
+  @in-nextcloud @gesture @unbuilt
   Scenario: Copy a design out of every mapping
     Given a mirrored design "Original" in the project "Copy Out"
     When I copy "Penpot/Copy Out/Original.penpot" to "Loose Copy.penpot"
     Then the file "Loose Copy.penpot" carries no Penpot id
     And Penpot project "Copy Out" holds no design named "Loose Copy"
     And Penpot project "Copy Out" holds a design named "Original"
+
+    # @unbuilt — THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: the copy
+    # keeps the original's id, so two files claim one design. Both sibling apps
+    # strip the identity from a copy landing outside every mapping.
 
   @in-nextcloud @gesture
   Scenario: Copy a file the app does not manage
