@@ -70,7 +70,7 @@ env:
 jobs:
 
   integration:
-    name: Integration ${{ matrix.suite }} / ${{ matrix.backend }}
+    name: Integration ${{ matrix.suite }}
     runs-on: ubuntu-latest
 
     # ── TWO AXES, AND THEY DO OPPOSITE THINGS ────────────────────────────────
@@ -99,22 +99,7 @@ jobs:
         # NC 33 is the app's max-version; SQLite is the fast integration path.
         server-versions: ['stable33']
         suite: [admin, design, project, core]
-        backend: [plain, team]
-        exclude:
-        # The admin surface configures mappings; it never writes INTO one, so
-        # running it on both backends would buy a second Penpot stack and prove
-        # nothing. It runs once — and it runs on the `team` leg, because that is
-        # the one with groupfolders installed.
-        #
-        # WHICH LEG IT KEEPS IS THE POINT. For every other suite the backend is a
-        # dimension the spec must not mention. For this one it is the SUBJECT:
-        # "mapping a team provisions a Team Folder" and "…with Team Folders turned
-        # off provisions a plain folder" are two outcomes an admin chooses between,
-        # so both have to be askable in the same run. That needs groupfolders
-        # present and a scenario that names the kind it wants — not a leg that
-        # decides for it. On the `plain` leg the Team Folder half is untestable.
-        - suite: admin
-          backend: plain
+        # (no exclusions: one leg per suite)
 
     services:
       # ── Penpot stack ──────────────────────────────────────────────────────
@@ -261,20 +246,21 @@ jobs:
     # untested against a real Penpot. WebDAV is how a browser does it, and PHP's
     # built-in server is enough for DAV: no nginx, no fpm. Ported from
     # nextcloud-n8n, where this has been carrying a much deeper suite.
-    # ── THE ONLY THING THE BACKEND AXIS ACTUALLY CHANGES ─────────────────────
-    # A "team folder" is the groupfolders app. It is a separate Nextcloud app
-    # rather than core, so the team legs install it and the plain legs do not —
-    # which is the whole reason `backend` is a matrix axis rather than a flag the
-    # steps read: the two halves have different DEPENDENCIES, not just different
-    # data.
+    # ── TEAM FOLDERS ARE ALWAYS PRESENT ──────────────────────────────────────
+    # A "team folder" is the groupfolders app, and it is installed on EVERY leg —
+    # the same thing the n8n and grafana suites do.
     #
-    # Until now the groupfolders backend was never covered. features/README.md
-    # records what that cost: the structural scenarios in reconcile.feature
-    # mapped a Team Folder and passed only because of where they sat in the run —
-    # moved later, the folder resolved to nothing at all. More scenarios would
-    # not have caught that. Running the existing ones against both backends does.
+    # It used to be a matrix axis: `plain` legs ran without it, `team` legs with,
+    # and every suite ran twice. That made the storage backend something the RUN
+    # decided and the spec could not mention, so a mapping table could not say
+    # which kind of folder it wanted, and scenarios needed @plain-folder /
+    # @team-folder tags to opt out of the leg that could not host them.
+    #
+    # With the app always present, `| storage | team folder |` is just another
+    # cell — the mapping says what it is, which is where that belongs, and the
+    # nuances between the two become askable in one run instead of being split
+    # across legs that never meet.
     - name: Install Team Folders (groupfolders)
-      if: matrix.backend == 'team'
       run: |
         ./occ app:install groupfolders
         ./occ app:enable groupfolders
@@ -442,27 +428,17 @@ jobs:
         NC_ADMIN_PASS: ${{ env.NC_ADMIN_PASS }}
         PENPOT_URL: http://localhost:9001
         PENPOT_TOKEN: ${{ steps.penpot_token.outputs.token }}
-        # Read by SetupTrait when it maps a team: 'team' asks for a groupfolders
-        # -backed mapping, 'plain' for an admin-owned folder. The scenarios say
-        # nothing about which — that is the point of it being an axis.
-        PENPOT_TEST_BACKEND: ${{ matrix.backend }}
         # Bound here rather than interpolated into `run:` — a `${{ }}` inside a
         # shell script is substituted BEFORE the shell sees it, which mixes
         # templating with logic and is an injection seam. Read as plain $VARs.
         SUITE: ${{ matrix.suite }}
-        BACKEND: ${{ matrix.backend }}
-      # ONE BEHAVIOUR REALLY DOES DIFFER BY BACKEND, so it is written as two
-      # scenarios and each leg skips the other's (delete-design.feature). Every
-      # other scenario is backend-agnostic and carries neither tag.
-      #
       # The status filter is repeated from behat.dist.yml because a CLI --tags
       # REPLACES the config filter rather than adding to it. bin/check-suites.sh
       # asserts the two lists are identical, so they cannot drift apart silently.
       run: |
-        if [ "$BACKEND" = team ]; then SKIP='~@plain-folder'; else SKIP='~@team-folder'; fi
         vendor/bin/behat --config behat.dist.yml --strict \
           --suite="$SUITE" \
-          --tags="~@todo&&~@unbuilt&&~@blocked&&~@decision&&$SKIP"
+          --tags="~@todo&&~@unbuilt&&~@blocked&&~@decision"
 
     # ── Diagnostics: what did the SERVER think? ──────────────────────────────
     # A failing Behat scenario reports what the ASSERTION saw and nothing about
@@ -491,7 +467,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         # Unique per leg: artifacts with the same name collide.
-        name: junit-${{ matrix.suite }}-${{ matrix.backend }}
+        name: junit-${{ matrix.suite }}
         path: apps/${{ env.APP_ID }}/tests/integration/junit/*.xml
         retention-days: 7
         if-no-files-found: error

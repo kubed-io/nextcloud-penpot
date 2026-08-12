@@ -10,14 +10,15 @@ Feature: Emptying the trash
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
     And a mapping with the following values:
-      | team   | Design Team |
-      | folder | Penpot      |
-      | mode   | sync        |
+      | team    | Design Team  |
+      | folder  | Penpot       |
+      | mode    | sync         |
+      | storage | admin folder |
 
     # ── RULE: the purge finishes what the trashing started ────────────────────
     # notes: ../AGENTS.md#purging-a-mirror-from-the-nextcloud-trash-destroys-the-design
 
-  @in-nextcloud @gesture @plain-folder
+  @in-nextcloud @gesture
   Scenario: Empty the trash
     Given a mirrored design "Gone For Good" in the project "Purge Me"
     And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
@@ -30,9 +31,15 @@ Feature: Emptying the trash
     # irreversible gesture Nextcloud offers.
 
   # notes: ../AGENTS.md#emptying-a-team-folders-trash-cannot-reach-penpot-and-says-nothing
-  @in-nextcloud @gesture @team-folder
+  @in-nextcloud @gesture
   Scenario: Empty the trash of a Team Folder
-    Given a mirrored design "Gone For Good" in the project "Purge Me"
+    Given a mapping with the following values:
+      | team    | Design Team |
+      | folder  | Penpot      |
+      | mode    | sync        |
+      | storage | team folder |
+      | groups  | admin       |
+    And a mirrored design "Gone For Good" in the project "Purge Me"
     And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
     And the design "Gone For Good" is in Penpot's trash
     When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
