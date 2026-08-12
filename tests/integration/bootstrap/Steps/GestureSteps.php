@@ -48,6 +48,15 @@ trait GestureSteps {
 	/** Where the most recent gesture put the file, for the assertions to read. */
 	private string $gestureTarget = '';
 
+	/**
+	 * The Penpot id the file carried BEFORE the gesture.
+	 *
+	 * Read at gesture time because that is the last moment the old path resolves,
+	 * and because resolving an id from the NEW name afterwards proves only that
+	 * some design has that name — not that it is the same one.
+	 */
+	private string $idBeforeGesture = '';
+
 	// ── the gestures ────────────────────────────────────────────────────────
 
 	/** @When /^I copy "([^"]*)" to "([^"]*)"$/ */
@@ -73,6 +82,10 @@ trait GestureSteps {
 	 * @When /^I rename "([^"]*)" to "([^"]*)"$/
 	 */
 	public function iRenameTo(string $path, string $newName): void {
+		// THE ID BEFORE THE GESTURE, so a Then can claim the design MOVED rather than
+		// being replaced by a new one wearing the new name. Resolving the id from the
+		// new name afterwards cannot tell those apart.
+		$this->idBeforeGesture = (string)$this->davReadMetadata($path, 'penpot_id');
 		$parent = dirname($path);
 		$target = ($parent === '.' || $parent === '') ? $newName : $parent . '/' . $newName;
 		$this->davMove($path, $target);
@@ -111,6 +124,11 @@ trait GestureSteps {
 	 * The gesture, and its past tense for scenarios that merely need the file to
 	 * be there before the behaviour starts. See {@see iDelete()}.
 	 *
+	 * A GIVEN STATES WHAT IS TRUE. As an arrange the sentence is "there is an
+	 * untracked archive here", not "I uploaded one" — putting it there is the
+	 * step's problem, not the scenario's.
+	 *
+	 * @Given /^an untracked "\.penpot" archive at "([^"]*)"$/
 	 * @When /^I upload a ".penpot" archive at "([^"]*)"$/
 	 * @Given /^an uploaded ".penpot" archive at "([^"]*)"$/
 	 */
@@ -233,7 +251,37 @@ trait GestureSteps {
 		}
 	}
 
-	/** @Then /^the file "([^"]*)" is not in the Nextcloud trash$/ */
+	/**
+	 * THE SNAPSHOT IS THE WHOLE POINT of pruning a vanished design (saga §6.46):
+	 * the archive is written into the mirror while the design is still readable, so
+	 * the bytes in the trash are the last thing that could bring it back at all. A
+	 * trashed file's own path no longer resolves, so this reads the trashbin entry.
+	 *
+	 * @Then /^the trashed file "([^"]*)" holds the design's final archive$/
+	 */
+	public function theTrashedFileHoldsItsFinalArchive(string $path): void {
+		$entry = $this->trashbinPathFor($path);
+		if ($entry === null) {
+			throw new \RuntimeException("'{$path}' is not in the Nextcloud trash");
+		}
+		$bytes = (string)$this->davClient()
+			->request('GET', $this->trashHref($entry))
+			->getBody();
+		if (substr($bytes, 0, 2) !== 'PK') {
+			throw new \RuntimeException(
+				'the trashed mirror holds ' . strlen($bytes) . ' bytes that are not a ZIP archive — '
+				. 'the final snapshot was never written',
+			);
+		}
+	}
+
+	/**
+	 * One check, two sentences, because a purge and a restore both leave no trashbin
+	 * entry and mean opposite things. "Gone from" reads for the destroyed case.
+	 *
+	 * @Then /^the file "([^"]*)" is gone from the Nextcloud trash$/
+	 * @Then /^the file "([^"]*)" is not in the Nextcloud trash$/
+	 */
 	public function theFileIsNotInTheNextcloudTrash(string $path): void {
 		if ($this->trashbinPathFor($path) !== null) {
 			throw new \RuntimeException("expected no trashbin entry for '{$path}', but one is there");

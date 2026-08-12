@@ -42,7 +42,16 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * and {@see GestureSteps}.
  */
 trait ProjectFolderSteps {
-	/** @When /^I create a folder at "([^"]*)"$/ */
+	/**
+	 * A GIVEN STATES WHAT IS TRUE. As an arrange the sentence is "there is a plain
+	 * folder here", not "I created one" — and "not a project" is the load-bearing
+	 * half, because a folder only becomes a project by carrying a project id.
+	 *
+	 * @Given /^a folder at "([^"]*)" that is not a project$/
+	 * @Given /^a folder at "([^"]*)" that is not mapped$/
+	 * @Given /^a folder at "([^"]*)" in the user's home that is not a project$/
+	 * @When /^I create a folder at "([^"]*)"$/
+	 */
 	public function iCreateAFolderAt(string $path): void {
 		$this->davMkcol($path);
 	}

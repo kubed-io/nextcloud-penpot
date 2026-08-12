@@ -1,59 +1,78 @@
 # Notes, decisions and history for this feature: ../AGENTS.md#designspurge
 
-Feature: Purge the app's mirrored files from Nextcloud
-  As a Nextcloud admin
-  I want a button that removes the ".penpot" files this app mirrored
-  So that I can reset the Nextcloud side without ever touching Penpot or losing standalone files
+Feature: Emptying the trash
+  As a Nextcloud user
+  I want emptying the trash to finish the delete on both sides
+  So that the one irreversible act is reached only by the one irreversible gesture
 
   Background:
-    Given the app is connected to Penpot
-    And a Team Folder mapped to the Penpot team "Northwind"
-    And the Penpot project "My Stuff" is mirrored as a folder inside it
+    Given the app is enabled
+    And the Penpot base URL points at the test instance
+    And the admin has configured the service-account token
+    And a mapping with the following values:
+      | team   | Design Team |
+      | folder | Penpot      |
+      | mode   | sync        |
 
-  @unbuilt
-  Scenario: Purge deletes mirrored files but leaves Penpot and the mapping intact
-    Given a mirrored ".penpot" file in the "My Stuff" subfolder
-    When the admin purges the Nextcloud files
-    Then no mirrored files remain in the "My Stuff" subfolder
-    And the design file still exists, unchanged, in Penpot
-    And the "Northwind" mapping is still configured
+    # ── RULE: the purge finishes what the trashing started ────────────────────
+    # notes: ../AGENTS.md#purging-a-mirror-from-the-nextcloud-trash-destroys-the-design
 
-  @unbuilt
-  Scenario: Purge keeps an unmapped file — a standalone copy is never lost
-    Given an unmapped ".penpot" file that still carries its "penpot_id"
-    And I remember the unmapped file
-    And a mirrored ".penpot" file in the "My Stuff" subfolder
-    When the admin purges the Nextcloud files
-    Then no mirrored files remain in the "My Stuff" subfolder
-    And the remembered unmapped file is left in place
+  @in-nextcloud @gesture @plain-folder
+  Scenario: Empty the trash
+    Given a mirrored design "Gone For Good" in the project "Purge Me"
+    And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
+    And the design "Gone For Good" is in Penpot's trash
+    When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
+    Then the design "Gone For Good" is not in Penpot's trash
+    And the file "Penpot/Purge Me/Gone For Good.penpot" is gone from the Nextcloud trash
 
-  @unbuilt
-  Scenario: Purge keeps an untracked ".penpot" file — never the app's business
-    Given a ".penpot" file with no "penpot_id" (never tracked)
-    When the admin purges the Nextcloud files
-    Then that untracked file is left in place
+    # The one irreversible thing this app can cause, reached only by the one
+    # irreversible gesture Nextcloud offers.
 
-  @unbuilt
-  Scenario: A purge warns what is actually being deleted
-    Given 3 mirrored files in "sync" mode and 10 in "link" mode in the "My Stuff" subfolder
-    When the admin starts a purge
-    Then the confirmation names how many files hold real archives
-    And it explains that link files hold no content to lose
-    # Purging 10 pointers and purging 3 backups are very different events.
+  # notes: ../AGENTS.md#emptying-a-team-folders-trash-cannot-reach-penpot-and-says-nothing
+  @in-nextcloud @gesture @team-folder
+  Scenario: Empty the trash of a Team Folder
+    Given a mirrored design "Gone For Good" in the project "Purge Me"
+    And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
+    And the design "Gone For Good" is in Penpot's trash
+    When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
+    Then the design "Gone For Good" is still in Penpot's trash
+    And the file "Penpot/Purge Me/Gone For Good.penpot" is gone from the Nextcloud trash
 
-  @blocked
-  Scenario: Sync from Penpot brings a sync file back after a purge
-    Given a mirrored ".penpot" file in "sync" mode in the "My Stuff" subfolder
-    And the admin purges the Nextcloud files
-    When the admin clicks "Sync from Penpot" for the "Northwind" mapping
-    Then the design file appears again as a file in the "My Stuff" subfolder
-    And it is re-exported and re-downloaded from Penpot, not restored from any local backup
+    # A Team Folder's trash raises no event this app can hear, so the design is left
+    # in Penpot's trash to age out on its own rather than be destroyed unseen.
 
-  @blocked
-  Scenario: Sync from Penpot brings a link file back as a pointer
-    Given a mirrored ".penpot" file in "link" mode in the "My Stuff" subfolder
-    And the admin purges the Nextcloud files
-    When the admin clicks "Sync from Penpot" for the "Northwind" mapping
-    Then the file appears again in the "My Stuff" subfolder as a pointer
-    And no export was performed to bring it back
-    # A purge of link files costs nothing to undo — there were never any bytes.
+    # ── RULE: the purge destroys only what it can still see in Penpot's trash ─
+    # notes: ../AGENTS.md#a-purge-only-destroys-what-is-still-in-penpots-trash
+
+  @in-nextcloud @gesture @todo
+  Scenario: Empty the trash after someone rescued the design in Penpot
+    Given a mirrored design "Rescued" in the project "Purge Me"
+    And "Penpot/Purge Me/Rescued.penpot" is in the trash
+    And the design "Rescued" has been restored in Penpot
+    When I purge "Penpot/Purge Me/Rescued.penpot" from the Nextcloud trash
+    Then Penpot project "Purge Me" holds a design named "Rescued"
+    And the file "Penpot/Purge Me/Rescued.penpot" is gone from the Nextcloud trash
+
+    # Penpot's permanent delete does NOT check that a design is in the trash — hand
+    # it a live one and it is destroyed. The trashed mirror still carries the id.
+
+  @in-nextcloud @gesture @todo
+  Scenario: Empty the trash after the design is already gone from Penpot
+    Given a mirrored design "Twice Dead" in the project "Purge Me"
+    And "Penpot/Purge Me/Twice Dead.penpot" is in the trash
+    And the design "Twice Dead" has been permanently deleted in Penpot
+    When I purge "Penpot/Purge Me/Twice Dead.penpot" from the Nextcloud trash
+    Then the file "Penpot/Purge Me/Twice Dead.penpot" is gone from the Nextcloud trash
+
+    # ── RULE: a file the app never mirrored is Nextcloud's alone ──────────────
+
+  @in-nextcloud @gesture
+  Scenario: Empty the trash of a file the app never mirrored
+    Given a mirrored design "Keep Me" in the project "Purge Me"
+    And an untracked ".penpot" archive at "Loose Design.penpot"
+    And "Loose Design.penpot" is in the trash
+    When I purge "Loose Design.penpot" from the Nextcloud trash
+    Then Penpot project "Purge Me" holds a design named "Keep Me"
+    And the design "Keep Me" is not in Penpot's trash
+    And the file "Loose Design.penpot" is gone from the Nextcloud trash
