@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Supports Nextcloud **34**. The integration suite now runs against both ends of the supported range instead of one version, after two patch releases of Nextcloud turned out to disagree about behaviour these apps rely on.
+- Supports Nextcloud **34**, and every major in the supported range is now actually executed by the integration suite — after two patch releases of Nextcloud turned out to disagree about behaviour these apps rely on.
 
 - Internal: an untracked step assertion could not fail for the reason it claimed, and a metadata table silently compared unknown vocabulary as a literal (no behaviour change; test harness only).
 
