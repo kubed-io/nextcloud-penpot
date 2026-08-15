@@ -75,7 +75,7 @@ this app integrates with.
          would sit on the folder doing nothing, with no error anywhere. A silently
          absent feature is the failure mode this project keeps having to dig out, so
          the floor is raised to where the feature actually works. (Live is 33.) -->
-    <nextcloud min-version="32" max-version="33"/>
+    <nextcloud min-version="32" max-version="34"/>
   </dependencies>
   <settings>
     <!-- Section order (by priority), deliberately identical to nextcloud-n8n and
