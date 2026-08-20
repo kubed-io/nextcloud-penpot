@@ -63,10 +63,11 @@ namespace OCA\Files_Trashbin\Events {
 namespace Sabre\DAV {
 	// The Sabre/DAV server surface LinkWriteGuardPlugin builds on. Sabre ships
 	// inside a running Nextcloud, not in nextcloud/ocp, so the unit suite has to
-	// declare the three symbols the plugin touches: the node interface it type-
-	// checks against, the server it hooks `beforeWriteContent` on, and the plugin
-	// base it extends. Declarations only — the real behaviour is exercised by the
-	// integration suite against a live server.
+	// declare the symbols the plugin touches: the node interface it type-checks
+	// against, the server it hooks `beforeWriteContent` and `method:MOVE` on (and
+	// asks to place a Destination header), and the plugin base it extends.
+	// Declarations only — the real behaviour is exercised by the integration
+	// suite against a live server.
 	if (!interface_exists(INode::class, false)) {
 		interface INode {
 			public function getName(): string;
@@ -80,11 +81,33 @@ namespace Sabre\DAV {
 
 			public function addPlugin(ServerPlugin $plugin): void {
 			}
+
+			/** Turns an absolute Destination header into a path relative to the DAV root. */
+			public function calculateUri(string $uri): string {
+				return ltrim((string)parse_url($uri, PHP_URL_PATH), '/');
+			}
 		}
 	}
 	if (!class_exists(ServerPlugin::class, false)) {
 		abstract class ServerPlugin {
 			abstract public function initialize(Server $server): void;
+		}
+	}
+}
+
+namespace Sabre\HTTP {
+	// The `method:*` handler signature. Sabre hands the whole request over, which is
+	// how the move guard reads the Destination header without reaching into an
+	// untyped public property on the server.
+	if (!interface_exists(RequestInterface::class, false)) {
+		interface RequestInterface {
+			public function getPath(): string;
+
+			public function getHeader(string $name): ?string;
+		}
+	}
+	if (!interface_exists(ResponseInterface::class, false)) {
+		interface ResponseInterface {
 		}
 	}
 }

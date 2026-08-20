@@ -13,6 +13,7 @@ use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
+use OCA\PenpotSync\Service\MoveRules;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\SyncGuard;
@@ -61,7 +62,12 @@ final class MoveGuardListenerTest extends TestCase {
 			static fn (string $text, array $parameters = []): string => vsprintf($text, $parameters),
 		);
 
-		$this->listener = new MoveGuardListener($this->metadata, $this->resolver, $this->guard, $l);
+		// The rules are a real MoveRules, not a double: they ARE the behaviour under
+		// test here, and the listener is now only the half that aborts.
+		$this->listener = new MoveGuardListener(
+			new MoveRules($this->metadata, $this->resolver, $l),
+			$this->guard,
+		);
 	}
 
 	// ── §6.30, project folders ──────────────────────────────────────────────

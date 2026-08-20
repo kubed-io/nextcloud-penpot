@@ -1920,6 +1920,39 @@ three destinations, one outcome — which is what makes it a table.
 The last two assertions are the point of the refusal: the file is still
 where it was, still tracked, and Penpot never heard about any of it.
 
+### A refusal has to reach the person, and the listener cannot carry it
+
+BOTH refusals above were invisible. `MoveGuardListener` throws
+`AbortedEventException` with a message written for exactly this moment — named
+rule, reason, way forward, translated through `IL10N` — and the person dragging
+the folder saw a 403 with an empty body. The messages have been right the whole
+time; nothing was delivering them.
+
+Read out of a running Nextcloud rather than reasoned about, three frames deep:
+
+- `OC\Files\Node\HookConnector::rename()` catches `AbortedEventException` by
+  name, logs it, and sets `run = false`. The message goes to the log, and stops.
+- `View::rename()` returns `false`, so `Sabre\...\Directory::moveInto()` answers
+  `throw new \Sabre\DAV\Exception\Forbidden('')` — an empty string, by literal.
+- `OC_Hook::emit()` wraps every slot in `catch (Throwable)` and CARRIES ON. Only
+  `HintException` and `ServerNotAvailableException` are re-thrown.
+
+That third frame is the trap, and it is why the obvious repair is wrong.
+`AbortedEventException` is not one option among several — it is the ONLY thing a
+listener on this route can throw that refuses anything at all. The Grafana
+sibling measured the alternative in CI: swapping in `OCP\Files\ForbiddenException`
+to rescue the message turned nine refusals into HTTP 201, allowed.
+
+**So the rules are stated once and asked twice.** `MoveRules` answers with a
+message or null. `MoveGuardListener` asks and aborts — that is the half reaching
+`occ`, another app, a script, none of which go near Sabre. `LinkWriteGuardPlugin`
+asks on `method:MOVE` and throws `Forbidden` with the reason — the only place a
+readable 403 reaches a client. Same split `method:PUT` and `method:COPY` already
+use in both siblings, arrived at the same way.
+
+The scenarios did not change, and neither did the rules. What changed is that
+`Then the move is refused` is now a claim about something the person can read.
+
 ### A design moved to another project in Penpot relocates its mirror
 
 THE PRUNE MUST NOT FIRE. The design is still named by Penpot, just from a

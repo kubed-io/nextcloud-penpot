@@ -363,9 +363,12 @@ namespace OCP\Files {
 }
 
 namespace OCP\Exceptions {
-	// MoveGuardListener throws this to REFUSE a move before it happens (§6.30).
-	// Core turns it into a user-visible message; here it only needs to exist so
-	// the guard's test can assert the refusal.
+	// MoveGuardListener throws this to REFUSE a move before it happens (§6.30) —
+	// the ONE exception `OC_Hook::emit()` does not swallow on the way through,
+	// because `HookConnector` catches it by name. The message it carries does NOT
+	// survive that catch; {@see OCA\PenpotSync\DAV\LinkWriteGuardPlugin} is what
+	// says why. Here it only needs to exist so the guard's test can assert the
+	// refusal.
 	if (!class_exists(AbortedEventException::class, false)) {
 		class AbortedEventException extends \Exception {
 		}
