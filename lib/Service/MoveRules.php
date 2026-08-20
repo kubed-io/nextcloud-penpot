@@ -88,7 +88,7 @@ final class MoveRules {
 		return $this->evaluate($source, $targetParent === null ? null : $this->resolver->resolve($targetParent));
 	}
 
-	/** @param ?Membership $to where the source would end up, already resolved */
+	/** @param Membership|null $to where the source would end up, already resolved */
 	private function evaluate(Node $source, ?Membership $to): ?string {
 		if ($source instanceof Folder) {
 			return $this->forProjectFolder($source, $to);
