@@ -11,13 +11,18 @@ namespace OCA\PenpotSync\DAV;
 
 use OCA\DAV\Connector\Sabre\File as DavFile;
 use OCA\PenpotSync\AppInfo\Application;
+use OCA\PenpotSync\Service\MoveRules;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PullService;
+use OCP\Files\IRootFolder;
+use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 use Sabre\DAV\Exception\Forbidden;
 use Sabre\DAV\INode;
 use Sabre\DAV\Server;
 use Sabre\DAV\ServerPlugin;
+use Sabre\HTTP\RequestInterface;
+use Sabre\HTTP\ResponseInterface;
 
 /**
  * Refuses to let a `link`-mode design file be overwritten over WebDAV.
@@ -70,15 +75,90 @@ use Sabre\DAV\ServerPlugin;
 final class LinkWriteGuardPlugin extends ServerPlugin {
 	public function __construct(
 		private readonly PenpotMetadata $metadata,
+		private readonly MoveRules $rules,
+		private readonly IRootFolder $rootFolder,
+		private readonly IUserSession $userSession,
 		private readonly LoggerInterface $logger,
 	) {
 	}
 
+	/** Kept from {@see initialize} so {@see onMove} can place a destination path. */
+	private ?Server $server = null;
+
 	#[\Override]
 	public function initialize(Server $server): void {
+		$this->server = $server;
 		// Run early (a low priority number wins) so we refuse before any bytes are
 		// streamed to the part file.
 		$server->on('beforeWriteContent', [$this, 'beforeWriteContent'], 10);
+		// AND THE REFUSALS THE LISTENER CANNOT VOICE. {@see \OCA\PenpotSync\Listener\MoveGuardListener}
+		// stops a refused move on every route there is, but the message it carries is
+		// caught and discarded by `HookConnector::rename()`, and `Directory::moveInto()`
+		// then answers `Forbidden('')` with an empty string. So a person dragging a
+		// project out of its team folder got a failure dialog with nothing in it —
+		// exactly the outcome those two carefully written, translated messages exist to
+		// prevent. Refusing here is what puts the reason in the response.
+		//
+		// The priority runs this ahead of Sabre's own `httpMove` (100).
+		$server->on('method:MOVE', [$this, 'onMove'], 10);
+	}
+
+	/**
+	 * Refuse a MOVE the rules refuse, in words the person can read.
+	 *
+	 * @param ResponseInterface $response unused; part of Sabre's `method:*` signature
+	 * @return bool always true — this handler either throws or hands the request on
+	 *
+	 * The rules are {@see MoveRules}, shared with the listener rather than restated, so
+	 * the two answers cannot drift apart. All this adds is the translation between
+	 * Sabre's `files/<uid>/<relative>` and the node the rules want.
+	 *
+	 * FAIL OPEN, AS EVERYWHERE IN THIS PLUGIN. A source that cannot be resolved or a
+	 * destination Sabre cannot place leaves the move alone — the listener is still
+	 * behind it, so the worst case is the refusal this app has always made, silently,
+	 * rather than a move that should have been refused slipping through.
+	 */
+	public function onMove(RequestInterface $request, ResponseInterface $response): bool {
+		$destination = $request->getHeader('Destination');
+		if ($destination === null || $destination === '' || $this->server === null) {
+			return true;
+		}
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		if ($uid === '') {
+			return true;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($uid);
+			$source = $userFolder->get($this->relativeTo($request->getPath()));
+			// THE DESTINATION DOES NOT EXIST YET, so what the rules are handed is the
+			// folder it is binding INTO — which is what they distil a target down to
+			// anyway ({@see MoveRules::refusalForLandingIn}).
+			$targetRelative = $this->relativeTo($this->server->calculateUri($destination));
+			$parentPath = dirname($targetRelative);
+			$targetParent = $parentPath === '.' || $parentPath === '' ? $userFolder : $userFolder->get($parentPath);
+		} catch (\Throwable) {
+			return true;
+		}
+
+		$refusal = $this->rules->refusalForLandingIn($source, $targetParent);
+		if ($refusal === null) {
+			return true;
+		}
+
+		$this->logger->warning('penpot_sync: refused a WebDAV move', [
+			'app' => Application::APP_ID,
+			'from' => $request->getPath(),
+		]);
+
+		throw new Forbidden($refusal);
+	}
+
+	/** `files/<uid>/<relative>` as Sabre spells it → the `<relative>` the app works in. */
+	private function relativeTo(string $davPath): string {
+		$relative = preg_replace('#^files/[^/]+/#', '', ltrim($davPath, '/'));
+
+		return is_string($relative) ? $relative : '';
 	}
 
 	/**
