@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- When a move is refused — a project leaving its team folder, a link leaving its project — Nextcloud now shows you the reason instead of an empty error.
+
 ### Changed
 
 - Supports Nextcloud **34**, and every major in the supported range is now actually executed by the integration suite — after two patch releases of Nextcloud turned out to disagree about behaviour these apps rely on.

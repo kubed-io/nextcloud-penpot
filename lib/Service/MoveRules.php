@@ -182,4 +182,5 @@ final class MoveRules {
 	 */
 	private function samePosition(Membership $a, Membership $b): bool {
 		return $a->projectId === $b->projectId && $a->teamId === $b->teamId;
-	}}
+	}
+}
