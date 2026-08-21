@@ -76,6 +76,8 @@ Feature: Mapping a Penpot team to a Nextcloud folder
 
     # notes: ../AGENTS.md#a-mapping-may-not-reuse-a-team-or-a-folder
 
+  # @todo AND IT FAILS, WHICH IS A FINDING: "it" has no referent here. Naming a
+  # team needs a token, and this scenario is about not having one.
   # notes: ../AGENTS.md#without-a-service-account-token-nothing-can-be-mapped
   @todo
   Scenario: Without a service-account token, nothing can be mapped

@@ -1,5 +1,9 @@
 # Notes, decisions and history for this feature: ../AGENTS.md#designsopen-with
 
+# @blocked throughout — no browser. Every scenario here asserts a context-menu
+# entry or what a click does, which this harness cannot reach.
+# notes: ../AGENTS.md#designsopen-with
+@blocked
 Feature: Opening a design file
   As a Nextcloud user
   I want a design file to take me to the live design in Penpot
@@ -11,7 +15,7 @@ Feature: Opening a design file
     # ── RULE: a design file names a live design, whatever its mode ────────────
     # notes: ../AGENTS.md#opening-needs-a-team-id-so-an-unmapped-file-opens-nothing
 
-  @in-nextcloud @gesture @ui @todo
+  @in-nextcloud @gesture @ui
   Scenario Outline: Open in Penpot is offered for a mirrored design file
     Given a design file in "<mode>" mode
     When I look at its context menu
@@ -22,7 +26,7 @@ Feature: Opening a design file
       | sync |
       | link |
 
-  @in-nextcloud @gesture @ui @todo
+  @in-nextcloud @gesture @ui
   Scenario Outline: A plain click opens the design in Penpot
     Given a design file in "<mode>" mode
     When I click the file in the Files app
@@ -35,14 +39,14 @@ Feature: Opening a design file
 
     # ── RULE: the opener needs an instance and a single file ──────────────────
 
-  @in-nextcloud @gesture @ui @todo
+  @in-nextcloud @gesture @ui
   Scenario: Open in Penpot is hidden until an instance is configured
     Given the admin has not set the Penpot base URL
     And a design file in "sync" mode
     When I look at its context menu
     Then "Open in Penpot" is hidden
 
-  @in-nextcloud @gesture @ui @todo
+  @in-nextcloud @gesture @ui
   Scenario: Open in Penpot is hidden for a selection of several files
     Given two design files in "sync" mode
     When I look at their context menu
@@ -53,7 +57,7 @@ Feature: Opening a design file
     # ── RULE: a file the app does not track opens nothing, quietly ────────────
     # notes: ../AGENTS.md#an-untracked-design-file-opens-nothing-rather-than-failing
 
-  @in-nextcloud @gesture @ui @todo
+  @in-nextcloud @gesture @ui
   Scenario: Click a design file the app does not track
     Given an untracked design file at "Scratch/Loose.penpot"
     When I click the file in the Files app

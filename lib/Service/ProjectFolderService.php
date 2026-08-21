@@ -109,7 +109,11 @@ final class ProjectFolderService {
 			return;
 		}
 
-		$name = trim($folder->getName());
+		// THE NAME IS THE PATH BELOW THE MAPPING, not the folder's own name — see
+		// MembershipResolver::pathBelowMapping(). Using the bare name made this
+		// direction disagree with the pull, which has always spelt a project's
+		// nesting into its name.
+		$name = trim((string)$this->resolver->pathBelowMapping($folder));
 		if ($name === '' || mb_strlen($name) > 250) {
 			// Penpot's own rule is [:string {:max 250, :min 1}] — checked here so
 			// the refusal is local and the tag comes off, rather than arriving as a

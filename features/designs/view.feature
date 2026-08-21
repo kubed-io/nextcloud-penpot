@@ -18,8 +18,10 @@ Feature: Looking at a design file
 
     # ── RULE: a mirror reads as a design, not as the archive it happens to be ─
 
+  # @blocked — no browser. An icon in a folder listing is DOM, and the two DAV
+  # scenarios below are how this harness reaches the same metadata.
   # notes: ../AGENTS.md#a-mapped-folder-shows-its-designs-as-designs
-  @ui @todo
+  @ui @blocked
   Scenario: A mapped folder shows its designs as designs
     Given a design file named "Brand Kit.penpot" in "Penpot/Brand"
     And a design file named "Landing Page.penpot" in "Penpot/Brand"

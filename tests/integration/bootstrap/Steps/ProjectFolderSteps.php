@@ -51,6 +51,7 @@ trait ProjectFolderSteps {
 	 * @Given /^a folder at "([^"]*)" that is not mapped$/
 	 * @Given /^a folder at "([^"]*)" in the user's home that is not a project$/
 	 * @When /^I create a folder at "([^"]*)"$/
+	 * @When /^I create the folder "([^"]*)"$/
 	 */
 	public function iCreateAFolderAt(string $path): void {
 		$this->davMkcol($path);

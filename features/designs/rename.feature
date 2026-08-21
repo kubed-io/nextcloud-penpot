@@ -19,7 +19,7 @@ Feature: Renaming a design
     # ── RULE: a name is one value living in two places ────────────────────────
     # notes: ../AGENTS.md#renaming-a-mirrored-file-renames-its-design-in-penpot
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Rename a design in Nextcloud
     Given a design file named "Old Name.penpot" in "Penpot/Rename Live"
     When I rename the file to "<new name>.penpot"
@@ -44,7 +44,7 @@ Feature: Renaming a design
     # replace it with a new one wearing the new name.
 
   # notes: ../AGENTS.md#a-rename-is-picked-up-in-both-modes-without-an-export
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Rename a design in Penpot
     Given a design file named "Old Name.penpot" in "<folder>/Renamed"
     When someone renames the design to "New Name" in Penpot
@@ -64,7 +64,9 @@ Feature: Renaming a design
     # ── RULE: a link is read-only, so its name is Penpot's to set ─────────────
     # notes: ../AGENTS.md#renaming-a-link-never-renames-the-design
 
-  @in-nextcloud @gesture @todo
+  # @unbuilt — the rename is ALLOWED today (HTTP 201). MoveRules permits any move
+  # within a link's own project, and a rename is one; the spec wants it refused.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Rename a link in Nextcloud
     Given a design file named "Old Name.penpot" in "Pointers/Confined"
     When I try to rename the file to "New Name.penpot"

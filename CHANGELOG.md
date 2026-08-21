@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Moving a project folder now renames the project in Penpot.** Dragging one into another folder used to leave Penpot calling it by its old name, and a project nested inside a folder was named after the folder alone instead of its path — so `Penpot/foo/Old` was announced as `Old`. Both sides now agree that a project's name is where it sits.
+
 - When a move is refused — a project leaving its team folder, a link leaving its project — Nextcloud now shows you the reason instead of an empty error.
 
 ### Changed
@@ -31,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Internal: an untracked step assertion could not fail for the reason it claimed, and a metadata table silently compared unknown vocabulary as a literal (no behaviour change; test harness only).
 
-- Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and the integration harness is being re-taught one behaviour at a time. The connection, app-lifecycle and team-mapping scenarios run again; the rest stay `@todo` until their PR. No behaviour change.
+- Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and the integration harness is being re-taught one behaviour at a time. The connection, app-lifecycle, mapping, design-rename and project verbs run again; the rest stay `@todo` until their PR.
 
 ### Added
 

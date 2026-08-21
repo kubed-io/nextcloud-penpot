@@ -91,7 +91,7 @@ Feature: Copying a Penpot project folder
 
     # ── RULE: a copy outside every mapping is an ordinary folder ──────────────
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Copy a project out of every mapping
     Given the following items in the mappings:
       | path                          | kind    |

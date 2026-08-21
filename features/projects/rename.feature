@@ -20,7 +20,7 @@ Feature: Renaming a project
     # ── RULE: the id is what makes a rename a rename ──────────────────────────
     # notes: ../AGENTS.md#renaming-a-project-folder-renames-the-project-in-penpot
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Rename a project folder in Nextcloud
     Given the following items in the mappings:
       | path                     |
@@ -44,6 +44,8 @@ Feature: Renaming a project
     # ── RULE: a project renamed in Penpot is renamed in place ─────────────────
     # notes: ../AGENTS.md#a-project-renamed-in-penpot-keeps-its-folder-where-it-is
 
+  # @todo — needs per-scenario isolation in Penpot: the team still holds the
+  # "New" project the scenario above made, so the pull adopts the wrong folder.
   @in-penpot @gesture @todo
   Scenario Outline: Rename a project in Penpot
     Given the following items in the mappings:

@@ -96,6 +96,44 @@ trait WebDavTrait {
 		$this->assertStatus($this->davClient()->request('PUT', $this->davEncode($path), ['body' => $body]), [201, 204], "PUT $path");
 	}
 
+	/**
+	 * The immediate children of a folder, as paths under the files root.
+	 *
+	 * Depth 1 lists the folder itself first, and core spells that entry with a
+	 * trailing slash and the same href as the request — so it is dropped by
+	 * comparing the decoded path rather than by position, which a differently
+	 * ordered server would get wrong.
+	 *
+	 * @return list<string>
+	 */
+	private function davChildren(string $folder): array {
+		$folder = trim($folder, '/');
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($folder), [
+			'headers' => ['Depth' => '1', 'Content-Type' => 'application/xml'],
+			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:">'
+				. '<d:prop><d:resourcetype/></d:prop></d:propfind>',
+		]);
+		$this->assertStatus($res, [207], "PROPFIND $folder");
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+
+		$root = '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/';
+		$out = [];
+		foreach ($doc->xpath('//d:response/d:href') ?: [] as $href) {
+			$path = trim(rawurldecode((string)$href), '/');
+			$prefix = trim(rawurldecode($root), '/');
+			if (!str_starts_with($path, $prefix)) {
+				continue;
+			}
+			$rel = trim(substr($path, strlen($prefix)), '/');
+			if ($rel === '' || $rel === $folder) {
+				continue;
+			}
+			$out[] = $rel;
+		}
+		return $out;
+	}
+
 	/** GET a file's content. */
 	private function davGet(string $path): string {
 		$res = $this->davClient()->request('GET', $this->davEncode($path));
@@ -119,10 +157,28 @@ trait WebDavTrait {
 
 	/** MOVE a file, returning the raw status (so move-refused scenarios can inspect it). */
 	private function davMoveStatus(string $from, string $to): int {
+		return $this->davMoveResult($from, $to)['status'];
+	}
+
+	/**
+	 * A refused MOVE, status AND body.
+	 *
+	 * The body is half the claim since #32: `LinkWriteGuardPlugin` throws
+	 * `Forbidden` carrying the reason on `method:MOVE`, and that is the only route
+	 * where a readable 403 reaches a client — `AbortedEventException` from the
+	 * listener reaches the log and stops there. A scenario saying "refused with a
+	 * message" is asserting that repair still works, so it has to read the body;
+	 * asserting the status alone would pass against the empty-body 403 that bug
+	 * produced.
+	 *
+	 * @return array{status:int, body:string}
+	 */
+	private function davMoveResult(string $from, string $to): array {
 		$dest = $this->ncBaseUrl . '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/' . $this->davEncode($to);
-		return $this->davClient()->request('MOVE', $this->davEncode($from), [
+		$res = $this->davClient()->request('MOVE', $this->davEncode($from), [
 			'headers' => ['Destination' => $dest, 'Overwrite' => 'F'],
-		])->getStatusCode();
+		]);
+		return ['status' => $res->getStatusCode(), 'body' => (string)$res->getBody()];
 	}
 
 	/** COPY a file within the user's files root (fires NodeCopiedEvent in NC). */

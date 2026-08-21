@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Tests\Integration;
 use Behat\Behat\Context\Context;
 use OCA\PenpotSync\Tests\Integration\Steps\AdminSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\AppLifecycleSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\ArrangeSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ConnectionSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\GestureSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
@@ -20,6 +21,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\ModeSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ProjectFolderSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PruneSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PullSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\RenameSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 use OCA\PenpotSync\Tests\Integration\Support\WebDavTrait;
 
@@ -60,10 +62,12 @@ final class FeatureContext implements Context {
 	use OccTrait;
 	use WebDavTrait;
 	use AppLifecycleSteps;
+	use ArrangeSteps;
 	use AdminSteps;
 	use ConnectionSteps;
 	use MappingSteps;
 	use PullSteps;
+	use RenameSteps;
 	use ModeSteps;
 	use PruneSteps;
 	use GestureSteps;

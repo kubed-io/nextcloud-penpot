@@ -162,50 +162,75 @@ count nobody states is a count nobody can check.
 
 ---
 
-## Where we are — 2026-08-21 · **ROUND 1 SURVEYED — THE HARNESS HELD**
+## Where we are — 2026-08-21 · **THE SPINE IS IN, AND FOUR LEGS ARE GREEN**
 
 > **Opening state.** 116 scenarios, all `@todo`. Zero running. Four integration
-> legs reporting `tests="0"`, which is a pass and says so in three places
-> (`behat.dist.yml`, the workflow header, `features/README.md`).
+> legs reporting `tests="0"`.
 
 ### Round 1 — the nine that were already signed off · **9 live, 1 re-triaged**
 
+The re-survey passed: all nine, in one PR, exactly as the plan said to. The only
+work was two things the rewrite had dropped — `connection/admin.feature`'s blank
+Background, and `lifecycle.feature`'s "Removing the app" flattened from `@blocked`
+to `@todo` with its wall still written above it.
+
+### Round 2 — the arrange spine, and the design and project verbs
+
+Round 2 was supposed to be the two rooms built wrong. It is not, and the reason is
+worth recording: **the spec rewrite replaced the step VOCABULARY, not just the
+filing.** Measured across the 107 excluded scenarios, four sentences gated almost
+all of them — `the app is connected to Penpot` (94), `the following mappings were
+made:` (89), `a design file named … in …` (61), `the following items in the
+mappings:` (42) — and exactly ONE excluded scenario had every step it needed. So
+there was no cheap batch to pick up; the shared Background had to be built first.
+
 | | |
 |---|---|
-| went live | **9** scenario headers → **27** executed scenarios |
-| moved to a real status | **1** — `lifecycle.feature` "Removing the app" → `@blocked` (*no app removal*) |
-| still `@todo` | **106** |
-| legs now reporting tests | `admin` (25) and `core` (2); `design` and `project` still empty |
+| live | **15** headers → **41** executed (`admin` 25, `design` 7, `project` 7, `core` 2) |
+| `@todo` | 87 |
+| `@blocked` | 9 — no browser (6), no app removal (1), no way to author a design (2) |
+| `@unbuilt` | 5 — each names what the code owes |
 
-**The question this round asked was *did redrawing the plan break the harness?*
-and the answer is almost no.** All nine were promoted in one PR, as the plan said
-to. Every step the nine name was already defined — `check-step-definitions.sh`
-confirms 144 patterns with no duplicates and nothing undefined across the runnable
-set — and the three mapping feature files turn out to be **byte-identical** to
-their pre-collapse `team-mapping/` selves apart from the `@todo` line itself. For
-those, promotion was the whole of the work.
+### What the run found in `lib/`, which is the whole argument for running it
 
-**Two things the rewrite had dropped, and only running them would have found either:**
+Four defects, none reachable by any amount of mocking, every one of them found by
+a scenario failing rather than by reading:
 
-- **`connection/admin.feature` lost a Background line.** `And nothing is configured
-  yet` was gone. That line was not incidental — commit `466f92d` is titled *"a bad
-  URL names the url field, and the Background starts blank"* and added it on
-  purpose. The third row of the bad-details outline is the one that needs it: it
-  submits `example.com`, `set-url` refuses a URL with no scheme, nothing is
-  stored — and unless the Background wiped it first, the health check finds the
-  perfectly good URL the row above left behind, succeeds, and the scenario fails
-  asserting an error it should have got. Restored.
-- **"Removing the app" was flattened from `@blocked` to `@todo`.** Its comment
-  named its wall the entire time. Chapter 2's close warned that of the seven
-  flattened `@blocked` scenarios one named no wall at all; this is the opposite
-  case — a named wall the flat queue had hidden — and it is `@blocked` again.
+1. **A project was named after its folder, not its path.** The pull has always
+   read a Penpot project name AS a path — `PullService::ensureProjectFolder()`
+   hands it to `newFolder()`, so `foo/Old` becomes the folders it spells. The push
+   used `$folder->getName()`. One fact, two answers, and the flat case hid it
+   perfectly: for `Penpot/Old` both readings give `Old`.
+2. **A moved project folder never told Penpot.** `NodeRenamedListener` compared
+   names to decide whether to push a rename — correct until (1) was fixed, and
+   wrong the moment a project's name became its path.
+3. **`rename-file` takes `id` on the wire, not `file`.** `PenpotClient::PARAMS` is
+   a translation table; reading the call site and copying its array is not the same
+   as reading the wire. Penpot answered with its own schema.
+4. **A guard that could not see inside a `Scenario Outline`.**
+   `check-step-definitions.sh` skipped every step containing a `<`, commented
+   "resolved per example row", and nothing ever resolved them — so undefined steps
+   were invisible in every outline in the repo. Now two-phase, and watched failing
+   before being believed.
 
-**What this round does NOT claim.** These nine prove the harness, not the app.
-Nothing here exercises a design, a project folder or a gesture; `design` and
-`project` are still 94 scenarios of untouched `@todo`, and the two rooms known to
-be built wrong (Round 2) are untouched. The re-survey is a foundation check, and
-the foundation is sound.
+### The five `@unbuilt`, which are Round 3's queue
 
-**Next: Round 2 — the two rooms built wrong.** `designs/delete.feature`'s "Trash a
-link" and `designs/move.feature`'s "Move an untracked design file into a project",
-both of which are bug fixes with the expectation already written down.
+- `projects/create` ×2 — a design in a folder Penpot has never seen lands in
+  Drafts; only a tagged folder becomes a project.
+- `projects/move` — a move high in the tree renames only what moved, not the
+  projects named THROUGH it.
+- `projects/move` — a project folder cannot leave its team. **The spec disagrees
+  with itself here**: `features/README.md`'s two-noun table says a project is
+  "pinned inside its team folder", which is the app's behaviour, while the scenario
+  expects the move to unmap it. That needs a decision before it needs code.
+- `designs/rename` — renaming a link is allowed; `MoveRules` permits any move
+  inside the link's own project and a rename is one.
+
+### The one harness wall left
+
+`projects/rename`'s Penpot-side outline is `@todo` for a reason that is neither
+spec nor app: **Penpot state accumulates across a leg.** Teams are find-or-create
+by name and survive the scenario, so a second scenario renaming `Old` → `New`
+finds a `New` already there. Real isolation needs a `delete-project` RPC (absent
+from `PenpotClient`, and its payload would be a guess) or a unique team per
+scenario (which breaks every scenario that names a team).

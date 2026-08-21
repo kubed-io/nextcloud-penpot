@@ -15,6 +15,7 @@ Feature: Moving a project
     And the following items in the mappings:
       | path                            |
       | /Penpot/Clients                 |
+      | /Shared/Archive                 |
       | /Pointers/Existing/Fixed.penpot |
     And a folder at "Scratch" that is not mapped
 
@@ -23,7 +24,7 @@ Feature: Moving a project
     # ── RULE: where a project folder sits is what the project is called ───────
     # notes: ../AGENTS.md#moving-a-project-folder-renames-the-project
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Move a project folder within its team
     Given the following items in the mappings:
       | path                             |
@@ -44,7 +45,9 @@ Feature: Moving a project
     # replaces it with a new one wearing the new path.
 
   # notes: ../AGENTS.md#a-move-high-in-the-tree-renames-every-project-below-it
-  @in-nextcloud @gesture @todo
+  # @unbuilt — the projects BELOW the dragged folder keep their old names
+  # (`foo/bar`, not `Clients/foo/bar`): only the moved node itself is pushed.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a folder that other projects are named through
     Given the following items in the mappings:
       | path                            |
@@ -64,7 +67,9 @@ Feature: Moving a project
     # ── RULE: leaving every mapping leaves the project standing ───────────────
     # notes: ../AGENTS.md#a-project-folder-that-leaves-every-mapping-stops-being-a-mirror
 
-  @in-nextcloud @gesture @todo
+  # @unbuilt — refused today (HTTP 403), and README's own table agrees with the app
+  # that a project is "pinned inside its team folder". The spec needs a decision.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a project folder out of a team to unmap it
     Given the following items in the mappings:
       | path                            |

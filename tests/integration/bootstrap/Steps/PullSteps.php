@@ -708,7 +708,20 @@ trait PullSteps {
 		$this->mustContain($this->status($path), 'Membership: in_project', $path);
 	}
 
-	/** @Then /^there is no node at "([^"]*)"$/ */
+	/**
+	 * Nothing is there — the same claim whether the scenario calls it a node or a
+	 * folder.
+	 *
+	 * `there is no folder at "X"` is the phrasing a project scenario reaches for
+	 * after a move or a rename, and it means the stronger thing: not "there is
+	 * something there but it is a file" but "the folder is gone". So it shares this
+	 * definition rather than getting a weaker one of its own, and
+	 * {@see mustNotExist()} is what makes the absence trustworthy — it insists on
+	 * `No such node` rather than accepting any non-zero exit.
+	 *
+	 * @Then /^there is no node at "([^"]*)"$/
+	 * @Then /^there is no folder at "([^"]*)"$/
+	 */
 	public function thereIsNoNodeAt(string $path): void {
 		$this->mustNotExist($path);
 	}

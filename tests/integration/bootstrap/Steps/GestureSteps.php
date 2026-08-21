@@ -86,16 +86,71 @@ trait GestureSteps {
 	}
 
 	/**
+	 * Move something INTO a folder, which is what a drag actually is.
+	 *
+	 * ## WHY THIS IS NOT THE SAME STEP AS `… to "…"`
+	 *
+	 * `to` names the destination PATH; `into` names the destination FOLDER and
+	 * keeps the thing's own name. `I move "Penpot/Traveller" into "Penpot/Clients"`
+	 * ends at `Penpot/Clients/Traveller`, and spelling that out as a path would
+	 * make every such sentence repeat the name it just said — which is exactly what
+	 * the rewritten spec stopped doing. Every path-form move in the spec now says
+	 * `into`, because every one of them is a drag.
+	 *
+	 * @When /^I move "([^"]*)" into "([^"]*)"$/
+	 */
+	public function iMoveInto(string $path, string $folder): void {
+		$this->captureIdBeforeGesture($path);
+		$target = trim($folder, '/') . '/' . basename($path);
+		$this->davMove($path, $target);
+		$this->gestureTarget = $target;
+	}
+
+	/**
+	 * The same drag, expected to be REFUSED — see {@see iTryToMove()} for why a
+	 * refusal needs its own step rather than a flag on this one.
+	 *
+	 * @When /^I try to move "([^"]*)" into "([^"]*)"$/
+	 */
+	public function iTryToMoveInto(string $path, string $folder): void {
+		$target = trim($folder, '/') . '/' . basename($path);
+		$result = $this->davMoveResult($path, $target);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+		$this->gestureTarget = $path;
+	}
+
+	/**
 	 * A rename is a MOVE to a sibling path — the same DAV verb and the same
 	 * Nextcloud event. Telling the two apart is the listener's job, not the
 	 * transport's, so this step deliberately goes through the same call.
+	 *
+	 * ## THE DESTINATION IS A PATH WHEN IT SPELLS ONE, AND A SIBLING NAME OTHERWISE
+	 *
+	 * The rewritten spec says `I rename "Penpot/Old" to "Penpot/New"` — both sides
+	 * full paths, which is how a reader wants to see a rename that happens three
+	 * folders deep. This step used to append the second argument to the first's
+	 * parent unconditionally, so that sentence moved the folder to
+	 * `Penpot/Penpot/New` and the scenario failed somewhere else entirely.
+	 *
+	 * Both spellings are accepted because both are wanted: a rename in the files
+	 * root has no slash to give (`I rename "Scratch" to "Junk"`), and one below the
+	 * root reads better stated in full. A slash is the whole test, and it is not
+	 * ambiguous — a sibling name cannot contain one, because that is precisely what
+	 * makes it a sibling.
+	 *
+	 * The implicit-file form is a DIFFERENT step and always takes a bare name
+	 * ({@see ArrangeSteps} for the cursor it renames), because there the folder is
+	 * not in the sentence to be repeated.
 	 *
 	 * @When /^I rename "([^"]*)" to "([^"]*)"$/
 	 */
 	public function iRenameTo(string $path, string $newName): void {
 		$this->captureIdBeforeGesture($path);
 		$parent = dirname($path);
-		$target = ($parent === '.' || $parent === '') ? $newName : $parent . '/' . $newName;
+		$target = str_contains($newName, '/') || $parent === '.' || $parent === ''
+			? $newName
+			: $parent . '/' . $newName;
 		$this->davMove($path, $target);
 		$this->gestureTarget = $target;
 	}
@@ -205,8 +260,9 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
-	/** The status of the last refused gesture, for the assertion to read. */
+	/** The status and body of the last refused gesture, for the assertion to read. */
 	private int $lastGestureStatus = 0;
+	private string $lastGestureBody = '';
 
 	/**
 	 * A gesture the app is expected to REFUSE.
