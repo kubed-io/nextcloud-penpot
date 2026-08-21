@@ -54,6 +54,15 @@ final class ProjectFolderServiceTest extends TestCase {
 	/** @var array<int, ?PenpotFileMetadata> node id -> file stamp */
 	private array $fileStamps = [];
 
+	/**
+	 * What the resolver says a folder's path below the mapping is.
+	 *
+	 * Null means "its own name", which is true of every flat folder these tests
+	 * use and keeps them reading as they did before a project's name became a
+	 * path. The nested case sets it, because that is the whole point of it.
+	 */
+	private ?string $pathBelow = null;
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->client = $this->createMock(PenpotClient::class);
@@ -66,6 +75,9 @@ final class ProjectFolderServiceTest extends TestCase {
 		);
 		$this->metadata->method('readFile')->willReturnCallback(
 			fn (int $id): ?PenpotFileMetadata => $this->fileStamps[$id] ?? null,
+		);
+		$this->resolver->method('pathBelowMapping')->willReturnCallback(
+			fn (Node $node): ?string => $this->pathBelow ?? $node->getName(),
 		);
 
 		$this->projects = new ProjectFolderService(
@@ -89,6 +101,26 @@ final class ProjectFolderServiceTest extends TestCase {
 			->with(self::TEAM, 'Client Work');
 		$this->metadata->expects($this->once())->method('writeFolder')
 			->with(50, [PenpotMetadata::KEY_PROJECT_ID => self::NEW_PROJECT]);
+
+		$this->projects->onTagged($this->folder(50, 'Client Work'));
+	}
+
+	/**
+	 * A NESTED FOLDER'S PROJECT IS NAMED BY ITS PATH, not by the folder.
+	 *
+	 * `projects/create.feature` says so directly — `Penpot/Team/Deep` becomes the
+	 * project `Team/Deep` — and the pull has always read a project name that way
+	 * round, handing it to `newFolder()` so the slashes become folders. This
+	 * direction used the bare name, so tagging `Penpot/Clients/Client Work` created
+	 * a project called `Client Work` and the two sides disagreed.
+	 */
+	public function testTaggingANestedFolderNamesTheProjectByItsPath(): void {
+		$this->inTeam();
+		$this->pathBelow = 'Clients/Client Work';
+		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
+
+		$this->client->expects($this->once())->method('createProject')
+			->with(self::TEAM, 'Clients/Client Work');
 
 		$this->projects->onTagged($this->folder(50, 'Client Work'));
 	}

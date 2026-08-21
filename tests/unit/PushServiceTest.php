@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\FolderMarkers;
+use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
@@ -41,6 +42,7 @@ final class PushServiceTest extends TestCase {
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private PersonalTokenService $personalTokens;
+	private MembershipResolver $resolver;
 	private PushService $push;
 
 	protected function setUp(): void {
@@ -48,10 +50,12 @@ final class PushServiceTest extends TestCase {
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->personalTokens = $this->createMock(PersonalTokenService::class);
+		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->push = new PushService(
 			$this->client,
 			$this->metadata,
 			$this->personalTokens,
+			$this->resolver,
 			new NullLogger(),
 		);
 	}
@@ -105,11 +109,55 @@ final class PushServiceTest extends TestCase {
 		$this->attributingTo(null);
 		$this->metadata->method('readFolder')->with(20)
 			->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
+		$this->resolver->method('pathBelowMapping')->willReturn('Marketing');
 
 		$this->client->expects($this->once())->method('renameProject')
 			->with(self::PROJECT_ID, 'Marketing', null);
 
 		self::assertTrue($this->push->pushRename($this->folder(20, 'Marketing')));
+	}
+
+	/**
+	 * A PROJECT'S NAME IS ITS PATH BELOW THE MAPPING, so a folder three deep is
+	 * not called by its own name.
+	 *
+	 * This is the half the push side used to get wrong, and the failure was
+	 * invisible in the flat case: for `Penpot/Old` the path below the mapping and
+	 * the folder name are the same string, so every test passed while
+	 * `Penpot/foo/Old` was being announced to Penpot as `Old`. The pull has always
+	 * read a project name as a path (`PullService::ensureProjectFolder()` hands it
+	 * to `newFolder()`), so the two directions disagreed about one fact.
+	 *
+	 * `projects/rename.feature` pins it: renaming `Penpot/foo/Old` to
+	 * `Penpot/foo/New` expects the Penpot project to be named `foo/New`.
+	 */
+	public function testANestedProjectFolderIsNamedByItsPathBelowTheMapping(): void {
+		$this->attributingTo(null);
+		$this->metadata->method('readFolder')->with(21)
+			->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
+		$this->resolver->method('pathBelowMapping')->willReturn('foo/New');
+
+		$this->client->expects($this->once())->method('renameProject')
+			->with(self::PROJECT_ID, 'foo/New', null);
+
+		self::assertTrue($this->push->pushRename($this->folder(21, 'New')));
+	}
+
+	/**
+	 * A folder the resolver cannot place is not renamed at all.
+	 *
+	 * `pathBelowMapping()` returns null for a node outside every mapping and for a
+	 * mapping ROOT, and neither is a project — so the guard is what keeps a
+	 * `renameProject` call with an empty name off the wire.
+	 */
+	public function testDoesNotRenameAProjectItCannotName(): void {
+		$this->metadata->method('readFolder')->with(22)
+			->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
+		$this->resolver->method('pathBelowMapping')->willReturn(null);
+
+		$this->client->expects($this->never())->method('renameProject');
+
+		self::assertFalse($this->push->pushRename($this->folder(22, 'Orphan')));
 	}
 
 	public function testIgnoresTheTeamRootFolder(): void {

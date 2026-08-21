@@ -55,6 +55,7 @@ final class PushService {
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly PersonalTokenService $personalTokens,
+		private readonly MembershipResolver $resolver,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -122,11 +123,23 @@ final class PushService {
 			return false;
 		}
 
-		$this->client->renameProject($markers->projectId, $node->getName(), $this->personalTokens->tokenForActor());
+		// A MOVE IS A RENAME, WHICH IS WHY THIS IS A PATH. Dragging
+		// `Penpot/Traveller` into `Penpot/Clients` does not change the folder's own
+		// name at all — only where it sits — and Penpot has to hear about that as
+		// `Clients/Traveller`. The bare name could not express it, so a move
+		// renamed the project to what it was already called.
+		$name = $this->resolver->pathBelowMapping($node);
+		if ($name === null || trim($name) === '') {
+			// Outside every mapping, or the team root itself. Neither is a project
+			// this app renames.
+			return false;
+		}
+
+		$this->client->renameProject($markers->projectId, $name, $this->personalTokens->tokenForActor());
 		$this->logger->info('penpot_sync writeback: renamed Penpot project', [
 			'app' => Application::APP_ID,
 			'projectId' => $markers->projectId,
-			'name' => $node->getName(),
+			'name' => $name,
 		]);
 		return true;
 	}

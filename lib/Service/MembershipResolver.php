@@ -120,4 +120,54 @@ final class MembershipResolver {
 
 		return new Membership($projectId, $teamId);
 	}
+
+	/**
+	 * A project folder's NAME in Penpot: its path below the mapping root.
+	 *
+	 * ## WHY A PROJECT'S NAME IS A PATH AND NOT A FOLDER NAME
+	 *
+	 * Penpot projects are flat and Nextcloud folders nest, so the two are reconciled
+	 * by spelling the nesting INTO the name: `Penpot/foo/Old` is the project
+	 * `foo/Old`. That is not an invention here — the pull has always read it that
+	 * way round. {@see PullService::ensureProjectFolder()} does
+	 * `$root->newFolder($name)` with the Penpot name, and core turns `foo/Old` into
+	 * the folders it spells.
+	 *
+	 * The push side did not, and used the folder's bare name. So the two directions
+	 * disagreed about the same fact: a project mirrored FROM Penpot as `foo/Old`
+	 * landed at `Penpot/foo/Old`, while tagging `Penpot/foo/Old` created a project
+	 * called `Old`. `projects/create.feature` and `projects/rename.feature` both
+	 * spell out the path form, and this is what makes them true.
+	 *
+	 * Returns null when the node is outside every mapping, and also when it IS the
+	 * mapping root — a team root is not a project, so there is no name to give.
+	 */
+	public function pathBelowMapping(Node $node): ?string {
+		$segments = [];
+
+		$current = $node;
+		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
+			$id = $current->getId();
+			if ($id > 0 && $this->metadata->readFolder($id)->hasTeam()) {
+				// This rung is the mapping root; what we collected below it is the name.
+				return $segments === [] ? null : implode('/', array_reverse($segments));
+			}
+
+			$segments[] = $current->getName();
+
+			try {
+				$parent = $current->getParent();
+			} catch (NotFoundException) {
+				return null;
+			}
+
+			if ($parent->getId() === $id) {
+				return null;
+			}
+
+			$current = $parent;
+		}
+
+		return null;
+	}
 }
