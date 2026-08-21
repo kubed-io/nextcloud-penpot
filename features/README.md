@@ -40,7 +40,7 @@ one of them acts on the same kind of thing:
 |---|---|---|
 | [`designs/`](designs/) | a `.penpot` file | create, view, edit, copy, move, rename, delete, restore, purge, open-with |
 | [`projects/`](projects/) | a project folder | create, view, copy, move, rename, delete, restore |
-| [`team-mapping/`](team-mapping/) | a mapping | create, view, manage-groups, delete, sync-now |
+| [`mapping/`](mapping/) | a mapping | create, view, manage-groups, delete, sync-now |
 | [`connection/`](connection/) | the instance | admin, personal, sync-now |
 
 So `designs/move.feature` answers *"what happens when someone moves a design?"* —
@@ -129,7 +129,7 @@ one, and the marker that says so.
 | File | Owns |
 |---|---|
 | `connection/sync-now.feature` | An instance-wide sync — the section's button, and the schedule doing it unasked |
-| `team-mapping/sync-now.feature` | The card's own button: one mapping, on demand |
+| `mapping/sync-now.feature` | The card's own button: one mapping, on demand |
 
 A scenario belongs in either only when someone ASKED for a sync. "A design
 renamed in Penpot reaches Nextcloud" is a rename — it lives in
@@ -170,50 +170,57 @@ every gesture scenario lived away from the behaviour it demonstrated; as a tag,
 `behat --tags @gesture` gives the same collection back without splitting any
 feature. Nothing is lost and the scenarios sit next to their own kind.
 
-### Storage backend — a DYNAMIC BACKGROUND, not a tag and not a table
+### Storage backend — a CELL IN THE MAPPING TABLE, and no longer an axis
 
 Every behaviour is valid on both a plain (admin-owned) folder and a Team Folder,
-and none of them has a different outcome. So the backend must be covered without
-being *written down twice*. Three ways were considered and only one survives:
+and almost none of them has a different outcome. So the backend has to be covered
+without being *written down twice*. Three ways were tried, in this order:
 
-| | why not |
+| | |
 |---|---|
 | duplicate each scenario, tagged `@team-folder` / `@plain-folder` | two identical blocks that prove nothing, ×97 |
-| a `Scenario Outline` with a two-row `Examples` table | the rows would have identical expectations — the same duplication, compressed — and it runs them **sequentially**, so it costs wall time instead of saving it |
-| **a dynamic Background** | ✓ |
+| a matrix axis + a dynamic Background — `OccTrait::backendFlags()` reading `PENPOT_TEST_BACKEND`, the spec silent | worked, and cost every scenario the ability to SAY which folder it wanted |
+| **a `storage` cell in the mapping table** | ✓ |
 
-The Background is one line of Gherkin whose *meaning* is resolved per run:
+**What the axis bought, and what it cost.** It was genuinely right for a while,
+and it found things: the structural scenarios in `sync-now.feature` had mapped a
+Team Folder and passed only because of where they sat in the run — moved, the
+folder resolved to nothing, and Team Folder provisioning turned out never to have
+been covered at all. No new scenario would have caught that; pointing an existing
+one at the other backend did. The same dimension disproved §C6.27 (below).
+
+What it cost is that the backend was something the RUN decided and the spec could
+not mention. A scenario that genuinely wanted a Team Folder had no way to ask, so
+it needed a `@plain-folder` / `@team-folder` tag to opt out of the leg that could
+not host it — a tag that exists to skip a leg is the duplication coming back in
+through the tag system.
+
+**So groupfolders is installed on every leg** (the same thing the n8n and Grafana
+suites do), and the storage kind is stated where it belongs — in the mapping:
 
 ```gherkin
-  Background:
-    ...
-    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
+    And a mapping with the following values:
+      | team    | Northwind    |
+      | folder  | <folder>     |
+      | storage | <storage>    |
 ```
 
-`OccTrait::backendFlags()` reads `PENPOT_TEST_BACKEND` and maps either a plain
-folder or a groupfolders-backed one. The spec never mentions the backend, which
-is precisely what makes it a dimension rather than a claim — **a Background is
-setup, and setup is the harness's business.**
+`mapping/manage-groups.feature` is the worked example: one outline, two `Examples`
+blocks, one per backend, and the two are compared in a single run instead of
+across two legs that never meet. `OccTrait::backendFlags()` survives as the
+default for the steps that do not name a storage — with no `PENPOT_TEST_BACKEND`
+set it resolves to a plain shared folder, which is what a mapping gets when the
+scenario does not care.
 
-The CI matrix then runs the whole suite once per backend, in parallel, so the
-second one costs no wall-clock time (saga §C6.26).
+The objection this replaced was **"a table can only vary the mapping, and the
+difference is whether groupfolders is installed on the server"** — true while the
+app was conditional, and no longer true now that it is always there. The residual
+cost is honest and small: the plain rows exercise a plain folder on a server that
+*has* groupfolders installed, which is not every deployment. That is the price of
+being able to ask, and it is cheaper than a tag per scenario.
 
-**Why it cannot be an `Examples` table, concretely:** the difference is not a
-mapping flag, it is *whether the groupfolders app is installed on the server*. One
-Behat process runs against one Nextcloud, so a table would need groupfolders
-installed always — and the "plain" rows would then be exercising a plain folder
-**on a server that has groupfolders**, which is not what most deployments run. The
-matrix varies the SERVER; a table can only vary the mapping.
-
-That this was never covered is not theoretical: the structural scenarios in
-`sync-now.feature` mapped a Team Folder and passed only because of where they sat
-in the run. Moved, the folder resolved to nothing — Team Folder provisioning had
-never actually been covered. More scenarios would not have caught that; running
-the existing ones against both backends does.
-
-Where a backend genuinely changes an OUTCOME it earns its own scenario, because
-then the two rows would *not* be identical — and it carries `@plain-folder` or
-`@team-folder` so the other leg skips it. There are two confirmed cases:
+Where a backend genuinely changes an OUTCOME it still earns its own scenario,
+because then the two rows would *not* be identical. There are two confirmed cases:
 
 - **§C6.16** — on a shared mapping a pruned mirror goes to the **owner's** trash,
   not the acting user's.
@@ -226,9 +233,11 @@ then the two rows would *not* be identical — and it carries `@plain-folder` or
   self-corrects, because Penpot's own trash expires after 7 days, so the
   divergence is a window rather than a permanent state.
 
-Both were found by RUNNING the suite across both backends, which is the argument
-for the dimension in one line: neither needed a new scenario to be discovered,
-only an existing one pointed at the other backend.
+Both were found by RUNNING the suite across both backends rather than reasoning
+about them — neither needed a new scenario to be discovered, only an existing one
+pointed at the other backend. That is the argument the axis won on, and it is why
+the `storage` cell has to keep both kinds reachable rather than quietly settling
+on whichever one the harness defaults to.
 
 ### `sync` vs `link` — a restriction in one direction, not an axis
 
@@ -272,11 +281,7 @@ scenario executes today; it is about **who picks it up**.
 it: the list is now things a person can sit down and do, with no triage step in
 front of it.
 
-#### Today the queue is the whole suite — all 116 scenarios, and nothing runs
-
-**This is a deliberate, temporary state, and the three sections below currently
-describe empty categories.** Read them anyway; they are how a scenario earns its
-status back.
+#### The queue is 106 of 116 — Round 1 is surveyed and the harness held
 
 The reorganisation this file describes — the folder became the noun, the file
 became the verb, `reconcile.feature` stopped being a feature — rewrote the spec
@@ -287,18 +292,37 @@ to one flat queue and let each PR that implements a behaviour restore that
 scenario's real status. **The second, because triage done from the spec alone is a
 guess, and the honest answer for each one is found by trying to make it pass.**
 
-So: every scenario is `@todo`, `@unbuilt`/`@blocked`/`@decision` have no members,
-and the integration matrix reports zero tests on all four legs. Zero tests is a
-pass here, not a broken reporter — Behat still fires its suite events for a suite
-the filter empties, so each leg writes `<testsuite tests="0"/>` and the workflow's
-leg-count guard stays armed.
+**Chapter 3 Round 1 drew the first nine** — the ones green in CI the moment before
+the collapse: the two admin-connection scenarios, enabling and disabling the app,
+the three mapping-creation ones, changing a mapped folder's groups, and syncing
+one mapping. They prove the HARNESS rather than any behaviour, which is what made
+them the only sane place to break ground. Where the suite stands now:
 
-**What this costs, stated plainly so nobody discovers it later.** Nine of these
-were **green in CI** the moment before the collapse — the two admin-connection
-scenarios, enabling and disabling the app, the three mapping-creation ones,
-changing a mapped folder's groups, and syncing one mapping. Those nine are the
-only scenarios in this suite ever proven to pass, so they are the cheapest
-possible re-promotions and they are where Chapter 3 starts.
+| status | scenarios | |
+|---|---|---|
+| *(none)* — runs in CI | 9 | 27 executed, on the `admin` and `core` legs |
+| `@todo` | 106 | the queue |
+| `@blocked` | 1 | `lifecycle.feature`, "Removing the app" |
+| `@unbuilt` | 0 | |
+| `@decision` | 0 | |
+
+`design` and `project` are still entirely `@todo`, so those two legs still report
+zero tests. Zero tests is a pass here, not a broken reporter — Behat still fires
+its suite events for a suite the filter empties, so the leg writes
+`<testsuite tests="0"/>` and the workflow's leg-count guard stays armed.
+
+**Round 1 also found two things the rewrite had dropped**, which is the argument
+for running a scenario rather than reading it:
+
+* `connection/admin.feature` lost `And nothing is configured yet` from its
+  Background. Commit `466f92d` had added that line on purpose — *"a bad URL names
+  the url field, and the Background starts blank"* — because the bad-URL row
+  relies on it: `set-url` refuses a URL it cannot build requests from, so nothing
+  is stored, and the health check must fail on a MISSING url rather than on the
+  good one the row above left behind. Restored.
+* `lifecycle.feature`'s "Removing the app" was flattened from `@blocked` to
+  `@todo` along with everything else, even though the comment above it names its
+  wall. Restored to `@blocked`; it is the tag's only member.
 
 Seven were `@blocked` and one was `@decision`, and **that record is only half in
 the files.** Where the reason was already written as a comment it survives the
@@ -308,13 +332,13 @@ collapse untouched, which is why those comments still open with the old tag name
   # @blocked — no app removal. The harness can enable and disable, which is what
   # `occ` offers; removing an app and reinstalling it is a store operation this
   # suite has no way to perform.
-  @todo
+  @blocked
   Scenario: Removing the app
 ```
 
 **A comment naming a status the tag no longer carries is the record, not a
-contradiction** — the tag is the temporary flat state, the comment is the truth.
-Three of the seven read that way (`lifecycle.feature`, both of
+contradiction** — the tag was the temporary flat state, the comment is the truth,
+and the one above has now been reconciled back. Two more read that way (both of
 `designs/edit.feature`), and the two `# @unbuilt — THIS IS THE SPEC, AND THE APP
 DOES THE OPPOSITE TODAY` notes in `designs/delete.feature` and
 `designs/move.feature` are the same thing and matter more, because they mark
@@ -331,7 +355,7 @@ is. The build order is in the saga's Chapter 3.
 
 #### What makes something `@blocked` rather than `@todo`
 
-Name the missing capability, in the scenario or the section above it. The eight
+Name the missing capability, in the scenario or the section above it. The seven
 that exist today:
 
 * **no browser** — anything about a button, card, panel, icon, or menu entry;
@@ -347,11 +371,13 @@ that exist today:
   (saga §1); the harness creates, renames, moves and deletes, but cannot author;
 * **no logged-in session** — every personal-token attribution scenario, because
   the occ+DAV harness has no acting user to attribute to;
-* **no groupfolders in the CI image** — Team Folder provisioning (which is also
-  why `@team-folder` is a dimension to run across rather than a thing to write
-  twice, above);
 * **no time travel** — anything gated on Penpot's deletion delay, which is
   7 days by default and set per team, not per request (§C6.19).
+
+**"no groupfolders in the CI image" was retired**, and is listed here only so it
+is not reached for again: the app is installed on every leg now, so Team Folder
+provisioning is reachable and the storage kind is a cell in a mapping table
+rather than a dimension the run decides.
 
 A `@blocked` scenario with no stated reason is really a `@todo` nobody checked.
 

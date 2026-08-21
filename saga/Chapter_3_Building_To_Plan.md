@@ -162,10 +162,50 @@ count nobody states is a count nobody can check.
 
 ---
 
-## Where we are — 2026-08-21 · **THE PLAN IS DRAWN AND NOTHING IS BUILT TO IT**
+## Where we are — 2026-08-21 · **ROUND 1 SURVEYED — THE HARNESS HELD**
 
 > **Opening state.** 116 scenarios, all `@todo`. Zero running. Four integration
 > legs reporting `tests="0"`, which is a pass and says so in three places
 > (`behat.dist.yml`, the workflow header, `features/README.md`).
->
-> No ground broken yet. Round 1 is the next PR.
+
+### Round 1 — the nine that were already signed off · **9 live, 1 re-triaged**
+
+| | |
+|---|---|
+| went live | **9** scenario headers → **27** executed scenarios |
+| moved to a real status | **1** — `lifecycle.feature` "Removing the app" → `@blocked` (*no app removal*) |
+| still `@todo` | **106** |
+| legs now reporting tests | `admin` (25) and `core` (2); `design` and `project` still empty |
+
+**The question this round asked was *did redrawing the plan break the harness?*
+and the answer is almost no.** All nine were promoted in one PR, as the plan said
+to. Every step the nine name was already defined — `check-step-definitions.sh`
+confirms 144 patterns with no duplicates and nothing undefined across the runnable
+set — and the three mapping feature files turn out to be **byte-identical** to
+their pre-collapse `team-mapping/` selves apart from the `@todo` line itself. For
+those, promotion was the whole of the work.
+
+**Two things the rewrite had dropped, and only running them would have found either:**
+
+- **`connection/admin.feature` lost a Background line.** `And nothing is configured
+  yet` was gone. That line was not incidental — commit `466f92d` is titled *"a bad
+  URL names the url field, and the Background starts blank"* and added it on
+  purpose. The third row of the bad-details outline is the one that needs it: it
+  submits `example.com`, `set-url` refuses a URL with no scheme, nothing is
+  stored — and unless the Background wiped it first, the health check finds the
+  perfectly good URL the row above left behind, succeeds, and the scenario fails
+  asserting an error it should have got. Restored.
+- **"Removing the app" was flattened from `@blocked` to `@todo`.** Its comment
+  named its wall the entire time. Chapter 2's close warned that of the seven
+  flattened `@blocked` scenarios one named no wall at all; this is the opposite
+  case — a named wall the flat queue had hidden — and it is `@blocked` again.
+
+**What this round does NOT claim.** These nine prove the harness, not the app.
+Nothing here exercises a design, a project folder or a gesture; `design` and
+`project` are still 94 scenarios of untouched `@todo`, and the two rooms known to
+be built wrong (Round 2) are untouched. The re-survey is a foundation check, and
+the foundation is sound.
+
+**Next: Round 2 — the two rooms built wrong.** `designs/delete.feature`'s "Trash a
+link" and `designs/move.feature`'s "Move an untracked design file into a project",
+both of which are bug fixes with the expectation already written down.
