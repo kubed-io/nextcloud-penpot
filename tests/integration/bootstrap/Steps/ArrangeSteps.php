@@ -320,7 +320,7 @@ trait ArrangeSteps {
 					break;
 				case 'project':
 					$this->davMkcol($path);
-					$this->iAssignThePenpotTagTo($path);
+					$this->ensureProjectFolder($path);
 					$this->rememberProject($path);
 					break;
 				case 'plain folder':
@@ -381,6 +381,26 @@ trait ArrangeSteps {
 		if (($this->mappingModes[$this->mappingRootOf($path)] ?? '') === 'link') {
 			$this->seedDesignViaPull($path, $name);
 		} else {
+			// ── THE FOLDER HAS TO BE A PROJECT FIRST, AND TAGGING IS HOW ──────────
+			//
+			// A design written into a folder Penpot has never seen does NOT make that
+			// folder a project today: it lands in the team's Drafts. CI said so in one
+			// line — `expected a Penpot project named 'New'; found: Drafts, Drafts,
+			// Drafts` — after three designs had been created perfectly happily.
+			//
+			// `ProjectFolderService` is the only thing that turns a folder into a
+			// project, and its own log line names its trigger: "created a Penpot
+			// project from a tagged folder". So the supported way to arrange "this
+			// design is in this project" is to tag the folder, then write the design
+			// into it — in that order, or the design is already in Drafts by the time
+			// the project exists.
+			//
+			// NOT A WORKAROUND FOR A MISSING FEATURE, and worth being precise about:
+			// `projects/create.feature` specs the other route as well ("Create a
+			// design in a folder Penpot has never seen" → the folder becomes a
+			// project). That scenario is still @todo and stays that way — this PR has
+			// not run it, and the observation above is not the same as running it.
+			$this->ensureProjectFolder($folder);
 			// Empty body: that is what "+ New → Penpot design" writes, and the app
 			// tells a CREATE from an UPLOAD by exactly this (see GestureSteps).
 			$this->davPut($path, '');
@@ -669,5 +689,24 @@ trait ArrangeSteps {
 		}
 
 		return $this->declaredProjectIds[$this->lastDeclaredProject] ?? '';
+	}
+
+	/**
+	 * Make a folder a Penpot project, if it is not one already.
+	 *
+	 * Idempotent by reading the stamp rather than the tag: the stamp is what every
+	 * later lookup uses (§6.29) and `ProjectFolderService` writes it before it does
+	 * anything else, so a folder carrying one is a project whatever its tag says.
+	 */
+	private function ensureProjectFolder(string $folder): void {
+		if ($this->projectIdOf($folder) !== '') {
+			return;
+		}
+		$this->iAssignThePenpotTagTo($folder);
+		if ($this->projectIdOf($folder) === '') {
+			throw new \RuntimeException(
+				"tagging '{$folder}' did not make it a Penpot project:\n" . $this->status($folder),
+			);
+		}
 	}
 }
