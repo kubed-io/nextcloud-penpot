@@ -145,9 +145,19 @@ trait RenameSteps {
 		if ($this->currentFileId === '') {
 			throw new \RuntimeException('no design is on stage to rename in Penpot');
 		}
-		// `file`, not `file-id` — read off PenpotClient::renameFile() rather than
-		// guessed, which is the difference between this working and a 400.
-		$this->penpotRpc('rename-file', ['file' => $this->currentFileId, 'name' => $name]);
+		// `id`, NOT `file`. PenpotClient::renameFile() passes `file`, but that is its
+		// INTERNAL name: `PenpotClient::PARAMS` translates it to the wire key `id`
+		// on the way out. This harness posts to the RPC bus directly, so it has to
+		// speak the wire — the same way the seeding path already says `project-id`
+		// rather than `project`.
+		//
+		// Penpot told us so itself, in a schema, which is the only reason this is
+		// written down rather than guessed twice:
+		//
+		//   RenameFileParams [:map [:name [:string …]] [:id :app.common.schema/uuid]]
+		//   {:path [:id], :type :malli.core/missing-key}
+		//   Value: {:name "New Name", :file "9789fcd3-…"}
+		$this->penpotRpc('rename-file', ['id' => $this->currentFileId, 'name' => $name]);
 		$this->theAdminRunsAPull();
 		// The pull chose the filename, so the cursor has to be re-found by id.
 		$this->currentFilePath = '';
@@ -166,7 +176,7 @@ trait RenameSteps {
 		if ($id === '') {
 			throw new \RuntimeException("no design named '{$which}' is on stage");
 		}
-		$this->penpotRpc('rename-file', ['file' => $id, 'name' => $name]);
+		$this->penpotRpc('rename-file', ['id' => $id, 'name' => $name]);
 		$this->theAdminRunsAPull();
 	}
 

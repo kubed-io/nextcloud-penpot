@@ -44,7 +44,9 @@ Feature: Renaming a project
     # ── RULE: a project renamed in Penpot is renamed in place ─────────────────
     # notes: ../AGENTS.md#a-project-renamed-in-penpot-keeps-its-folder-where-it-is
 
-  @in-penpot @gesture
+  # @todo — the three steps this needs are unwritten: the Penpot-side project
+  # rename, and the two that check a plain file and a vacated folder.
+  @in-penpot @gesture @todo
   Scenario Outline: Rename a project in Penpot
     Given the following items in the mappings:
       | path                  |

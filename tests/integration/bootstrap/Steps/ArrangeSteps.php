@@ -88,6 +88,19 @@ trait ArrangeSteps {
 	private array $mappingTeamIds = [];
 
 	/**
+	 * The Penpot team NAME behind each mapped folder.
+	 *
+	 * Kept beside the id because the two answer different questions: an id is what
+	 * an RPC takes, and a name is what `probe --files` prints — and resolving a
+	 * project needs the name, because the probe groups by team and two teams may
+	 * hold a project with the same name. They do, deliberately: several Backgrounds
+	 * put an `Existing` project in both the sync team and the link team.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $mappingTeamNames = [];
+
+	/**
 	 * The Penpot project id each declared folder had AT DECLARE TIME, keyed by the
 	 * path it was declared at.
 	 *
@@ -144,6 +157,7 @@ trait ArrangeSteps {
 	public function armArrange(): void {
 		$this->mappingModes = [];
 		$this->mappingTeamIds = [];
+		$this->mappingTeamNames = [];
 		$this->declaredProjectIds = [];
 		$this->declaredDesignIds = [];
 		$this->lastDeclaredProject = '';
@@ -232,6 +246,7 @@ trait ArrangeSteps {
 
 			$this->mappingModes[$folder] = trim($row['mode'] ?? '') ?: 'link';
 			$this->mappingTeamIds[$folder] = $this->namedTeamId;
+			$this->mappingTeamNames[$folder] = $team;
 		}
 
 		// ── A MAPPING IS NOT LIVE UNTIL A PULL HAS RUN ───────────────────────────
@@ -455,9 +470,8 @@ trait ArrangeSteps {
 		$this->namedTeamId = $team;
 		$this->pulledTeamId = $team;
 
-		$this->aPenpotProjectExistsInThatTeam($project);
 		$this->penpotRpc('create-file', [
-			'project-id' => $this->penpotProjectId($project),
+			'project-id' => $this->penpotProjectIn($root, $project),
 			'name' => $name,
 		]);
 		$this->theAdminRunsAPull();
@@ -708,5 +722,72 @@ trait ArrangeSteps {
 				"tagging '{$folder}' did not make it a Penpot project:\n" . $this->status($folder),
 			);
 		}
+	}
+
+	/**
+	 * The id of a project with this name IN THIS MAPPING'S TEAM, creating it if it
+	 * is not there.
+	 *
+	 * ## WHY THE TEAM IS PART OF THE QUESTION
+	 *
+	 * {@see PullSteps::penpotProjectId()} matches a project by NAME across the whole
+	 * probe listing and takes the first hit. That is fine where one team is on
+	 * stage, and wrong here: the rewritten Backgrounds map three teams at once and
+	 * deliberately give two of them a project with the SAME name — `Existing` sits
+	 * in both the sync team and the link team, and `designs/rename.feature` puts a
+	 * `Renamed` project in all three.
+	 *
+	 * So an unscoped lookup resolved the link folder's project to the SYNC team's
+	 * project of that name, seeded the design over there, and the pull then quite
+	 * correctly mirrored it into the sync folder. The symptom was
+	 * "the pull did not mirror 'Old Name' into the link folder 'Pointers'" — which
+	 * reads like a broken pull and was a fixture asking for the wrong project.
+	 *
+	 * The probe prints `  <name>  <uuid>  [<team>]`, so the team is right there;
+	 * this is the same parse as PullSteps', with the bracketed team no longer
+	 * thrown away.
+	 */
+	private function penpotProjectIn(string $mappedFolder, string $project): string {
+		$team = $this->mappingTeamNames[$mappedFolder] ?? '';
+		if ($team === '') {
+			throw new \RuntimeException("no mapping is declared for the folder '{$mappedFolder}'");
+		}
+
+		$found = $this->penpotProjectIdInTeam($project, $team);
+		if ($found !== null) {
+			return $found;
+		}
+
+		$this->penpotRpc('create-project', [
+			'team-id' => $this->mappingTeamIds[$mappedFolder] ?? '',
+			'name' => $project,
+		]);
+
+		$found = $this->penpotProjectIdInTeam($project, $team);
+		if ($found === null) {
+			throw new \RuntimeException(
+				"created the project '{$project}' in the team '{$team}' but cannot find it again",
+			);
+		}
+
+		return $found;
+	}
+
+	/** A project id by name AND team, or null when that pair is not listed. */
+	private function penpotProjectIdInTeam(string $project, string $team): ?string {
+		$res = $this->occ('penpot_sync:probe --files');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("probe failed while resolving '{$project}':\n{$res['output']}");
+		}
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^  (\S.*?)\s{2,}([0-9a-f-]{36})\s+\[(.*)\]\s*$/', $line, $m) !== 1) {
+				continue;
+			}
+			if (trim($m[1]) === $project && trim($m[3]) === $team) {
+				return $m[2];
+			}
+		}
+
+		return null;
 	}
 }

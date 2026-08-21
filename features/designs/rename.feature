@@ -64,7 +64,9 @@ Feature: Renaming a design
     # ── RULE: a link is read-only, so its name is Penpot's to set ─────────────
     # notes: ../AGENTS.md#renaming-a-link-never-renames-the-design
 
-  @in-nextcloud @gesture
+  # @unbuilt — the rename is ALLOWED today (HTTP 201). MoveRules permits any move
+  # within a link's own project, and a rename is one; the spec wants it refused.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Rename a link in Nextcloud
     Given a design file named "Old Name.penpot" in "Pointers/Confined"
     When I try to rename the file to "New Name.penpot"

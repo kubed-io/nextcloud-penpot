@@ -95,55 +95,108 @@ if dupes:
 compiled = [re.compile('^' + p + '$') for p in patterns]
 
 # ── the steps the suite actually runs ──────────────────────────────────────────
+# TWO PHASES, BECAUSE `Examples:` COMES AFTER THE STEPS IT FILLS IN.
+#
+# This used to be one line-by-line pass, and it skipped any step containing a `<`
+# with the comment "resolved per example row" — which nothing ever did. So every
+# undefined step inside a Scenario Outline was invisible here, and the guard whose
+# entire job is "do not let --strict find this minutes into a live run" reported
+# green while three undefined steps sat in a promoted outline. CI found them, which
+# is the expensive way round and exactly what this file exists to avoid.
+#
+# So: parse each feature into scenarios first, then resolve every step against
+# every example row. A step with no placeholder is checked once, which is the same
+# answer the old pass gave for the cases it could see.
 step_re = re.compile(r'^\s*(?:Given|When|Then|And|But)\s+(.*?)\s*$')
+row_re = re.compile(r'^\s*\|(.*)\|\s*$')
+
+
+def cells(line):
+    m = row_re.match(line)
+    return [c.strip() for c in m.group(1).split('|')] if m else None
+
+
 undefined = []
 for feature in features:
-    tags, in_scenario, runs = set(), False, False
-    background_gaps, any_runs = [], False
-    # A TAG ON THE `Feature:` LINE APPLIES TO EVERY SCENARIO BELOW IT. No file
-    # here uses one yet, but both siblings do — nextcloud-n8n marks the whole of
-    # uninstall.feature @blocked that way, and read without this the checker
-    # reports all seven of its steps as undefined in live scenarios: a page of
-    # false failures against a file the runner has never once executed.
-    feature_tags = set()
-    for raw in feature.read_text(encoding='utf-8').splitlines():
+    lines = feature.read_text(encoding='utf-8').splitlines()
+    feature_tags, pending = set(), set()
+    background, scenarios = [], []
+    cur = None          # the scenario being read, or None
+    mode = None         # 'background' | 'scenario'
+
+    for raw in lines:
         line = raw.strip()
+
         if line.startswith('@'):
-            tags |= set(line.split())
-            continue
-        if line.startswith(('Scenario:', 'Scenario Outline:')):
-            in_scenario, runs = True, not ((tags | feature_tags) & UNRUN)
-            any_runs = any_runs or runs
-            tags = set()
+            pending |= set(line.split())
             continue
         if line.startswith('Feature:'):
-            feature_tags = tags
-            in_scenario, runs = True, None
-            tags = set()
+            feature_tags, pending, mode = set(pending), set(), None
             continue
         if line.startswith('Background:'):
-            # A BACKGROUND IS ONLY REQUIRED IF SOMETHING IN ITS FILE RUNS. It runs
-            # once per scenario, so in a file that is entirely specification it never
-            # runs at all — and demanding its steps be implemented would report 24
-            # false failures on a suite CI is happily green on. Held aside and
-            # judged after the file is read.
-            in_scenario, runs = True, None
-            tags = set()
+            mode, background, pending = 'background', [], set()
             continue
-        if line.startswith(('Examples:', '#')) or not line:
+        if line.startswith(('Scenario:', 'Scenario Outline:')):
+            cur = {'runs': not ((pending | feature_tags) & UNRUN), 'steps': [], 'rows': []}
+            scenarios.append(cur)
+            mode, pending = 'scenario', set()
             continue
-        if not in_scenario or runs is False:
+        if line.startswith('Examples'):
+            # Rows belong to the scenario above; the header names the placeholders.
+            if cur is not None:
+                cur['rows'].append([])
             continue
+
+        row = cells(line)
+        if row is not None:
+            # A table under an Examples heading is example data; one under a step is
+            # that step's own argument and has no placeholders to bind.
+            if cur is not None and cur['rows'] and mode == 'scenario':
+                cur['rows'][-1].append(row)
+            continue
+
+        if line.startswith('#') or not line:
+            continue
+
         m = step_re.match(line)
         if not m:
             continue
-        text = m.group(1)
-        if '<' in text:  # a Scenario Outline placeholder; resolved per example row
-            continue
-        if not any(c.match(text) for c in compiled):
-            (background_gaps if runs is None else undefined).append(f'{feature.name}: {text}')
-    if any_runs:
-        undefined.extend(background_gaps)
+        if mode == 'background':
+            background.append(m.group(1))
+        elif mode == 'scenario' and cur is not None:
+            cur['steps'].append(m.group(1))
+
+    # A BACKGROUND IS ONLY REQUIRED IF SOMETHING IN ITS FILE RUNS. It runs once per
+    # scenario, so in a file that is entirely specification it never runs at all —
+    # demanding its steps be implemented would report false failures against a suite
+    # CI is happily green on.
+    live = [s for s in scenarios if s['runs']]
+    for scenario in live:
+        steps = background + scenario['steps']
+        bindings = []
+        for block in scenario['rows']:
+            if len(block) < 2:
+                continue
+            header = block[0]
+            for row in block[1:]:
+                if len(row) == len(header):
+                    bindings.append(dict(zip(header, row)))
+
+        for step in steps:
+            for resolved in ([step] if not bindings else [
+                re.sub(r'<([^>]*)>', lambda mm: b.get(mm.group(1), mm.group(0)), step)
+                for b in bindings
+            ]):
+                if '<' in resolved:
+                    # A placeholder no Examples column fills. That is a broken
+                    # outline rather than a missing definition, and it is the
+                    # feature file's bug — say so instead of guessing a pattern.
+                    undefined.append(f'{feature.name}: {resolved}  (no Examples column fills this)')
+                    continue
+                if not any(c.match(resolved) for c in compiled):
+                    entry = f'{feature.name}: {resolved}'
+                    if entry not in undefined:
+                        undefined.append(entry)
 
 if undefined:
     fail = True
