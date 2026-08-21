@@ -3,64 +3,100 @@
 Feature: Emptying the trash
   As a Nextcloud user
   I want emptying the trash to finish the delete on both sides
-  So that the one irreversible act is reached only by the one irreversible gesture
+  So that a purged file leaves nothing behind, and takes nothing else with it
 
   Background:
-    Given the app is enabled
-    And the Penpot base URL points at the test instance
-    And the admin has configured the service-account token
-    And a mapping with the following values:
-      | team    | Design Team  |
-      | folder  | Penpot       |
-      | mode    | sync         |
-      | storage | admin folder |
+    Given the app is connected to Penpot
+    And the following mappings were made:
+      | team           | folder   | mode | storage      | groups |
+      | Design Team    | Penpot   | sync | admin folder |        |
+      | Second Team    | Shared   | sync | team folder  | admin  |
+      | Reference Team | Pointers | link | admin folder |        |
+    And a folder at "Scratch" that is not mapped
+
+  # notes: ../AGENTS.md#the-mappings-in-the-background
 
     # ── RULE: the purge finishes what the trashing started ────────────────────
     # notes: ../AGENTS.md#purging-a-mirror-from-the-nextcloud-trash-destroys-the-design
 
-  @in-nextcloud @gesture
-  Scenario: Empty the trash
-    Given a mirrored design "Gone For Good" in the project "Purge Me"
-    And "Penpot/Purge Me/Gone For Good.penpot" is in the trash
-    And the design "Gone For Good" is in Penpot's trash
-    When I purge "Penpot/Purge Me/Gone For Good.penpot" from the Nextcloud trash
-    Then the design "Gone For Good" is not in Penpot's trash
-    And the file "Penpot/Purge Me/Gone For Good.penpot" is gone from the Nextcloud trash
+  @in-nextcloud @gesture @todo
+  Scenario Outline: Empty the trash
+    Given a design file named "Gone For Good.penpot" in "<source>"
+    And the file is in the Nextcloud trash
+    And its design is in Penpot's trash
+    When I purge it from the trash
+    Then that file's design is permanently deleted from Penpot
+    And the file is gone from the Nextcloud trash
+
+    Examples: from either storage kind, because a purge is a purge
+      | source          |
+      | Penpot/Purge Me |
+      | Shared/Purge Me |
 
     # The one irreversible thing this app can cause, reached only by the one
     # irreversible gesture Nextcloud offers.
+
+    # Penpot needs no recycle-bin setting: it HAS a trash, so the trashing was
+    # already reversible and this is the gesture that ends that.
 
     # ── RULE: the purge destroys only what it can still see in Penpot's trash ─
     # notes: ../AGENTS.md#a-purge-only-destroys-what-is-still-in-penpots-trash
 
   @in-nextcloud @gesture @todo
-  Scenario: Empty the trash after someone rescued the design in Penpot
-    Given a mirrored design "Rescued" in the project "Purge Me"
-    And "Penpot/Purge Me/Rescued.penpot" is in the trash
-    And the design "Rescued" has been restored in Penpot
-    When I purge "Penpot/Purge Me/Rescued.penpot" from the Nextcloud trash
-    Then Penpot project "Purge Me" holds a design named "Rescued"
-    And the file "Penpot/Purge Me/Rescued.penpot" is gone from the Nextcloud trash
+  Scenario: Empty the trash when the design is not in Penpot's trash
+    Given a design file named "Spared.penpot" in "Penpot/Purge Me"
+    And the file is in the Nextcloud trash
+    And its design is not in Penpot's trash
+    When I purge it from the trash
+    Then the file is gone from the Nextcloud trash
 
-    # Penpot's permanent delete does NOT check that a design is in the trash — hand
-    # it a live one and it is destroyed. The trashed mirror still carries the id.
+    # Restored over there, or erased over there — the purge cannot tell and does not
+    # need to. Penpot's permanent delete would destroy a LIVE design if handed one.
 
-  @in-nextcloud @gesture @todo
-  Scenario: Empty the trash after the design is already gone from Penpot
-    Given a mirrored design "Twice Dead" in the project "Purge Me"
-    And "Penpot/Purge Me/Twice Dead.penpot" is in the trash
-    And the design "Twice Dead" has been permanently deleted in Penpot
-    When I purge "Penpot/Purge Me/Twice Dead.penpot" from the Nextcloud trash
-    Then the file "Penpot/Purge Me/Twice Dead.penpot" is gone from the Nextcloud trash
+    # ── RULE: emptying Penpot's trash finishes the delete from that side ──────
+
+  @in-penpot @gesture @todo
+  Scenario Outline: Empty Penpot's trash in Penpot
+    Given a design file named "Gone For Good.penpot" in "<source>"
+    And the file is in the Nextcloud trash
+    And its design is in Penpot's trash
+    When someone empties Penpot's trash
+    Then the file is gone from the Nextcloud trash
+
+    Examples: both storage kinds, because a Team Folder's trash is a different one
+      | source          |
+      | Penpot/Purge Me |
+      | Shared/Purge Me |
+
+    # The purge came from the other side, and it is the same purge: the design is
+    # gone for good, so the trashed mirror has nothing left to be restored to.
 
     # ── RULE: a file the app never mirrored is Nextcloud's alone ──────────────
 
-  @in-nextcloud @gesture
-  Scenario: Empty the trash of a file the app never mirrored
-    Given a mirrored design "Keep Me" in the project "Purge Me"
-    And an untracked ".penpot" archive at "Loose Design.penpot"
-    And "Loose Design.penpot" is in the trash
-    When I purge "Loose Design.penpot" from the Nextcloud trash
-    Then Penpot project "Purge Me" holds a design named "Keep Me"
-    And the design "Keep Me" is not in Penpot's trash
-    And the file "Loose Design.penpot" is gone from the Nextcloud trash
+  @in-nextcloud @gesture @todo
+  Scenario Outline: Purge an untracked design file
+    Given an untracked design file at "<path>"
+    And the file is in the Nextcloud trash
+    When I purge it from the trash
+    Then no design is deleted in Penpot
+    And the file is gone from the Nextcloud trash
+
+    Examples: inside a mapping and outside every mapping alike
+      | path                          |
+      | Penpot/Purge Me/Loose.penpot  |
+      | Scratch/Loose.penpot          |
+
+    # ── RULE: a purge that cannot reach Penpot destroys nothing ───────────────
+
+  @in-nextcloud @gesture @todo
+  Scenario: Empty the trash while Penpot is unreachable
+    Given a design file named "Gone For Good.penpot" in "Penpot/Purge Me"
+    And the file is in the Nextcloud trash
+    And its design is in Penpot's trash
+    And Penpot is unreachable
+    When I purge it from the trash
+    Then no design is deleted in Penpot
+    And the file is gone from the Nextcloud trash
+
+    # Cannot prove the design is still in the trash, so do not destroy it. The
+    # Nextcloud trash is emptied either way — that half is not ours to refuse.

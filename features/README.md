@@ -272,6 +272,63 @@ scenario executes today; it is about **who picks it up**.
 it: the list is now things a person can sit down and do, with no triage step in
 front of it.
 
+#### Today the queue is the whole suite — all 116 scenarios, and nothing runs
+
+**This is a deliberate, temporary state, and the three sections below currently
+describe empty categories.** Read them anyway; they are how a scenario earns its
+status back.
+
+The reorganisation this file describes — the folder became the noun, the file
+became the verb, `reconcile.feature` stopped being a feature — rewrote the spec
+faster than the harness could follow. Nine scenarios were still running when it
+landed, and the step vocabulary underneath them had moved. The choice was to
+re-triage 116 scenarios inside the PR that did the rewriting, or to collapse them
+to one flat queue and let each PR that implements a behaviour restore that
+scenario's real status. **The second, because triage done from the spec alone is a
+guess, and the honest answer for each one is found by trying to make it pass.**
+
+So: every scenario is `@todo`, `@unbuilt`/`@blocked`/`@decision` have no members,
+and the integration matrix reports zero tests on all four legs. Zero tests is a
+pass here, not a broken reporter — Behat still fires its suite events for a suite
+the filter empties, so each leg writes `<testsuite tests="0"/>` and the workflow's
+leg-count guard stays armed.
+
+**What this costs, stated plainly so nobody discovers it later.** Nine of these
+were **green in CI** the moment before the collapse — the two admin-connection
+scenarios, enabling and disabling the app, the three mapping-creation ones,
+changing a mapped folder's groups, and syncing one mapping. Those nine are the
+only scenarios in this suite ever proven to pass, so they are the cheapest
+possible re-promotions and they are where Chapter 3 starts.
+
+Seven were `@blocked` and one was `@decision`, and **that record is only half in
+the files.** Where the reason was already written as a comment it survives the
+collapse untouched, which is why those comments still open with the old tag name:
+
+```gherkin
+  # @blocked — no app removal. The harness can enable and disable, which is what
+  # `occ` offers; removing an app and reinstalling it is a store operation this
+  # suite has no way to perform.
+  @todo
+  Scenario: Removing the app
+```
+
+**A comment naming a status the tag no longer carries is the record, not a
+contradiction** — the tag is the temporary flat state, the comment is the truth.
+Three of the seven read that way (`lifecycle.feature`, both of
+`designs/edit.feature`), and the two `# @unbuilt — THIS IS THE SPEC, AND THE APP
+DOES THE OPPOSITE TODAY` notes in `designs/delete.feature` and
+`designs/move.feature` are the same thing and matter more, because they mark
+places where promoting the scenario means **fixing the app, not writing a test**.
+
+The other four `@blocked` and the one `@decision` had no such comment, so their
+status lived only in the tag and is now only in the saga's Chapter 2 close, which
+names all eight. Do not re-derive them from the spec.
+
+**The rule that goes with it:** a scenario stops being `@todo` only on a PR that
+runs it. Promote it to live when it passes, or move it to its true status with the
+reason written down — never by re-reading the spec and deciding what it probably
+is. The build order is in the saga's Chapter 3.
+
 #### What makes something `@blocked` rather than `@todo`
 
 Name the missing capability, in the scenario or the section above it. The eight
@@ -318,14 +375,24 @@ scenario may still open a page to have somewhere to look.
 
 #### A `@todo` that fails is a finding, not a status
 
-One scenario is `@todo` because it FAILS, not because it is unwritten — the
-restore/pull listing disagreement (§6.49), and it says so in a comment. That is
-a deliberate use of the tag: the spec is right, the code is wrong, and the
-scenario is the evidence. Promoting it is a bug fix, not a test-writing task.
+A scenario may be `@todo` because it FAILS, not because it is unwritten: the spec
+is right, the code is wrong, and the scenario is the evidence. Promoting it is a
+bug fix, not a test-writing task.
 
-Say so in a comment when you do this. A silent failing `@todo` is
-indistinguishable from an unwritten one, and the difference is the whole value
-of the tag.
+**Say so in a comment when you do this.** A silent failing `@todo` is
+indistinguishable from an unwritten one, and the difference is the whole value of
+the tag — which is now the *only* thing that distinguishes them, since the tag
+itself no longer sorts anything (above). Two say so today, both marking the app
+disagreeing with the spec rather than lagging it:
+
+```gherkin
+    # @unbuilt — THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: it trashes
+    # the file and calls it "hidden". A link is Penpot's copy to remove.
+```
+
+in `designs/delete.feature` ("Trash a link") and `designs/move.feature` ("Move an
+untracked design file into a project"). The example this section used to give — the
+restore/pull listing disagreement (§6.49) — was resolved and its comment is gone.
 
 **A status tag sits on its own scenario, never above a comment block.** Gherkin
 binds a floating tag to whatever scenario comes next, across any number of

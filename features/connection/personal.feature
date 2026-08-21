@@ -9,7 +9,7 @@ Feature: The personal connection
     Given the app is enabled
     And a working admin connection to Penpot
 
-  @unbuilt
+  @todo
   Scenario: A user enters a valid token
     When the user sets their personal token to a valid one
     And the user tests their personal connection
@@ -18,7 +18,7 @@ Feature: The personal connection
     # The mapping is the token's shadow — nothing to name, nothing to decide.
     # notes: ../AGENTS.md#a-user-enters-a-valid-token
 
-  @unbuilt
+  @todo
   Scenario: A user clears their token
     Given the user has personal project folders in their home
     When the user clears their personal token
@@ -27,7 +27,7 @@ Feature: The personal connection
     And the folders and their files are left exactly where they are
     # notes: ../AGENTS.md#a-user-clears-their-token
 
-  @unbuilt
+  @todo
   Scenario: A user enters a bad token
     When the user sets their personal token to a bad one
     And the user tests their personal connection

@@ -1,81 +1,99 @@
 # Notes, decisions and history for this feature: ../AGENTS.md#projectsdelete
 
-Feature: Deleting a Penpot project folder
+Feature: Deleting a project
   As a Nextcloud user
-  I want deleting a project folder to delete the project in Penpot
-  So that removing a folder means the same thing on both sides
-  Background:
-    Given the app is enabled
-    And the Penpot base URL points at the test instance
-    And the admin has configured the service-account token
-    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
+  I want deleting a project folder to be as safe and as legible as deleting one design
+  So that one gesture cannot quietly destroy many designs
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Deleting a project folder deletes the project in Penpot
-    Given a mirrored design "Inside" in the project "Doomed"
-    When I delete the "Doomed" project folder
-    Then "delete-project" is called with that project's id
-    And Penpot no longer lists a project named "Doomed"
-    And the design "Inside" is in Penpot's trash
-    And the folder is recoverable from the Nextcloud trash
+  Background:
+    Given the app is connected to Penpot
+    And the following mappings were made:
+      | team           | folder   | mode | storage      | groups |
+      | Design Team    | Penpot   | sync | admin folder |        |
+      | Second Team    | Shared   | sync | team folder  | admin  |
+      | Reference Team | Pointers | link | admin folder |        |
+    And the following items in the mappings:
+      | path                            |
+      | /Penpot/Existing/Alpha.penpot   |
+      | /Pointers/Existing/Fixed.penpot |
+    And a folder at "Scratch" that is not mapped
+
+  # notes: ../AGENTS.md#the-mappings-in-the-background
+
+    # ── RULE: trashing a project folder trashes the project ───────────────────
     # notes: ../AGENTS.md#deleting-a-project-folder-deletes-the-project-in-penpot
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Deleting a project folder does not need a per-design call
-    Given a mirrored project "Doomed" holding 3 designs
-    When I delete the "Doomed" project folder
-    Then "delete-file" is never called
-    And exactly one "delete-project" call is made
-    # notes: ../AGENTS.md#deleting-a-project-folder-does-not-need-a-per-design-call
+  @in-nextcloud @gesture @todo
+  Scenario Outline: Trash a project folder
+    Given the following items in the mappings:
+      | path                          |
+      | /<folder>/Doomed/Alpha.penpot |
+      | /<folder>/Doomed/Beta.penpot  |
+    When I move "<folder>/Doomed" to the trash
+    Then Penpot holds no project named "Doomed"
+    And those designs are in Penpot's trash
+    And "<folder>/Doomed" is recoverable from the Nextcloud trash
+
+    Examples: the storage a mapping uses makes no difference to what a trash is
+      | folder |
+      | Penpot |
+      | Shared |
+
+    # Penpot's own trash takes the designs with the project, so nothing is destroyed
+    # by this gesture on either side — which is what makes it safe to do at all.
+
+  # notes: ../AGENTS.md#trashing-a-folder-takes-every-project-its-name-spelled
+  @in-nextcloud @gesture @todo
+  Scenario: Trash a folder that other projects are named through
+    Given the following items in the mappings:
+      | path                              |
+      | /Penpot/foo/bar/Alpha.penpot      |
+      | /Penpot/foo/bar/baz/Beta.penpot   |
+    When I move "Penpot/foo" to the trash
+    Then Penpot holds no project named "foo/bar"
+    And Penpot holds no project named "foo/bar/baz"
+    And "Penpot/foo" is recoverable from the Nextcloud trash
+
+    # "foo" is not a project itself, but every project below it is named THROUGH it,
+    # so the one gesture ends all of them — which is why the trash entry matters.
+
+    # ── RULE: a link team is Penpot's to change ───────────────────────────────
+    # notes: ../AGENTS.md#trashing-a-project-folder-in-a-link-team-is-refused
 
   @in-nextcloud @gesture @todo
-  Scenario: A plain folder inside a mapped folder deletes without touching Penpot
-    Given a plain folder "Just My Notes" inside the mapped folder
-    When I delete it
-    Then Penpot is never contacted
-    # Only a folder carrying `penpot_project_id` is a project. This is the same
-    # rule the tag opt-in rests on (create-project.feature), stated for delete.
+  Scenario: Trashing a project folder in a link team is refused
+    When I try to move "Pointers/Existing" to the trash
+    Then the trash is refused with a message
+    And Penpot holds a project named "Existing"
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: The team root is never deletable as a project
-    When I try to delete the mapped folder itself
-    Then "delete-project" is never called for the team's Drafts project
-    # notes: ../AGENTS.md#the-team-root-is-never-deletable-as-a-project
+    # The same refusal a single link gets, for the same reason: under a link the
+    # tree is Penpot's, and Nextcloud is a read-only mirror of it.
 
-  @in-penpot @todo
-  Scenario: A project deleted in Penpot leaves no folder claiming its id
-    Given a mirrored design "Orphan" in the project "Deleted Upstream"
-    When the project is deleted in Penpot
-    And the team is mirrored again
-    Then the mirror of "Orphan" is in the Nextcloud trash
-    And the folder does not still carry the dead project's id
+    # ── RULE: a project deleted in Penpot takes only what is Penpot's ─────────
     # notes: ../AGENTS.md#a-project-deleted-in-penpot-leaves-no-folder-claiming-its-id
 
-    # ── the hard step: emptying the trash purges Penpot ───────────────────────
+  @in-penpot @gesture @todo
+  Scenario: Delete a project in Penpot whose folder holds only designs
+    Given the following items in the mappings:
+      | path                         |
+      | /Penpot/Doomed/Alpha.penpot  |
+      | /Penpot/Doomed/Beta.penpot   |
+    When someone deletes the "Doomed" project in Penpot
+    Then "Penpot/Doomed" is gone from Nextcloud
+    And the designs are recoverable from the Nextcloud trash
 
-  # Penpot keeps listing a deleted project (saga §6.42), so the listing alone is
-  # not proof it exists. notes: ../AGENTS.md#a-project-penpot-still-lists-after-deletion-is-not-mirrored
-  @in-penpot @todo
-  Scenario: A project Penpot still lists after deletion is not mirrored
-    Given a Penpot project that has been deleted
-    When the team is mirrored again
-    Then no folder is created for that project
-    And no design is mirrored into one
+  @in-penpot @gesture @todo
+  Scenario: Delete a project in Penpot whose folder holds other files too
+    Given the following items in the mappings:
+      | path                        |
+      | /Penpot/Doomed/Alpha.penpot |
+      | /Penpot/Doomed/Budget.xlsx  |
+    When someone deletes the "Doomed" project in Penpot
+    Then "Penpot/Doomed" still exists in Nextcloud, holding "Budget.xlsx"
+    And it holds no design files
+    And the mappings hold:
+      | path           | identity |
+      | /Penpot/Doomed | absent   |
 
-  @todo
-  Scenario: Restoring a design also restores its project if that was deleted too
-    Given a Penpot project that was deleted, containing a design
-    When the design is restored from Penpot's trash
-    Then its containing project is restored as well
-    And the project folder reappears on the next pull
-    # Penpot's restore clears deleted_at on the project as well as the file.
-
-  # notes: ../AGENTS.md#deleting-a-personal-project-folder-deletes-that-project-in-penpot
-
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Deleting a personal project folder deletes that project in Penpot
-    Given a personal project folder in the user's home
-    When the user deletes the folder
-    Then the project is deleted in Penpot under the user's own token
-    And its designs go to Penpot's trash with it
-    And the folder is recoverable from the Nextcloud trash
+    # It stops being a project and goes back to being an ordinary folder. Deleting a
+    # user's spreadsheets because a Penpot project went away is not the app's call.

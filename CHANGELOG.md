@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Internal: an untracked step assertion could not fail for the reason it claimed, and a metadata table silently compared unknown vocabulary as a literal (no behaviour change; test harness only).
 
+- Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and every scenario is temporarily `@todo` while the integration harness is re-taught one behaviour at a time. No behaviour change; the integration suite runs nothing until then.
+
 ### Added
 
 - **A design's file now carries the design's own dates.** "Modified" shows when the design last changed in Penpot and "Created" when it was created there, instead of both showing when a sync happened to run — and a project folder carries its project's creation date. Sorting a mapped folder by date finally sorts by the designs.

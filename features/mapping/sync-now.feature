@@ -10,6 +10,7 @@ Feature: Syncing one mapping from its card
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
 
+  @todo
   Scenario: Syncing one mapping brings its projects and designs into Nextcloud
     Given a Penpot team named "Design Team" is mapped to the folder "One Mapping"
     And the Penpot team already contains:

@@ -1,40 +1,58 @@
 # Notes, decisions and history for this feature: ../AGENTS.md#projectsrestore
 
-Feature: Restoring a Penpot project folder
+Feature: Restoring a project from the trash
   As a Nextcloud user
-  I want restoring a project folder to bring back the project and its designs
-  So that undoing a folder delete undoes all of it, or tells me it cannot
-  Background:
-    Given the app is enabled
-    And the Penpot base URL points at the test instance
-    And the admin has configured the service-account token
-    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
+  I want restoring a project folder to bring the project back
+  So that undoing a folder delete undoes it in Penpot too
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: Restoring a project folder brings back the project and every design in it
-    Given a mirrored project "Doomed" holding 3 designs
-    And I deleted the "Doomed" project folder
-    When I restore the folder from the Nextcloud trash
-    Then "restore-deleted-team-files" is called once with all 3 design ids
-    And Penpot lists the project "Doomed" again
-    And all 3 designs are back in it
-    # notes: ../AGENTS.md#restoring-a-project-folder-brings-back-the-project-and-every-design-in-it
+  Background:
+    Given the app is connected to Penpot
+    And the following mappings were made:
+      | team        | folder | mode | storage      | groups |
+      | Design Team | Penpot | sync | admin folder |        |
+      | Second Team | Shared | sync | team folder  | admin  |
+    And the following items in the mappings:
+      | path                          |
+      | /Penpot/Existing/Alpha.penpot |
+
+  # notes: ../AGENTS.md#the-mappings-in-the-background
+
+    # ── RULE: the project comes back; what Penpot kept decides which id ───────
+    # notes: ../AGENTS.md#restoring-a-project-folder-brings-the-project-back
 
   @in-nextcloud @gesture @todo
-  Scenario: Restoring one design of a deleted project does not silently restore the rest
-    Given a Penpot project that was deleted with 2 designs in it
-    When only the first design is restored
-    Then the project exists again in Penpot
-    And the second design is still in Penpot's trash
-    # notes: ../AGENTS.md#restoring-one-design-of-a-deleted-project-does-not-silently-restore-the-rest
+  Scenario Outline: Restore a project folder from the Nextcloud trash
+    Given a project folder "<folder>/Doomed" <held>
+    And "<folder>/Doomed" is in the Nextcloud trash
+    When I restore "<folder>/Doomed" from the Nextcloud trash
+    Then Penpot holds a project named "Doomed"
+    And "<folder>/Doomed" holds:
+      | penpot_project_id | <identity> |
 
-  @blocked
-  Scenario: A project deleted while empty cannot be restored, and the app says so
-    Given a project folder whose project was deleted with no designs in it
-    When I restore the folder from the Nextcloud trash
-    Then the folder comes back as an ordinary folder
-    And the app explains that an empty Penpot project cannot be restored
-    And it names the grace window after which the project is gone for good
-    # notes: ../AGENTS.md#a-project-deleted-while-empty-cannot-be-restored-and-the-app-says-so
+    Examples: what Penpot can still give back decides which id comes home
+      | folder | held                                    | identity        |
+      | Penpot | holding designs still in Penpot's trash | the original id |
+      | Shared | holding designs still in Penpot's trash | the original id |
+      | Penpot | holding designs Penpot has purged       | a new id        |
+      | Penpot | holding no designs at all               | a new id        |
 
-    # ── the layers restore does NOT use, and why it says so ───────────────────
+    # A project comes back only through a design of its own — Penpot has no
+    # restore-project call. With nothing to come back through, it is made again.
+
+    # ── RULE: a design coming back in Penpot brings its project with it ───────
+    # notes: ../AGENTS.md#restoring-one-design-brings-its-project-with-it
+
+  @in-penpot @gesture @todo
+  Scenario: Restore one design of a deleted project in Penpot
+    Given the following items in the mappings:
+      | path                        |
+      | /Penpot/Doomed/Alpha.penpot |
+      | /Penpot/Doomed/Beta.penpot  |
+    And "Penpot/Doomed" is in the Nextcloud trash
+    When someone restores only "Alpha" in Penpot
+    Then Penpot holds a project named "Doomed"
+    And "Penpot/Doomed" is not in the Nextcloud trash
+    And the design "Beta" is in Penpot's trash
+
+    # Penpot clears a project's deletion when any file inside it comes back, so one
+    # design revives the project — and restoring a hundred would say nothing more.

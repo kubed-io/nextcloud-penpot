@@ -25,6 +25,17 @@ personal projects, and notifications. See the Course tables in
 status of every structure — that table is maintained per slice and is the
 fastest way to see what exists.
 
+> **READ THIS BEFORE YOU TRUST A GREEN BUILD.** Chapter 2 is CLOSED, and its
+> finale (§C6.38) redrew the **master design**: `features/` is now organised so
+> the folder is the noun and the file is the verb, and **all 116 scenarios are
+> `@todo`, so the integration suite runs zero tests on every leg.** Zero is a
+> pass here and says so in `behat.dist.yml`, the workflow header and
+> `features/README.md` — but it means a green integration run currently proves
+> **nothing** about this app. Re-teaching the harness is
+> [Chapter 3](saga/Chapter_3_Building_To_Plan.md), one behaviour per PR, and its
+> one rule is: **a scenario stops being `@todo` only on a PR that runs it** —
+> never by re-reading the spec and deciding what it probably is.
+
 Chapter 1 of the saga is CLOSED and carries a complete architecture — but read
 it before building, because several load-bearing decisions are still open forks
 (see [Architectural non-negotiables](#architectural-non-negotiables) below), and
