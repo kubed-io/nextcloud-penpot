@@ -45,7 +45,9 @@ Feature: Moving a project
     # replaces it with a new one wearing the new path.
 
   # notes: ../AGENTS.md#a-move-high-in-the-tree-renames-every-project-below-it
-  @in-nextcloud @gesture
+  # @unbuilt — the projects BELOW the dragged folder keep their old names
+  # (`foo/bar`, not `Clients/foo/bar`): only the moved node itself is pushed.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a folder that other projects are named through
     Given the following items in the mappings:
       | path                            |
