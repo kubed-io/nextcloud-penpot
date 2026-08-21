@@ -189,12 +189,17 @@ trait MetadataSteps {
 					? null : "expected the mapping's mode ('{$want}'), found '{$actual}'";
 
 			case "the design's id":
-				$want = $this->fileIdNamed($this->designNameOf($path));
+				// Scoped to the path's own mapping where one is declared; see
+				// {@see ArrangeSteps::designIdInMapping()} for why a bare name is not
+				// an address.
+				$want = $this->designIdInMapping($path) ?? $this->fileIdNamed($this->designNameOf($path));
 				return $actual === $want
 					? null : "expected the id of the design '{$this->designNameOf($path)}' ({$want}), found '{$actual}'";
 
 			case "the team's id":
-				$want = $this->theNamedTeam();
+				// The team of the mapping this path sits under — not whichever team
+				// the mappings table happened to name last.
+				$want = $this->teamIdForPath($path) ?: $this->theNamedTeam();
 				return $actual === $want
 					? null : "expected the mapped team's id ({$want}), found '{$actual}'";
 

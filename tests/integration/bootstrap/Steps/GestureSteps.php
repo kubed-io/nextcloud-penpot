@@ -200,6 +200,11 @@ trait GestureSteps {
 	 * @Given /^an uploaded ".penpot" archive at "([^"]*)"$/
 	 */
 	public function iUploadAnArchiveAt(string $path): void {
+		// THE FOLDER MAY NOT BE THERE YET. `an untracked design file at
+		// "Scratch/Adopt Me/Alpha.penpot"` names a folder the scenario never
+		// created, and a PUT into a missing collection is a 404 — which reads as a
+		// broken upload rather than a missing arrange.
+		$this->makeAncestors($path);
 		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the
 		// only thing the upload-vs-create guard looks at.
 		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));

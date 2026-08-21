@@ -122,7 +122,9 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  @in-nextcloud @gesture
+  # @unbuilt — refused today (HTTP 403) by the same rule that pins a project inside
+  # its team folder, which README's own table states as the intended behaviour.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
 use Behat\Gherkin\Node\TableNode;
+
 /**
  * The opt-in that makes a Nextcloud folder a Penpot project, and the tag that
  * marks every project folder whichever way round it came about

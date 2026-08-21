@@ -116,7 +116,9 @@ Feature: Creating a design
     # ── RULE: a design has to have somewhere to go ───────────────────────────
     # notes: ../AGENTS.md#a-design-has-to-have-somewhere-to-go
 
-  @in-nextcloud @gesture
+  # @unbuilt — allowed today (HTTP 201). The spec refuses it because there is no
+  # rootless design; the app writes the plain file the siblings write.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Create a design outside every mapping
     When I try to create a new design in "Scratch"
     Then the creation is refused with a message

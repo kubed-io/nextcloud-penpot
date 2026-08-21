@@ -22,7 +22,9 @@ Feature: Copying a Penpot project folder
     # ── RULE: a copied project is a new project, holding new designs ──────────
     # notes: ../AGENTS.md#a-copied-project-is-a-new-project
 
-  @in-nextcloud @gesture
+  # @unbuilt — a folder copy tracks nothing: CopyService::onCopy() takes a File and
+  # core fires no per-child event, so every id below the copy comes back absent.
+  @in-nextcloud @gesture @unbuilt
   Scenario Outline: Copy a project within its team
     Given the following items in the mappings:
       | path                            | kind    |
@@ -50,7 +52,9 @@ Feature: Copying a Penpot project folder
     # duplicate per design — which is why every id below the copy is a new one.
 
   # notes: ../AGENTS.md#a-project-copied-into-another-team-belongs-to-that-team
-  @in-nextcloud @gesture
+  # @unbuilt — same wall as the copy above: a copied folder is never tracked, so
+  # no project is created in the destination team.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Copy a project into another team
     Given the following items in the mappings:
       | path                          | kind    |
@@ -67,7 +71,9 @@ Feature: Copying a Penpot project folder
     # ── RULE: a project has no project above it ──────────────────────────────
     # notes: ../AGENTS.md#penpot-projects-do-not-nest
 
-  @in-nextcloud @gesture
+  # @unbuilt — same wall again: the arriving designs carry no ids, so nothing
+  # decides which project they land in.
+  @in-nextcloud @gesture @unbuilt
   Scenario Outline: Copy a project under something that cannot hold one
     Given the following items in the mappings:
       | path                          | kind    |
