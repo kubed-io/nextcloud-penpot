@@ -87,7 +87,7 @@ Feature: Moving a project
     # ── RULE: arriving in a team makes every design in it real ────────────────
     # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Move a folder of untracked designs into a team
     Given an untracked design file at "Scratch/Adopt Me/Alpha.penpot"
     When I move "Scratch/Adopt Me" into "Penpot"
@@ -122,7 +122,7 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |

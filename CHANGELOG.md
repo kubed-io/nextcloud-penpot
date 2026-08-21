@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Internal: an untracked step assertion could not fail for the reason it claimed, and a metadata table silently compared unknown vocabulary as a literal (no behaviour change; test harness only).
 
-- Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and the integration harness is being re-taught one behaviour at a time. The connection, app-lifecycle, mapping, design-rename and project verbs run again; the rest stay `@todo` until their PR.
+- Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and the integration harness is being re-taught one behaviour at a time. The connection, app-lifecycle, mapping, design and project verbs run again; the rest stay `@todo` until their PR.
 
 ### Added
 

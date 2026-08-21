@@ -113,7 +113,22 @@ final class ProjectFolderService {
 		// MembershipResolver::pathBelowMapping(). Using the bare name made this
 		// direction disagree with the pull, which has always spelt a project's
 		// nesting into its name.
-		$name = trim((string)$this->resolver->pathBelowMapping($folder));
+		$below = $this->resolver->pathBelowMapping($folder);
+		if ($below === null) {
+			// NOT THE SAME REFUSAL as an unusable name. Null means the folder has no
+			// path below a mapping to be named by — it IS the mapping root. A team
+			// root is not a project and never was, so this is the no-complaint case
+			// above rather than something the user typed wrongly; saying "the folder
+			// name cannot be used" would send them to rename a folder that is fine.
+			$this->logger->debug('penpot_sync project: the mapped root is not a project; nothing to create', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+			]);
+
+			return;
+		}
+
+		$name = trim($below);
 		if ($name === '' || mb_strlen($name) > 250) {
 			// Penpot's own rule is [:string {:max 250, :min 1}] — checked here so
 			// the refusal is local and the tag comes off, rather than arriving as a

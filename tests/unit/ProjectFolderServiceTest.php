@@ -55,13 +55,22 @@ final class ProjectFolderServiceTest extends TestCase {
 	private array $fileStamps = [];
 
 	/**
-	 * What the resolver says a folder's path below the mapping is.
+	 * What the STUB should answer for a folder's path below the mapping.
 	 *
-	 * Null means "its own name", which is true of every flat folder these tests
-	 * use and keeps them reading as they did before a project's name became a
-	 * path. The nested case sets it, because that is the whole point of it.
+	 * Null here means "do not override" — the double falls back to the node's own
+	 * name, which is what the real resolver returns for a folder sitting directly
+	 * under a mapping, and what every flat folder in these tests is.
+	 *
+	 * IT DOES NOT MEAN WHAT NULL MEANS ON THE REAL RESOLVER.
+	 * {@see MembershipResolver::pathBelowMapping()} returns null for a node outside
+	 * every mapping and for a mapping ROOT — cases with no name at all. Those are
+	 * exercised by setting this to an actual value or by the dedicated tests, never
+	 * by leaving it null.
 	 */
 	private ?string $pathBelow = null;
+
+	/** When true the stub answers null, the way the real resolver does for a root. */
+	private bool $pathBelowIsNull = false;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -77,7 +86,7 @@ final class ProjectFolderServiceTest extends TestCase {
 			fn (int $id): ?PenpotFileMetadata => $this->fileStamps[$id] ?? null,
 		);
 		$this->resolver->method('pathBelowMapping')->willReturnCallback(
-			fn (Node $node): ?string => $this->pathBelow ?? $node->getName(),
+			fn (Node $node): ?string => $this->pathBelowIsNull ? null : ($this->pathBelow ?? $node->getName()),
 		);
 
 		$this->projects = new ProjectFolderService(
@@ -103,6 +112,24 @@ final class ProjectFolderServiceTest extends TestCase {
 			->with(50, [PenpotMetadata::KEY_PROJECT_ID => self::NEW_PROJECT]);
 
 		$this->projects->onTagged($this->folder(50, 'Client Work'));
+	}
+
+	/**
+	 * TAGGING THE MAPPED ROOT IS A NO-OP, NOT A COMPLAINT.
+	 *
+	 * The root carries a team id, so the team lookup succeeds and the old code fell
+	 * through to the name check — where `pathBelowMapping()`'s null became an empty
+	 * string and the folder was refused with "the folder name cannot be used as a
+	 * Penpot project name". That sends someone off to rename a folder that is
+	 * perfectly fine. A team root simply is not a project.
+	 */
+	public function testTaggingTheMappedRootCreatesNothingAndRefusesNothing(): void {
+		$this->inTeam();
+
+		$this->client->expects($this->never())->method('createProject');
+		$this->tags->expects($this->never())->method('remove');
+
+		$this->projects->onTagged($this->rootFolder(50));
 	}
 
 	/**
@@ -309,6 +336,13 @@ final class ProjectFolderServiceTest extends TestCase {
 	}
 
 	/** @param list<Node> $children */
+	/** A mapped ROOT: the resolver gives it no path below a mapping. */
+	private function rootFolder(int $id): Folder {
+		$this->pathBelowIsNull = true;
+
+		return $this->folder($id, 'Penpot');
+	}
+
 	private function folder(int $id, string $name, array $children = []): Folder {
 		$node = $this->createMock(Folder::class);
 		$node->method('getId')->willReturn($id);
