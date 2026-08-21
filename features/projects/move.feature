@@ -15,6 +15,7 @@ Feature: Moving a project
     And the following items in the mappings:
       | path                            |
       | /Penpot/Clients                 |
+      | /Shared/Archive                 |
       | /Pointers/Existing/Fixed.penpot |
     And a folder at "Scratch" that is not mapped
 
@@ -64,7 +65,9 @@ Feature: Moving a project
     # ── RULE: leaving every mapping leaves the project standing ───────────────
     # notes: ../AGENTS.md#a-project-folder-that-leaves-every-mapping-stops-being-a-mirror
 
-  @in-nextcloud @gesture
+  # @unbuilt — refused today (HTTP 403), and README's own table agrees with the app
+  # that a project is "pinned inside its team folder". The spec needs a decision.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a project folder out of a team to unmap it
     Given the following items in the mappings:
       | path                            |

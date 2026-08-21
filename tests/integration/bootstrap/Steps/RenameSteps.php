@@ -257,4 +257,48 @@ trait RenameSteps {
 		}
 		return null;
 	}
+
+	/**
+	 * A folder still holds a plain file of the user's.
+	 *
+	 * THE POINT IS THAT NOTHING WAS RE-MADE. A project folder renamed from either
+	 * side must be the SAME folder afterwards, carrying everything that was in it —
+	 * including files this app has no opinion about. A rename implemented as
+	 * create-new-and-move-the-designs would satisfy every id assertion in the
+	 * scenario and quietly drop `Budget.xlsx`, so this row is the one that notices.
+	 *
+	 * @Then /^"([^"]*)" holds "([^"]*)"$/
+	 */
+	public function folderHolds(string $folder, string $name): void {
+		$path = trim($folder, '/') . '/' . $name;
+		if (!$this->davExists($path)) {
+			throw new \RuntimeException(
+				"expected '{$folder}' to still hold '{$name}', but there is nothing at '{$path}'",
+			);
+		}
+	}
+
+	/**
+	 * A project renamed in Penpot, and the sync that carries the news.
+	 *
+	 * "That project" is the one the arrange most recently put on stage — the same
+	 * referent `the original id` uses for a folder, and for the same reason: a
+	 * project's path is what the gesture changes, so it cannot be the thing that
+	 * identifies it.
+	 *
+	 * `id` is the wire key, NOT `project`. `PenpotClient::renameProject()` passes
+	 * `project` and `PenpotClient::PARAMS` translates it — the same trap
+	 * `rename-file` set, written out again here because the next person will copy
+	 * one of these two lines.
+	 *
+	 * @When /^someone renames that project to "([^"]*)" in Penpot$/
+	 */
+	public function someoneRenamesThatProjectToInPenpot(string $name): void {
+		$id = $this->declaredProjectIds[$this->lastDeclaredProject] ?? '';
+		if ($id === '') {
+			throw new \RuntimeException('no project is on stage to rename in Penpot');
+		}
+		$this->penpotRpc('rename-project', ['id' => $id, 'name' => $name]);
+		$this->theAdminRunsAPull();
+	}
 }

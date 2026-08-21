@@ -16,6 +16,7 @@ use OCA\PenpotSync\Service\SyncGuard;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Folder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
@@ -82,15 +83,31 @@ final class NodeRenamedListener implements IEventListener {
 		$source = $event->getSource();
 		$target = $event->getTarget();
 
-		// Comparing names, not paths, is deliberate: a move changes the path but
-		// not the name, and only the name reaches Penpot's rename commands.
-		if ($source->getName() !== $target->getName()) {
+		$renamed = $source->getName() !== $target->getName();
+		// A move is "the parent changed" — the path minus the name. A rename in
+		// place leaves this identical and costs nothing here.
+		$moved = $this->parentPath($source) !== $this->parentPath($target);
+
+		// A PROJECT FOLDER'S NAME IS ITS PATH BELOW THE MAPPING, so moving one
+		// RENAMES it even though getName() never changed.
+		//
+		// This used to compare names alone, and said so: "a move changes the path
+		// but not the name, and only the name reaches Penpot's rename commands."
+		// That was true while a project was called after its folder. It is not any
+		// more — dragging `Penpot/Traveller` into `Penpot/Clients` makes it the
+		// project `Clients/Traveller`, and comparing names saw nothing to push.
+		//
+		// Files are unaffected: a design's Penpot name is its filename, so a move
+		// really does leave it alone. Hence the `Folder` test rather than pushing a
+		// rename for everything that moved.
+		//
+		// Safe to run for any folder: pushRename() no-ops on a folder carrying no
+		// project id, and pathBelowMapping() returns null for a mapping root.
+		if ($renamed || ($moved && $target instanceof Folder)) {
 			$this->attempt('rename', $target, fn () => $this->push->pushRename($target));
 		}
 
-		// A move is "the parent changed" — the path minus the name. A rename in
-		// place leaves this identical and costs nothing here.
-		if ($this->parentPath($source) !== $this->parentPath($target)) {
+		if ($moved) {
 			$this->attempt('move', $target, fn () => $this->motion->onMove($source, $target));
 		}
 	}
