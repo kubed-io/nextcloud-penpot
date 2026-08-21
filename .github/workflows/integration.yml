@@ -7,28 +7,28 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: 9 OF 116 SCENARIOS, on two of the four legs. Round 1 of the
-# saga's Chapter 3 re-surveyed the nine that were green in CI the moment before
-# the spec rewrite collapsed everything to @todo — the two admin-connection
-# scenarios, enabling and disabling the app, the three mapping-creation ones,
-# changing a mapped folder's groups, and syncing one mapping. They expand to 27
-# executed scenarios (`admin` 25, `core` 2); `design` and `project` are still
-# entirely @todo and still report zero tests. `behat --tags @todo` is the
-# remaining queue. See behat.dist.yml for what the other three status tags mean,
-# and the saga's Chapter 3 for the order the queue is worked in.
+# SCOPE RIGHT NOW: 15 OF 116 SCENARIO HEADERS, on all four legs — 41 executed
+# scenarios (`admin` 25, `design` 7, `project` 7, `core` 2). The connection, the
+# app lifecycle and the mapping came back first (they had been green before the
+# spec rewrite collapsed everything to @todo); the design and project verbs
+# followed once the arrange spine in tests/integration/bootstrap/Steps/ArrangeSteps.php
+# was built, which is what the rewritten Background needs. `behat --tags @todo` is
+# the remaining queue of 87. See behat.dist.yml for what the other three status
+# tags mean, and the saga's Chapter 3 for the order the queue is worked in.
 #
 # A ZERO-SCENARIO LEG IS STILL A REPORTING LEG, which is what keeps the guards
 # below honest: Behat fires its suite events even when the filter matches nothing,
 # so the junit formatter writes <testsuite tests="0"/>, the upload's
 # if-no-files-found still has a file, and "Every leg is present" still counts four.
 # So this stays green on an empty suite WITHOUT either guard being loosened — they
-# remain armed for the silent-overwrite bug they were built for. Two legs still
-# depend on that and will until Chapter 3 reaches their nouns.
+# remain armed for the silent-overwrite bug they were built for. No leg depends on
+# that today; it stays because the next spec-first feature file will empty one.
 #
-# THE STACK BELOW IS DELIBERATELY NOT TORN DOWN on the legs whose queue is still
-# empty. It costs a few minutes per PR and buys the thing this suite exists for:
-# the PR that promotes a `design` scenario finds a working Nextcloud + Penpot
-# topology rather than re-debugging the topology and the scenario at once.
+# THE STACK BELOW EARNS ITS KEEP ON EVERY LEG NOW. It costs a few minutes per PR
+# and buys the thing this suite exists for: the run that promoted the design and
+# project verbs found four real bugs in `lib/` — a project named by its folder
+# rather than its path, a move that never told Penpot, and two wire keys — none of
+# which any amount of mocking would have produced.
 #
 # WHY THE PENPOT STACK IS WORTH THREE CONTAINERS PER RUN. This suite is the ONLY
 # place the wire format is asserted. The unit suite deliberately does not mock
@@ -556,9 +556,9 @@ jobs:
         status=$?
         set -e
 
-        # `--strict` FAILS A RUN THAT MATCHED NO SCENARIOS, and the `design` and
-        # `project` legs are still entirely @todo, so they exit 1 on a suite that
-        # is empty BY DESIGN. Read off Behat 3.32 rather than guessed:
+        # `--strict` FAILS A RUN THAT MATCHED NO SCENARIOS. No leg is empty today,
+        # but one will be again the moment a spec-first feature file lands, so the
+        # exemption stays. Read off Behat 3.32 rather than guessed:
         #
         #   TestResults::NO_TESTS            = -100
         #   TestResults::getResultCode()     seeds with NO_TESTS and max()es over
@@ -581,10 +581,9 @@ jobs:
         #
         # Read off the JUnit XML rather than Behat's human output, because "No
         # scenarios" is prose that can be reworded and <testcase> is a contract.
-        # SELF-HEALING, AND ALREADY PROVEN SO: the `admin` and `core` legs promoted
-        # their first scenarios in Chapter 3 Round 1, so testcases > 0 there and the
-        # real exit code governs again — with no edit here. The remaining two legs
-        # heal the same way when their nouns are reached.
+        # SELF-HEALING, AND PROVEN IN BOTH DIRECTIONS: every leg was empty, then
+        # `admin` and `core` filled, then `design` and `project` — testcases > 0 and
+        # the real exit code governs again, with no edit here on any of the four.
         if [ "$status" -ne 0 ]; then
           cases=$(grep -o '<testcase ' junit/*.xml 2>/dev/null | wc -l)
           bad=$(grep -oE '<(failure|error)[ >/]' junit/*.xml 2>/dev/null | wc -l)

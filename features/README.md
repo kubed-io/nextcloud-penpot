@@ -281,7 +281,7 @@ scenario executes today; it is about **who picks it up**.
 it: the list is now things a person can sit down and do, with no triage step in
 front of it.
 
-#### The queue is 106 of 116 — Round 1 is surveyed and the harness held
+#### The queue is 87 of 116 — the arrange spine is in and four legs are green
 
 The reorganisation this file describes — the folder became the noun, the file
 became the verb, `reconcile.feature` stopped being a feature — rewrote the spec
@@ -300,16 +300,15 @@ them the only sane place to break ground. Where the suite stands now:
 
 | status | scenarios | |
 |---|---|---|
-| *(none)* — runs in CI | 9 | 27 executed, on the `admin` and `core` legs |
-| `@todo` | 106 | the queue |
-| `@blocked` | 1 | `lifecycle.feature`, "Removing the app" |
-| `@unbuilt` | 0 | |
+| *(none)* — runs in CI | 15 | 41 executed: `admin` 25, `design` 7, `project` 7, `core` 2 |
+| `@todo` | 87 | the queue |
+| `@blocked` | 9 | no browser, no app removal, no way to author a design |
+| `@unbuilt` | 5 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |
 
-`design` and `project` are still entirely `@todo`, so those two legs still report
-zero tests. Zero tests is a pass here, not a broken reporter — Behat still fires
-its suite events for a suite the filter empties, so the leg writes
-`<testsuite tests="0"/>` and the workflow's leg-count guard stays armed.
+**All four legs report tests now**, so the empty-suite exemption in the workflow
+no longer carries any of them. It stays, because it is self-healing in both
+directions and the next spec-first feature file will empty a leg again.
 
 **Round 1 also found two things the rewrite had dropped**, which is the argument
 for running a scenario rather than reading it:
