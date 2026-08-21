@@ -96,6 +96,44 @@ trait WebDavTrait {
 		$this->assertStatus($this->davClient()->request('PUT', $this->davEncode($path), ['body' => $body]), [201, 204], "PUT $path");
 	}
 
+	/**
+	 * The immediate children of a folder, as paths under the files root.
+	 *
+	 * Depth 1 lists the folder itself first, and core spells that entry with a
+	 * trailing slash and the same href as the request — so it is dropped by
+	 * comparing the decoded path rather than by position, which a differently
+	 * ordered server would get wrong.
+	 *
+	 * @return list<string>
+	 */
+	private function davChildren(string $folder): array {
+		$folder = trim($folder, '/');
+		$res = $this->davClient()->request('PROPFIND', $this->davEncode($folder), [
+			'headers' => ['Depth' => '1', 'Content-Type' => 'application/xml'],
+			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:">'
+				. '<d:prop><d:resourcetype/></d:prop></d:propfind>',
+		]);
+		$this->assertStatus($res, [207], "PROPFIND $folder");
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+
+		$root = '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/';
+		$out = [];
+		foreach ($doc->xpath('//d:response/d:href') ?: [] as $href) {
+			$path = trim(rawurldecode((string)$href), '/');
+			$prefix = trim(rawurldecode($root), '/');
+			if (!str_starts_with($path, $prefix)) {
+				continue;
+			}
+			$rel = trim(substr($path, strlen($prefix)), '/');
+			if ($rel === '' || $rel === $folder) {
+				continue;
+			}
+			$out[] = $rel;
+		}
+		return $out;
+	}
+
 	/** GET a file's content. */
 	private function davGet(string $path): string {
 		$res = $this->davClient()->request('GET', $this->davEncode($path));

@@ -20,7 +20,7 @@ Feature: Renaming a project
     # ── RULE: the id is what makes a rename a rename ──────────────────────────
     # notes: ../AGENTS.md#renaming-a-project-folder-renames-the-project-in-penpot
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Rename a project folder in Nextcloud
     Given the following items in the mappings:
       | path                     |

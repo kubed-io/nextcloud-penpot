@@ -2072,6 +2072,24 @@ no separate cross-mapping scenario on the remote side either.
 
 ## designs/open-with
 
+**`@blocked` throughout — no browser, and that is the whole file.** Every scenario
+here asserts a context-menu entry, what a plain click does, or that an entry is
+*hidden*. All three are DOM behaviour, and the occ+DAV harness has no DOM.
+
+**The logic behind the action is covered, just not here.**
+`tests/js/files-helpers.test.js` pins the helpers the file action is built from —
+`readMetadata`, `getPenpotId`, `getPenpotMode` and `buildUrl` — including the two
+things most likely to break it: the stored wire value `reference` being translated
+back to `link` before any caller sees it, and `buildUrl` never emitting a
+`file-id` without a `team-id`, which is the shape that actually errored once. So
+what is missing is the wiring between a real menu and those helpers, not the
+decisions they make.
+
+**Marked at the `Feature:` level rather than scenario by scenario**, which Behat
+applies to every scenario below it — the same way nextcloud-n8n marks the whole of
+its `uninstall.feature`. One line moves when a browser harness arrives.
+
+
 `features/designs/open-with.feature`
 
 "Open with" — the opener(s) offered for a mirrored ".penpot" file.

@@ -14,7 +14,7 @@ Feature: Editing a design
   # Penpot-side only: a ".penpot" archive cannot be authored from Nextcloud.
   # @blocked throughout — the harness cannot edit a design's content.
   # notes: ../AGENTS.md#edit-design
-  @in-penpot @todo
+  @in-penpot @blocked
   Scenario: An edit in Penpot reaches the stored archive
     Given a Penpot team named "Design Team" is mapped to the folder "Penpot" in "sync" mode
     And a mirrored design "Cover" in the project "Brand"
@@ -31,7 +31,7 @@ Feature: Editing a design
     # notes: ../AGENTS.md#an-edit-in-penpot-reaches-the-stored-archive
 
   # @blocked — same wall.
-  @in-penpot @todo
+  @in-penpot @blocked
   Scenario: An edit in Penpot costs a link nothing but its dates
     Given a mirrored design "Sketch" in the project "Brand"
     When the design "Sketch" is edited in Penpot
