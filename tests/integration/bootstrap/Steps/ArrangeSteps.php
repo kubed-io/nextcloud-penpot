@@ -233,6 +233,25 @@ trait ArrangeSteps {
 			$this->mappingModes[$folder] = trim($row['mode'] ?? '') ?: 'link';
 			$this->mappingTeamIds[$folder] = $this->namedTeamId;
 		}
+
+		// ── A MAPPING IS NOT LIVE UNTIL A PULL HAS RUN ───────────────────────────
+		//
+		// `add-mapping` provisions the folder but does NOT mark it. Membership is
+		// derived by walking UP the tree for a folder carrying `penpot_team_id`
+		// (MembershipResolver, saga §6.29 — "the single most load-bearing rule in
+		// the app"), and the only thing that ever writes that marker is
+		// `PullService`. Grep for `writeFolder(` if this ever looks doubtful: every
+		// call site is in PullService.
+		//
+		// So without this pull, a design written into a freshly mapped folder
+		// resolves to `Membership: none` and the app correctly declines to track
+		// it — which is what CI reported, and it took a `status` dump to see that
+		// the fixture was wrong rather than the app.
+		//
+		// It also matches what the sentence CLAIMS. "The following mappings were
+		// made" means the mappings are usable, and a real instance reaches that
+		// state the same way: you map a team, then it syncs.
+		$this->theAdminRunsAPull();
 	}
 
 	/**
@@ -340,12 +359,46 @@ trait ArrangeSteps {
 		$folder = dirname($path);
 		$name = preg_replace('/\.penpot$/', '', basename($path)) ?? basename($path);
 
+		// ALREADY THERE IS A VALID ANSWER TO "IS THIS ITEM IN THE MAPPING?".
+		//
+		// Penpot state accumulates across a leg: teams are find-or-create by name
+		// and there is no delete-project RPC in this app to tear one down with, so
+		// the pull above re-mirrors every project an earlier scenario left in the
+		// team. A second row asking for the same path would then PUT an empty body
+		// over a mirrored archive — blanking a sync file to arrange it.
+		//
+		// A `Given` states what is true, so if it is already true, stop.
+		if ($this->davExists($path)) {
+			$existing = $this->davReadMetadata($path, 'penpot_id') ?? '';
+			if ($existing !== '') {
+				$this->declaredDesignIds[basename($path)] = $existing;
+				$this->rememberProject($folder);
+
+				return;
+			}
+		}
+
 		if (($this->mappingModes[$this->mappingRootOf($path)] ?? '') === 'link') {
 			$this->seedDesignViaPull($path, $name);
 		} else {
 			// Empty body: that is what "+ New → Penpot design" writes, and the app
 			// tells a CREATE from an UPLOAD by exactly this (see GestureSteps).
 			$this->davPut($path, '');
+			// ...AND THEN A PULL, BECAUSE A CREATE STORES NO ARCHIVE.
+			//
+			// `CreationService` says so in as many words: the design was just made
+			// empty in Penpot, so there is nothing worth exporting yet and no
+			// revision is stamped. The bytes arrive on the next pull, down
+			// ArchiveService's self-healing path — the same one that repairs a sync
+			// file whose archive went missing.
+			//
+			// So without this, `a design file named … in "<a sync folder>"` produces a
+			// mirror that is a sync file with an EMPTY body, which is not a state the
+			// app leaves lying around and not what any scenario means by the
+			// sentence. `designs/rename.feature` asks for `| content | an archive |`
+			// straight after this arrange, and would have failed on a fixture rather
+			// than on the app.
+			$this->theAdminRunsAPull();
 		}
 
 		$id = $this->davReadMetadata($path, 'penpot_id') ?? '';
