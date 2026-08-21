@@ -74,6 +74,20 @@ trait ArrangeSteps {
 	private array $mappingModes = [];
 
 	/**
+	 * The Penpot team id behind each mapped folder.
+	 *
+	 * NEEDED BECAUSE "THAT TEAM" IS AMBIGUOUS BY THE TIME AN ITEM IS SEEDED. The
+	 * mappings table leaves `namedTeamId` pointing at whichever row came LAST, and
+	 * the link-seeding path below has to create its project in the team that owns
+	 * the folder it is seeding into. That happens to be the same team today —
+	 * `Pointers` is the last row in every Background — which is exactly the kind of
+	 * accident that works until someone reorders a table.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $mappingTeamIds = [];
+
+	/**
 	 * The Penpot project id each declared folder had AT DECLARE TIME, keyed by the
 	 * path it was declared at.
 	 *
@@ -109,12 +123,33 @@ trait ArrangeSteps {
 	 */
 	private string $lastDeclaredProject = '';
 
+	/**
+	 * THE CURSOR: the file "the file" means.
+	 *
+	 * The rewritten spec stopped repeating paths. It says `a design file named
+	 * "Old Name.penpot" in "Penpot/Rename Live"` once and then talks about "the
+	 * file" — which is how a person describes what they are doing, and it is the
+	 * only way a rename outline can stay readable when the name is the parameter
+	 * being varied.
+	 *
+	 * Three values, because a rename moves the path out from under the scenario:
+	 * the folder does not change, the id does not change, and those two are what
+	 * let the path be re-resolved after the name has changed underneath it.
+	 */
+	private string $currentFilePath = '';
+	private string $currentFolder = '';
+	private string $currentFileId = '';
+
 	/** @BeforeScenario */
 	public function armArrange(): void {
 		$this->mappingModes = [];
+		$this->mappingTeamIds = [];
 		$this->declaredProjectIds = [];
 		$this->declaredDesignIds = [];
 		$this->lastDeclaredProject = '';
+		$this->currentFilePath = '';
+		$this->currentFolder = '';
+		$this->currentFileId = '';
 	}
 
 	/**
@@ -129,7 +164,12 @@ trait ArrangeSteps {
 	 * @Given the app is connected to Penpot
 	 */
 	public function theAppIsConnectedToPenpot(): void {
-		$this->theAppIsEnabled();
+		// givenTheAppIsEnabled(), NOT theAppIsEnabled() — the latter is the `@Then`
+		// assertion, and its PHPUnit matcher reaches into a config registry that only
+		// exists inside a PHPUnit run, so calling it from an arrange fails with
+		// "Registry::get(): Return value must be of type Configuration, null returned"
+		// and says nothing about the app.
+		$this->givenTheAppIsEnabled();
 		$this->thePenpotBaseUrlPointsAtTheTestInstance();
 		$this->theAdminHasConfiguredTheServiceAccountToken();
 	}
@@ -191,6 +231,7 @@ trait ArrangeSteps {
 			}
 
 			$this->mappingModes[$folder] = trim($row['mode'] ?? '') ?: 'link';
+			$this->mappingTeamIds[$folder] = $this->namedTeamId;
 		}
 	}
 
@@ -332,6 +373,15 @@ trait ArrangeSteps {
 			throw new \RuntimeException("a link mirror needs a project folder, got '{$path}'");
 		}
 
+		// Point "that team" at the mapping being seeded, rather than relying on
+		// whichever row the mappings table named last.
+		$team = $this->mappingTeamIds[$root] ?? '';
+		if ($team === '') {
+			throw new \RuntimeException("no mapping is declared for the folder '{$root}'");
+		}
+		$this->namedTeamId = $team;
+		$this->pulledTeamId = $team;
+
 		$this->aPenpotProjectExistsInThatTeam($project);
 		$this->penpotRpc('create-file', [
 			'project-id' => $this->penpotProjectId($project),
@@ -413,8 +463,7 @@ trait ArrangeSteps {
 			case 'the original id':
 				$original = $isDesign
 					? ($this->declaredDesignIds[basename($path)] ?? '')
-					: ($this->declaredProjectIds[$path]
-						?? ($this->declaredProjectIds[$this->lastDeclaredProject] ?? ''));
+					: $this->originalProjectIdFor($path);
 				if ($original === '') {
 					return 'the arrange recorded no original id to compare against';
 				}
@@ -434,15 +483,138 @@ trait ArrangeSteps {
 
 			case 'set':
 				return $actual !== '' ? null : 'expected an id, found nothing';
-
 			case 'absent':
 				return $actual === '' ? null : "expected no id to be stored, found '{$actual}'";
-
 			default:
 				throw new \RuntimeException(
 					"the identity column says '{$want}', which is not a value this vocabulary knows."
 					. ' Use "the original id", "a new id", "set" or "absent".',
 				);
 		}
+	}
+
+	/**
+	 * A design the scenario named, in a folder it named — and the cursor "the
+	 * file" points at from here on.
+	 *
+	 * The extension is stripped to get the Penpot name: a design's filename is its
+	 * name plus the `.penpot` Penpot never carries (§6.4), an invariant
+	 * `designs/rename.feature` pins in both directions. That is what makes it safe
+	 * to resolve one from the other rather than storing a second copy of the name.
+	 *
+	 * @Given /^a design file named "([^"]*)" in "([^"]*)"$/
+	 */
+	public function aDesignFileNamedIn(string $filename, string $folder): void {
+		$folder = trim($folder, '/');
+		$path = $folder . '/' . $filename;
+
+		$this->makeAncestors($path);
+		$this->declareDesign($path);
+
+		$this->currentFilePath = $path;
+		$this->currentFolder = $folder;
+		$this->currentFileId = $this->declaredDesignIds[$filename] ?? '';
+	}
+
+	/**
+	 * Where the cursor is now, re-resolved if the name moved under it.
+	 *
+	 * A rename made in Penpot arrives through a pull, so nothing in the scenario
+	 * knows the new filename — the app chose it. Rather than have every assertion
+	 * spell that out, the cursor is re-found BY ID inside its folder, which is the
+	 * one thing a rename never changes.
+	 */
+	private function currentFile(): string {
+		if ($this->currentFilePath !== '' && $this->davExists($this->currentFilePath)) {
+			return $this->currentFilePath;
+		}
+		if ($this->currentFileId === '' || $this->currentFolder === '') {
+			throw new \RuntimeException(
+				'no design file is on stage — a scenario must name one before it says "the file"',
+			);
+		}
+		foreach ($this->davChildren($this->currentFolder) as $child) {
+			if (!str_ends_with($child, '.penpot')) {
+				continue;
+			}
+			if (($this->davReadMetadata($child, 'penpot_id') ?? '') === $this->currentFileId) {
+				$this->currentFilePath = $child;
+				return $child;
+			}
+		}
+		throw new \RuntimeException(sprintf(
+			"no file under '%s' carries the design id %s any more; it held: %s",
+			$this->currentFolder,
+			$this->currentFileId,
+			implode(', ', $this->davChildren($this->currentFolder)) ?: '(nothing)',
+		));
+	}
+
+	/**
+	 * The mode of the mapping a path sits under, in the ADMIN's vocabulary.
+	 *
+	 * `the mapping's mode` is how a metadata table avoids saying `sync` or `link`
+	 * in a scenario that runs against all three mappings — the point of those rows
+	 * is that the mode is whatever the mapping said, not a particular value.
+	 */
+	private function modeOfMappingFor(string $path): string {
+		$root = $this->mappingRootOf($path);
+		return $this->mappingModes[$root] ?? 'link';
+	}
+
+	/**
+	 * Which declared project a `Then` path is talking about.
+	 *
+	 * ## WHY THIS IS NOT JUST A LOOKUP
+	 *
+	 * A design keeps its filename across every gesture, so its original id is a
+	 * dictionary hit. A project folder does not, and the two gestures break it in
+	 * OPPOSITE ways:
+	 *
+	 * - a RENAME changes the last segment and keeps the rest —
+	 *   `Penpot/foo/Old` → `Penpot/foo/New`;
+	 * - a MOVE keeps the last segments and changes the front —
+	 *   `Penpot/foo/bar` → `Penpot/Clients/foo/bar`.
+	 *
+	 * So neither the head nor the tail of the path is stable on its own, and the
+	 * first cut of this — "fall back to the project declared most recently" — got
+	 * `Move a folder that other projects are named through` wrong: that scenario
+	 * declares TWO projects and asserts both, so the fallback compared `…/foo/bar`
+	 * against the id belonging to `…/foo/bar/baz` and failed for a reason that had
+	 * nothing to do with the app.
+	 *
+	 * Three rules, most specific first:
+	 *   1. the exact path, for anything that did not move at all;
+	 *   2. the declared project sharing the longest run of TRAILING segments, which
+	 *      is what a move preserves and is unambiguous when several are on stage;
+	 *   3. the most recently declared project, which is what a rename leaves — and
+	 *      is safe there precisely because a rename scenario has one project under
+	 *      test and the file re-declares it after the Background.
+	 */
+	private function originalProjectIdFor(string $path): string {
+		if (isset($this->declaredProjectIds[$path])) {
+			return $this->declaredProjectIds[$path];
+		}
+
+		$want = explode('/', $path);
+		$best = '';
+		$bestRun = 0;
+		foreach ($this->declaredProjectIds as $declared => $id) {
+			$have = explode('/', $declared);
+			$run = 0;
+			while ($run < count($want) && $run < count($have)
+				&& $want[count($want) - 1 - $run] === $have[count($have) - 1 - $run]) {
+				$run++;
+			}
+			if ($run > $bestRun) {
+				$bestRun = $run;
+				$best = $id;
+			}
+		}
+		if ($bestRun > 0) {
+			return $best;
+		}
+
+		return $this->declaredProjectIds[$this->lastDeclaredProject] ?? '';
 	}
 }

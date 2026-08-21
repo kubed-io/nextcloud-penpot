@@ -86,6 +86,41 @@ trait GestureSteps {
 	}
 
 	/**
+	 * Move something INTO a folder, which is what a drag actually is.
+	 *
+	 * ## WHY THIS IS NOT THE SAME STEP AS `… to "…"`
+	 *
+	 * `to` names the destination PATH; `into` names the destination FOLDER and
+	 * keeps the thing's own name. `I move "Penpot/Traveller" into "Penpot/Clients"`
+	 * ends at `Penpot/Clients/Traveller`, and spelling that out as a path would
+	 * make every such sentence repeat the name it just said — which is exactly what
+	 * the rewritten spec stopped doing. Every path-form move in the spec now says
+	 * `into`, because every one of them is a drag.
+	 *
+	 * @When /^I move "([^"]*)" into "([^"]*)"$/
+	 */
+	public function iMoveInto(string $path, string $folder): void {
+		$this->captureIdBeforeGesture($path);
+		$target = trim($folder, '/') . '/' . basename($path);
+		$this->davMove($path, $target);
+		$this->gestureTarget = $target;
+	}
+
+	/**
+	 * The same drag, expected to be REFUSED — see {@see iTryToMove()} for why a
+	 * refusal needs its own step rather than a flag on this one.
+	 *
+	 * @When /^I try to move "([^"]*)" into "([^"]*)"$/
+	 */
+	public function iTryToMoveInto(string $path, string $folder): void {
+		$target = trim($folder, '/') . '/' . basename($path);
+		$result = $this->davMoveResult($path, $target);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+		$this->gestureTarget = $path;
+	}
+
+	/**
 	 * A rename is a MOVE to a sibling path — the same DAV verb and the same
 	 * Nextcloud event. Telling the two apart is the listener's job, not the
 	 * transport's, so this step deliberately goes through the same call.
@@ -225,8 +260,9 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
-	/** The status of the last refused gesture, for the assertion to read. */
+	/** The status and body of the last refused gesture, for the assertion to read. */
 	private int $lastGestureStatus = 0;
+	private string $lastGestureBody = '';
 
 	/**
 	 * A gesture the app is expected to REFUSE.

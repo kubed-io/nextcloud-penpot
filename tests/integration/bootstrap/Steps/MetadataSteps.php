@@ -58,8 +58,18 @@ use Behat\Gherkin\Node\TableNode;
  * sees what a client sees rather than what the app believes.
  */
 trait MetadataSteps {
-	/** The properties a table may name, and how each is read. */
-	private const READABLE = ['penpot_id', 'penpot_mode', 'penpot_team_id', 'penpot_revision', 'content'];
+	/**
+	 * The properties a table may name, and how each is read.
+	 *
+	 * A NAME NOT IN HERE IS REFUSED rather than read as nothing. Every unknown
+	 * property used to come back `null`, which made `absent` pass for it — so a
+	 * table could assert something this trait had no idea how to look at and go
+	 * green. `penpot_project_id` was exactly that case: `projects/create.feature`
+	 * asks whether a plain folder has one, and the answer was yes-but-unreadable.
+	 */
+	private const READABLE = [
+		'penpot_id', 'penpot_mode', 'penpot_team_id', 'penpot_revision', 'penpot_project_id', 'content',
+	];
 
 	/**
 	 * Assert what a mirror holds, one row per property.
@@ -67,7 +77,11 @@ trait MetadataSteps {
 	 * @Then /^"([^"]*)" holds:$/
 	 */
 	public function holds(string $path, TableNode $table): void {
-		$now = $this->readState($path);
+		// READ ONLY WHAT THE TABLE ASKS FOR. Reading the whole set eagerly meant
+		// every table paid for `content`, which is resolved from `occ status` and
+		// exists only for FILES — so `"Penpot/Notes" holds: | penpot_project_id |`
+		// on a plain folder blew up looking for bytes nobody asked about.
+		$now = $this->readState($path, array_keys($table->getRowsHash()));
 		$failures = [];
 
 		foreach ($table->getRowsHash() as $property => $expected) {
@@ -124,6 +138,29 @@ trait MetadataSteps {
 				}
 				return $actual === $this->idBeforeGesture
 					? null : "expected the id it already had ({$this->idBeforeGesture}), found '{$actual}'";
+
+			case 'the original id':
+				// THE CURSOR'S ID, captured when the scenario put the file on stage.
+				// Stronger than `the design's id`, which resolves whatever design now
+				// wears that name and so cannot tell a rename from a
+				// delete-and-recreate — which is the entire claim of every rename
+				// scenario. {@see ArrangeSteps} for the cursor.
+				if ($this->currentFileId === '') {
+					return 'the arrange put no design on stage to compare against';
+				}
+				return $actual === $this->currentFileId
+					? null : "expected the id it already had ({$this->currentFileId}), found '{$actual}'";
+
+			case "the mapping's mode":
+				// A row that names no mode on purpose. Three mappings run the same
+				// outline, and the point is that the file's mode is whatever its
+				// MAPPING said — naming `sync` or `link` here would turn one claim
+				// into three scenarios. The wire value for `link` is `reference`
+				// (the literal `link` is is_callable() and crashes core's PROPFIND).
+				$mode = $this->modeOfMappingFor($path);
+				$want = $mode === 'link' ? 'reference' : $mode;
+				return $actual === $want
+					? null : "expected the mapping's mode ('{$want}'), found '{$actual}'";
 
 			case "the design's id":
 				$want = $this->fileIdNamed($this->designNameOf($path));
@@ -185,11 +222,24 @@ trait MetadataSteps {
 	 * comes from `occ penpot_sync:status`, the only thing that can tell a real
 	 * archive from a pointer from nothing.
 	 *
+	 * @param list<string> $properties the names the table actually asked for
 	 * @return array<string,string|null>
 	 */
-	private function readState(string $path): array {
+	private function readState(string $path, array $properties): array {
 		$state = [];
-		foreach (self::READABLE as $property) {
+		foreach ($properties as $property) {
+			// A clock is not a stored property; check() resolves those itself and
+			// never looks at $actual, so reading one here would be wasted work.
+			if (in_array($property, ['modified', 'created'], true)) {
+				continue;
+			}
+			if (!in_array($property, self::READABLE, true)) {
+				throw new \RuntimeException(sprintf(
+					"'%s' is not a property this vocabulary knows how to read. Known: %s.",
+					$property,
+					implode(', ', self::READABLE),
+				));
+			}
 			$state[$property] = $property === 'content'
 				? $this->contentKind($path)
 				: $this->davReadMetadata($path, $property);

@@ -157,10 +157,28 @@ trait WebDavTrait {
 
 	/** MOVE a file, returning the raw status (so move-refused scenarios can inspect it). */
 	private function davMoveStatus(string $from, string $to): int {
+		return $this->davMoveResult($from, $to)['status'];
+	}
+
+	/**
+	 * A refused MOVE, status AND body.
+	 *
+	 * The body is half the claim since #32: `LinkWriteGuardPlugin` throws
+	 * `Forbidden` carrying the reason on `method:MOVE`, and that is the only route
+	 * where a readable 403 reaches a client — `AbortedEventException` from the
+	 * listener reaches the log and stops there. A scenario saying "refused with a
+	 * message" is asserting that repair still works, so it has to read the body;
+	 * asserting the status alone would pass against the empty-body 403 that bug
+	 * produced.
+	 *
+	 * @return array{status:int, body:string}
+	 */
+	private function davMoveResult(string $from, string $to): array {
 		$dest = $this->ncBaseUrl . '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/' . $this->davEncode($to);
-		return $this->davClient()->request('MOVE', $this->davEncode($from), [
+		$res = $this->davClient()->request('MOVE', $this->davEncode($from), [
 			'headers' => ['Destination' => $dest, 'Overwrite' => 'F'],
-		])->getStatusCode();
+		]);
+		return ['status' => $res->getStatusCode(), 'body' => (string)$res->getBody()];
 	}
 
 	/** COPY a file within the user's files root (fires NodeCopiedEvent in NC). */
