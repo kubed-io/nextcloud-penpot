@@ -7,25 +7,28 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: NOTHING. Every one of the 116 scenarios is @todo, so
-# behat.dist.yml's filter empties all four legs and each reports zero tests. That
-# is the deliberate state of the PR that rewrote the spec: the noun became the
-# folder and the verb the file, the harness lags the whole of it, and re-teaching
-# it is one PR per behaviour rather than one enormous one. `behat --tags @todo` is
-# the queue. See behat.dist.yml for why the other three status tags are empty but
-# kept, and the saga's Chapter 3 for the order the queue is worked in.
+# SCOPE RIGHT NOW: 9 OF 116 SCENARIOS, on two of the four legs. Round 1 of the
+# saga's Chapter 3 re-surveyed the nine that were green in CI the moment before
+# the spec rewrite collapsed everything to @todo — the two admin-connection
+# scenarios, enabling and disabling the app, the three mapping-creation ones,
+# changing a mapped folder's groups, and syncing one mapping. They expand to 27
+# executed scenarios (`admin` 25, `core` 2); `design` and `project` are still
+# entirely @todo and still report zero tests. `behat --tags @todo` is the
+# remaining queue. See behat.dist.yml for what the other three status tags mean,
+# and the saga's Chapter 3 for the order the queue is worked in.
 #
 # A ZERO-SCENARIO LEG IS STILL A REPORTING LEG, which is what keeps the guards
 # below honest: Behat fires its suite events even when the filter matches nothing,
 # so the junit formatter writes <testsuite tests="0"/>, the upload's
 # if-no-files-found still has a file, and "Every leg is present" still counts four.
 # So this stays green on an empty suite WITHOUT either guard being loosened — they
-# remain armed for the silent-overwrite bug they were built for.
+# remain armed for the silent-overwrite bug they were built for. Two legs still
+# depend on that and will until Chapter 3 reaches their nouns.
 #
-# THE STACK BELOW IS DELIBERATELY NOT TORN DOWN while the queue is empty. It costs
-# a few minutes per PR and buys the thing this suite exists for: the first PR to
-# promote a scenario finds a working Nextcloud + Penpot topology rather than
-# re-debugging the topology and the scenario at the same time.
+# THE STACK BELOW IS DELIBERATELY NOT TORN DOWN on the legs whose queue is still
+# empty. It costs a few minutes per PR and buys the thing this suite exists for:
+# the PR that promotes a `design` scenario finds a working Nextcloud + Penpot
+# topology rather than re-debugging the topology and the scenario at once.
 #
 # WHY THE PENPOT STACK IS WORTH THREE CONTAINERS PER RUN. This suite is the ONLY
 # place the wire format is asserted. The unit suite deliberately does not mock
@@ -125,17 +128,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: versions
 
-    # ── TWO AXES, AND THEY DO OPPOSITE THINGS ────────────────────────────────
+    # ── ONE AXIS THAT DIVIDES, AND A VERSION AXIS THAT REPEATS ───────────────
     #
-    #   suite    DIVIDES the scenarios. Four legs each run a quarter, in
-    #            parallel, so wall time drops.
-    #   backend  REPEATS them. Every behaviour is valid on both storage backends
-    #            (features/README.md has said so for a while), so this is a
-    #            dimension the suite is RUN across rather than written twice.
+    #   suite            DIVIDES the scenarios. Four legs each run a quarter, in
+    #                    parallel, so wall time drops.
+    #   server-versions  REPEATS them, and is decided by the trigger (above): one
+    #                    Nextcloud on a PR, the whole advertised range on main.
+    #
+    # THERE IS NO LONGER A BACKEND AXIS. It used to be the second dividing axis —
+    # `plain` legs without groupfolders, `team` legs with — and it was removed
+    # when groupfolders became unconditional (see "TEAM FOLDERS ARE ALWAYS
+    # PRESENT" below). The storage kind is now a cell in a mapping table, so the
+    # spec says which folder it wants instead of the run deciding for it.
     #
     # Net effect measured on this repo: ~95s fixed setup + ~320s Behat, so one
-    # leg is ~7m and four are ~95+80 = ~3m — while the backend axis doubles
-    # coverage at no wall-clock cost, because those legs run in parallel too.
+    # leg is ~7m and four are ~95+80 = ~3m.
     #
     # WHY THE SUITE AXIS IS FILENAME-BASED, not tag-based: measured over the live
     # scenarios, 28 carry no channel tag and 32 no origin tag, so a tag partition
@@ -316,9 +323,59 @@ jobs:
     # cell — the mapping says what it is, which is where that belongs, and the
     # nuances between the two become askable in one run instead of being split
     # across legs that never meet.
+    #
+    # THE APP STORE IS SOMEBODY ELSE'S UPTIME, and this step made every leg depend
+    # on it. `occ app:install` fetches from apps.nextcloud.com at run time, and when
+    # that fetch fails the error is `Could not download app groupfolders, it was not
+    # found on the appstore` — which reads like the app was removed and is usually
+    # just the runners being rate-limited. It took out the n8n and grafana siblings
+    # SIMULTANEOUSLY, on green branches, minutes after the same branches had passed;
+    # re-running by hand eventually worked, which is the tell. Nothing about the app
+    # was wrong and nothing in either diff was at fault.
+    #
+    # WORSE HERE THAN IN EITHER SIBLING, because of the decision directly above.
+    # Grafana installs groupfolders only to serve the scenarios that NAME a Team
+    # Folder; this suite installs it on every leg unconditionally, so 100% of legs
+    # take the dependency — four on a PR, twelve on a merge to main.
+    #
+    # AND RIGHT NOW IT BUYS NOTHING AT ALL, which is the sharpest version of the
+    # argument: the queue is empty (see the header), so every leg currently reaches
+    # out to the app store to install an app that no scenario exercises. A blip
+    # there would turn a deliberately-empty green suite red for a reason that has
+    # nothing to do with this repo.
+    #
+    # So the download happens ONCE per server version and is cached. On a hit there
+    # is no network at all; on a miss the install is retried before giving up, which
+    # is what turns a rate-limit blip from a red build into a slow step. Ported from
+    # nextcloud-grafana and nextcloud-n8n, where it has been carrying this exact
+    # failure since it cost them both a day.
+    - name: Cache Team Folders (groupfolders)
+      id: groupfolders-cache
+      uses: actions/cache@v6
+      with:
+        path: apps/groupfolders
+        key: groupfolders-${{ matrix.server-versions }}-v1
+
     - name: Install Team Folders (groupfolders)
       run: |
-        ./occ app:install groupfolders
+        if [ ! -d apps/groupfolders ]; then
+          # Three attempts with backoff: the failure this guards against is a
+          # transient fetch, so the retry is the fix and the cache is the prevention.
+          for attempt in 1 2 3; do
+            if ./occ app:install groupfolders; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::groupfolders could not be downloaded after 3 attempts — apps.nextcloud.com is likely unreachable or rate-limiting this runner"
+              exit 1
+            fi
+            echo "app:install failed (attempt $attempt) — retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+        else
+          echo "restored groupfolders from cache — no app store fetch"
+        fi
+        # Always enable: a cache hit restores the files but not the DB state.
         ./occ app:enable groupfolders
         ./occ app:list | grep -i groupfolders
 
@@ -492,9 +549,53 @@ jobs:
       # REPLACES the config filter rather than adding to it. bin/check-suites.sh
       # asserts the two lists are identical, so they cannot drift apart silently.
       run: |
+        set +e
         vendor/bin/behat --config behat.dist.yml --strict \
           --suite="$SUITE" \
           --tags="~@todo&&~@unbuilt&&~@blocked&&~@decision"
+        status=$?
+        set -e
+
+        # `--strict` FAILS A RUN THAT MATCHED NO SCENARIOS, and the `design` and
+        # `project` legs are still entirely @todo, so they exit 1 on a suite that
+        # is empty BY DESIGN. Read off Behat 3.32 rather than guessed:
+        #
+        #   TestResults::NO_TESTS            = -100
+        #   TestResults::getResultCode()     seeds with NO_TESTS and max()es over
+        #                                    an empty array, so it returns -100
+        #   StrictInterpretation::isFailure() = !$result->isPassed()
+        #   isPassed()                       = (PASSED === -100) === false
+        #
+        # → exit 1. Under the default SoftInterpretation the test is
+        # `FAILED <= $code`, and -100 is not, which is why this only bites with
+        # --strict. `--allow-no-tests` does NOT help: it only guards the
+        # WrongPathsException branch, which needs paths on the command line, and
+        # this selects with --suite.
+        #
+        # DROPPING --strict IS THE WRONG FIX. It is the only thing that turns an
+        # undefined step into a failure, and Behat exits 0 on undefined steps by
+        # default — that is how a stray tag once excluded one scenario while four
+        # others ran undefined and the job stayed green. So keep it, and narrow
+        # the exemption to exactly the case that is legitimate: Behat wrote a
+        # report and the report contains nothing.
+        #
+        # Read off the JUnit XML rather than Behat's human output, because "No
+        # scenarios" is prose that can be reworded and <testcase> is a contract.
+        # SELF-HEALING, AND ALREADY PROVEN SO: the `admin` and `core` legs promoted
+        # their first scenarios in Chapter 3 Round 1, so testcases > 0 there and the
+        # real exit code governs again — with no edit here. The remaining two legs
+        # heal the same way when their nouns are reached.
+        if [ "$status" -ne 0 ]; then
+          cases=$(grep -o '<testcase ' junit/*.xml 2>/dev/null | wc -l)
+          bad=$(grep -oE '<(failure|error)[ >/]' junit/*.xml 2>/dev/null | wc -l)
+          if [ "$cases" -eq 0 ] && [ "$bad" -eq 0 ]; then
+            echo "::notice::Behat matched no scenarios in suite '$SUITE' — every scenario is @todo. --strict maps an empty run to exit 1; the report is empty and clean, so this is a pass."
+            status=0
+          else
+            echo "::error::Behat failed with $cases testcase(s) and $bad failure/error marker(s) in the report."
+          fi
+        fi
+        exit $status
 
     # ── Diagnostics: what did the SERVER think? ──────────────────────────────
     # A failing Behat scenario reports what the ASSERTION saw and nothing about

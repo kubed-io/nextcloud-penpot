@@ -18,7 +18,7 @@ default:
   #              write it — `behat --tags @todo` is the work queue.
   #   @unbuilt   a spec awaiting code. Nothing to test yet.
   #   @blocked   real behaviour this harness cannot reach (no browser, no
-  #              logged-in session, no groupfolders, cannot age a deletion).
+  #              logged-in session, no fault injection, cannot age a deletion).
   #   @decision  records a deliberate absence. There is no operation, ever.
   #
   # All four are excluded from the run; the distinction is about who picks the
@@ -26,21 +26,26 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # RIGHT NOW ALL 116 SCENARIOS ARE @todo AND THREE OF THOSE TAGS HAVE NO MEMBERS.
-  # That is deliberate and temporary. The spec was rewritten wholesale — the noun
-  # became the folder and the verb the file — and the harness now lags the whole
-  # of it, so the suite was collapsed to ONE flat queue rather than re-triaged
-  # scenario by scenario in the PR that did the rewriting. `behat --tags @todo` is
-  # the queue; a scenario earns its real status back on the PR that implements it.
+  # 9 OF 116 SCENARIOS RUN, and re-triage has started. The spec was rewritten
+  # wholesale — the noun became the folder and the verb the file — and rather than
+  # re-triage 116 scenarios inside that PR, the suite was collapsed to ONE flat
+  # @todo queue for each later PR to draw from. Chapter 3 Round 1 drew the first
+  # nine: the ones green in CI the moment before the collapse, which prove the
+  # HARNESS rather than the behaviour. `behat --tags @todo` is the rest of the
+  # queue; a scenario earns its real status back on the PR that runs it.
+  #
+  # @blocked HAS ONE MEMBER AGAIN — lifecycle.feature's "Removing the app", whose
+  # comment named its wall all along ("no app removal") and which the collapse had
+  # flattened to @todo. @unbuilt and @decision are still empty.
   #
   # THE FILTER STILL NAMES ALL FOUR, so re-triage is a tag edit and never a config
-  # change. Do not "tidy" the empty three out — the collapse is the anomaly here,
+  # change. Do not "tidy" the empty two out — the collapse is the anomaly here,
   # not the vocabulary. What each tag means is unchanged (features/README.md).
   #
-  # A CONSEQUENCE WORTH KNOWING BEFORE IT SURPRISES YOU: every leg reports zero
-  # tests, and that is a pass, not a hole in the reporting. Behat still fires its
-  # suite events for a suite the filter empties, so the junit formatter writes
-  # <testsuite tests="0"/> and the workflow's leg-count guard stays armed.
+  # A CONSEQUENCE WORTH KNOWING BEFORE IT SURPRISES YOU: the `design` and `project`
+  # legs still report zero tests, and that is a pass, not a hole in the reporting.
+  # Behat still fires its suite events for a suite the filter empties, so the junit
+  # formatter writes <testsuite tests="0"/> and the leg-count guard stays armed.
   gherkin:
     filters:
       tags: '~@todo&&~@unbuilt&&~@blocked&&~@decision'
