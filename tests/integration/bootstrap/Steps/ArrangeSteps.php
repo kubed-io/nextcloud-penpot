@@ -790,4 +790,66 @@ trait ArrangeSteps {
 
 		return null;
 	}
+
+	/**
+	 * The Penpot team behind the mapping a PATH sits under.
+	 *
+	 * `the team's id` used to mean "the team the scenario named last", which is the
+	 * last row of the mappings table — `Reference Team` in every Background here.
+	 * A file in `Penpot/Brand` then compared against the LINK team's id and failed
+	 * for a reason that had nothing to do with the app.
+	 */
+	private function teamIdForPath(string $path): string {
+		return $this->mappingTeamIds[$this->mappingRootOf($path)] ?? '';
+	}
+
+	/**
+	 * A design's id, resolved in the team AND project its path implies.
+	 *
+	 * ONE NAME IS NOT AN ADDRESS. `designs/view.feature` deliberately puts a
+	 * `Brand Kit` in `Penpot/Brand` and another in `Pointers/Brand` — same design
+	 * name, same project name, different teams — because the two modes are the
+	 * point of the scenario. A by-name lookup over the whole probe listing returns
+	 * whichever came first, so the sync row was asserted against the link row's id.
+	 *
+	 * The probe nests its output, so the scoping is free once it is read as a tree:
+	 *
+	 *     <project>  <uuid>  [<team>]
+	 *       <design>  revn=<n>  <uuid>
+	 *
+	 * Returns null when the path is not under a declared mapping, so the caller can
+	 * fall back to the older unscoped lookup rather than lose an assertion.
+	 */
+	private function designIdInMapping(string $path): ?string {
+		$root = $this->mappingRootOf($path);
+		$team = $this->mappingTeamNames[$root] ?? '';
+		if ($team === '') {
+			return null;
+		}
+
+		$project = trim(substr(dirname($path), strlen($root)), '/');
+		$design = preg_replace('/\.penpot$/', '', basename($path)) ?? basename($path);
+
+		$res = $this->occ('penpot_sync:probe --files');
+		if ($res['exit'] !== 0) {
+			return null;
+		}
+
+		$inProject = false;
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^  (\S.*?)\s{2,}[0-9a-f-]{36}\s+\[(.*)\]\s*$/', $line, $m) === 1) {
+				$inProject = trim($m[1]) === $project && trim($m[2]) === $team;
+				continue;
+			}
+			if (!$inProject) {
+				continue;
+			}
+			if (preg_match('/^\s+(.*?)\s+revn=\S+\s+([0-9a-f-]{36})\s*$/', $line, $m) === 1
+				&& trim($m[1]) === $design) {
+				return $m[2];
+			}
+		}
+
+		return null;
+	}
 }
