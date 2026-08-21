@@ -115,19 +115,27 @@ final class ProjectFolderServiceTest extends TestCase {
 	}
 
 	/**
-	 * TAGGING THE MAPPED ROOT IS A NO-OP, NOT A COMPLAINT.
+	 * TAGGING THE MAPPED ROOT CREATES NOTHING, AND TAKES THE TAG BACK OFF.
 	 *
 	 * The root carries a team id, so the team lookup succeeds and the old code fell
 	 * through to the name check — where `pathBelowMapping()`'s null became an empty
 	 * string and the folder was refused with "the folder name cannot be used as a
 	 * Penpot project name". That sends someone off to rename a folder that is
 	 * perfectly fine. A team root simply is not a project.
+	 *
+	 * The tag comes off even so, which is the one thing that differs from a folder
+	 * outside every mapping: THAT tag is left alone because the folder is none of
+	 * this app's business, while a mapped root is entirely its business. The pull
+	 * tags only folders it has stamped with a project id, so a root left wearing
+	 * the tag would be the single place the badge means nothing.
+	 *
+	 * No `createProject`, and no warning either — trying it is reasonable.
 	 */
-	public function testTaggingTheMappedRootCreatesNothingAndRefusesNothing(): void {
+	public function testTaggingTheMappedRootCreatesNothingAndUntagsIt(): void {
 		$this->inTeam();
 
 		$this->client->expects($this->never())->method('createProject');
-		$this->tags->expects($this->never())->method('remove');
+		$this->tags->expects($this->once())->method('remove')->with(50);
 
 		$this->projects->onTagged($this->rootFolder(50));
 	}
