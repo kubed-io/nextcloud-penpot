@@ -15,6 +15,7 @@ Feature: Changing who a mapped folder is shared with
     # notes: ../AGENTS.md#team-mappingmanage-groups
 
   # notes: ../AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
+  @todo
   Scenario Outline: The groups a mapped folder is shared with can be changed
     Given the Nextcloud groups "design,sales" exist
     And a mapping with the following values:

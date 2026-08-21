@@ -1,95 +1,107 @@
 # Notes, decisions and history for this feature: ../AGENTS.md#projectscreate
 
-Feature: A folder as a Penpot project — the opt-in, and the tag that marks it
+Feature: Creating a project
   As a Nextcloud user
-  I want to choose which of my folders are Penpot projects
-  So that a mapped folder stays usable for ordinary things
+  I want the folders holding my designs to exist in Penpot too
+  So that the two sides look the same without my having to manage either
 
   Background:
-    Given the app is enabled
-    And the Penpot base URL points at the test instance
-    And the admin has configured the service-account token
-    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
-    And the team has been mirrored into Nextcloud
+    Given the app is connected to Penpot
+    And the following mappings were made:
+      | team           | folder   | mode | storage      | groups |
+      | Design Team    | Penpot   | sync | admin folder |        |
+      | Second Team    | Shared   | sync | team folder  | admin  |
+      | Reference Team | Pointers | link | admin folder |        |
+    And the following items in the mappings:
+      | path                            |
+      | /Penpot/Existing/Alpha.penpot   |
+      | /Pointers/Existing/Fixed.penpot |
+    And a folder at "Scratch" that is not mapped
 
-    # ── the permissive half, and it has to come first ───────────────────────────
+  # notes: ../AGENTS.md#the-mappings-in-the-background
 
-  @in-nextcloud @gesture
-  Scenario: A new folder inside a mapped folder is just a folder
-    When I create a folder at "Penpot/Just My Notes"
-    Then the folder "Penpot/Just My Notes" carries no Penpot project id
-    And the folder "Penpot/Just My Notes" does not carry the "penpot" tag
-    And Penpot holds no project named "Just My Notes"
-    # A mapped folder that silently turned every subfolder into a Penpot project
-    # would be unusable for anything else.
+    # ── RULE: a folder is a project in Penpot when a design is in it ──────────
+    # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
 
-    # ── opting in ───────────────────────────────────────────────────────────────
+  @in-nextcloud @gesture @todo
+  Scenario Outline: Create a design in a folder Penpot has never seen
+    Given the folder "<folder>" holding no designs
+    When I create a new design in "<folder>"
+    Then Penpot holds a project named "<project>"
+    And the design is in the "<project>" Penpot project
+    And "<folder>" holds:
+      | penpot_project_id | set |
 
-  @in-nextcloud @occ
-  Scenario: Tagging a folder "penpot" creates the project in Penpot
-    Given I create a folder at "Penpot/Client Work"
-    When I assign the "penpot" tag to "Penpot/Client Work"
-    Then Penpot holds a project named "Client Work"
-    And the folder "Penpot/Client Work" carries a Penpot project id
+    Examples: however deep it lands, in either kind of storage
+      | folder                  | project          |
+      | Penpot/Team             | Team             |
+      | Penpot/Team/Deep        | Team/Deep        |
+      | Shared/Team             | Team             |
+      | Shared/Team/Deep/Deeper | Team/Deep/Deeper |
 
-  @in-nextcloud @occ
-  Scenario: A folder opted in late brings the designs already inside it
-    Given I create a folder at "Penpot/Late Opt In"
-    And I create a new design file at "Penpot/Late Opt In/Moodboard.penpot"
-    When I assign the "penpot" tag to "Penpot/Late Opt In"
-    Then Penpot project "Late Opt In" holds a design named "Moodboard"
-    # notes: ../AGENTS.md#a-folder-opted-in-late-brings-the-designs-already-inside-it
+  # notes: ../AGENTS.md#the-project-name-is-the-path-below-the-mapping
 
-  @in-nextcloud @occ
-  Scenario: Tagging a folder that is already a project changes nothing
-    Given a mirrored project "Already Mine"
-    When I assign the "penpot" tag to "Penpot/Already Mine"
-    Then the folder "Penpot/Already Mine" carries a Penpot project id
-    And Penpot holds a project named "Already Mine"
-    # notes: ../AGENTS.md#tagging-a-folder-that-is-already-a-project-changes-nothing
+  @in-nextcloud @gesture @todo
+  Scenario Outline: Move a design into a folder Penpot has never seen
+    Given a design file named "Travelling.penpot" in "<source>"
+    And the folder "<folder>" holding no designs
+    When I move the file into "<folder>"
+    Then Penpot holds a project named "<project>"
+    And the design is in the "<project>" Penpot project
 
-  @in-nextcloud @occ @todo
-  Scenario: A folder tagged as a project must have a usable name first
-    Given a plain folder inside the mapped folder whose name is unusable as a project name
-    When I assign the "penpot" tag to it
-    Then the app refuses and explains what is wrong with the name
-    And the tag is not left applied
-    And no Penpot project is created
-    # notes: ../AGENTS.md#a-folder-tagged-as-a-project-must-have-a-usable-name-first
+    Examples: wherever it came from, it ends up in the same place
+      | source          | folder                  | project          |
+      | Scratch         | Penpot/Team             | Team             |
+      | Penpot/Existing | Penpot/Team/Deep        | Team/Deep        |
+      | Shared/Existing | Penpot/Team             | Team             |
+      | Penpot/Existing | Shared/Team/Deep/Deeper | Team/Deep/Deeper |
 
-  @in-nextcloud @occ @todo
-  Scenario: Tagging a folder outside every mapping does nothing at all
-    Given a plain folder "Holiday Photos" outside every mapped folder
-    When I assign the "penpot" tag to it
-    Then Penpot is never contacted
-    And the tag is left where the user put it
-    # notes: ../AGENTS.md#tagging-a-folder-outside-every-mapping-does-nothing-at-all
+    # ── RULE: a folder with no design in it is Nextcloud's alone ──────────────
+    # notes: ../AGENTS.md#a-folder-holding-no-designs-is-just-a-folder
 
-    # ── opting out does not destroy anything ────────────────────────────────────
+  @in-nextcloud @gesture @todo
+  Scenario: Create a folder in a mapping
+    When I create the folder "Penpot/Notes"
+    Then Penpot holds no project named "Notes"
+    And "Penpot/Notes" holds:
+      | penpot_project_id | absent |
 
-  @in-nextcloud @occ
-  Scenario: Removing the "penpot" tag does not delete the project
-    Given I create a folder at "Penpot/Keep Me"
-    And the folder "Penpot/Keep Me" has been tagged "penpot"
-    When I remove the "penpot" tag from "Penpot/Keep Me"
-    Then Penpot holds a project named "Keep Me"
-    And the folder "Penpot/Keep Me" carries a Penpot project id
-    # notes: ../AGENTS.md#removing-the-penpot-tag-does-not-delete-the-project
+    # ── RULE: a project made in Penpot arrives as the folders its name spells ─
+    # notes: ../AGENTS.md#a-project-name-with-slashes-is-a-path
+    # notes: ../AGENTS.md#the-folders-a-project-name-spells-are-not-projects
 
-    # ── the tag as the shared marker ────────────────────────────────────────────
+  @in-penpot @gesture @todo
+  Scenario Outline: Create a project in Penpot
+    When someone creates the "<name>" project in the "<team>" Penpot team
+    Then "<folder>" exists in Nextcloud, holding:
+      | penpot_project_id | the project's id |
+    And the folders its name spelled on the way down hold:
+      | penpot_project_id | absent |
 
-  @in-penpot
-  Scenario: A project created in Penpot arrives as a tagged folder
-    Given a Penpot project named "Bubbles" exists in that team
-    When the team is mirrored again
-    Then the folder "Penpot/Bubbles" carries a Penpot project id
-    And the folder "Penpot/Bubbles" carries the "penpot" tag
-    # notes: ../AGENTS.md#a-project-created-in-penpot-arrives-as-a-tagged-folder
+    Examples: one name, however many folders it spells, in any team
+      | team           | name          | folder               |
+      | Design Team    | Team          | Penpot/Team          |
+      | Design Team    | foo/bar       | Penpot/foo/bar       |
+      | Second Team    | Deep/Down/Low | Shared/Deep/Down/Low |
+      | Reference Team | Pinned        | Pointers/Pinned      |
 
-  @in-penpot
-  Scenario: A project folder that lost its tag gets it back on the next pull
-    Given a mirrored project "Retagged"
-    And I remove the "penpot" tag from "Penpot/Retagged"
-    When the team is mirrored again
-    Then the folder "Penpot/Retagged" carries the "penpot" tag
-    # notes: ../AGENTS.md#a-project-folder-that-lost-its-tag-gets-it-back-on-the-next-pull
+    # "foo" is made because "foo/bar" needs somewhere to sit. It holds no design, so
+    # it is a folder like any other — and a project named "foo" would later claim it.
+
+    # ── RULE: a name that spells no path is reported, not guessed at ──────────
+    # notes: ../AGENTS.md#a-project-name-that-spells-no-path-is-skipped
+
+  @in-penpot @gesture @todo
+  Scenario Outline: Create a project in Penpot with a name Nextcloud cannot spell
+    When someone creates the "<name>" project in the "Design Team" Penpot team
+    Then no folder is created for it in "Penpot"
+    And the user is notified that the project could not be placed
+
+    Examples: every name that survives Penpot's 1-to-250 rule and spells nothing
+      | name       |
+      | /          |
+      | foo/../bar |
+      | foo/?/bar  |
+
+    # Penpot takes any string of 1 to 250 characters, so these are all reachable from
+    # its own UI. One project is the whole cost — the rest of the team still arrives.

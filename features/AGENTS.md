@@ -509,6 +509,51 @@ Copying a PROJECT folder is copy-project.feature, and the answer there is the
 opposite one — it is refused. That asymmetry is exactly why the two are
 separate files rather than one with a branch in the middle.
 
+### A copy's clocks are its own
+
+`copy.feature` pins `Created` in the post-state because a copy is a BIRTH: a design
+exists in Penpot that did not before. Inheriting the original's date would date the
+copy before it existed, and this app already makes a point of a mirror wearing the
+DESIGN's clock rather than the sync's — so the copy has to wear its own.
+
+`Modified` is deliberately not asserted, and the asymmetry is the platform's rather
+than ours: Nextcloud puts the modification time back before the copy request ends,
+so the file wears its design's modified date only from the next pull onward. The
+Grafana sibling measured that inside a failing CI run and left the same row out.
+
+Worth restating here because penpot's clocks arrive as EPOCH MILLISECONDS, not the
+ISO-8601 both siblings parse ({@see MirrorTimes}) — an assertion that passes on a
+sibling can pass here while reading a number nothing parsed.
+
+### A copy made in Nextcloud is named by Nextcloud
+
+Nextcloud has already named the copy by the time the app hears about it, and that
+name is the user's stated intent — so it is what the design is called in Penpot,
+extension stripped. Copying inside one folder gives "Original (1)", copying into a
+different one keeps "Original", and both are the platform's choice, not ours.
+
+Two places agree rather than the siblings' three. Their bodies are JSON carrying a
+`title`, so a name can disagree with itself inside one file; a `.penpot` body is a
+binary archive with no name to check.
+
+### The mappings in the Background
+
+Three mappings, declared as ONE table — team, folder, mode, storage and groups
+spelled out per line — plus one folder that is mapped to nothing. Every scenario
+then names the folder it acts in, and the Background is what says what that folder
+IS. Nothing restates "sync", "team folder" or "unmapped" in a step.
+
+The four lines are the whole input space a copy has: a `sync` mapping in an admin
+folder, a `sync` mapping in a Team Folder, a `link` mapping, and outside every
+mapping. Mode and storage are not scenarios; they are properties of the place the
+file landed in, which is why they belong here and not in a Given.
+
+Ported from the Grafana sibling, which arrived at it after three separate
+`a mapping with the following values:` blocks per Background stopped reading as one
+neighbourhood and started reading as three unrelated facts. The Background is the
+neighbourhood, not the subject — the subject is whatever the scenario arranges for
+itself.
+
 ### Copying a ".penpot" file outside every mapping never contacts Penpot
 
 OUTSIDE EVERY MAPPING, NOTHING HAPPENS — the boundary that makes the rest of
@@ -646,36 +691,62 @@ modes, purely because of where the duplicate was made.
 
 `features/projects/copy.feature`
 
-COPYING A PROJECT — and the short answer is that you cannot.
+COPYING A PROJECT — a real copy, producing a real second project.
 
-Copying a DESIGN duplicates it in Penpot (copy-design.feature). Copying a
-project folder does NOT, and the asymmetry is deliberate rather than an
-omission: Penpot has no duplicate-project operation, so the app would have to
-synthesise one by creating a project and duplicating every design into it. That
-is a bulk write invented by a drag, with no single call to make it atomic and
-no obvious answer for what a half-finished one leaves behind.
+REVERSES saga §6.40, which refused the gesture. The old reasoning was that Penpot
+has no duplicate-project call, so the app would have to synthesise one. It does, and
+that is fine: a project copy is a `create-project` followed by one `duplicate-file`
+per design, which is exactly what a copied FOLDER already means in both siblings.
+Nothing about it is atomic in Grafana either.
 
-So it is refused, visibly. An ordinary folder that merely happens to sit inside
-a mapped folder is unaffected — it is not a project, and copying it is just
-copying a folder.
+The three old objections answered:
+ (1) two folders claiming one project — they do not: the copy gets a NEW project id
+     and every design under it a new file id, which is the whole point of the rule;
+ (2) Nextcloud auto-naming the copy — that is the same rule designs/copy already
+     lives by. Nextcloud names it, Penpot takes that name, §6.36 stays true;
+ (3) three apps on one folder — each app answers for its own mappings, as it does
+     for every other gesture on a shared folder.
 
-### Copying a project folder is refused, unlike copying a file
+### A copied project is a new project
 
-DISABLED DELIBERATELY (saga §6.40), not merely unbuilt. Three reasons:
- (1) the copy would carry the same project id, so two folders claim one
-     project — and every file in the copied tree would too;
- (2) Nextcloud auto-increments a copy to "My Stuff (2)", which instantly
-     violates §6.36's names-always-match rule — and "fixing" it by rename
-     would rename the ORIGINAL Penpot project;
- (3) on this cluster a single folder can also carry n8n and Grafana
-     mappings, so a folder copy asks three independent apps to agree on
-     what a duplicate means, with no coordination between them.
+The copy carries a new project id and every design under it a new file id. Two
+folders claiming one project is the failure this rule exists to prevent, and it is
+the same claim designs/copy makes one level down.
 
-### Copying an ordinary folder inside a mapped folder is unaffected
+Storage is a row rather than a scenario: an admin folder and a Team Folder differ in
+where Nextcloud puts the bytes and in nothing this app decides.
 
-Only folders carrying a project id are refused. A mapped folder has to stay
-usable as an ordinary folder, which is the same rule the tag opt-in rests
-on (create-project.feature).
+### A project copied into another team belongs to that team
+
+The destination decides, exactly as it does for a design. The copy is created in the
+destination team and never re-homed afterwards, so there is no window in which it
+belongs to the team it came from.
+
+### Penpot projects do not nest
+
+THE NUANCE THAT DOES NOT PORT FROM THE SIBLINGS. Grafana folders nest; Penpot
+projects are flat under a team. So a project folder copied UNDER another project — or
+under a plain folder — cannot be a project, and arrives as an ordinary folder with no
+project id.
+
+Its designs are not lost: they resolve by the same nearest-project-ancestor rule
+create.feature states, so they join the project above, or the team's Drafts when
+there is none.
+
+### A copy never changes a project's mode
+
+A mode belongs to the TEAM, and a copy may not change one. Copying a project from a
+sync team into a link team is refused, and so is the reverse — the same rule
+designs/copy carries for a single design, read one level up.
+
+ONE OUTLINE, TWO EXAMPLES BLOCKS, because it is two independent halves of one rule —
+the same shape designs/copy uses. The first is the SOURCE rule and it is total: a link
+project has nowhere to go, its own team included. The second is the DESTINATION rule,
+which only needs a source the first has not already refused.
+
+Grafana states the same rule twice, split across two scenarios, in its FOLDER copy but
+combined in its dashboard copy. The combined form is the one worth having: split, the
+link-to-link row falls between the two and neither scenario claims it.
 
 ---
 
@@ -833,118 +904,85 @@ team ancestor because a token was set.
 
 `features/projects/create.feature`
 
-HOW A FOLDER BECOMES A PENPOT PROJECT — the creating half, from either side.
+A PROJECT IS A FOLDER THAT HOLDS A DESIGN, and its name is the path from the
+mapping's folder down to it. Both halves were decided together (§C6.38) and neither
+works without the other.
 
-### WHAT THIS FILE OWNS
+REPLACES the tag mechanism. A `penpot` tag used to be what made a folder a project,
+and the app carried a whole vocabulary for tagging, un-tagging, tagging something
+already tagged, and tagging outside every mapping. None of it was behaviour anyone
+performed on purpose — it was a mechanism wearing a feature's clothes. The tag
+survives only as the visible pill `PullService::tagProject()` already describes it
+as: decoration over an authoritative id, never at the cost of the pull.
 
-A project's IDENTITY: how a folder acquires one, and the marker that says it
-has. Every VERB a project can be on the receiving end of lives with the other
-instances of that verb, so "what happens when I rename a project?" and "what
-happens when I rename a design?" sit side by side rather than in two files:
+### A folder is a project when a design is in it
 
-  renaming a project   → rename-project.feature
-  copying one          → copy-project.feature   (refused — and why)
-  moving one           → move-project.feature
-  deleting one         → delete-project.feature
-  restoring one        → restore-project.feature
+The same rule both siblings state about folders, and the reason it works here is
+that Penpot never has to be told about a folder — only about a design, which it
+needs a project id for anyway. So the project is created as a CONSEQUENCE of the
+first design landing in it, and an empty folder stays Nextcloud's own business.
 
-This file used to own all of those, which was the same mistake gestures.feature
-made in the other direction — organising by the KIND OF THING acted on instead
-of by the BEHAVIOUR — and it cost the same thing: "what happens when I rename a
-project folder?" had two answers in two files, and the two had already drifted.
+Promotion by content rather than by tag because a move is a gesture people already
+make, and a tag is one they have to be taught.
 
-It was called project-folder.feature until the design/project split, which is
-when the last of those verbs moved out. The name followed the contents: what is
-left is creation, so it sits beside create-design.feature where the two opt-in
-models can be read together.
+### The project name is the path below the mapping
 
-A PERSONAL project is created the same way, by the same tag, in the user's own
-home — `connection/personal.feature` owns the token that puts it there.
+`/Penpot/Team/Deep` in a mapping rooted at `Penpot` is a project named `Team/Deep`.
+Penpot has no parent field — projects are flat under a team — so the only place the
+tree can live is the name.
 
-### THE ASYMMETRY (saga §C6.18)
+MEASURED, not assumed: `create-project` takes `[:string {:max 250, :min 1}]` and
+accepts `/` anywhere in it, including leading, trailing and doubled. Two projects in
+one team may share a name. So the name is a free string, and reading a path out of it
+is our interpretation rather than a contract Penpot enforces.
 
-    every Penpot project      →  a folder in Nextcloud     (automatic)
-    SOME Nextcloud folders    →  a project in Penpot       (opt-in only)
+Which is why the path is a RENDERING and never the key. Reconcile stays by project
+id, exactly as it does for a design — so two projects genuinely named `foo/bar`
+render as `/foo/bar` and `/foo/bar (2)`, and the suffix is Nextcloud's alone, the
+same rule both siblings already carry for two things sharing a title.
 
-A folder created inside a mapped folder is an ORDINARY FOLDER. Nothing is
-sent, nothing is inferred, and it can hold anything the user likes — notes,
-exports, a subfolder of references. Mapped folders are real folders, and they
-must behave like ordinary ones. Inferring intent from a folder's existence is
-the kind of automatic behaviour this app has refused everywhere else (§6.33 on
-creation, move-design.feature on drag-in).
+### A folder holding no designs is just a folder
 
-The opt-in is the `penpot` TAG. Assigning it says "make this a project", which
-is a deliberate act with a name, exactly as "+ New → Penpot design" is for
-files. The tag is ALSO how the app marks the folders it mirrors, so the two
-directions share one visible marker: if it carries the tag, it is a Penpot
-project, whoever made it one.
+The other half of the promotion rule, and the reason `Create a folder in a mapping`
+earns a scenario: a folder with no project id is one this app has never had anything
+to do with. Making an empty folder must not reach Penpot at all.
 
-WHY A TAG AND NOT A BUTTON: Nextcloud already has tag assignment as a
-first-class gesture with an event (`TagAssignedEvent`), the sibling apps use it
-for exactly this kind of opt-in, and it survives a rename or a move in a way a
-name convention could not. It needs Nextcloud 32 — see appinfo/info.xml.
+### A project name with slashes is a path
 
-### A NOTE ON THE BACKGROUND
+The case that decided the whole design. Someone types `foo/bar` into Penpot's own
+project dialog — nothing stops them, measured — and under leaf-naming there was no
+answer but to skip it and log. A project the user made, silently absent from
+Nextcloud.
 
-It used to provision a Team Folder and mirror a project called "My Stuff" into
-it, and none of those steps had ever existed — harmless while the whole file
-was @todo, and an instant `--strict` failure the moment one scenario went live.
-It is now the same Background the other live behaviour files use: a PLAIN
-mapped folder, because Team Folder provisioning is not covered by this suite
-(features/README.md), plus the mirror every scenario here needs.
+Reading the slash makes that project arrive at `/foo/bar` instead. The guard does not
+disappear, it shrinks: from *any name containing a slash* down to *a name that spells
+no path at all*.
 
-### A folder opted in late brings the designs already inside it
+### The folders a project name spells are not projects
 
-THE REASON TO ALLOW OPTING IN LATE. A folder someone has been filling with
-designs becomes a project WITH its contents, rather than forcing the
-decision up front. Before the tag those designs were in the team's Drafts
-(§6.35) — a folder inside a mapping is still inside the mapping — and one
-`move-files` re-files the lot without exporting or re-id'ing anything.
+`foo/bar` makes `/foo` because `bar` needs somewhere to sit. `/foo` holds no design
+and carries no project id, so it is indistinguishable from a folder the user made —
+and that is correct, because there is nothing to distinguish. If a project named
+`foo` appears later, that same folder gains an id.
 
-### Tagging a folder that is already a project changes nothing
+This answers the first of open question #47's three blockers, which asked how an
+inferred folder is told apart from a user folder. It is not, and need not be.
 
-The common path, because the pull tags every folder it mirrors. A second
-create here would leave two folders claiming one project — the exact
-ambiguity copy-design.feature refuses a folder copy to avoid.
+### A project name that spells no path is skipped
 
-### A folder tagged as a project must have a usable name first
+`/`, `foo/../bar`, `foo/?/bar` — all legal in Penpot, none renderable as a Nextcloud
+path. Normalise first (a leading, trailing or doubled slash is dropped), then skip
+what is left over.
 
-BUILT (§C6.18) — ProjectFolderService checks the name locally and takes the
-tag back off, so the user can rename and re-tag: a two-step they control,
-rather than a half-created state they have to discover (§6.39). Still @todo
-only for want of a step that makes a folder whose name Nextcloud accepts
-and Penpot would not — NC allows 255 characters and Penpot 250, so the
-window exists but has to be constructed deliberately.
+REPORTED AS A NEXTCLOUD NOTIFICATION, which is the only channel a pull has. An
+earlier cut said "the sync reports the project it could not place", which reads as a
+post-state and is really a second gesture — an excuse to run a sync inside a `Then`.
+The bell is where an async failure belongs, and it is the same channel both siblings
+already use ({@see SyncNotifier}); this app has yet to grow one.
 
-### Tagging a folder outside every mapping does nothing at all
-
-Tags are instance-wide, so this is not an error to report — no team could
-be resolved for that folder even in principle. Stripping a user's own tag
-off a folder this app has no business touching would be a worse surprise
-than an inert label.
-
-### Removing the "penpot" tag does not delete the project
-
-Untagging is unmapping, not deleting — the same rule as moving a design out
-of a mapping (§6.23), and the same rule as deleting a project folder
-(delete-project.feature). Destroying a project because someone removed a label
-would be the worst kind of surprise.
-
-The app does not subscribe to `TagUnassignedEvent` at all, so "Penpot is
-never contacted" is true by construction rather than by a branch someone
-could later add an `else` to.
-
-### A project created in Penpot arrives as a tagged folder
-
-A user cannot tell — and should not have to — whether a project folder
-started life in Penpot or was opted in from Nextcloud. Both carry the tag;
-both are projects.
-
-### A project folder that lost its tag gets it back on the next pull
-
-The tag decorates; `penpot_project_id` decides. Because the id never went
-anywhere, the pull re-stamps the badge on every run — which is also why the
-tag being missing is never a state the app has to repair specially.
+One project is the whole cost, which is why the scenario keeps a second project in
+the team and asserts it arrived. The rest of the team still pulls, and that is the
+difference between a report and a failure.
 
 ---
 
@@ -1187,102 +1225,60 @@ against the original's 5.
 
 `features/projects/delete.feature`
 
-DELETING A PROJECT — the folder, which is ONE Penpot call rather than one per
-design. Deleting a design is delete-design.feature.
+Deleting a project folder deletes the project. Penpot has its own trash, so the
+designs go there with it and nothing is destroyed by the gesture on either side —
+which is what makes a folder delete safe to offer at all.
 
-WHY IT IS NOT A LOOP. `delete-project` removes the project and everything in it
-server-side, so the app never walks the designs. That matters beyond
-efficiency: a per-design loop could fail halfway and leave a project that is
-half-deleted on one side and whole on the other, which is precisely the state
-nothing in this app is allowed to produce.
+REWRITTEN when §C6.38 made the name a path. Five of the seven old scenarios asserted
+CALLS rather than outcomes — `"delete-project" is called with that project's id`,
+`"delete-file" is never called`, `exactly one "delete-project" call is made`,
+`Penpot is never contacted`. That is the implementation's call pattern, not a
+behaviour anyone can observe, and it would keep passing while the project sat there
+undeleted. What a person can see is that the project is gone and its designs are in
+Penpot's trash, so that is what the scenarios say now.
 
-WHAT IS NOT A PROJECT. A plain folder that merely sits inside a mapped folder
-carries no `penpot_project_id`, so deleting it touches nothing in Penpot — and
-the TEAM ROOT is never deletable as a project, because it is the mapping, not a
-project in it.
-
-The design-side rules about the two bins, the permanent-delete guard, and link
-dismissal all live in delete-design.feature and are not restated here.
-
-### A CORRECTION THIS FILE EXISTS TO CARRY (saga §C6.25)
-
-This spec used to say "deleting a personal project folder never touches
-Penpot". That was not a rule — it was the CURRENT DEFECT written up as one.
-Deleting a project folder reaches Penpot **not at all** today, for two stacked
-reasons (DeleteListener bails on anything that is not a File, and Nextcloud
-fires BeforeNodeDeletedEvent for the folder ONLY, with no per-child event), and
-the folder then comes back on the next pull — which reads as the app undoing
-the user's deletion. Somewhere between "we will deal with this later" and the
-spec, later became never.
-
-The mirror's whole premise is parity: a folder the user tagged into existence
-is one they can delete the same way, in a personal team exactly as in a mapped
-one. Only the credential differs.
-
-### WHAT PENPOT ACTUALLY DOES, measured (saga §C6.11)
-
-  delete-project {id}   → HTTP 204, and it is ENTIRELY SOFT. Sets
-                          project.deleted_at to now + deletion-delay (7 days by
-                          default) and a worker cascades the SAME future
-                          timestamp to every file in it.
-  restore               → there is NO restore-project RPC. A project returns
-                          only as a SIDE EFFECT of restoring one of its files.
-  an EMPTY project      → has no file to carry it back, so it cannot be
-                          restored through the API at all. It expires.
-
-DELETE CASCADES; RESTORE DOES NOT — measured by deleting a project holding two
-designs and restoring only one: the project came back, that design came back,
-the other stayed in the trash. So "restore the project folder" has to mean
-"restore every design that was in it, in ONE call" — not for tidiness, but
-because a per-file loop that failed halfway would leave a project holding some
-of its designs and no signal that anything was wrong.
-
-THE GRACE WINDOW LINES UP WITH THE NEXTCLOUD TRASH almost exactly, which is
-what makes the mirror honest: soft on both sides, recoverable on both sides,
-for roughly the same week. restore-project.feature owns the other half.
+Two more went for other reasons: `A project Penpot still lists after deletion is not
+mirrored` described the `get-projects` upstream bug (§6.42), which is a workaround
+and belongs in the saga; `Restoring a design also restores its project` is
+`projects/restore`'s.
 
 ### Deleting a project folder deletes the project in Penpot
 
-The two trashes line up: Nextcloud's is reversible and so is Penpot's, on
-a comparable window. This is the same shape as deleting a single mirror
-(above) one level up the tree.
+The designs go to Penpot's trash with the project — Penpot deletes a project softly,
+so the whole gesture is reversible on both sides for the length of its grace window.
+The Nextcloud folder is recoverable from the Nextcloud trash, independently.
 
-### Deleting a project folder does not need a per-design call
+### Trashing a folder takes every project its name spelled
 
-Penpot cascades server-side, so mirroring its behaviour is ONE call, not
-N+1 — and doing it per-file would be worse than redundant: it would leave
-the project itself alive and empty if the last call failed.
+THE CONSEQUENCE OF THE PATH MODEL, and the one thing about deleting that does not
+port from either sibling. `/Penpot/foo` may hold no designs and be no project, while
+`foo/bar` and `foo/bar/baz` are named THROUGH it. Deleting it ends all of them.
 
-### The team root is never deletable as a project
+That is not a surprise to hide — it is what deleting a folder has always meant in a
+file manager, and the Nextcloud trash entry is the undo. But it is why the trash
+entry has to be asserted rather than assumed: this is the gesture that can reach the
+most projects at once.
 
-Penpot answers `:non-deletable-project` for a team's default project. The
-team root carries `penpot_team_id`, not `penpot_project_id`, so it does not
-resolve as a project folder and never reaches the call.
+### Trashing a project folder in a link team is refused
+
+The same refusal a single link file gets, for the same reason: under a link the tree
+is Penpot's and Nextcloud is a read-only mirror of it. Removing the folder locally
+would only make the mapping disagree with the team it mirrors until the next pull
+wrote it back.
 
 ### A project deleted in Penpot leaves no folder claiming its id
 
-THE GAP THE LIVE PROBE FOUND (§C6.19). The designs prune correctly, with
-rescue archives — but the FOLDER survives, still stamped with a project id
-that no longer resolves, still wearing the `penpot` tag. Anything dropped
-into it afterwards resolves to a project Penpot will refuse.
+Two endings, decided by what the folder holds, and the pair only works if both are
+stated. Holding only designs, the folder GOES — the mirror has nothing left to be.
+Holding anything else, the folder STAYS, keeps the other files, and loses only its
+project id.
 
-`get-all-projects` filters deleted projects out, so the pull cannot tell
-"deleted" from "never existed" — which is exactly why the pull must not
-DELETE the folder either. Un-stamping it (and un-tagging it) turns it back
-into an ordinary folder, which is the truthful end state.
+The second ending is the one worth reading twice, so it names the surviving file
+rather than describing an absence: deleting a user's spreadsheets because a Penpot
+project went away is not this app's call, and "still exists, holding Budget.xlsx" is
+the only phrasing that proves it didn't.
 
-### Deleting a personal project folder deletes that project in Penpot
-
-── the same gesture in a personal team, and it means the SAME thing ────────
-A personal project is a project. The who and the where differ; the rule does
-not. This is stated explicitly because the spec previously claimed the
-opposite — see the correction note at the top of this file.
-
-SAME RULE AS A TEAM PROJECT, different credential. A personal project is
-not a read-only view of Penpot — the whole point of the mirror is parity,
-so a folder the user tagged into existence is one they can delete the same
-way. The user's own token performs it, because the service account cannot
-see their personal team at all (`connection/personal.feature`).
+The pair is Grafana's, verbatim in shape, and the reasoning transfers exactly.
 
 ---
 
@@ -1474,7 +1470,7 @@ something else:
 | a file carries this metadata | **the pull** | asserted by `sync-now.feature`, shown here |
 | the mode property's wire value | what the metadata says | the DAV view scenario |
 | the context-menu glyph | the action that draws it | `open-with.feature` |
-| the metadata cannot be edited | a refusal anyone can provoke | stayed, as a scenario |
+| the metadata cannot be edited | core, which registers every key EDIT_FORBIDDEN | a note, not a scenario — see RETIRED below |
 
 Nobody registers a mimetype; they install an app. Nobody sets metadata; they map
 a team and the pull stamps it. Once each end state sits with the behaviour that
@@ -1488,7 +1484,7 @@ duplicates or as end states already owned elsewhere:
 | A project folder is identifiable by both metadata and a visible tag | word-for-word the same scenario as `mapping-membership.feature`'s "A project folder carries a visible tag as well as its metadata" — same arrange, same two asserts |
 | A file moved out of its mapped folder is unmapped, not untracked | the *rule* is `mapping-membership.feature`'s "A file with no project-id ancestor belongs to no mapping"; the *gesture* is `move-design.feature`'s move-out. Neither needed a third statement of it |
 | The mode is visible and reflects whether content is stored | two `Given`/`Then` pairs in one scenario — two scenarios wearing one name. The DAV half merged into the view scenario; the body half is `set-mode.feature`'s demote scenario |
-| The row icon and the menu glyph are separate files | two files with opposite contracts, so one scenario could not be the arrange for both. The row icon stayed; the menu glyph went to `open-with.feature` |
+| The row icon and the menu glyph are separate files | two files with opposite contracts, so one scenario could not be the arrange for both. The menu glyph went to `open-with.feature`; the row icon half was retired later, in the alignment pass — see RETIRED below |
 
 Ported from `kubed-io/nextcloud-n8n`, where the split landed first — itself
 downstream of the mapping-table work that started here.
@@ -1576,8 +1572,10 @@ which has been false since Course 3):
   uninstall (lifecycle.feature).
 
   NOT BUILT — the project folder's visible system TAG (§6.32). The folder
-  metadata is written; the human-visible pill is still Course 6 work. The
-  fourth scenario below asserts both halves and only the metadata half holds.
+  metadata is written; the human-visible pill is still Course 6 work. No
+  scenario here asserts it: this file looks at a design FILE, and the tag is a
+  folder's — `connection/sync-now.feature` claims it, in the tags column of the
+  tree a pull leaves behind.
 
 @todo — the scenarios are all DAV/mimetype assertions and the integration
 harness is occ-only. The mimetype registration in particular is UNASSERTED IN
@@ -1594,19 +1592,6 @@ that would be testing Nextcloud's icon renderer.
 
 ASSERTED OVER DAV, because that is where the Files app reads it. The mapping
 file being right on disk proves nothing about what a client is told.
-
-### The row icon is the app's colour mark
-
-`@blocked`, and the reason is named: it is a rendering fact and not reachable
-from HTTP.
-
-WHY IT SURVIVED AS ITS OWN SCENARIO rather than folding into the mimetype one:
-Nextcloud renders mimetype icons out of `core/img/filetypes/` WITHOUT
-recolouring them, so that file must carry its own fill or it is invisible. That
-is the opposite contract from the context-menu glyph, which NC *does* recolour —
-which is why the menu half now lives in `open-with.feature`, next to the action
-that draws it (saga §C6.1/§C6.7). One scenario could not honestly be the arrange
-for both.
 
 ### Viewing the DAV properties on a file shows Penpot specific details
 
@@ -1633,24 +1618,34 @@ because a client author reading only the README would look for "link".
 The mode axis — whether that body is an archive or nothing at all — belongs to
 the MAPPING, not to this file and not to any per-file action.
 
-### A file carries the team its design belongs to, but never a project
+### Finding designs by their mode
 
-THE ONE THING CACHED ON THE FILE (§C6.7), and the one thing that is not.
-The team is stamped because the browser builds the workspace deep link from
-it and cannot afford to walk a freely-nested tree on every render. The
-project is NOT, because it is derived from the folders and a copy would go
-stale on the first move — see mapping-membership.feature.
+`@blocked`, and the missing capability is named: there is no proven DAV REPORT
+search over `nc:metadata-*` in this harness to drive it against. The index
+itself is real — `penpot_mode` is registered as an indexed metadata key
+precisely so "find every link in the instance" is a query rather than a folder
+walk — but nothing here can issue that query. Confirm the search surface exists
+and this becomes an ordinary `@todo`.
 
-### What the app manages, only the app changes
+### RETIRED — three more, when this file was aligned with its siblings
 
-A REFUSAL SOMEONE CAN PROVOKE, so it earns a scenario: any DAV client can
-attempt a PROPPATCH. The identity of a mirror is the app's to write — a client
-that could edit `penpot_id` could silently re-point a file at a different
-design. Every key is registered EDIT_FORBIDDEN, so the refusal comes from core
-rather than from us.
+Grafana's `dashboards/view.feature` is three scenarios; n8n's is the same three
+plus two CLI listings this app has no command for (`occ` here maps teams, it
+does not list designs). This file was five, and each of the three that went was
+a fact already owned somewhere else:
 
-The load-bearing assertion is that the VALUE did not change, not that a
-particular status came back.
+| scenario | why it went |
+|---|---|
+| The row icon is the app's colour mark | pixels, and unreachable from HTTP — it had been `@blocked` since it was written. Its only observable half is that a mirror carries the app's own mimetype instead of `application/zip`, which the mimetype scenario asserts. The renderer fact it existed to record is kept below, where a note can hold it without pretending to be a test |
+| A file carries the team its design belongs to, but never a project | `penpot_team_id` is a row of the DAV outline, so the positive half was already said. The rest was a NEGATIVE — a scenario proving a key the app deliberately does not write. Why it is not written is documented above; nobody performs it |
+| What the app manages, only the app changes | the refusal is core's and not this app's: every key is registered EDIT_FORBIDDEN, so a PROPPATCH is turned away before any of our code runs. Grafana keeps the note and has no scenario for it, and this file now matches. n8n does keep one, in `workflows/edit.feature` — filed as an edit, which is what a PROPPATCH is |
+
+THE RENDERER FACT, kept because it will otherwise be rediscovered the hard way:
+Nextcloud serves mimetype icons out of `core/img/filetypes/` WITHOUT recolouring
+them, so that file must carry its own fill or it renders invisible. That is the
+opposite contract from the context-menu glyph, which core DOES recolour — which
+is why the menu half lives in `open-with.feature`, beside the action that draws
+it (saga §C6.1/§C6.7).
 
 ══ NEXTCLOUD'S TIMESTAMPS ARE PENPOT'S NOW ═══════════════════════════════
 
@@ -1906,6 +1901,27 @@ symmetrical and are two different rules read from opposite ends.
 (Written as a comment, not a Gherkin `Rule:` block — Behat's parser rejects
 that keyword outright. See features/README.md.)
 
+### A duplicate arriving in a project keeps the id already there
+
+THE PERSON ANSWERS WHAT THE CONTENT SHOULD BE; the identity is never theirs to
+pick. Nextcloud's conflict dialog offers keep-existing, keep-new or keep-both, and
+all three questions are about BYTES. Whichever body wins, the file that stays at
+that path goes on being the design it already was — because a project holds exactly
+one file per design id, and the arrival's id is an accident of where it came from.
+
+The Examples cross the three answers with the three identities an arrival can carry
+(the same id, a different one, none at all) because the whole claim is that the
+third column does not read the second. Ported from the Grafana sibling, which found
+the bug this table exists to catch: an arrival carrying a stale id re-bound the
+destination to a design nobody was looking at.
+
+### Keeping both versions of a duplicate makes the arrival its own design
+
+Keep-both is the one answer that leaves two files, so it is the one answer that
+needs a second design. Nextcloud names the arrival "Turnbuckle (1)"; that file has
+to become a design of its own rather than a second claim on the first, which is the
+same rule copy.feature states from the other end.
+
 ### A link cannot be moved out of the project it points into
 
 DRIVEN LIVE. The guard is the only thing in this app that says no, and until
@@ -1966,44 +1982,91 @@ losing a `sync` file's archive on the way past.
 
 `features/projects/move.feature`
 
-MOVING A PROJECT — the folder, and the one rule that makes it different from
-moving a design: a project folder's POSITION is constrained where a design's is
-not. Moving a design is move-design.feature.
+REWRITTEN under §C6.38, and the old file's central claim is now the opposite of the
+truth. It said `And Penpot is never contacted` — moving a project folder was purely
+local, because the project's name was its leaf folder and position meant nothing.
+With the name being the PATH, a move IS a rename, and Penpot is contacted every time.
 
-WHY A PROJECT FOLDER IS PINNED TO ITS TEAM FOLDER. A project belongs to exactly
-one Penpot team, and the team folder IS that team in Nextcloud. Dragging the
-folder out of it would assert a membership Penpot has no way to represent — so
-it is refused, visibly, with the alternative spelled out. Inside its own team
-folder the user may put it wherever they like: Nextcloud owns layout, Penpot
-owns membership (saga §6.29/§6.30).
+Three of its scenarios also refused a move that should be allowed. `A project folder
+cannot be moved out of its team folder`, `The project-folder refusal explains why`
+and `A project folder cannot be moved into a different team's folder` were one rule
+stated three times, and the rule was wrong: `move-project` takes `{id, team-id}`
+(measured live), so crossing a team is one call, exactly as it is for a design and
+exactly as Grafana allows a folder to cross mappings.
 
-THE INVARIANT THAT COVERS BOTH FILES lives in move-design.feature — "no move,
-of any file or folder, ever deletes anything in Penpot" — and is not restated
-here, because one copy of a rule is the point of splitting these.
+### Moving a project folder renames the project
 
-### The project-folder refusal explains why, and what to do instead
+The path below the mapping is the name, so dragging `Traveller` into `Clients` makes
+it `Clients/Traveller`. The id never changes — a move renames the project, it never
+replaces it with a new one wearing the new path.
 
-Split from the scenario above, which proves the refusal HAPPENS; this one
-is about what it SAYS, and needs the exception body surfaced through DAV.
-Saga §6.30. Reparenting a project in Penpot (`move-project`) is real and
-confirmed, but it is a destructive cross-team mutation that changes who can
-see the work — far outside §6.1. Refuse loudly; never silently undo.
+### A move high in the tree renames every project below it
 
-### A project folder cannot be moved into a different team's folder
+THE COST OF THE PATH MODEL, stated where someone will meet it. Penpot has no parent
+field, so there is no atomic re-parent: moving `/Penpot/foo` renames `foo/bar` and
+`foo/bar/baz` and everything else named through it, one `rename-project` each.
 
-══ MOVED IN PENPOT ════════════════════════════════════════════════════════
+Every one keeps its id, which is what makes a partial failure survivable — the ids
+still name the same projects, and the next pull reconciles the names. It is also why
+the reconciler must never read *the folder is not where the name says* as "move the
+folder back": under this model Nextcloud's position is the newer fact.
 
-The same behaviour from the other end, and it arrives via a sync run rather
-than an event. Penpot is authoritative for project membership, so a design
-re-filed upstream relocates its mirror — it is not a conflict to resolve, it
-is the source of truth changing.
+### A project carries its team as well as its name
 
-### A user can move their personal project folders anywhere in their home
+One move changing team and name together, keeping the id, the designs and their
+history. `move-project` carries the team, so nothing is re-created to cross a
+boundary — the same shape `move-files` gives a single design.
 
-── the same rule in a personal team ────────────────────────────────────────
-A personal project is a project. The WHO (the user's own token) and the WHERE
-(their home root, no team-folder ancestor) differ; the rule does not — see
-`## personal-projects — RETIRED` for what actually is special about them.
+### A project folder that leaves every mapping stops being a mirror
+
+Nothing is deleted in Penpot. The project stands, its designs stand, and the folder
+simply stops being the thing that mirrors it — the same rule a single design leaving
+its mapping already follows.
+
+Worth knowing rather than asserting: the project still exists, so a later pull will
+build a folder for it again at its own path. That is a consequence of two rules
+agreeing, not a third rule, and it does not earn a scenario.
+
+### A move never changes a project's mode
+
+A mode belongs to the TEAM, and a move may not change one. One Outline and two
+Examples blocks, the same shape `projects/copy` uses: the first block is the SOURCE
+rule and is total — a link project has nowhere to go, its own team included — and the
+second is the DESTINATION rule, which only needs a source the first has not refused.
+
+### An emptied parent is reaped only when it holds nothing else
+
+The clean-up half of a re-path, and the half that can destroy something if it is
+wrong. After a project moves out, the folder it sat in may be left with nothing —
+and it may have only ever existed because the project's name spelled it.
+
+Reaped when it holds nothing AND carries no project id of its own. Kept the moment it
+holds anything else, user files included. That is the same line Grafana draws for a
+folder that lost its last dashboard, one gesture over: deleting a user's notes
+because a Penpot project moved out from under them is not this app's call.
+
+### A project renamed in Penpot moves its folder
+
+The mirror of the rule above, and the reason both belong in one file. Penpot can
+rename `Upstream` to `Clients/Upstream` in a single call; in Nextcloud that is a MOVE,
+possibly several folders deep, possibly creating folders on the way.
+
+THE FOLDER IS MOVED, NOT REPLACED, and the id is what makes that possible. The new
+name says where the project belongs; the id says which folder already IS it. So the
+reconciler has a before and an after: ensure the destination path exists, move that
+folder into it, then clean up behind. Everything the folder held travels with it,
+the user's own files included — an earlier cut said the old path was simply "gone
+from Nextcloud", which reads as a delete and would have destroyed anything else
+sitting in there.
+
+CHANGING TEAM IS A ROW OF THE SAME OUTLINE, not a scenario of its own. Penpot can
+rename and re-team in one gesture where a Files drag can only do one at a time, so
+the destination team is an INPUT and the outcome — the folder is gone from where it
+was and stands, with its id, where the new name and team put it — is identical.
+
+Grafana states it the same way (`Move a folder in Grafana`, whose Examples caption is
+*"Grafana can move and rename in one call where a Files gesture cannot"*), and it has
+no separate cross-mapping scenario on the remote side either.
 
 ---
 
@@ -2102,6 +2165,34 @@ next to the menu entry that draws it.
 
 `@blocked` for the same reason every scenario in this file is: no browser
 driver.
+
+
+### Opening needs a team id, so an unmapped file opens nothing
+
+The deep link requires BOTH ids. Penpot will not open a workspace without a team —
+its own legacy-route redirect makes an RPC round trip purely to look one up, which is
+the proof — so `?file-id=` alone lands on an internal error.
+
+A file that has left every mapping keeps its `penpot_id` and loses its
+`penpot_team_id` (`designs/move.feature`), so there is nothing to build a link from.
+The design may well still exist over there; this app just no longer knows which team
+to open it in.
+
+The code reaches the same place from the other direction: `enabled()` is gated on the
+file TYPE rather than the mode or the id, because on the first folder after a page
+load the listing can arrive before the app's DAV property is registered, and an action
+that flickers once a session is worse than one that occasionally no-ops. So the menu
+entry appears and the CLICK is where it finds out.
+
+### An untracked design file opens nothing rather than failing
+
+Reaching a click without both ids means the file is a `.penpot` this app does not
+track — a state, not a failure. So the click is a silent no-op rather than an error
+toast: nothing the user did was wrong, and there is nothing for them to fix.
+
+This is the other half of not gating the action on the id. The action is offered on
+the file TYPE, which is cheap and never flickers; the click is where the app finds
+out whether it can actually go anywhere.
 
 ---
 
@@ -2289,6 +2380,27 @@ This is the whole reason personal tokens exist (saga §6.18) — rename is one
 of the app's few write paths (saga §6.19), all of which attribute the same
 way.
 
+### Renaming a link never renames the design
+
+A `link` file's name comes from Penpot, so a rename made in Nextcloud would survive
+exactly until the next pull re-derived the filename and quietly undid it. A rename
+undone later is worse than one refused now: the user is neither told no nor allowed
+to keep it. Refused, in the same voice the move guard uses.
+
+Both siblings state this rule; penpot had the mirroring half (`Rename a design in
+Penpot` covers a link) and not the refusing half, so a link could be renamed locally
+and silently reverted.
+
+### The suffix is Nextcloud's alone
+
+Two designs may share a name in Penpot; two files in one folder may not. When a
+design is renamed over there onto a name a sibling already holds, the file that HELD
+the name keeps it and the arriving one takes "(1)".
+
+The direction matters and is the whole scenario: suffixing the incumbent instead
+would rename a file the user never touched, and the next pull would swap them back.
+Penpot is perfectly happy with two "Alpha"s and never sees the suffix at all.
+
 ### An empty file name is refused before it is sent
 
 ── the name guard: the same shape at both levels ───────────────────────────
@@ -2373,6 +2485,16 @@ create with a distinct name never exercises that.
 So the end state is "two designs are still two files, with different ids", not "a
 new file appeared". The subject is the id-based matching, which is the only thing
 about a duplicate that is ours to get wrong.
+
+### A link mapping authors nothing
+
+A link folder is a read-only projection of Penpot. A file appearing in one is a
+local file and can never become the design it looks like — so the app refuses the
+creation rather than leaving a `.penpot` sitting there looking managed. Creating the
+design in Penpot is how a link folder gains a file.
+
+Refused at every depth, which is why it is an Outline: a project folder nested under
+a link mapping is no more writable than the mapping's own root.
 
 ### A design has to have somewhere to go
 
@@ -2476,6 +2598,16 @@ happened the first time the two were run together.
 So there is one scenario now. This is the nuance the storage change was made to
 catch, and it caught it immediately: a limitation the specs had recorded as fact,
 provable only by running both halves in one place.
+
+### A Team Folder's trash emits no purge signal
+
+The purge is one behaviour and one scenario, with the storage kind as a ROW — but the
+two rows do not reach the app the same way. A Team Folder's trash raises no purge
+hook at all; both siblings ride the filecache entry removal instead
+(`TeamFolderPurgeListener`), and this app has no such listener yet.
+
+Recorded here rather than as a second scenario, because the mechanism is a HOW. If
+the Team Folder row fails and the admin-folder row passes, this is why.
 
 ### A purge only destroys what is still in Penpot's trash
 
@@ -2714,68 +2846,49 @@ design.
 
 `features/projects/rename.feature`
 
-Renaming a PROJECT — the folder in Nextcloud and the Penpot project it maps to.
-Renaming a DESIGN is rename-design.feature: same gesture in the Files app, but
-a different Penpot object (`rename-project` vs `rename-file`) and a different
-set of name rules, because a project name has to survive becoming a folder name.
+WHERE THE LINE SITS BETWEEN THIS FILE AND `projects/move.feature`, now that §C6.38
+has made a project's name its path: **rename is the folder keeping its parent, move
+is the parent changing.** Split by the NEXTCLOUD outcome, because in Penpot both are
+one `rename-project` call and there is nothing to tell them apart over there.
 
-A PROJECT IS A FOLDER. That is why this file exists separately: in Nextcloud a
-Penpot project has no representation other than a folder, so every constraint
-Nextcloud puts on folder names lands here and nowhere else.
+That is Grafana's line too, and it is why its `Move a folder in Grafana` Outline is
+captioned about doing both in one call — the remote side has one gesture where the
+Files app has two.
 
-PENPOT → NEXTCLOUD: the pull compares Penpot's project name against the folder
-on disk and renames the folder, keyed on `penpot_project_id` — never on the
-name, which is exactly what a rename would defeat.
+REWRITTEN, and eight of the eleven old scenarios went. Four described the `/` guard —
+`The app never sends a slash to Penpot`, `A project whose name contains a slash is
+skipped`, `Renaming the project in Penpot fixes it on the next pull`, `The app never
+invents a substitute name`. All are obsolete: a slash is now a path, the app sends
+them deliberately, and what remains of the guard lives in `projects/create`.
 
-NEXTCLOUD → PENPOT: locked since saga §6.36. This direction was settled BEFORE
-the file rename was (§6.54), and the asymmetry it created is what forced that
-decision.
+The other four were the familiar shapes. `Renaming a project folder does not touch
+the designs inside it` asserted that bystanders were unharmed. `A project rename is
+attributed to the acting user` asserted `"rename-project" is called using that user's
+own token` — a call, not a behaviour, and the per-user axis besides. `One unmappable
+project does not block the rest of the team` was a bystander assertion on an obsolete
+rule. `An empty folder name is refused` tested a rule Nextcloud already enforces
+before the app ever hears about it.
 
-THE NAME RULES ARE THE SUBSTANCE HERE. A project name that cannot become a
-folder name is REFUSED rather than sanitised (saga §6.51): "foo/bar" and
-"foo-bar" would both collapse to "foo-bar", silently merging two distinct
-projects into one folder with no way to tell which is which. Refusing visibly
-beats breaking the names-always-match rule invisibly. Inferring a parent folder
-from the "/" is a whole different layout — an unbuilt saga design (§6.53), never
-a fallback triggered by one awkward name.
+### Renaming a project folder renames the project in Penpot
 
-### rename-project: Background
+The last segment of the path changed, so the last segment of the name changes. The id
+never moves, which is the whole anti-break claim, and the designs inside are untouched
+because nothing about them changed — that is a consequence, not a second scenario.
 
-A PROJECT FOLDER IS ITS OWN FLOW, not a variant of the file rename (§6.36 /
-§6.39): a different event, a different id, a different RPC, and a 204 with no
-body instead of a record. It had no live coverage at all, which meant the two
-rename paths were one green test and one assumption.
+### A project renamed in Penpot keeps its folder where it is
 
-The assertion works because `penpot_sync:probe` lists PENPOT's own project
-names — so finding a design under the new name proves Penpot renamed the
-project, not merely that Nextcloud renamed a folder.
+Renamed IN PLACE. Nextcloud is authoritative for layout, so the pull renames the
+folder where the user left it and never drags it to a canonical path.
 
-### Renaming a project folder does not touch the designs inside it
-
-`rename-project` takes the PROJECT id; nothing about the files changes, and
-a regression that sent file ids here would rename a design instead — which
-this catches, because the design would no longer be found by its own name.
+If the new name changes the PATH rather than just the last segment, that is a move in
+Nextcloud and `projects/move.feature` owns it. One Penpot call, two Nextcloud
+outcomes, and the outcome is what decides which file states it.
 
 ### A failed project rename leaves the local rename standing
 
-Saga §6.18 rule 3 — a remote failure never destroys local state. Same rule
-as the file twin below, and it has to be stated for both because they are
-different listeners reading different ids.
-
-### The app never sends a slash to Penpot
-
-A Nextcloud folder name cannot contain "/" anyway, so this is automatic for
-renames — but it must also hold for the CREATE path (create-project.feature's
-tag opt-in), which is where a name could be composed rather than typed.
-
-### The app never invents a substitute name
-
-Sanitising is REJECTED (saga §6.51): "foo/bar" and "foo-bar" would both
-become "foo-bar", silently collapsing two distinct projects into one folder
-with no way to tell which is which. That breaks the names-always-match rule
-invisibly, which is worse than refusing visibly. Inferring a parent folder
-from the "/" is a whole different layout — an unbuilt saga design (§6.53), not
-something to fall back into because one name happened to contain a slash.
+Nextcloud has already renamed the folder, and reverting would fight the user over a
+gesture that succeeded locally. The divergence is reported and the next pull settles
+it — the same rule every other failed propagation in this app follows.
 
 ---
 
@@ -2947,74 +3060,99 @@ asked for is now in Penpot. Deleting it to "clean up" a failed rename destroys
 the thing that just worked, so the app keeps it, records the new id against the
 local file, and says plainly that the design came back wearing the wrong name.
 
+## projects/purge
+
+`features/projects/purge.feature`
+
+Emptying the Nextcloud trash of a project folder finishes what the trashing started:
+the designs it held leave Penpot's trash for good. Penpot's trash is what made the
+folder delete reversible, and this is the gesture that ends that.
+
+### A purge reaches every project the folder held
+
+Recursive is recursive, and under §C6.38 that reaches further than it looks. A trashed
+`/Penpot/Team` may have spelled `Team/Sub` as well as `Team`, so one purge can be the
+last word on several projects at once. The Examples say so with a nested row rather
+than with a second scenario, because the outcome is identical however many it reached.
+
+A LINK TEAM HAS NO SCENARIO HERE, deliberately. Its project folders cannot be trashed
+(`projects/delete`), so they can never be in the trash to purge. Grafana states the
+same absence in the same place, for the same reason.
+
+Two scenarios that Grafana carries are also deliberately absent. `while other
+dashboards are parked` asserts that a purge did not reach things it was never given —
+a bystander claim, and the same one already retired from `designs/purge`. Purging a
+plain folder that was never a project asserts the pre-state: with no designs there was
+never anything to finish.
+
+### Emptying Penpot's trash reaches back into the Nextcloud trash
+
+Those designs were the only route the project had back — there is no `restore-project`
+call, measured — so once they are gone the trashed folder has nothing left to be
+restored to, and it goes too.
+
+### A Penpot purge may not destroy what was never Penpot's
+
+The restraint half, and the reason the rule above needs a second scenario rather than
+a row: the outcome differs in KIND. A trashed folder holding a spreadsheet STAYS in
+the Nextcloud trash, holding it. A file with no far side cannot be destroyed by
+something that happened on the far side.
+
+The same line `projects/delete` draws for a project deleted in Penpot, one gesture
+later.
+
+---
+
 ## projects/restore
 
 `features/projects/restore.feature`
 
-RESTORING A PROJECT — the folder, and everything that was in it. Restoring a
-design is restore-design.feature.
+TWO SCENARIOS, and the consolidation is the point. Restoring a project folder always
+ends the same way — Penpot holds the project again — and the only thing that varies
+is whether it wears the id it left with. That is a VALUE, so it is a column.
 
-A PROJECT COMES BACK WHOLE, OR IT DOES NOT COME BACK. Restoring the folder
-restores the project and every design that went down with it — restoring one
-design of a deleted project does NOT silently resurrect the project around it,
-because that would be inventing a container the user never asked for.
+MEASURED against a live Penpot, and the measurements are what collapsed the file:
 
-THE ONE THING THAT CANNOT BE UNDONE: a project deleted while EMPTY has no
-design to restore it through. Penpot exposes no restore-project RPC — a project
-returns only as a side effect of restoring one of its files (saga §C6.11,
-confirmed live) — so an empty one is genuinely gone, and the app says so
-plainly rather than failing in a way that reads like a bug.
+- `delete-project` is soft. The project leaves `get-all-projects` at once and its
+  FILES appear in `get-team-deleted-files`, stamped `willBeDeletedAt` about seven days
+  out. The project itself appears in no trash listing anywhere — only its files do.
+- **There is no `restore-project` RPC.** It answers 404. A project's only route back
+  is `restore-deleted-team-files` on a file, which revives the project as a side
+  effect — confirmed by restoring one file and watching its project reappear.
+- `get-all-projects` filters deleted projects correctly. The §6.42 note about
+  `get-projects` never filtering `deleted_at` does not apply to the call this app
+  already uses.
 
-### Restoring a project folder brings back the project and every design in it
+### Restoring a project folder brings the project back
 
-ONE call with the whole set, not three calls. Penpot restores the project
-from any file in it, so three calls would restore the project on the first
-and then merely add files — but a partial failure would leave a project
-holding some of its designs, which is worse than either extreme.
+Four rows, one outcome. Storage is a row for the usual reason. The other three are the
+three things Penpot can still be holding when the folder comes out of the trash:
 
-### Restoring one design of a deleted project does not silently restore the rest
+- its designs, still in Penpot's trash → the original id comes home;
+- its designs, already purged → nothing to come back through, so a new one is made;
+- nothing, because the project never held a design → same, for the same reason.
 
-Confirmed live (§C6.19). Stated because it is genuinely surprising, and
-because a naive "restore the folder" that fired one call per file it
-happened to find in the Nextcloud trash would produce exactly this
-half-restored state without ever looking wrong.
+The last is not an exotic case. A project created in Penpot arrives as a Nextcloud
+folder whether or not it holds designs, so trashing that folder deletes a project no
+file can revive. It reaches the same end state by a different road, which is exactly
+what an Examples row is for.
 
-### A project deleted while empty cannot be restored, and the app says so
+### Restoring one design brings its project with it
 
-Penpot offers no `restore-project`, and there is no file to carry it back.
-Saying so is the whole behaviour — the alternative is a folder that looks
-restored and points at nothing.
+Penpot clears a project's deletion when any file inside it comes back, so restoring
+ONE design revives the project and lifts its folder out of the Nextcloud trash.
+Restoring two, or a hundred, says nothing further — which is why there is no separate
+scenario for restoring "the project's designs". You cannot restore a project; you can
+only restore files, one set at a time, and the first one already did the interesting
+part.
+
+RETIRED — `Restore a trashed project's designs in Penpot, where the folder held other
+files`. The claim was that a folder comes out of the Nextcloud trash whole, spreadsheet
+included. True, but it is Nextcloud's doing rather than this app's, and it is the same
+restore as any other. If it earns a scenario anywhere it is `designs/restore`, where a
+single design coming back is the subject.
 
 ---
-
-## projects/view
-
-`features/projects/view.feature`
-
-TELLING A PROJECT FOLDER FROM AN ORDINARY ONE. Created in the noun/verb
-restructure from scenarios that had been sitting in `mapping-membership.feature`
-— looking at a project is looking, and `designs/` already had a `view`.
-
-### A project folder carries a visible tag as well as its metadata
-
-Two markers, two jobs (§6.32): the metadata is what every lookup reads, the tag
-is what a user can see and search for. Under free nesting that matters more than
-it would under a depth cap — position no longer tells you which folders are
-projects.
-
-### A tagged folder's name always equals its Penpot project's name
-
-A project folder is otherwise indistinguishable from an ordinary folder someone
-named the same thing. Tag plus matching name means a tagged folder called "Acme"
-IS the Penpot project "Acme". The rename half of the invariant is
-`projects/rename.feature`'s, where it is live.
-
-### A plain folder inside a mapped folder is tolerated, not adopted
-
-The whole point of the tag: ordinary folders live among project folders without
-becoming projects. The opt-in that DOES make one a project is
-`projects/create.feature`'s, and it is live there.
-
 ## team-mapping/set-mode — RETIRED (and `sync-mode` with it)
 
 `features/team-mapping/set-mode.feature` is **gone**, and so is the
@@ -3068,258 +3206,78 @@ it is doing exactly what a person would do: mapping the team the other way.
 
 `features/connection/sync-now.feature`
 
-SYNC NOW — bringing what is already in Penpot into Nextcloud.
+THREE SCENARIOS, DOWN FROM ELEVEN, and the shape came from the siblings: grafana and
+n8n both carry two, because the whole tree is the assertion and everything else is a
+row of the Background.
 
-### A sync brings the team's projects and designs into Nextcloud
+### Sync-now scope
 
-ONE BEHAVIOUR, FOUR WAYS TO START IT — admin/one mapping, admin/every mapping,
-the schedule, and a user's own personal team. Same pre-state, same post-state, so
-the actor and the scope are COLUMNS rather than four scenarios. Whether a run is
-synchronous or queued is a mechanism and is asserted nowhere.
+One button, one scope: every mapping. The admin's button and the scheduled run are the
+same behaviour started two ways, which is why they are two rows of one Outline rather
+than two scenarios — the actor is an input and the tree that comes out is identical.
 
-PROJECTS COME IN BY NAME AND WEAR THE TAG; designs come in beneath them. Every
-path in the tree table is named exactly as Penpot names the thing it mirrors,
-which is the whole of "project folder names match their projects". Drafts is the
-team's default project and gets no folder of its own — it IS the mapped folder
-(§6.35), so a loose design sits at the root.
+There is no per-mapping sync-now. A mapping that needs its own run needs it because
+something is wrong with it, and that is a question for `connection/admin.feature`.
 
-NOTHING ASSERTS "THE SYNC SUCCEEDED". The tree is the proof, and the only one
-every trigger can offer: a command's exit code says nothing about a job that ran
-inside Nextcloud.
+### A background is a picture, not a story
 
-### A folder already named like a Penpot project is adopted, not duplicated
+Both sides are declared as state — what Penpot holds, what Nextcloud holds, what is
+mapped — and the Background never says how they came to disagree. `/Penpot/Cogs` and
+`/Penpot/notes.txt` are simply there before the sync runs; nothing narrates a user
+having made them.
 
-THE NAME IS ALL THERE IS TO MATCH ON the first time — a hand-made folder carries
-no project id yet. Adopting it is what stops a first sync over an existing tree
-leaving a second folder beside the one someone made. From then on the id
-identifies the project, which is why a rename upstream moves this folder rather
-than making another.
+### The tree is the assertion
 
-### THE RECONCILER IS NOT A FEATURE (saga §C6.28)
+One `Nextcloud holds exactly these resources:` table replaces five scenarios, because
+every one of them was a claim about the same tree:
 
-This file used to be `reconcile.feature`, and it had thirty-four scenarios. The
-reconciler is what carries every "from Penpot" change into Nextcloud — it is the
-mechanism BEHIND the behaviours, not one of them, and a file named after it
-collects scenarios for no better reason than that they travel through the same
-code. Three of the thirty-four were behaviours. Ten were rules with no actor and
-no gesture. Thirteen restated a verb another file already owns — a rename is a
-rename, and that it arrived via the reconciler is HOW, not WHAT.
+- **adoption** — `/Penpot/Cogs` was in the Background and is in the result, tagged.
+  No `Cogs (2)` appears, which is the whole of the old `A folder already named like a
+  Penpot project is adopted, not duplicated`;
+- **untouched content** — `notes.txt` and `plan.txt` go in and come out, which is the
+  whole of `A sync leaves content it does not manage alone`;
+- **Drafts** — `Loose Idea.penpot` surfaces at the mapping root and no `Drafts` folder
+  is created, because Drafts is a state rather than a place;
+- **the path model** — the project named `Region/Deep` arrives as two folders, and only
+  the deeper one is tagged. `/Penpot/Region` holds no design and is nobody's project;
+- **every storage kind and mode at once** — an admin folder, a Team Folder and a link
+  team, in one table.
 
-Half the file could not be built, and that was the tell rather than a coincidence:
-an unbuildable scenario is usually a scenario about the wrong thing.
+`exactly` is what makes it work. A table that only listed what should appear could not
+have caught a stray `Cogs (2)` sitting beside the real one.
 
-### TWO ACTORS, AND THAT IS THE WHOLE FILE
+### The first sync to Penpot makes designs of the files already there
 
-    admin   syncs one mapping now, and waits for it
-    admin   syncs everything now, which is a background job
-    time    the schedule comes round and does it with nobody asking
+THE OTHER DIRECTION EXISTS, and an earlier cut of this section said it could not.
+That was a misreading of §6.1: what is forbidden is pushing SHAPE DATA into a design
+Penpot already has. Creating a project, renaming one, importing a whole archive as a
+new design — the app does all of these, and the gesture features are full of them.
 
-Everything below is the OUTCOME of one of those. Mirroring a root, a project, a
-file, its dates; leaving an unchanged instance alone; pruning what Penpot no
-longer has — none of them is a separate behaviour, they are what a sync DOES.
+So sync-now has two buttons, as both siblings do. The push takes a `.penpot` sitting
+in a mapped folder that Penpot has never seen and makes a design of it, in the project
+the folder spells. It never touches a design Penpot already holds.
 
-### THE FIRST SYNC IS ITS OWN SITUATION
+A link team is deliberately absent from the push's fixtures. Its contents come from
+Penpot and from nowhere else, so there is nothing for a push to do there — and putting
+an untracked file under one would have been asking a question `designs/create` already
+refuses.
 
-Whatever put these designs in Penpot happened before this app existed, so it is
-out of scope by definition. That makes "existing designs arrive for the first
-time" a real and independent thing to describe — and it needs one or two designs
-to describe it, not a catalogue of every state a design can be in.
+### RETIRED — six scenarios, and what happened to each
 
-### A USER'S SYNC NOW IS THE SAME BEHAVIOUR
+| scenario | why it went |
+|---|---|
+| A folder already named like a Penpot project is adopted | now a Background row and a result row |
+| A sync leaves content it does not manage alone | same — `notes.txt` goes in and comes out |
+| A sync that cannot finish says so, and says why | `<what is wrong>` was a whole clause in a placeholder, and a connection failure belongs to `connection/admin.feature` |
+| One failure never costs the rest of the sync | `<one thing fails>` likewise, and neither sibling states it |
+| A sync that dies halfway leaves every file whole | @blocked with no fault injection and no sibling equivalent |
+| A second sync started while one is running does not queue another | a negative about a thing that must not happen, @blocked, and absent from both siblings |
+| A user syncs their own personal team | parked with the rest of the per-user work, to be done across all three apps at once |
+| Two Penpot projects in one team sharing a name | the collision rule now lives with the naming rule in `projects/create` |
 
-Scoped by what their token can see in Penpot and what they can see in Nextcloud,
-but the end state is identical, and a scenario that differs only in scope is the
-same scenario. The one genuine difference is that the personal team mapping is
-AUTOMATIC, so a user's button is scoped to exactly one folder and needs no
-mapping card at all.
-
-### sync-now scope
-
-A MAPPING GUARANTEES ONE FOLDER. Everything else — the project folders, their
-tags, the designs — arrives on the first sync, so it is described here and not
-in admin-mapping.feature.
-
-AND THE FIRST SYNC IS ALL THIS FILE COVERS. A later run only has work to do
-because something changed in Penpot, and every one of those is a scenario about
-THE CHANGE rather than about syncing: a design deleted upstream is
-delete-design.feature's, a project renamed upstream is rename-project.feature's.
-Once those are theirs, there is no "second sync" behaviour left to describe.
-
-Three scenarios about pruning used to sit here — a mirror pruned when its design
-is gone, a `link` getting a last archive on the way out, a `sync` needing none.
-All three are already asserted, step for step, by delete-design.feature's "A
-design deleted in Penpot is snapshotted, then moved to the trash" and "A design
-that already had its archive needs no second export". They were duplicates, and
-the duplicate was in the wrong file: a prune is an effect of deleting in Penpot,
-which is a Penpot-origin behaviour.
-
-Three more said a second run changes nothing — no duplicate folder, nothing
-pruned, no mtime or etag moved. Idempotence is real and it is how the reconciler
-works, but "a sync that reacts to nothing" is not a behaviour a user can ask
-for. The step definitions for the mtime/etag pair are deliberately KEPT in
-PullSteps: their docblock records a live bug (a pull was moving mtime and etag on
-every file on every run, which makes every sync client re-download the world),
-and re-adding the scenario is one line if that guard is wanted back.
-
-THE TRIGGER IS DATA. Four ways to start a sync —
-
-    actor    | scope
-    ---------+---------------------
-    admin    | one mapping          the card's "Sync now"
-    admin    | every mapping        the section's "Sync from Penpot"
-    schedule | every mapping        time as the actor
-    user     | their personal team  the personal "Sync now"
-
-— with the same pre-state and the same post-state. They were four scenarios,
-each asserting that post-state in its own words, and they had used four
-different phrasings for it. As columns the sameness is the point of the table.
-THE SCHEDULE IS A ROW, NOT A PROMISE. The obvious way to test it — set the
-interval to a few seconds and sleep — does not work and would be the wrong test
-anyway: ScheduleConfig clamps to 300s and the job clamps again to 60s, both
-deliberately, because a job re-entering faster than a pull can finish is a bug.
-A test that had to defeat two safety floors would be testing the floors.
-`occ background-job:execute --force-execute` runs the real ScheduledPullJob now,
-ignoring its interval, which is "the schedule came round" with the waiting taken
-out. Enabling the schedule is part of the trigger rather than a fixture: a
-schedule nobody turned on has no actor, and the job returns immediately by
-design when it is off.
-
-Only the personal sync is still out of reach, so that one row sits in a tagged
-scenario of its own rather than being silently skipped inside a green outline.
-
-NOTHING ASSERTS "THE SYNC SUCCEEDED" any more. The tree is the proof, and it is
-the only proof every trigger can offer — a command's exit code says nothing
-about a job that ran inside Nextcloud. That is what let the schedule join the
-outline instead of needing a scenario with its own weaker assertions.
-
-WHETHER A RUN IS QUEUED OR SYNCHRONOUS IS ASSERTED NOWHERE. A scenario used to
-end `Then the sync is queued as a background job`, with a comment justifying why
-"everything" cannot be synchronous. That is a mechanism and a design note, not a
-behaviour — the admin's question is whether their designs arrived and whether
-they were told.
-
-A TREE IS ONE FACT, so the post-state is one table:
-
-    And the mapped folder holds:
-      | path                       | tagged |
-      | One Mapping/Cogs           | penpot |
-      | One Mapping/Cogs/Gizmo.penpot | -   |
-
-It replaced a column of one-node-per-line assertions that never showed the
-SHAPE the sync was meant to build. The tag is a column rather than a scenario
-because it is a property of a node, the same as the node existing at all — and
-that also ends the tag being asserted in three files at once.
-
-PROJECT NAMES ARE GLOBAL TO THE SUITE, and this section learned it the hard
-way. Every core-suite scenario seeds into the SAME Penpot team, nothing tears a
-project down afterwards, and several assertions locate a project BY NAME — so a
-reused name silently points a later scenario at an earlier one's project. The
-first draft called a project "Widgets", which an existing scenario further down
-also creates; that scenario then read the wrong project's `created-at` and
-failed on a date it had asserted correctly for months. Two projects already
-shared the name "Widgets" before this section existed, which is why the second
-of them is now "Reconciled".
-
-Pick a name nothing else uses. `grep -rn '"<name>"' features/` is the check.
-
-THE PRE-STATE IS WHAT PENPOT HOLDS, as one table:
-
-    And the Penpot team already contains:
-      | project | design    |
-      | Widgets | Gizmo     |
-      | Widgets | Doohickey |
-      | Gadgets | Sprocket  |
-
-A first sync is only interesting when the team already has something in it, and
-"something" is a SHAPE — projects, each with designs. Repeating "a project named
-X exists" and "a file named Y exists in the project X" describes how it was
-built instead, which is not what a `Given` is for. The step find-or-creates each
-project, so a name may repeat down the column to give one project several
-designs.
-
-WHICH IS ALSO HOW DRAFTS GETS WRITTEN IN THE SAME TABLE. `Drafts` resolves to
-the team's real default project rather than making a second project that happens
-to share its name — so "a loose design in Drafts" needs no special sentence. It
-mirrors to the mapped folder's ROOT, because the default project has no folder
-of its own (§6.35), and the scenario asserts both halves: the design is at the
-root and there is no `Drafts` folder beside it.
-
-FOUND BY NAME, KEPT BY ID. This is the rule the section exists to pin. A project
-folder is named exactly as Penpot names the project; from then on the stamped
-`penpot_project_id` is what identifies it, which is why a rename upstream MOVES
-the folder rather than making a second one. The first time round there is no id
-to match on — a folder somebody made by hand carries nothing — so the name is
-all there is, and `PullService::ensureProjectFolder()` adopts a same-named
-folder rather than creating `Widgets (2)` beside it. That adoption is a real
-behaviour with a real scenario now; it used to be a comment in the code.
-
-AND THE TAG IS PART OF THE MIRROR, not decoration applied later. Every project
-folder wears `penpot` — the same tag a user applies by hand to opt a folder in
-(create-project.feature), so one badge means "this is a project" whichever
-direction it came from. `tagProject()` runs on both the adopt and the create
-path, which is why the adoption scenario asserts the tag too: adopting a folder
-that never got badged would leave it invisible to the same searches.
-
-### A sync that cannot finish says so, and says why
-
-@unbuilt, AND THE GAP IS REAL — found while writing it. `occ penpot_sync:sync`
-catches exactly one exception, `OutOfBoundsException`, which is an unknown
-mapping id. A `PenpotApiException` — an unreachable Penpot, a rejected token —
-escapes uncaught, so the honest answer to "what happens when a sync cannot reach
-Penpot?" is currently "a stack trace".
-
-It is one scenario rather than a CLI one and a UI one because both front doors
-need the same answer, which is the same rule MappingService follows for
-validation: the rules live in the service so the `occ` twin cannot drift from
-the panel.
-
-The two rows are the two ways the connection can be wrong, and they are the two
-`admin-connection.feature` already distinguishes for the connection TEST —
-missing token versus unreachable host. A sync should not collapse them, for the
-same reason the test does not: they send an operator to different fixes.
-
-### Users do not author their own team mappings
-
-DELIBERATELY NOT BUILT, not merely unwritten. Letting users author mappings
-breeds edge cases faster than anything else on the table: two users mapping
-one team, a user mapping a team the service account cannot see, folders
-orphaned when the admin removes the mapping underneath them. The personal
-team mapping stays automatic and singular.
-
----
-
-### A sync that dies halfway leaves every file whole
-
-FROM THE RETIRED `errors.feature`, where it read "a pull interrupted halfway" —
-the reconciler as the actor again. What matters is not that a pull was
-interrupted but that a sync can die at any moment, and no file may be left as a
-half-written archive.
-
-Every write is to a temp location and moved into place, so a file is its old
-version or its new one. `@blocked` — **no fault injection**: the run has to be
-killed mid-write.
-
-### A user syncs their own personal team
-
-THE PER-MAPPING SYNC, FOR THE ONE MAPPING A USER OWNS. It is the same shape as
-`team-mapping/sync-now.feature`'s card button — one mapping, on demand, filling
-immediately — and it is here rather than there because the personal mapping is
-not a team mapping. It has no card, no admin, and no row in the mapping list: it
-exists because a token does (`connection/personal.feature`).
-
-THE TREE IS THE PROOF, exactly as it is for a team. Two differences, and both
-fall out of where the mapping points rather than from anything special about
-personal work:
-
-  - the mapped folder is the user's HOME ROOT, so a project folder sits at the
-    top of their files and a Drafts design sits beside it;
-  - the sync runs on the USER'S OWN TOKEN, because the service account cannot see
-    a personal team at all (saga §6.12) — which is why the designs appearing is
-    itself the proof of whose credential ran.
-
-Everything else — the `penpot` tag on project folders, links holding no bytes,
-dates coming from Penpot — is the ordinary behaviour, asserted with the ordinary
-table.
+The old Outline also varied the mapped FOLDER by actor — `All Mappings` for the admin,
+`On Schedule` for the schedule — so the two rows never touched the same tree. That is a
+fixture working around a collision, not an input the behaviour depends on.
 
 ## team-import — RETIRED
 

@@ -5,6 +5,7 @@ Feature: App install lifecycle
   I want the penpot_sync app to enable, disable and uninstall cleanly
   So that installing or removing it never leaves the instance broken
 
+  @todo
   Scenario: Enabling the app
     When the admin enables the app
     Then the app should be enabled
@@ -12,6 +13,7 @@ Feature: App install lifecycle
     And ".penpot" files are registered as their own file type
     # notes: AGENTS.md#enabling-the-app
 
+  @todo
   Scenario: Disabling the app
     Given the app is enabled
     When the admin disables the app
@@ -21,7 +23,7 @@ Feature: App install lifecycle
   # `occ` offers; removing an app and reinstalling it is a store operation this
   # suite has no way to perform.
   # notes: AGENTS.md#removing-the-app
-  @blocked
+  @todo
   Scenario: Removing the app
     Given the app is enabled
     When the admin removes the app

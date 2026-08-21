@@ -1,69 +1,206 @@
 # Notes, decisions and history for this feature: ../AGENTS.md#projectsmove
 
-Feature: Moving a Penpot project folder
+Feature: Moving a project
   As a Nextcloud user
-  I want to arrange project folders inside my team folder
-  So that the tree suits me without ever changing which team a project is in
+  I want a project folder to mean the same thing in Penpot wherever I file it
+  So that arranging my tree never orphans a project or duplicates one
+
   Background:
-    Given the app is enabled
-    And the Penpot base URL points at the test instance
-    And the admin has configured the service-account token
-    And a Penpot team named "Design Team" is mapped to the folder "Penpot"
+    Given the app is connected to Penpot
+    And the following mappings were made:
+      | team           | folder   | mode | storage      | groups |
+      | Design Team    | Penpot   | sync | admin folder |        |
+      | Second Team    | Shared   | sync | team folder  | admin  |
+      | Reference Team | Pointers | link | admin folder |        |
+    And the following items in the mappings:
+      | path                            |
+      | /Penpot/Clients                 |
+      | /Pointers/Existing/Fixed.penpot |
+    And a folder at "Scratch" that is not mapped
 
-  # notes: ../AGENTS.md#a-project-folder-can-be-moved-anywhere-inside-its-team-folder
-  @in-nextcloud @gesture @todo
-  Scenario Outline: A project folder can be moved anywhere inside its team folder
-    Given a mirrored project "Traveller" holding a design
-    And <a destination> inside the team folder
-    When I move "Penpot/Traveller" into that destination
-    Then the move succeeds
-    And Penpot is never contacted
-    And files inside it still belong to the project "Traveller"
-    And the folder still resolves to the same team, found further up
-    And a pull does not move the folder back
+  # notes: ../AGENTS.md#the-mappings-in-the-background
 
-    Examples: a destination Penpot knows about, and one it does not
-      | a destination            |
-      | a plain folder "Clients" |
-      | a project folder "Outer" |
-
-  @in-nextcloud @gesture
-  Scenario: A project folder cannot be moved out of its team folder
-    Given a mirrored project "Stays Inside"
-    When I try to move "Penpot/Stays Inside" to "Stays Inside"
-    Then the move is refused
-    And the folder "Penpot/Stays Inside" carries a Penpot project id
-    # The folder is still there, still stamped — the refusal happened BEFORE the
-    # move, which is the whole point of guarding on the `Before` event.
+    # ── RULE: where a project folder sits is what the project is called ───────
+    # notes: ../AGENTS.md#moving-a-project-folder-renames-the-project
 
   @in-nextcloud @gesture @todo
-  Scenario: The project-folder refusal explains why, and what to do instead
-    Given a mirrored project "Stays Inside"
-    When I try to move it outside its team folder
-    Then the refusal explains a project cannot leave its team from Nextcloud
-    And it explains that moving a project between teams must be done in Penpot
-    # notes: ../AGENTS.md#the-project-folder-refusal-explains-why-and-what-to-do-instead
+  Scenario Outline: Move a project folder within its team
+    Given the following items in the mappings:
+      | path                             |
+      | /<folder>/Traveller/Alpha.penpot |
+    When I move "<folder>/Traveller" into "<destination>"
+    Then Penpot holds a project named "<named>"
+    And the mappings hold:
+      | path                              | identity        |
+      | /<destination>/Traveller          | the original id |
+      | /<destination>/Traveller/Alpha.penpot | the original id |
 
-  @in-nextcloud @gesture @unbuilt
-  Scenario: A project folder cannot be moved into a different team's folder
-    Given a second team folder mapped to another Penpot team
-    When I try to move a project folder into it
-    Then the move is refused with the same explanation
-    And neither team's mapping is modified
+    Examples: the storage a mapping uses makes no difference to what a move is
+      | folder | destination     | named             |
+      | Penpot | Penpot/Clients  | Clients/Traveller |
+      | Shared | Shared/Archive  | Archive/Traveller |
 
-    # notes: ../AGENTS.md#a-project-folder-cannot-be-moved-into-a-different-teams-folder
+    # The id is the whole anti-break claim: a move renames the project, it never
+    # replaces it with a new one wearing the new path.
 
-  # notes: ../AGENTS.md#a-user-can-move-their-personal-project-folders-anywhere-in-their-home
+  # notes: ../AGENTS.md#a-move-high-in-the-tree-renames-every-project-below-it
+  @in-nextcloud @gesture @todo
+  Scenario: Move a folder that other projects are named through
+    Given the following items in the mappings:
+      | path                            |
+      | /Penpot/foo/bar/Alpha.penpot    |
+      | /Penpot/foo/bar/baz/Beta.penpot |
+    When I move "Penpot/foo" into "Penpot/Clients"
+    Then Penpot holds a project named "Clients/foo/bar"
+    And Penpot holds a project named "Clients/foo/bar/baz"
+    And the mappings hold:
+      | path                            | identity        |
+      | /Penpot/Clients/foo/bar         | the original id |
+      | /Penpot/Clients/foo/bar/baz     | the original id |
 
-  @unbuilt
-  Scenario: A user can move their personal project folders anywhere in their home
-    Given a personal project folder "Sketches" at the user's home root
-    And a plain folder "Design" in the user's home
-    When the user moves "Sketches" into "Design"
-    Then the move succeeds
-    And files inside "Sketches" still belong to the "Sketches" project
-    And a pull does not move the folder back
-    # Same free-nesting rule as team projects (saga §6.29). There is no team
-    # folder to stay inside, so the §6.30 restriction has nothing to bite on.
+    # "foo" is no project itself, but every project below it is named THROUGH it —
+    # so one drag is one rename per project, and each keeps the id it always had.
 
-    # ── the credential boundary ──────────────────────────────────────────────────
+    # ── RULE: leaving every mapping leaves the project standing ───────────────
+    # notes: ../AGENTS.md#a-project-folder-that-leaves-every-mapping-stops-being-a-mirror
+
+  @in-nextcloud @gesture @todo
+  Scenario: Move a project folder out of a team to unmap it
+    Given the following items in the mappings:
+      | path                            |
+      | /Penpot/Let Go/Alpha.penpot     |
+    When I move "Penpot/Let Go" into "Scratch"
+    Then Penpot holds a project named "Let Go"
+    And the mappings hold:
+      | path                          | identity |
+      | /Scratch/Let Go               | absent   |
+      | /Scratch/Let Go/Alpha.penpot  | absent   |
+
+    # Nothing is deleted over there — the same rule a single design leaving follows.
+    # The project is simply no longer mirrored by this folder.
+
+    # ── RULE: arriving in a team makes every design in it real ────────────────
+    # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
+
+  @in-nextcloud @gesture @todo
+  Scenario: Move a folder of untracked designs into a team
+    Given an untracked design file at "Scratch/Adopt Me/Alpha.penpot"
+    When I move "Scratch/Adopt Me" into "Penpot"
+    Then Penpot holds a project named "Adopt Me"
+    And the mappings hold:
+      | path                            | identity |
+      | /Penpot/Adopt Me                | set      |
+      | /Penpot/Adopt Me/Alpha.penpot   | set      |
+
+    # ── RULE: a move is not a way around the link guard ───────────────────────
+    # notes: ../AGENTS.md#a-move-never-changes-a-projects-mode
+
+  @in-nextcloud @gesture @todo
+  Scenario Outline: Moving a link project, or into a link team, is refused
+    Given the following items in the mappings:
+      | path                            |
+      | /<source>/Confined/Alpha.penpot |
+    When I try to move "<source>/Confined" into "<destination>"
+    Then the move is refused with a message
+    And "<source>/Confined" stays where it was
+
+    Examples: a link project is Penpot's to place, and there is nowhere it may go
+      | source   | destination |
+      | Pointers | Penpot      |
+      | Pointers | Scratch     |
+      | Pointers | Pointers    |
+
+    Examples: and a link team is filled from Penpot, whatever is arriving
+      | source | destination |
+      | Penpot | Pointers    |
+
+    # ── RULE: a project carries its team as well as its name ──────────────────
+    # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
+
+  @in-nextcloud @gesture @todo
+  Scenario: Move a project folder into another team
+    Given the following items in the mappings:
+      | path                          |
+      | /Penpot/Crossing/Alpha.penpot |
+    When I move "Penpot/Crossing" into "Shared"
+    Then the "Crossing" Penpot project is in the "Second Team" team
+    And the mappings hold:
+      | path                          | identity        |
+      | /Shared/Crossing              | the original id |
+      | /Shared/Crossing/Alpha.penpot | the original id |
+
+    # One move changing team and name together, keeping the id, the designs and
+    # their history. A project is never re-created to cross a team boundary.
+
+    # ── RULE: a project changed in Penpot moves its folder ────────────────────
+    # notes: ../AGENTS.md#a-project-renamed-in-penpot-moves-its-folder
+
+  @in-penpot @gesture @todo
+  Scenario Outline: Move/Rename a project in Penpot
+    Given the following items in the mappings:
+      | path                  |
+      | /<from>/Alpha.penpot  |
+      | /<from>/Budget.xlsx   |
+    When someone moves that project to "<name>" in the "<team>" Penpot team
+    Then the mappings hold:
+      | path                | identity        |
+      | /<to>               | the original id |
+      | /<to>/Alpha.penpot  | the original id |
+    And "<to>" holds "Budget.xlsx"
+    And there is no folder at "<from>"
+
+    Examples: Penpot can re-path and change team in one call, where a drag cannot
+      | from                | team        | name             | to                      |
+      | Penpot/Upstream     | Design Team | Clients/Upstream | Penpot/Clients/Upstream |
+      | Penpot/foo/Upstream | Design Team | Upstream         | Penpot/Upstream         |
+      | Penpot/Upstream     | Design Team | Deep/Down/Low    | Penpot/Deep/Down/Low    |
+      | Penpot/Upstream     | Second Team | Crossing         | Shared/Crossing         |
+
+    # THE ID IS THE BEFORE AND AFTER. The new name says where the project belongs; the
+    # id says which folder is already it. Ensure the destination, then move that folder.
+
+    # ── RULE: what the old parent still holds decides whether it goes ─────────
+    # notes: ../AGENTS.md#an-emptied-parent-is-reaped-only-when-it-holds-nothing-else
+
+  @in-penpot @gesture @todo
+  Scenario: Move a project in Penpot out of a folder holding nothing else
+    Given the following items in the mappings:
+      | path                          |
+      | /Penpot/foo/Upstream/Alpha.penpot |
+    When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
+    Then "Penpot/Clients/Upstream" holds:
+      | penpot_project_id | the original id |
+    And there is no folder at "Penpot/foo"
+
+    # "foo" only ever existed because "foo/Upstream" needed somewhere to sit. With
+    # nothing left in it and no id of its own, it has stopped meaning anything.
+
+  @in-penpot @gesture @todo
+  Scenario: Move a project in Penpot out of a folder holding other files
+    Given the following items in the mappings:
+      | path                              |
+      | /Penpot/foo/Upstream/Alpha.penpot |
+      | /Penpot/foo/Notes.txt             |
+    When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
+    Then "Penpot/Clients/Upstream" holds:
+      | penpot_project_id | the original id |
+    And "Penpot/foo" still exists in Nextcloud, holding "Notes.txt"
+
+    # Deleting a user's notes because a Penpot project moved out from under them is
+    # not this app's call — the same line Grafana draws for a folder losing its last.
+
+    # ── RULE: a move Penpot will not take leaves the local one standing ───────
+
+  @in-nextcloud @gesture @todo
+  Scenario: Move a project folder while Penpot is unreachable
+    Given the following items in the mappings:
+      | path                             |
+      | /Penpot/Traveller/Alpha.penpot   |
+    And Penpot is unreachable
+    When I move "Penpot/Traveller" into "Penpot/Clients"
+    Then the failure is reported to the user
+    And "Penpot/Clients/Traveller" holds:
+      | penpot_project_id | the original id |
+
+    # Nextcloud has already moved it, and reverting would fight the user over a
+    # gesture that succeeded locally. The next pull settles which name wins.

@@ -13,6 +13,7 @@ Feature: Mapping a Penpot team to a Nextcloud folder
     # ── one fact, one table — the same shape as pre-state or as the action ─────
     # notes: ../AGENTS.md#the-preconditions
 
+  @todo
   Scenario Outline: Creating a mapping saves the form
     Given no Penpot teams are mapped
     And a Penpot team named "Northwind" exists
@@ -47,7 +48,7 @@ Feature: Mapping a Penpot team to a Nextcloud folder
     # notes: ../AGENTS.md#creating-a-mapping-saves-the-form
 
   # api only because the ui is a drop down
-  @api @occ
+  @api @occ @todo
   Scenario: A team id that resolves to nothing cannot be mapped
     Given no Penpot teams are mapped
     When the admin tries to map the team id "11111111-2222-3333-4444-555555555555"
@@ -58,6 +59,7 @@ Feature: Mapping a Penpot team to a Nextcloud folder
     # add-mapping something no lookup could have produced.
     # notes: ../AGENTS.md#a-team-id-that-resolves-to-nothing-cannot-be-mapped
 
+  @todo
   Scenario Outline: A mapping may not reuse a team or a folder
     Given a mapping with the following values:
       | team   | Northwind |

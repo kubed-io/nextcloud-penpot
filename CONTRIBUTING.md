@@ -7,11 +7,18 @@ with the rest of that org, and has a deliberate process around getting changes i
 Please read this whole doc before you push code — most of the "why is my PR stuck?"
 questions are answered below.
 
-**This repo is currently pre-code.** There is no `lib/`, `src/`, `tests/`, or
-`features/` yet — only scaffolding (docs, tooling config, CI) and the design
-narrative in [`saga/`](saga/). If you're picking up Chapter 2 (the first real
-implementation work), read [saga/Chapter_1_First_Contact.md](saga/Chapter_1_First_Contact.md)
-in full first — several architectural questions are still open forks, not decided.
+**Where the work is right now.** Chapters 1 (the API survey) and 2 (the build)
+are both CLOSED. Chapter 2's finale redrew the **master design** — `features/` was
+reorganised so the folder is the noun and the file is the verb — and in the
+process every one of its 116 scenarios became `@todo`, so **the integration suite
+currently runs nothing at all.** That is deliberate and it is the state you are
+picking up.
+
+If you are picking up [saga/Chapter_3_Building_To_Plan.md](saga/Chapter_3_Building_To_Plan.md)
+— building to that design, one behaviour per PR — read it and
+[features/README.md](features/README.md) first, then §C6.38 of
+[saga/Chapter_2_The_Colony.md](saga/Chapter_2_The_Colony.md) for why the suite is
+empty. The one rule: **a scenario stops being `@todo` only on a PR that runs it.**
 
 If you only have time for one paragraph: **prefer opening an issue first so the
 work can be scoped and approved, then open a PR with tests and a clear changelog

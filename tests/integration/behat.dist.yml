@@ -25,6 +25,22 @@ default:
   # scenario up and what they do with it, not about whether it executes today.
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
+  #
+  # RIGHT NOW ALL 116 SCENARIOS ARE @todo AND THREE OF THOSE TAGS HAVE NO MEMBERS.
+  # That is deliberate and temporary. The spec was rewritten wholesale — the noun
+  # became the folder and the verb the file — and the harness now lags the whole
+  # of it, so the suite was collapsed to ONE flat queue rather than re-triaged
+  # scenario by scenario in the PR that did the rewriting. `behat --tags @todo` is
+  # the queue; a scenario earns its real status back on the PR that implements it.
+  #
+  # THE FILTER STILL NAMES ALL FOUR, so re-triage is a tag edit and never a config
+  # change. Do not "tidy" the empty three out — the collapse is the anomaly here,
+  # not the vocabulary. What each tag means is unchanged (features/README.md).
+  #
+  # A CONSEQUENCE WORTH KNOWING BEFORE IT SURPRISES YOU: every leg reports zero
+  # tests, and that is a pass, not a hole in the reporting. Behat still fires its
+  # suite events for a suite the filter empties, so the junit formatter writes
+  # <testsuite tests="0"/> and the workflow's leg-count guard stays armed.
   gherkin:
     filters:
       tags: '~@todo&&~@unbuilt&&~@blocked&&~@decision'
@@ -59,11 +75,11 @@ default:
       - '%paths.base%/../../features/connection/admin.feature'
       - '%paths.base%/../../features/connection/personal.feature'
       - '%paths.base%/../../features/connection/sync-now.feature'
-      - '%paths.base%/../../features/team-mapping/create.feature'
-      - '%paths.base%/../../features/team-mapping/view.feature'
-      - '%paths.base%/../../features/team-mapping/delete.feature'
-      - '%paths.base%/../../features/team-mapping/manage-groups.feature'
-      - '%paths.base%/../../features/team-mapping/sync-now.feature'
+      - '%paths.base%/../../features/mapping/create.feature'
+      - '%paths.base%/../../features/mapping/view.feature'
+      - '%paths.base%/../../features/mapping/delete.feature'
+      - '%paths.base%/../../features/mapping/manage-groups.feature'
+      - '%paths.base%/../../features/mapping/sync-now.feature'
       # Context class lives with the test code (tests/integration/bootstrap/),
       # loaded via the integration composer autoload — features/ stays pure Gherkin.
       contexts: &contexts
@@ -86,10 +102,10 @@ default:
     project:
       paths:
       - '%paths.base%/../../features/projects/create.feature'
-      - '%paths.base%/../../features/projects/view.feature'
       - '%paths.base%/../../features/projects/copy.feature'
       - '%paths.base%/../../features/projects/delete.feature'
       - '%paths.base%/../../features/projects/move.feature'
+      - '%paths.base%/../../features/projects/purge.feature'
       - '%paths.base%/../../features/projects/rename.feature'
       - '%paths.base%/../../features/projects/restore.feature'
       contexts: *contexts

@@ -20,6 +20,56 @@
 
 ---
 
+## Status: **CLOSED** — 2026-08-21
+
+> **Closed by Dr K.** Two things came out of this chapter, and the second one is
+> the finale.
+>
+> **We got our footing.** Every course from the doctrine is standing: the radio,
+> the settlement house, the survey stakes, two-way traffic, the salvage yard, the
+> town square. We know how to talk to this planet now, and everything that stands
+> here stands because somebody called the thing instead of reasoning about it.
+>
+> **And then we drew the master design** (§C6.38). That is what closes the chapter
+> — not another structure, but the plan every future structure is judged against,
+> and the harness that does the judging. It comes last on purpose: the colony was
+> built course by course against a plan still shaped like its own implementation,
+> and the plan could only be redrawn around behaviour once there was enough built
+> to know what the behaviours actually were.
+>
+> **The finale, and it is a demolition before it is a build:**
+>
+> - **§C6.38 — the spec outran the harness, deliberately.** The feature suite was
+>   reorganised from files named after code to files named after behaviour: the
+>   **folder is the noun, the file is the verb**, `reconcile.feature` stopped
+>   being a feature at all (§C6.28), and `team-mapping/` became `mapping/`.
+>   **142 scenarios became 116** — not by deleting behaviour but by deleting
+>   duplicate answers to the same question.
+> - **And then every one of the 116 was tagged `@todo`.** The suite runs nothing.
+>   That is the state this chapter closes in, on purpose: the rewrite moved the
+>   step vocabulary out from under the 46 scenarios that were green, and
+>   re-triaging 116 of them from the spec alone would have been 116 guesses.
+>
+> **What that buys, which is the whole argument for doing it last:** every course
+> found bugs a mock would have permitted (§R1.1–§R1.7, §C6.7, §C6.9, §C6.14,
+> §C6.37), and every one was found by **calling the thing**. The plan is now shaped
+> like the questions a user asks rather than like the code that answers them, so
+> Chapter 3 can build to it one behaviour at a time and each promotion means
+> something.
+>
+> **The cost, and it is real:** nine scenarios were green the moment before the
+> collapse and are green no longer. They are named in the close below, along with
+> the seven `@blocked` and one `@decision` whose status lived only in a tag. That
+> is a deliberate trade, not an accident — and it is the one thing in this chapter
+> that a later chapter is expected to undo rather than build on.
+>
+> **Read §C6.38 before picking anything up**, then `features/README.md`, then
+> [Chapter 3 — Building to Plan](Chapter_3_Building_To_Plan.md). The earlier
+> sections are how the colony got built; §C6.38 is the master design, and why none
+> of it is currently built to.
+
+---
+
 ## The doctrine — build on tested ground, in dependency order
 
 The two previous settlements teach opposite lessons, and both apply here.
@@ -3821,3 +3871,232 @@ And the second-order one: **the app's success log was the evidence, not the
 alibi.** It disagreed with the test, so one of them was wrong about what it had
 observed — and the disagreement was the whole clue. It was read for two runs as
 proof that the test was flaky.
+
+---
+
+### §C6.38 — The finale: the spec outran the harness, on purpose
+
+The last thing this chapter builds is the thing that judges it, and building it
+meant breaking every test in the suite. That is not a mishap reported after the
+fact — it is the shape of the decision, and it was taken with the number in view.
+
+#### What the reorganisation actually changed
+
+The suite had been named after the code. `reconcile.feature` was the pull;
+`gestures.feature` was "the ones CI can drive"; `create-project.feature` had
+quietly become the file that owned every verb a project folder could receive.
+Asking *"what happens when someone renames a project folder?"* meant reading
+three files, and two of them had already drifted apart — one carried live
+coverage of the rename while another still called it unbuilt.
+
+So the axis changed from mechanism to behaviour: **the folder is the noun, the
+file is the verb.** Four nouns, one folder each, and a file per verb.
+
+| | before | after |
+|---|---|---|
+| feature files | 26 | 26 |
+| scenarios | 142 | **116** |
+| running in CI | 46 | **0** |
+
+**26 files became 26 files, which is the point.** Nothing was deleted for being
+inconvenient. The 26 scenarios that went away were *duplicate answers to one
+question* — the same rename asserted in two files, the same refusal stated once as
+a scenario and once as a comment pointing at the other file. `projects/view.feature`
+retired because looking at a project folder is not a behaviour separate from what
+tagging it did; `projects/purge.feature` appeared because emptying a project's
+trash is, and nothing had owned it. `team-mapping/` became `mapping/` because a
+mapping is configuration and the team was never the noun.
+
+#### Why every scenario is `@todo` and the suite runs nothing
+
+The rewrite moved the step vocabulary. Nine of the 46 green scenarios survived it
+intact; the rest were rewritten, renamed, or split, and their steps no longer
+matched the definitions that had been passing. The choice was:
+
+- **re-triage 116 scenarios inside this PR** — decide, for each, whether it is
+  `@todo`, `@unbuilt`, `@blocked` or `@decision`, by reading the spec; or
+- **collapse all 116 to `@todo`** and let each be triaged by the PR that tries to
+  make it pass.
+
+The second, and the reason is this chapter's own doctrine turned on itself.
+**Triage from the spec alone is a guess, and this chapter is a list of guesses
+that were wrong.** §C6.7 read the route and assumed the parameters and shipped
+broken. §6.26 concluded Penpot's trash was unreachable by sweeping guessed names
+instead of reading the source. §C6.37 carried a 2.5-second constant "measured, not
+guessed" that had been measured off the wrong phenomenon. Every one of those was a
+confident reading of a thing nobody had called. Deciding on paper whether 116
+scenarios are blocked or merely untested is the same move at scale.
+
+So the honest status for all 116 is *"nobody has tried this against the refactored
+harness"*, and `@todo` is the tag that means somebody should. One flat queue, no
+triage step in front of it, and the triage happens where the answer is cheap —
+inside the PR that runs the thing.
+
+#### The rule
+
+**A scenario stops being `@todo` only on a PR that runs it.** Promote it to live
+when it passes, or move it to its true status with the reason written down. Never
+by re-reading the spec and deciding what it probably is.
+
+#### The zero-scenario build, settled by reading rather than pushing
+
+A suite that matches no scenarios is a state the CI had never been in, and two
+gates stood in front of it: the JUnit upload's `if-no-files-found: error`, and the
+"Every leg is present" guard that compares leg directories to report files. Both
+exist because of a real bug — seven artifacts collapsing to four reports, `97
+tests, 97 passed` printed over a red matrix (§C6.27's neighbour). Loosening either
+one to accommodate an empty suite would have retired a guard to fix a non-problem.
+
+The temptation was to push and find out. Instead the question was answered from
+Behat 3.32's source, which is the same move as calling the RPC:
+
+- `GroupedSpecificationIterator::group()` buckets iterators by suite name with a
+  plain `array_map`. It cannot check emptiness without consuming them, and it does
+  not try.
+- So `RuntimeExercise::test()` enters its loop once per selected suite regardless,
+  and `suiteTester->setUp()` fires `BeforeSuiteTested`.
+- `JUnitOutlineStoreListener::printHeaderOnBeforeSuiteTestedEvent()` writes the
+  `<testsuite>` element on that event.
+
+**A suite the filter empties still writes `<testsuite tests="0"/>`.** The upload
+finds its file, the guard counts four legs against four reports, and EnricoMi
+reports zero tests with `action_fail: false`. Nothing needed changing, and neither
+guard was touched. Cost: three files read. The alternative was a push, a seven-
+minute matrix, and a red build to interpret.
+
+**The rule, which is just the charter applied to a build tool:** *call the thing
+before you design around it* does not only mean the foreign API. It meant Behat
+here, and reading three of its classes was cheaper than one CI cycle.
+
+#### What the collapse threw away, named because a tag cannot be grepped from history
+
+The nine that were **green in CI** the moment before, and are therefore the
+cheapest possible re-promotions:
+
+| file | scenario |
+|---|---|
+| `connection/admin.feature` | An admin enters valid connection details |
+| `connection/admin.feature` | An admin enters bad connection details *(outline)* |
+| `lifecycle.feature` | Enabling the app |
+| `lifecycle.feature` | Disabling the app |
+| `mapping/create.feature` | Creating a mapping saves the form *(outline)* |
+| `mapping/create.feature` | A team id that resolves to nothing cannot be mapped |
+| `mapping/create.feature` | A mapping may not reuse a team or a folder *(outline)* |
+| `mapping/manage-groups.feature` | The groups a mapped folder is shared with can be changed *(outline)* |
+| `mapping/sync-now.feature` | Syncing one mapping brings its projects and designs into Nextcloud |
+
+The seven `@blocked` and one `@decision`, with the wall each names. **Three carry
+their reason as a comment in the feature file and survive the collapse without
+this table** — those comments still open with `# @blocked`, which is the record and
+not a contradiction. The other five had nothing but the tag, and this is now the
+only place they are written down:
+
+| file | scenario | wall | in the file? |
+|---|---|---|---|
+| `lifecycle.feature` | Removing the app | no app removal | ✅ comment |
+| `designs/edit.feature` | An edit in Penpot reaches the stored archive | no way to author content | ✅ comment |
+| `designs/edit.feature` | An edit in Penpot costs a link nothing but its dates | no way to author content | ✅ comment |
+| `designs/create.feature` | Create a design as a user with a personal token | no logged-in session | ❌ tag only |
+| `designs/create.feature` | Create a design as a user with no personal token | no logged-in session | ❌ tag only |
+| `designs/delete.feature` | Trash a design that is already gone from Penpot | **none stated** — see below | ❌ tag only |
+| `designs/view.feature` | Finding designs by their mode | no proven DAV `REPORT` over `nc:metadata-*` | ❌ AGENTS.md only |
+| `mapping/delete.feature` | There is no project mapping to remove | `@decision` — no operation, ever | ❌ tag only |
+
+**One of those eight was never really `@blocked`, and the collapse is how we found
+out.** `designs/delete.feature`'s "Trash a design that is already gone from Penpot"
+names no wall, in the scenario or in `AGENTS.md` — and `features/README.md` already
+had the rule for that case: *a `@blocked` scenario with no stated reason is really a
+`@todo` nobody checked.* Its `Given` needs a design permanently deleted in Penpot,
+which §6.49 proved is an ordinary command (`permanently-delete-team-files`), so
+there is no evident wall at all. Flattening the tags forced every one of them to be
+looked at, which the tag had been quietly excusing.
+
+And the two that matter most, because promoting them is a **bug fix, not a test**.
+Both survive as comments, both say the app does the opposite of the spec today:
+
+- `designs/delete.feature` — "Trash a link". The app trashes the file and calls it
+  "hidden"; a link is Penpot's copy to remove.
+- `designs/move.feature` — "Move an untracked design file into a project". The app
+  leaves the file untracked; a mapping that ignores a design sitting inside it is
+  not a mapping.
+
+#### The rule, restated for whoever finds a red suite next time
+
+**A green suite that tests nothing and a red suite are not the same failure, and
+only one of them is honest.** The suite reports zero tests on every leg and says
+so in `behat.dist.yml`, in the workflow header, and in `features/README.md`. The
+failure mode this chapter kept finding — §C6.14's tag bound to the wrong scenario,
+§C6.16's promise never asserted, the reporter printing 97 passes over a red matrix
+— was always *coverage that had quietly stopped existing while the build stayed
+green*. Zero is the one honest number for a harness that has not been re-taught.
+
+---
+
+## Chapter 2 — where it stands (CLOSED)
+
+What this chapter settled, what it corrected, and what it leaves to Chapter 3:
+
+**What it produced:**
+
+- **A colony, course by course**, in the order the doctrine set: the client
+  (§R1.1–§R1.7), the admin surface, the resolver and the pull (§C3.1–§C3.6), the
+  write paths (§C4.1–§C4.8), delete and restore (§C5.1), and the Files-app
+  experience (§C6.1–§C6.37). Courses 1 and 2 were inverted relative to both
+  siblings, and that call held: the protocol fooled us three more times after we
+  decided it would.
+- **A spec shaped like the questions a user asks** (§C6.38): the folder is the
+  noun, the file is the verb, 116 scenarios, no file named after a mechanism.
+- **Bugs that only a live instance could show**, every one of them found by
+  calling the thing rather than reasoning about it: two Transit cache bugs and
+  `json_encode([])` (§R1.1–§R1.3), Penpot's content negotiation (§R1.4), the
+  assumed-parameter 404 (§C6.7), the decoder bug Course 1 predicted and Course 6
+  found (§C6.9), the endpoint that 404ed with a controller behind it (§C6.14), and
+  the delayed job that un-restores a file 3.8 seconds after the delete (§C6.37).
+
+**What it corrected about itself:**
+
+- **§C6.27's neighbour — the reporter.** `merge-multiple: true` collapsed seven
+  artifacts into four reports and printed `97 tests, 97 passed` over a red matrix.
+  A reporter that can be green while the run is red was the worst defect in the
+  chapter, and it was in the reporting, not the app.
+- **§C6.13 — the purge is not an event**, and two siblings had disagreed about it
+  without either being wrong.
+- **§C6.24/§C6.25 — "later" became "never"**, and the spec was made to say so out
+  loud rather than carrying an intention.
+- **§C6.37 — a flake that reproduces 100% under measurement was never a flake.**
+  Four re-runs bought nothing; one afternoon with a probe turned "sometimes fails"
+  into a table with a fixed number in it. The app's own success log had been read
+  as an alibi for two runs when it was the evidence.
+- **§C6.38 — the suite was reorganised twice before it was reorganised right.**
+  §C6.28 retired `reconcile.feature`; §C6.30–§C6.36 took the mapping apart. Both
+  were the same correction applied to one file at a time, and the general form —
+  *a file named after code is a mechanism wearing a feature file* — only became
+  visible after the second one.
+
+**What it deliberately leaves open** — the honest inheritance:
+
+- **The whole suite is `@todo` and nothing runs** (§C6.38). This is the headline
+  item and the only one a later chapter is expected to *undo* rather than build
+  on. Nine scenarios were green; they are named above and they are where Chapter 3
+  starts.
+- **`keyed` folder mode.** Still not built, still no feature file, still three
+  real questions (#47). The field that stood for it is gone (§C6.36).
+- **Webhooks.** Delivery still never observed (#19). Cron is the trigger.
+- **Content push.** §6.1. A permanent boundary, not a phase ordering.
+- **A Team Folder's trash cannot reach Penpot** — groupfolders' `ITrashBackend`
+  emits nothing observable. Self-correcting inside Penpot's 7-day window, so a
+  divergence window rather than a permanent state.
+
+**For whoever picks up [Chapter 3](Chapter_3_Building_To_Plan.md):** the queue is
+116 scenarios and it is flat on purpose. Start with the nine that were green, because they prove the harness
+before they prove any behaviour. Then take the two that are bug fixes wearing test
+tags (`designs/delete.feature` "Trash a link", `designs/move.feature` "Move an
+untracked design file into a project"), because a spec the app contradicts is
+worth more than a spec the app merely lags. Read §C6.38 and `features/README.md`
+first; the rest of this chapter is how the colony got built, and §C6.38 is why
+none of it is currently proven.
+
+**The pattern worth inheriting, and it is the same one Chapter 1 named:** every
+fork this chapter resolved late was resolved by *touching the thing* — including
+the last one, where the thing was Behat and the touch was reading three of its
+classes instead of pushing a commit to find out.

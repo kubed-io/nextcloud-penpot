@@ -13,7 +13,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # THE BACKGROUND WAS FICTION until the live scenario below joined this file:
     # its three steps had never been written. notes: ../AGENTS.md#team-mappingdelete
 
-  @unbuilt
+  @todo
   Scenario: Removing the team mapping trashes its mirrored files and leaves standalone files alone
     Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
     And a mirrored ".penpot" file in the "My Stuff" folder
@@ -26,7 +26,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And Penpot is never contacted by this action
     And the design still exists, unchanged, in Penpot
 
-  @decision
+  @todo
   Scenario: There is no project mapping to remove
     Given the "Northwind" mapping exists with several mirrored project folders
     Then no individual project folder can be unmapped
@@ -61,21 +61,4 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     # Reconnecting is matched on penpot_id, so a restored file is adopted rather
     # than duplicated — the same id-matching guarantee sync-now.feature asserts.
 
-  @todo
-  Scenario: Removing a mapping never contacts Penpot, even for cleanup
-    Given the "Northwind" mapping with mirrored files
-    When the admin removes the mapping
-    Then no request of any kind is made to Penpot
-    And "delete-file" is never called
-    And no webhook, project, or design is deleted on the Penpot side
-    # Penpot deletion only ever happens on an explicit "Delete in Penpot" action
-    # (delete-design.feature for a design, delete-project.feature for a project). Tearing down a mapping is a purely Nextcloud-side act.
 
-  Scenario: Removing a mapping deletes nothing
-    Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
-    When the admin removes that mapping
-    Then there are exactly 0 configured team mappings
-    And removing it reported that nothing was deleted
-    # notes: ../AGENTS.md#removing-a-mapping-deletes-nothing

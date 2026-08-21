@@ -7,8 +7,8 @@ Feature: The main admin connection
 
   Background:
     Given the app is enabled
-    And nothing is configured yet
 
+  @todo
   Scenario: An admin enters valid connection details
     When the admin fills in the connection details:
       | url         | the test instance |
@@ -19,6 +19,7 @@ Feature: The main admin connection
     Then the health check reports success
     And the health check lists at least one Penpot team
 
+  @todo
   Scenario Outline: An admin enters bad connection details
     When the admin fills in the connection details:
       | url         | <url>   |

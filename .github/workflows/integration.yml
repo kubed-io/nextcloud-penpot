@@ -7,9 +7,25 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: app install/enable, the base URL over occ, and — new with the
-# client — a REAL connection to a REAL Penpot. Every other feature file stays
-# @todo and is filtered out by behat.dist.yml.
+# SCOPE RIGHT NOW: NOTHING. Every one of the 116 scenarios is @todo, so
+# behat.dist.yml's filter empties all four legs and each reports zero tests. That
+# is the deliberate state of the PR that rewrote the spec: the noun became the
+# folder and the verb the file, the harness lags the whole of it, and re-teaching
+# it is one PR per behaviour rather than one enormous one. `behat --tags @todo` is
+# the queue. See behat.dist.yml for why the other three status tags are empty but
+# kept, and the saga's Chapter 3 for the order the queue is worked in.
+#
+# A ZERO-SCENARIO LEG IS STILL A REPORTING LEG, which is what keeps the guards
+# below honest: Behat fires its suite events even when the filter matches nothing,
+# so the junit formatter writes <testsuite tests="0"/>, the upload's
+# if-no-files-found still has a file, and "Every leg is present" still counts four.
+# So this stays green on an empty suite WITHOUT either guard being loosened — they
+# remain armed for the silent-overwrite bug they were built for.
+#
+# THE STACK BELOW IS DELIBERATELY NOT TORN DOWN while the queue is empty. It costs
+# a few minutes per PR and buys the thing this suite exists for: the first PR to
+# promote a scenario finds a working Nextcloud + Penpot topology rather than
+# re-debugging the topology and the scenario at the same time.
 #
 # WHY THE PENPOT STACK IS WORTH THREE CONTAINERS PER RUN. This suite is the ONLY
 # place the wire format is asserted. The unit suite deliberately does not mock

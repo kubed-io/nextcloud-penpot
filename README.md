@@ -731,7 +731,14 @@ the decisions it forced — read §6.18–§6.48 first if you want the decisions
 than the survey that produced them, and its closing section for what's settled,
 what's open, and where to build next. [Chapter 2: The
 Colony](saga/Chapter_2_The_Colony.md) is what has actually been built, course by
-course, and its table is the honest map of what is done and what is next.
+course, and its table is the honest map of what is done and what is next. It is
+now **CLOSED**, and its finale (§C6.38) is the one thing to read before trusting
+any test result here: it got the colony its footing and then redrew the **master
+design** — the feature suite, reorganised around behaviour rather than mechanism —
+and **every one of its 116 scenarios is `@todo`, so the integration suite
+currently runs nothing at all.** [Chapter 3: Building to
+Plan](saga/Chapter_3_Building_To_Plan.md) is the work of building to it, one PR at
+a time, and carries the order it happens in.
 
 ### Executable specification
 
