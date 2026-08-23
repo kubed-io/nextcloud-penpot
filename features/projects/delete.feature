@@ -43,7 +43,9 @@ Feature: Deleting a project
     # by this gesture on either side — which is what makes it safe to do at all.
 
   # notes: ../AGENTS.md#trashing-a-folder-takes-every-project-its-name-spelled
-  @in-nextcloud @gesture @todo
+  # @unbuilt — the projects named THROUGH the folder survive it, the same gap the
+  # move-through scenario names: only the trashed node itself is acted on.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Trash a folder that other projects are named through
     Given the following items in the mappings:
       | path                              |
@@ -60,7 +62,9 @@ Feature: Deleting a project
     # ── RULE: a link team is Penpot's to change ───────────────────────────────
     # notes: ../AGENTS.md#trashing-a-project-folder-in-a-link-team-is-refused
 
-  @in-nextcloud @gesture @todo
+  # @unbuilt — allowed today (HTTP 204). The link guard covers PUT, COPY and MOVE;
+  # a DELETE inside a link mapping reaches nothing that refuses it.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Trashing a project folder in a link team is refused
     When I try to move "Pointers/Existing" to the trash
     Then the trash is refused with a message

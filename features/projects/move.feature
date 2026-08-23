@@ -87,7 +87,9 @@ Feature: Moving a project
     # ── RULE: arriving in a team makes every design in it real ────────────────
     # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
 
-  @in-nextcloud @gesture @todo
+  # @unbuilt — no project named "Adopt Me" appears. Arriving designs are not
+  # adopted: a folder becomes a project by being tagged, not by holding one.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a folder of untracked designs into a team
     Given an untracked design file at "Scratch/Adopt Me/Alpha.penpot"
     When I move "Scratch/Adopt Me" into "Penpot"
@@ -122,7 +124,9 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  @in-nextcloud @gesture @todo
+  # @unbuilt — refused today (HTTP 403) by the same rule that pins a project inside
+  # its team folder, which README's own table states as the intended behaviour.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |

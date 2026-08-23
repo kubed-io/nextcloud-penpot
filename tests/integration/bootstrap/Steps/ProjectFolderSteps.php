@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Integration\Steps;
 
+use Behat\Gherkin\Node\TableNode;
+
 /**
  * The opt-in that makes a Nextcloud folder a Penpot project, and the tag that
  * marks every project folder whichever way round it came about
@@ -179,5 +181,115 @@ trait ProjectFolderSteps {
 		}
 
 		return $names;
+	}
+
+	/**
+	 * Which TEAM a Penpot project belongs to.
+	 *
+	 * The claim a cross-team copy or move is really making: the project did not
+	 * merely appear with the right name, it appeared on the other side of a team
+	 * boundary. `probe --files` prints `  <name>  <uuid>  [<team>]`, so the team is
+	 * already there — the same listing {@see penpotProjectNames()} reads.
+	 *
+	 * @Then /^the "([^"]*)" Penpot project is in the "([^"]*)" team$/
+	 */
+	public function thePenpotProjectIsInTheTeam(string $project, string $team): void {
+		$this->until(
+			fn (): bool => in_array($team, $this->penpotProjectTeams($project), true),
+			fn (): string => sprintf(
+				"expected the Penpot project '%s' to be in the team '%s'; found it in: %s",
+				$project,
+				$team,
+				implode(', ', $this->penpotProjectTeams($project)) ?: '(no project of that name)',
+			),
+		);
+	}
+
+	/**
+	 * A project holds exactly these designs, one per file, by name.
+	 *
+	 * EXACTLY, because the interesting failure is a duplicate. A copy is a create
+	 * plus one duplicate per design, and the way that goes wrong is a design copied
+	 * twice or a name silently suffixed — both of which leave the right names
+	 * present and the count wrong.
+	 *
+	 * @Then /^the "([^"]*)" Penpot project holds one design per file, named:$/
+	 */
+	public function theProjectHoldsOneDesignPerFileNamed(string $project, TableNode $names): void {
+		$want = [];
+		foreach ($names->getRows() as $row) {
+			$name = trim($row[0] ?? '');
+			if ($name !== '') {
+				$want[] = $name;
+			}
+		}
+		sort($want);
+
+		$this->until(
+			function () use ($project, $want): bool {
+				$have = $this->penpotFileNamesIn($project);
+				sort($have);
+
+				return $have === $want;
+			},
+			function () use ($project, $want): string {
+				$have = $this->penpotFileNamesIn($project);
+				sort($have);
+
+				return sprintf(
+					"expected the Penpot project '%s' to hold exactly [%s]; it holds [%s]",
+					$project,
+					implode(', ', $want),
+					implode(', ', $have),
+				);
+			},
+		);
+	}
+
+	/**
+	 * Where a design ended up, named rather than cursored.
+	 *
+	 * The `Drafts` row is the point of the scenario using this: a design whose
+	 * folder cannot be a project still has to land somewhere, and Drafts is where.
+	 *
+	 * @Then /^the design "([^"]*)" is in the "([^"]*)" Penpot project$/
+	 */
+	public function theDesignIsInThePenpotProject(string $design, string $project): void {
+		$this->until(
+			fn (): bool => in_array($design, $this->penpotFileNamesIn($project), true),
+			fn (): string => sprintf(
+				"expected the design '%s' in the Penpot project '%s'; it holds: %s",
+				$design,
+				$project,
+				implode(', ', $this->penpotFileNamesIn($project)) ?: '(nothing)',
+			),
+		);
+	}
+
+	/**
+	 * Every team a project of this name appears in.
+	 *
+	 * A LIST, not a single answer, because two teams may hold a project with the
+	 * same name — the Backgrounds arrange exactly that on purpose.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotProjectTeams(string $project): array {
+		$res = $this->occ('penpot_sync:probe --files');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("probe failed while resolving '{$project}':\n{$res['output']}");
+		}
+
+		$teams = [];
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^  (\S.*?)\s{2,}[0-9a-f-]{36}\s+\[(.*)\]\s*$/', $line, $m) !== 1) {
+				continue;
+			}
+			if (trim($m[1]) === $project) {
+				$teams[] = trim($m[2]);
+			}
+		}
+
+		return $teams;
 	}
 }

@@ -117,11 +117,20 @@ trait WebDavTrait {
 		$doc = new \SimpleXMLElement((string)$res->getBody());
 		$doc->registerXPathNamespace('d', 'DAV:');
 
-		$root = '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/';
+		// THE PREFIX COMES FROM ncBaseUrl, NOT FROM A LITERAL. A Nextcloud served
+		// from a subdirectory (`https://host/nextcloud`) returns hrefs carrying that
+		// prefix, so a hard-coded `/remote.php/...` matches nothing and this returns
+		// an empty listing — which reads as "the folder is empty" rather than as a
+		// broken helper. Every other DAV helper here builds from ncBaseUrl already.
+		$base = trim((string)parse_url($this->ncBaseUrl, PHP_URL_PATH), '/');
+		$prefix = trim(
+			($base === '' ? '' : $base . '/') . 'remote.php/dav/files/' . $this->ncUser,
+			'/',
+		);
+
 		$out = [];
 		foreach ($doc->xpath('//d:response/d:href') ?: [] as $href) {
 			$path = trim(rawurldecode((string)$href), '/');
-			$prefix = trim(rawurldecode($root), '/');
 			if (!str_starts_with($path, $prefix)) {
 				continue;
 			}
@@ -197,7 +206,21 @@ trait WebDavTrait {
 
 	/** DELETE a file, returning the raw status (so abort scenarios can inspect it). */
 	private function davDeleteStatus(string $path): int {
-		return $this->davClient()->request('DELETE', $this->davEncode($path))->getStatusCode();
+		return $this->davDeleteResult($path)['status'];
+	}
+
+	/**
+	 * A refused DELETE, status AND body — the trash half of {@see davMoveResult()}.
+	 *
+	 * Same reasoning: since #32 a refusal's REASON is half the claim, and a
+	 * scenario saying "refused with a message" cannot assert one from a status.
+	 *
+	 * @return array{status:int, body:string}
+	 */
+	private function davDeleteResult(string $path): array {
+		$res = $this->davClient()->request('DELETE', $this->davEncode($path));
+
+		return ['status' => $res->getStatusCode(), 'body' => (string)$res->getBody()];
 	}
 
 	/**

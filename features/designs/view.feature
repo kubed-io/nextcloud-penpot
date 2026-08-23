@@ -31,7 +31,7 @@ Feature: Looking at a design file
     # ── RULE: a client can read what the app knows about the file ────────────
 
   # notes: ../AGENTS.md#viewing-the-dav-properties-on-a-file-shows-penpot-specific-details
-  @dav @todo
+  @dav
   Scenario Outline: Viewing the DAV properties on a file shows Penpot specific details
     Given a design file named "Brand Kit.penpot" in "<folder>"
     When a WebDAV client requests the file's properties

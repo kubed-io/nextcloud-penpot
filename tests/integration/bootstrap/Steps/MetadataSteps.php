@@ -72,6 +72,20 @@ trait MetadataSteps {
 	];
 
 	/**
+	 * The act the DAV scenarios name, which the assertion then performs.
+	 *
+	 * A NO-OP ON PURPOSE, and worth saying so. `the file holds:` below issues the
+	 * PROPFIND itself, so putting a second one here would ask the same question
+	 * twice and prove nothing about the answer. The sentence earns its place by
+	 * naming WHO is asking — these scenarios are about what a plain WebDAV client
+	 * can read without this app's help, and that is the whole claim.
+	 *
+	 * @When /^a WebDAV client requests the file's properties$/
+	 */
+	public function aWebDavClientRequestsTheFilesProperties(): void {
+	}
+
+	/**
 	 * Assert what a mirror holds, one row per property.
 	 *
 	 * @Then /^"([^"]*)" holds:$/
@@ -151,6 +165,18 @@ trait MetadataSteps {
 				return $actual === $this->currentFileId
 					? null : "expected the id it already had ({$this->currentFileId}), found '{$actual}'";
 
+			case 'sync':
+			case 'link':
+			case 'reference':
+				// A BARE MODE IS A LITERAL, in the one place that spells the wire
+				// value out. Everywhere else a table says `"link"` and this trait
+				// translates it to the stored `reference`; `designs/view.feature` is
+				// where the DAV surface itself is the subject, so it writes what a
+				// client actually reads — `sync` and `reference`, unquoted.
+				$want = $expected === 'link' ? 'reference' : $expected;
+				return $actual === $want
+					? null : "expected '{$want}', found '{$actual}'";
+
 			case "the mapping's mode":
 				// A row that names no mode on purpose. Three mappings run the same
 				// outline, and the point is that the file's mode is whatever its
@@ -163,12 +189,17 @@ trait MetadataSteps {
 					? null : "expected the mapping's mode ('{$want}'), found '{$actual}'";
 
 			case "the design's id":
-				$want = $this->fileIdNamed($this->designNameOf($path));
+				// Scoped to the path's own mapping where one is declared; see
+				// {@see ArrangeSteps::designIdInMapping()} for why a bare name is not
+				// an address.
+				$want = $this->designIdInMapping($path) ?? $this->fileIdNamed($this->designNameOf($path));
 				return $actual === $want
 					? null : "expected the id of the design '{$this->designNameOf($path)}' ({$want}), found '{$actual}'";
 
 			case "the team's id":
-				$want = $this->theNamedTeam();
+				// The team of the mapping this path sits under — not whichever team
+				// the mappings table happened to name last.
+				$want = $this->teamIdForPath($path) ?: $this->theNamedTeam();
 				return $actual === $want
 					? null : "expected the mapped team's id ({$want}), found '{$actual}'";
 

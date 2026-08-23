@@ -53,6 +53,11 @@ use Psr\Log\LoggerInterface;
  *   - **Already a project** (carries `penpot_project_id`) — no-op. The pull
  *     stamps the tag on every folder it mirrors, so this is the common path and
  *     it must cost nothing.
+ *   - **The mapped ROOT itself** — not a project and never can be, so the tag is
+ *     taken off. Unlike the case below, this folder IS this app's business, and
+ *     the pull tags only what it has stamped with a project id; a tagged root
+ *     would be the one place the badge meant nothing. Removed silently — trying
+ *     it is reasonable, not a mistake worth reporting.
  *   - **Outside every mapping** — nothing to do and nothing to be sorry about.
  *     Tags are instance-wide: a user can put `penpot` on a folder in their
  *     Documents, and no team could be resolved for it even in principle. The tag
@@ -113,7 +118,33 @@ final class ProjectFolderService {
 		// MembershipResolver::pathBelowMapping(). Using the bare name made this
 		// direction disagree with the pull, which has always spelt a project's
 		// nesting into its name.
-		$name = trim((string)$this->resolver->pathBelowMapping($folder));
+		$below = $this->resolver->pathBelowMapping($folder);
+		if ($below === null) {
+			// NOT THE SAME REFUSAL as an unusable name. Null means the folder has no
+			// path below a mapping to be named by — it IS the mapping root. A team
+			// root is not a project and never was, so saying "the folder name cannot
+			// be used" would send someone off to rename a folder that is fine.
+			//
+			// THE TAG STILL COMES OFF, and this is the one place that differs from
+			// "outside every mapping" above. There the tag is left standing because
+			// the folder is none of this app's business; a mapped root is entirely
+			// its business, and every other folder wearing this tag carries a
+			// `penpot_project_id` — the pull only ever tags what it has stamped. A
+			// root left tagged would be the single folder where the badge means
+			// nothing, which is exactly the confusion the tag exists to prevent.
+			//
+			// Silently, though: no warning and no `refuse()`. Tagging the root is a
+			// reasonable thing to try, not a mistake to report.
+			$this->logger->debug('penpot_sync project: the mapped root is not a project; untagging', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+			]);
+			$this->guard->run(fn () => $this->tags->remove($folder->getId()));
+
+			return;
+		}
+
+		$name = trim($below);
 		if ($name === '' || mb_strlen($name) > 250) {
 			// Penpot's own rule is [:string {:max 250, :min 1}] — checked here so
 			// the refusal is local and the tag comes off, rather than arriving as a

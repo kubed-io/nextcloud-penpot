@@ -45,6 +45,9 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * and the Penpot RPC channel from {@see PullSteps}.
  */
 trait GestureSteps {
+	/** What "+ New → Penpot design" names the file it writes. */
+	private const NEW_DESIGN = 'New design.penpot';
+
 	/** Where the most recent gesture put the file, for the assertions to read. */
 	private string $gestureTarget = '';
 
@@ -192,10 +195,16 @@ trait GestureSteps {
 	 * step's problem, not the scenario's.
 	 *
 	 * @Given /^an untracked "\.penpot" archive at "([^"]*)"$/
+	 * @Given /^an untracked design file at "([^"]*)"$/
 	 * @When /^I upload a ".penpot" archive at "([^"]*)"$/
 	 * @Given /^an uploaded ".penpot" archive at "([^"]*)"$/
 	 */
 	public function iUploadAnArchiveAt(string $path): void {
+		// THE FOLDER MAY NOT BE THERE YET. `an untracked design file at
+		// "Scratch/Adopt Me/Alpha.penpot"` names a folder the scenario never
+		// created, and a PUT into a missing collection is a 404 — which reads as a
+		// broken upload rather than a missing arrange.
+		$this->makeAncestors($path);
 		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the
 		// only thing the upload-vs-create guard looks at.
 		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
@@ -260,7 +269,15 @@ trait GestureSteps {
 		$this->gestureTarget = $path;
 	}
 
-	/** The status and body of the last refused gesture, for the assertion to read. */
+	/**
+	 * The last refused gesture, for the assertion to read.
+	 *
+	 * BOTH HALVES, FROM BOTH ENTRY POINTS. The body used to be filled in by the
+	 * `into` form alone, so an assertion about the REASON would have read whatever
+	 * the previous scenario left behind after a `to`-form refusal — stale, and
+	 * passing for the wrong reason. Since #32 the reason is the interesting half,
+	 * so neither form may leave it behind.
+	 */
 	private int $lastGestureStatus = 0;
 	private string $lastGestureBody = '';
 
@@ -275,7 +292,9 @@ trait GestureSteps {
 	 * @When /^I try to move "([^"]*)" to "([^"]*)"$/
 	 */
 	public function iTryToMove(string $from, string $to): void {
-		$this->lastGestureStatus = $this->davMoveStatus($from, $to);
+		$result = $this->davMoveResult($from, $to);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
 		$this->gestureTarget = $from;
 	}
 
@@ -571,5 +590,114 @@ trait GestureSteps {
 		}
 
 		return $names;
+	}
+
+	// ── the trash, said the way the rewritten spec says it ───────────────────
+
+	/**
+	 * "Move to the trash" is what the Files app calls deleting, and the spec now
+	 * uses that wording because the recoverability is half the claim — a project
+	 * folder's designs going to Penpot's trash is only safe if the folder can come
+	 * back.
+	 *
+	 * @When /^I move "([^"]*)" to the trash$/
+	 */
+	public function iMoveToTheTrash(string $path): void {
+		$this->captureIdBeforeGesture($path);
+		$this->davDelete($path);
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The same gesture, expected to be REFUSED — see {@see iTryToMove()} for why a
+	 * refusal needs its own step.
+	 *
+	 * @When /^I try to move "([^"]*)" to the trash$/
+	 */
+	public function iTryToMoveToTheTrash(string $path): void {
+		$result = $this->davDeleteResult($path);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * @Then /^the trash is refused with a message$/
+	 */
+	public function theTrashIsRefusedWithAMessage(): void {
+		$this->refusedWithAMessage('trash');
+	}
+
+	/**
+	 * @Then /^the creation is refused with a message$/
+	 */
+	public function theCreationIsRefusedWithAMessage(): void {
+		$this->refusedWithAMessage('creation');
+	}
+
+	/**
+	 * One refusal check for every gesture that can be refused.
+	 *
+	 * THE BODY IS HALF THE CLAIM. Both of this app's refusals were invisible until
+	 * #32 — the reason reached the log and the person got an empty 403 — so a
+	 * scenario saying "with a message" is asserting that repair still holds, and a
+	 * status-only check would pass against the bug.
+	 */
+	private function refusedWithAMessage(string $what): void {
+		if ($this->lastGestureStatus < 400 || $this->lastGestureStatus >= 500) {
+			throw new \RuntimeException(
+				"expected the {$what} to be refused, got HTTP {$this->lastGestureStatus}",
+			);
+		}
+		if (trim(strip_tags($this->lastGestureBody)) === '') {
+			throw new \RuntimeException(
+				"the {$what} was refused with HTTP {$this->lastGestureStatus} but an EMPTY body — "
+				. 'that is the #32 bug, where the reason reached the log and never the client.',
+			);
+		}
+	}
+
+	/**
+	 * The trash still holds it, so the gesture was recoverable.
+	 *
+	 * Matched through `nc:trashbin-filename` rather than by path, because core
+	 * appends a `.dNNNNN` deletion stamp to the entry — see {@see trashbinPathFor()}.
+	 *
+	 * @Then /^"([^"]*)" is recoverable from the Nextcloud trash$/
+	 */
+	public function isRecoverableFromTheNextcloudTrash(string $path): void {
+		if ($this->trashbinPathFor($path) === null) {
+			throw new \RuntimeException("nothing in the Nextcloud trash came from '{$path}'");
+		}
+	}
+
+	// ── "+ New → Penpot design", by folder rather than by path ───────────────
+
+	/**
+	 * The spec names the FOLDER and lets the app pick the filename, because that is
+	 * what the button does — `New design.penpot` is core's, not the scenario's.
+	 *
+	 * @When /^I create a new design in "([^"]*)"$/
+	 */
+	public function iCreateANewDesignIn(string $folder): void {
+		$path = trim($folder, '/') . '/' . self::NEW_DESIGN;
+		$this->davPut($path, '');
+		$this->gestureTarget = $path;
+		$this->currentFilePath = $path;
+		$this->currentFolder = trim($folder, '/');
+		$this->currentFileId = $this->davReadMetadata($path, 'penpot_id') ?? '';
+	}
+
+	/**
+	 * The same act where the app is expected to say no.
+	 *
+	 * @When /^I try to create a new design in "([^"]*)"$/
+	 */
+	public function iTryToCreateANewDesignIn(string $folder): void {
+		$path = trim($folder, '/') . '/' . self::NEW_DESIGN;
+		$res = $this->davClient()->request('PUT', $this->davEncode($path), ['body' => '']);
+		$this->lastGestureStatus = $res->getStatusCode();
+		$this->lastGestureBody = (string)$res->getBody();
+		$this->gestureTarget = $path;
 	}
 }
