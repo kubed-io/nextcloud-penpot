@@ -296,6 +296,25 @@ into a team`, and all three of `projects/copy`'s `@unbuilt` are the same missing
 capability — **noticing a folder that has arrived inside a mapping**. Five
 scenarios, one piece of work, which makes it the obvious next round.
 
+### The asymmetry left behind, named rather than hidden
+
+A review of the PR found a sixth thing for that round, and it is worth recording
+because it is a place the two halves of one event now disagree.
+
+`PushService::pushFolderRename()` walks the subtree; `MotionService::onFolderMove()`
+does not. So dragging a PLAIN folder that holds projects across two mapped teams
+renames those projects to their new path and leaves them in the old team.
+
+**Incomplete, not broken.** Before §C6.38 that gesture did nothing whatsoever —
+neither half fired — so it moved from entirely wrong to half right. What made
+closing it in the same PR the wrong call is that it could not be PROVEN: the only
+cross-team pair the suite can express crosses a storage boundary, which is the wall
+above. Adding unit-tested-only code to a green PR is precisely the move this round
+had already demonstrated the cost of, one scenario earlier.
+
+It is written into `MotionService` at the line that returns early, so the next
+person to read that branch meets it there rather than in a closed review thread.
+
 **The one thing deliberately left half-done, said out loud:** the designs *under* an
 unmapped folder keep their `penpot_team_id` and their `sync` mode. Finishing that
 is `designs/move.feature`'s own `@todo`, and it needs `PenpotMetadata` to remove a

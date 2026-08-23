@@ -237,7 +237,23 @@ final class MotionService {
 		if (!$markers->hasProject()) {
 			// A plain folder. Every PROJECT below it was named through it and has
 			// just been renamed — but that is a rename, and PushService pushes it
-			// from the same event. Nothing here.
+			// from the same event.
+			//
+			// KNOWN GAP, AND THE TWO HALVES OF THE EVENT DISAGREE ABOUT IT.
+			// `PushService::pushFolderRename()` walks the subtree; this does not. So
+			// dragging a plain folder that HOLDS projects across two mapped teams
+			// renames those projects to their new path and leaves them in the old
+			// team. It is an incomplete improvement rather than a regression —
+			// before §C6.38 that gesture did nothing at all, neither half — but the
+			// asymmetry is real and it is written down here rather than in a review
+			// thread.
+			//
+			// Not closed in the PR that found it, deliberately: the only cross-team
+			// pair the suite can express crosses a STORAGE boundary (a Team Folder),
+			// which fires no NodeRenamedEvent at all — measured, see
+			// `projects/move.feature`. So the fix cannot be proven by the
+			// integration suite today, and it belongs with the capability that
+			// unblocks it: noticing a folder that has ARRIVED inside a mapping.
 			return false;
 		}
 		$projectId = $markers->projectId;
