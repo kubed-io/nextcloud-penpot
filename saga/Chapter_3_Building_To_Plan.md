@@ -186,19 +186,19 @@ there was no cheap batch to pick up; the shared Background had to be built first
 
 | | | after Round 2 | now |
 |---|---|---|---|
-| live | headers → executed | **15** → **41** | **20** → **50** |
+| live | headers → executed | **15** → **41** | **19** → **49** |
 | `@todo` | the queue | 87 | 77 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
-| `@unbuilt` | each names what the code owes | 5 | 10 |
+| `@unbuilt` | each names what the code owes | 5 | 11 |
 
-The legs now stand at `admin` 25, `design` 9, `project` 14, `core` 2.
+The legs now stand at `admin` 25, `design` 9, `project` 13, `core` 2.
 
-**`@unbuilt` DOUBLING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
-3 and 13 → 10 across Round 4, and both moves are the same measurement working:
-Round 3 promoted nine scenarios and found that most of them described behaviour
-the app did not have, so they were tagged rather than quietly skipped. Round 4 then
-paid three of them off. A queue that only ever shrinks is a queue nobody is
-measuring against.
+**`@unbuilt` GROWING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
+3 and 13 → 11 across Round 4, and every move is the same measurement working:
+Round 3 promoted nine scenarios and found that most of them described behaviour the
+app did not have, so they were tagged rather than quietly skipped. Round 4 paid two
+of those off and sent a third back with a better reason than it left with. A queue
+that only ever shrinks is a queue nobody is measuring against.
 
 ### What the run found in `lib/`, which is the whole argument for running it
 
@@ -275,6 +275,26 @@ What changed in `lib/`:
 3. `PushService::pushFolderRename()` became a subtree walk. Penpot has no parent
    field, so re-parenting `foo` is one `rename-project` per project named through
    it — the cost of the path model, now paid rather than skipped.
+
+### The fourth scenario, and why promoting it was still right
+
+`Move a project folder into another team` was promoted with the other three, failed
+in CI, and went back to `@unbuilt`. The wall is neither the rule nor the API, which
+is exactly why no amount of re-reading would have found it: `Shared` is a **Team
+Folder**, so the drag crosses a storage boundary, and core fires no
+`NodeRenamedEvent` for those — it is a copy+delete underneath, and neither half
+routes a folder. Nothing destructive happens. Nothing happens at all.
+
+**PROMOTING IT IS HOW THE WALL GOT FOUND**, and the tag now records something
+measured instead of something assumed. The temptation was to point the scenario at
+two admin-folder mappings, where it would pass — and it would then be testing
+something nobody asked about, one scenario after this file says out loud that *the
+storage a mapping uses makes no difference to what a move is*.
+
+The code owed turns out to be shared: this, `Move a folder of untracked designs
+into a team`, and all three of `projects/copy`'s `@unbuilt` are the same missing
+capability — **noticing a folder that has arrived inside a mapping**. Five
+scenarios, one piece of work, which makes it the obvious next round.
 
 **The one thing deliberately left half-done, said out loud:** the designs *under* an
 unmapped folder keep their `penpot_team_id` and their `sync` mode. Finishing that

@@ -311,17 +311,23 @@ them the only sane place to break ground. Where the suite stands now:
 
 | status | scenarios | |
 |---|---|---|
-| *(none)* — runs in CI | 20 | 50 executed: `admin` 25, `design` 9, `project` 14, `core` 2 |
+| *(none)* — runs in CI | 19 | 49 executed: `admin` 25, `design` 9, `project` 13, `core` 2 |
 | `@todo` | 77 | the queue |
 | `@blocked` | 9 | no browser, no app removal, no way to author a design |
-| `@unbuilt` | 10 | the app disagrees with the spec; see below |
+| `@unbuilt` | 11 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |
 
-**The `project` leg doubled without a single test being written for it.** §C6.38
-reversed a rule — a project folder was pinned inside its team folder — and three
+**The `project` leg nearly doubled without a single test being written for it.**
+§C6.38 reversed a rule — a project folder was pinned inside its team folder — and
 scenarios moved straight from `@unbuilt` to green because the code caught up with
-what they already said. That is the payoff of tagging honestly: the work queue
-told the truth about what was owed, so the PR that paid it needed no re-triage.
+what they already said. That is the payoff of tagging honestly: the work queue told
+the truth about what was owed, so the PR that paid it needed no re-triage.
+
+It also cuts the other way in the same file. A fourth scenario was promoted, failed
+in CI, and went back to `@unbuilt` naming a wall nobody had measured — a move into a
+Team Folder crosses a storage boundary and fires no rename event at all. **That
+round trip is the point**: promoting it was how the wall got found, and the tag now
+records a fact rather than an assumption.
 
 **All four legs report tests now**, so the empty-suite exemption in the workflow
 no longer carries any of them. It stays, because it is self-healing in both

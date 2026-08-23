@@ -7,8 +7,8 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: 20 OF 116 SCENARIO HEADERS, on all four legs — 50 executed
-# scenarios (`admin` 25, `design` 9, `project` 14, `core` 2). The connection, the
+# SCOPE RIGHT NOW: 19 OF 116 SCENARIO HEADERS, on all four legs — 49 executed
+# scenarios (`admin` 25, `design` 9, `project` 13, `core` 2). The connection, the
 # app lifecycle and the mapping came back first (they had been green before the
 # spec rewrite collapsed everything to @todo); the design and project verbs
 # followed once the arrange spine in tests/integration/bootstrap/Steps/ArrangeSteps.php

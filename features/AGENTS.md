@@ -2033,6 +2033,30 @@ One move changing team and name together, keeping the id, the designs and their
 history. `move-project` carries the team, so nothing is re-created to cross a
 boundary — the same shape `move-files` gives a single design.
 
+**`@unbuilt` FOR A REASON THAT IS NEITHER THE RULE NOR THE API.** §C6.38 built
+`move-project` and `MotionService` calls it, and the three other scenarios in this
+file went green on it. This one did not, and the wall is underneath both:
+
+`Shared` is a **Team Folder**, so dragging `Penpot/Crossing` into it crosses a
+storage boundary. Core does not fire `NodeRenamedEvent` for those — it is a
+copy+delete underneath — and neither half routes a folder: `CopyListener` and
+`DeleteListener` both take a `File`, and core fires no per-child event for the
+designs inside. So nothing destructive happens. Nothing happens at all.
+
+Measured in CI rather than reasoned about: the drag returns success and the project
+is still in `Design Team` afterwards.
+
+**The Background is not the problem, and must not be "fixed".** Pointing this
+scenario at two admin-folder mappings would make it pass while testing something
+nobody asked about — the rule under test is that a project carries its team, and
+`the storage a mapping uses makes no difference to what a move is` is a claim this
+file makes out loud one scenario earlier.
+
+**The code owed is shared with `Move a folder of untracked designs into a team`**,
+and with all three of `projects/copy`'s: every one of them is *a folder arriving
+inside a mapping*, which this app currently has no way to notice. One capability,
+five scenarios.
+
 ### A project folder that leaves every mapping stops being a mirror
 
 Nothing is deleted in Penpot. The project stands, its designs stand, and the folder

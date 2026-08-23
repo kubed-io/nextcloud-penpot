@@ -120,7 +120,9 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  @in-nextcloud @gesture
+  # @unbuilt — the app never sees this gesture: "Shared" is a Team Folder, so the
+  # move crosses a storage boundary and fires no NodeRenamedEvent. Measured in CI.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |

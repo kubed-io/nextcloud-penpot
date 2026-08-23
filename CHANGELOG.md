@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **A project folder can now be dragged anywhere**, including into another team's folder or out of every mapped folder entirely. Crossing a team keeps the project, its designs and their history — nothing is re-created. Dragging one out simply stops it being a mirror: nothing is deleted in Penpot, and the folder becomes an ordinary Nextcloud folder. This used to be refused outright.
+- **A project folder can now be dragged out of a mapped folder**, which used to be refused outright. Nothing is deleted in Penpot — the project and its designs stay exactly as they are, and the folder simply becomes an ordinary Nextcloud folder. Dragging one into a *different team's* folder works too, unless that folder is a Team Folder; Nextcloud handles those moves in a way the app cannot yet see.
 
 - **Moving a folder now renames every project below it**, not just the one you dragged — a project's name is the path it sits at, so grouping three projects under a new folder renames all three.
 
