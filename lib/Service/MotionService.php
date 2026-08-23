@@ -282,6 +282,16 @@ final class MotionService {
 	 * or dropping a design into the unmapped tree would file it into a Penpot
 	 * project the folder no longer represents.
 	 *
+	 * THE DESCENT DOES NOT STOP AT UNMARKED FOLDERS, and the first cut of this
+	 * did. A project three levels down under two ordinary folders — `Let Go/notes/
+	 * archive/Deep` — is reached by walking UP exactly like any other, so it has to
+	 * be reached walking DOWN too. Descending only through marked folders left
+	 * precisely the ids this method exists to remove, in precisely the tree shape
+	 * §6.29 is designed to allow. {@see ProjectFolderService::managedDesignsBelow()}
+	 * descends the same way for the same reason — the one difference being that it
+	 * STOPS at a marked folder (those designs belong to that project) while this
+	 * one carries on (that project is leaving too).
+	 *
 	 * The `penpot` tag goes with the marker. It is the opt-in badge
 	 * ({@see ProjectFolderService}), and a folder wearing it while carrying no
 	 * project id is the one place the badge would mean nothing. Inside the guard,
@@ -296,8 +306,10 @@ final class MotionService {
 			return;
 		}
 
-		$this->metadata->clear($folder->getId());
-		$this->guard->run(fn () => $this->tags->remove($folder->getId()));
+		if ($this->metadata->readFolder($folder->getId())->hasProject()) {
+			$this->metadata->clear($folder->getId());
+			$this->guard->run(fn () => $this->tags->remove($folder->getId()));
+		}
 
 		try {
 			$children = $folder->getDirectoryListing();
@@ -312,7 +324,7 @@ final class MotionService {
 		}
 
 		foreach ($children as $child) {
-			if ($child instanceof Folder && $this->metadata->readFolder($child->getId())->hasProject()) {
+			if ($child instanceof Folder) {
 				$this->unmap($child, $depth + 1);
 			}
 		}

@@ -269,6 +269,35 @@ final class MotionServiceTest extends TestCase {
 		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder()));
 	}
 
+	/**
+	 * A PROJECT UNDER A PLAIN FOLDER IS STILL REACHED, which the first cut of
+	 * `unmap()` got wrong: it descended only into folders that already carried a
+	 * marker, so `Let Go/notes/Deep` kept its `penpot_project_id` out in unmapped
+	 * space — the exact id the method exists to remove, in the exact tree shape
+	 * §6.29 exists to allow.
+	 */
+	public function testUnmappingDescendsThroughAPlainFolderToReachANestedProject(): void {
+		$deep = $this->markedFolder(42, 'Deep', hasProject: true);
+		$notes = $this->markedFolder(43, 'notes', hasProject: false, children: [$deep]);
+
+		$this->givenFolderMarkers([40 => true, 43 => false, 42 => true]);
+		$this->givenMembership([
+			'target' => Membership::none(),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+
+		$cleared = [];
+		$this->metadata->method('clear')->willReturnCallback(
+			static function (int $id) use (&$cleared): void {
+				$cleared[] = $id;
+			},
+		);
+
+		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder([$notes])));
+		// 43 is the plain folder: walked THROUGH, never cleared.
+		self::assertSame([40, 42], $cleared);
+	}
+
 	public function testUnmappingReachesANestedProjectToo(): void {
 		// THE RESOLVER WALKS UP, so a `penpot_project_id` left on a nested folder in
 		// unmapped space is not inert — it would still answer for anything dropped
@@ -396,6 +425,36 @@ final class MotionServiceTest extends TestCase {
 		$source->method('getParent')->willReturn($oldParent);
 
 		return $source;
+	}
+
+	/**
+	 * A child folder for the unmap walk.
+	 *
+	 * @param list<Folder> $children
+	 * @return Folder&\PHPUnit\Framework\MockObject\MockObject
+	 */
+	private function markedFolder(int $id, string $name, bool $hasProject, array $children = []): Folder {
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getId')->willReturn($id);
+		$folder->method('getName')->willReturn($name);
+		$folder->method('getPath')->willReturn('/dana/files/Scratch/' . $name);
+		$folder->method('getDirectoryListing')->willReturn($children);
+
+		return $folder;
+	}
+
+	/**
+	 * Which node ids carry a project marker, for a walk that reads several.
+	 *
+	 * @param array<int, bool> $byId
+	 */
+	private function givenFolderMarkers(array $byId): void {
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => new FolderMarkers(
+				($byId[$id] ?? false) ? self::PROJECT_A : '',
+				'',
+			),
+		);
 	}
 
 	private function givenProjectFolder(): void {
