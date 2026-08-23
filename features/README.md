@@ -92,10 +92,21 @@ behaviours rather than one with a branch:
 
 | verb | design | project |
 |---|---|---|
-| copy | duplicates it in Penpot | **refused** — Penpot has no duplicate-project call |
-| move | anywhere its project reaches | pinned inside its team folder |
+| copy | duplicates it in Penpot | a new project holding new designs |
+| move | anywhere its project reaches | anywhere at all — the path is the name |
 | delete | one design | one call that takes the whole project with it |
 | restore | the same design, id intact | the project *and* everything in it, or not at all |
+
+**Two rows of that table were wrong until §C6.38, and both were wrong about the
+API rather than about the design.** `move` said *pinned inside its team folder*
+and `copy` said *refused — Penpot has no duplicate-project call*. Penpot has
+`move-project` (`{project-id, team-id}`) and `duplicate-project`
+(`{project-id, name?}`), both since 1.16; the schemas are in
+`app/rpc/commands/management.clj`. A limit that was never checked became a rule,
+the rule was written into a table, and the table was then cited as the reason to
+keep the limit. `projects/move.feature` and `projects/copy.feature` had already
+been rewritten to say what the app should do — this table was the last place
+still saying otherwise.
 
 A **personal** project is still a project: the verbs behave identically, so the
 only special things are the who (the user's own token) and the where (their home
@@ -300,11 +311,17 @@ them the only sane place to break ground. Where the suite stands now:
 
 | status | scenarios | |
 |---|---|---|
-| *(none)* — runs in CI | 15 | 41 executed: `admin` 25, `design` 7, `project` 7, `core` 2 |
-| `@todo` | 87 | the queue |
+| *(none)* — runs in CI | 20 | 50 executed: `admin` 25, `design` 9, `project` 14, `core` 2 |
+| `@todo` | 77 | the queue |
 | `@blocked` | 9 | no browser, no app removal, no way to author a design |
-| `@unbuilt` | 5 | the app disagrees with the spec; see below |
+| `@unbuilt` | 10 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |
+
+**The `project` leg doubled without a single test being written for it.** §C6.38
+reversed a rule — a project folder was pinned inside its team folder — and three
+scenarios moved straight from `@unbuilt` to green because the code caught up with
+what they already said. That is the payoff of tagging honestly: the work queue
+told the truth about what was owed, so the PR that paid it needed no re-triage.
 
 **All four legs report tests now**, so the empty-suite exemption in the workflow
 no longer carries any of them. It stays, because it is self-healing in both

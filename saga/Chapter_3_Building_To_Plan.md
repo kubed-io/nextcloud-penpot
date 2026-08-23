@@ -162,7 +162,7 @@ count nobody states is a count nobody can check.
 
 ---
 
-## Where we are — 2026-08-21 · **THE SPINE IS IN, AND FOUR LEGS ARE GREEN**
+## Where we are — 2026-08-23 · **THE SPINE IS IN, AND A RULE HAS REVERSED**
 
 > **Opening state.** 116 scenarios, all `@todo`. Zero running. Four integration
 > legs reporting `tests="0"`.
@@ -184,12 +184,21 @@ made:` (89), `a design file named … in …` (61), `the following items in the
 mappings:` (42) — and exactly ONE excluded scenario had every step it needed. So
 there was no cheap batch to pick up; the shared Background had to be built first.
 
-| | |
-|---|---|
-| live | **15** headers → **41** executed (`admin` 25, `design` 7, `project` 7, `core` 2) |
-| `@todo` | 87 |
-| `@blocked` | 9 — no browser (6), no app removal (1), no way to author a design (2) |
-| `@unbuilt` | 5 — each names what the code owes |
+| | | after Round 2 | now |
+|---|---|---|---|
+| live | headers → executed | **15** → **41** | **20** → **50** |
+| `@todo` | the queue | 87 | 77 |
+| `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
+| `@unbuilt` | each names what the code owes | 5 | 10 |
+
+The legs now stand at `admin` 25, `design` 9, `project` 14, `core` 2.
+
+**`@unbuilt` DOUBLING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
+3 and 13 → 10 across Round 4, and both moves are the same measurement working:
+Round 3 promoted nine scenarios and found that most of them described behaviour
+the app did not have, so they were tagged rather than quietly skipped. Round 4 then
+paid three of them off. A queue that only ever shrinks is a queue nobody is
+measuring against.
 
 ### What the run found in `lib/`, which is the whole argument for running it
 
@@ -213,24 +222,75 @@ a scenario failing rather than by reading:
    were invisible in every outline in the repo. Now two-phase, and watched failing
    before being believed.
 
-### The five `@unbuilt`, which are Round 3's queue
+### The five `@unbuilt`, which were Round 3's queue
 
 - `projects/create` ×2 — a design in a folder Penpot has never seen lands in
   Drafts; only a tagged folder becomes a project.
 - `projects/move` — a move high in the tree renames only what moved, not the
-  projects named THROUGH it.
-- `projects/move` — a project folder cannot leave its team. **The spec disagrees
-  with itself here**: `features/README.md`'s two-noun table says a project is
-  "pinned inside its team folder", which is the app's behaviour, while the scenario
-  expects the move to unmap it. That needs a decision before it needs code.
+  projects named THROUGH it. **Paid off in Round 4.**
+- `projects/move` — a project folder cannot leave its team. **The spec disagreed
+  with itself here**: `features/README.md`'s two-noun table said a project is
+  "pinned inside its team folder", which was the app's behaviour, while the
+  scenario expected the move to unmap it. **Settled in Round 4: the scenario was
+  right, and so was `projects/copy`.**
 - `designs/rename` — renaming a link is allowed; `MoveRules` permits any move
   inside the link's own project and a rename is one.
+
+### Round 4 — §C6.38, and what a wrong rule costs
+
+Round 4 had one subject: **the biggest thing the rewrite changed that the code had
+not caught up with.** The gherkin said a project folder's name is its PATH below
+the mapping, which makes a move a rename; the code still refused every move that
+changed the team, in three places, citing §6.30.
+
+The refusal was wrong, and not by a matter of taste. It was written down as a
+consequence of the API — *moving a project between teams has to be done in Penpot
+itself* — and the API says otherwise. `move-project` has taken `{project-id,
+team-id}` since Penpot 1.16.
+
+**A LIMIT THAT WAS NEVER CHECKED BECAME A RULE, AND THE RULE THEN DEFENDED
+ITSELF.** §6.30 locked it "for now". `features/README.md`'s two-noun table wrote it
+down as design. The `@unbuilt` note on the scenario then cited that table as
+evidence the app was right and the spec needed a decision. Three artefacts, one
+unverified belief, and each one citing the next.
+
+The same read of `app/rpc/commands/` corrected two more claims of the same kind:
+
+- **`duplicate-project` exists** (`{project-id, name?}`, "Duplicate an entire
+  project with all the files"). README's table said Penpot has no such call and
+  therefore a project copy is *refused* — while `projects/copy.feature` had already
+  been rewritten to say a copy makes a new project. The table was the stale half.
+- **`delete-project` exists**, taking a bare `{id}`. The harness wall below said
+  its payload "would be a guess". It is not one any more.
+
+What changed in `lib/`:
+
+1. `MoveRules` lost the team rule and gained the MODE rule the spec actually
+   states — nothing crosses the edge of a `link` mapping, in either direction. The
+   old rule had been covering three of that scenario's four rows by accident, and
+   getting the fourth (a link project moved *within* its own team) wrong.
+2. `MotionService` stopped waving folders through. A project folder that crossed a
+   mapping is one `move-project`; one that left every mapping is an unmapping, and
+   Penpot is not contacted at all.
+3. `PushService::pushFolderRename()` became a subtree walk. Penpot has no parent
+   field, so re-parenting `foo` is one `rename-project` per project named through
+   it — the cost of the path model, now paid rather than skipped.
+
+**The one thing deliberately left half-done, said out loud:** the designs *under* an
+unmapped folder keep their `penpot_team_id` and their `sync` mode. Finishing that
+is `designs/move.feature`'s own `@todo`, and it needs `PenpotMetadata` to remove a
+SINGLE key — it can write keys and drop a whole record, and unmapping a design
+wants neither. Doing it here only for designs that happen to sit under a moved
+project would make the two paths disagree in a new direction instead of fixing the
+old one.
 
 ### The one harness wall left
 
 `projects/rename`'s Penpot-side outline is `@todo` for a reason that is neither
 spec nor app: **Penpot state accumulates across a leg.** Teams are find-or-create
 by name and survive the scenario, so a second scenario renaming `Old` → `New`
-finds a `New` already there. Real isolation needs a `delete-project` RPC (absent
-from `PenpotClient`, and its payload would be a guess) or a unique team per
-scenario (which breaks every scenario that names a team).
+finds a `New` already there. Real isolation needs either a unique team per scenario
+(which breaks every scenario that names a team) or a teardown that deletes what a
+scenario created — and Round 4 removed the excuse for the second: `delete-project`
+takes `{id}`, read off `schema:delete-project`. Whether a teardown SHOULD delete
+from Penpot is still a question worth asking before it is built.

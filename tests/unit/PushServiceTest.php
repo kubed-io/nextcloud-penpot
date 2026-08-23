@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\FolderMarkers;
+use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
@@ -43,14 +44,25 @@ final class PushServiceTest extends TestCase {
 	private PenpotMetadata $metadata;
 	private PersonalTokenService $personalTokens;
 	private MembershipResolver $resolver;
+
+	/** What the resolver reports for every folder; see {@see setUp()}. */
+	private Membership $position;
+
 	private PushService $push;
 
 	protected function setUp(): void {
 		parent::setUp();
+		$this->position = new Membership(null, 'team-abc');
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->personalTokens = $this->createMock(PersonalTokenService::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
+		// INSIDE A MAPPING BY DEFAULT. Every folder test below is about what gets
+		// renamed, not about whether the folder is mirrored at all — and the one
+		// test that IS about that says so by overriding this.
+		$this->resolver->method('resolve')->willReturnCallback(
+			fn (): Membership => $this->position,
+		);
 		$this->push = new PushService(
 			$this->client,
 			$this->metadata,
@@ -161,12 +173,75 @@ final class PushServiceTest extends TestCase {
 	}
 
 	public function testIgnoresTheTeamRootFolder(): void {
-		// The root carries only a team id — renaming it is not a project rename.
+		// The root carries a team id, and renaming it renames nothing: a project's
+		// name is its path BELOW the root, so every one of those paths is exactly
+		// what it was. Walking the tree would send one `rename-project` per project,
+		// each to the name it already has.
 		$this->metadata->method('readFolder')
 			->willReturn(new FolderMarkers('', 'team-abc'));
 		$this->client->expects($this->never())->method('renameProject');
 
 		self::assertFalse($this->push->pushRename($this->folder(10, 'Design Files')));
+	}
+
+	public function testIgnoresAFolderOutsideEveryMapping(): void {
+		// AND DOES NOT WALK IT. This is what keeps an ordinary folder rename
+		// anywhere else in the instance from costing a directory listing per level.
+		$this->position = Membership::none();
+		$folder = $this->folder(23, 'Holiday photos');
+		$folder->expects($this->never())->method('getDirectoryListing');
+		$this->client->expects($this->never())->method('renameProject');
+
+		self::assertFalse($this->push->pushRename($folder));
+	}
+
+	/**
+	 * THE COST OF THE PATH MODEL, pinned. Dragging `Penpot/foo` into
+	 * `Penpot/Clients` renames every project named THROUGH it — Penpot has no
+	 * parent field, so there is no atomic re-parent to send and each one is its own
+	 * `rename-project`.
+	 *
+	 * `foo` itself is NOT a project here, which is the case that made this a walk
+	 * rather than a special case: a plain folder someone groups their projects
+	 * under has no Penpot counterpart at all, and moving it still renames
+	 * everything below it.
+	 */
+	public function testRenamesEveryProjectBelowAMovedFolder(): void {
+		$this->attributingTo(null);
+
+		$bar = $this->folder(31, 'bar');
+		$baz = $this->folder(32, 'baz');
+		$bar->method('getDirectoryListing')->willReturn([$baz]);
+		$foo = $this->folder(30, 'foo');
+		$foo->method('getDirectoryListing')->willReturn([$bar]);
+
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => match ($id) {
+				31 => new FolderMarkers('project-bar', ''),
+				32 => new FolderMarkers('project-baz', ''),
+				default => new FolderMarkers('', ''),
+			},
+		);
+		$this->resolver->method('pathBelowMapping')->willReturnCallback(
+			static fn (Folder $folder): ?string => match ($folder->getId()) {
+				31 => 'Clients/foo/bar',
+				32 => 'Clients/foo/bar/baz',
+				default => 'Clients/foo',
+			},
+		);
+
+		$renamed = [];
+		$this->client->method('renameProject')->willReturnCallback(
+			static function (string $projectId, string $name) use (&$renamed): void {
+				$renamed[$projectId] = $name;
+			},
+		);
+
+		self::assertTrue($this->push->pushRename($foo));
+		self::assertSame(
+			['project-bar' => 'Clients/foo/bar', 'project-baz' => 'Clients/foo/bar/baz'],
+			$renamed,
+		);
 	}
 
 	/** Who the write attributes to; null is the service account (§6.18). */
@@ -181,10 +256,17 @@ final class PushServiceTest extends TestCase {
 		return $file;
 	}
 
+	/**
+	 * A folder mock. `getDirectoryListing()` is left unstubbed so it answers with
+	 * an empty array — a leaf — and the tests that need children say so.
+	 *
+	 * @return Folder&\PHPUnit\Framework\MockObject\MockObject
+	 */
 	private function folder(int $id, string $name): Folder {
 		$folder = $this->createMock(Folder::class);
 		$folder->method('getId')->willReturn($id);
 		$folder->method('getName')->willReturn($name);
+		$folder->method('getPath')->willReturn('/dana/files/' . $name);
 		return $folder;
 	}
 }

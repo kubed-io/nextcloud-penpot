@@ -45,9 +45,7 @@ Feature: Moving a project
     # replaces it with a new one wearing the new path.
 
   # notes: ../AGENTS.md#a-move-high-in-the-tree-renames-every-project-below-it
-  # @unbuilt — the projects BELOW the dragged folder keep their old names
-  # (`foo/bar`, not `Clients/foo/bar`): only the moved node itself is pushed.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move a folder that other projects are named through
     Given the following items in the mappings:
       | path                            |
@@ -67,9 +65,7 @@ Feature: Moving a project
     # ── RULE: leaving every mapping leaves the project standing ───────────────
     # notes: ../AGENTS.md#a-project-folder-that-leaves-every-mapping-stops-being-a-mirror
 
-  # @unbuilt — refused today (HTTP 403), and README's own table agrees with the app
-  # that a project is "pinned inside its team folder". The spec needs a decision.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move a project folder out of a team to unmap it
     Given the following items in the mappings:
       | path                            |
@@ -77,12 +73,12 @@ Feature: Moving a project
     When I move "Penpot/Let Go" into "Scratch"
     Then Penpot holds a project named "Let Go"
     And the mappings hold:
-      | path                          | identity |
-      | /Scratch/Let Go               | absent   |
-      | /Scratch/Let Go/Alpha.penpot  | absent   |
+      | path                          | identity        |
+      | /Scratch/Let Go               | absent          |
+      | /Scratch/Let Go/Alpha.penpot  | the original id |
 
-    # Nothing is deleted over there — the same rule a single design leaving follows.
-    # The project is simply no longer mirrored by this folder.
+    # Nothing is deleted over there, and the two rows differ on purpose: the folder's
+    # marker still resolves for anything dropped beside it, the design's id does not.
 
     # ── RULE: arriving in a team makes every design in it real ────────────────
     # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
@@ -102,7 +98,7 @@ Feature: Moving a project
     # ── RULE: a move is not a way around the link guard ───────────────────────
     # notes: ../AGENTS.md#a-move-never-changes-a-projects-mode
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Moving a link project, or into a link team, is refused
     Given the following items in the mappings:
       | path                            |
@@ -124,9 +120,7 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  # @unbuilt — refused today (HTTP 403) by the same rule that pins a project inside
-  # its team folder, which README's own table states as the intended behaviour.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |

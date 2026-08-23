@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\DestinationResolver;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
@@ -18,6 +19,8 @@ use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
+use OCA\PenpotSync\Service\ProjectTags;
+use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
@@ -39,7 +42,23 @@ use Psr\Log\NullLogger;
  *     default project rather than treated as "no project";
  *   - a move out of every mapped folder pushes NOTHING — unmapping is Course 5's
  *     explicit decision, never inferred from a drag;
- *   - folders and unmanaged `.penpot` files are not ours to move.
+ *   - unmanaged `.penpot` files are not ours to move.
+ *
+ * ## AND SINCE §C6.38, THE FOLDER HALF
+ *
+ * A project folder used to be waved through with one `return false`. It now takes
+ * three branches, and the one worth staring at is the third:
+ *
+ *   - crossed into another mapped team → one `move-project`, id intact;
+ *   - dragged within its own team → nothing, because the NAME is what changed and
+ *     PushService pushes that from the same event;
+ *   - left every mapping → Penpot is not contacted at all, and the marker comes
+ *     off instead, nested projects included.
+ *
+ * The comparison is team-to-team rather than "is there a team now", which
+ * {@see testAProjectFolderTidiedInsideUnmappedSpaceIsLeftAlone()} exists to hold
+ * in place: the cheap version of that check unmaps a personal project (§6.31) the
+ * first time its owner tidies their home.
  */
 final class MotionServiceTest extends TestCase {
 	private const PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
@@ -53,6 +72,7 @@ final class MotionServiceTest extends TestCase {
 	private MembershipResolver $resolver;
 	private DestinationResolver $destinations;
 	private PersonalTokenService $personalTokens;
+	private ProjectTags $tags;
 	private MotionService $motion;
 
 	protected function setUp(): void {
@@ -61,6 +81,7 @@ final class MotionServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->personalTokens = $this->createMock(PersonalTokenService::class);
+		$this->tags = $this->createMock(ProjectTags::class);
 		// The REAL destination resolver over the mocked client, deliberately: the
 		// Drafts lookup is the behaviour a team-root move depends on, and mocking
 		// it away is what let the copy path ship with the opposite rule (§C6.10).
@@ -71,6 +92,8 @@ final class MotionServiceTest extends TestCase {
 			$this->resolver,
 			$this->destinations,
 			$this->personalTokens,
+			$this->tags,
+			new SyncGuard(),
 			new NullLogger(),
 		);
 	}
@@ -191,14 +214,101 @@ final class MotionServiceTest extends TestCase {
 		self::assertFalse($this->motion->onMove($this->source(), $this->target('notes.txt')));
 	}
 
-	public function testAFolderIsIgnored(): void {
-		// Folder layout is Nextcloud's (§6.29) — a project folder has no position
-		// in Penpot to update, and the one illegal folder move is refused earlier
-		// by MoveGuardListener.
-		$this->client->expects($this->never())->method('moveFiles');
+	public function testAPlainFolderIsIgnored(): void {
+		// Folder layout is Nextcloud's (§6.29). A plain folder carries no project
+		// id, so there is nothing here to re-team — and the projects nested below
+		// it renamed rather than moved, which is PushService's half of the event.
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->client->expects($this->never())->method('moveProject');
 
-		$folder = $this->createMock(Folder::class);
-		self::assertFalse($this->motion->onMove($this->source(), $folder));
+		self::assertFalse($this->motion->onMove($this->sourceFolder(), $this->folder()));
+	}
+
+	// ── §C6.38: a project folder moves too ──────────────────────────────────
+
+	public function testAProjectFolderDraggedIntoAnotherTeamMovesTheProject(): void {
+		$this->givenProjectFolder();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, 'team-NEW'),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+		$this->personalTokens->method('tokenForActor')->willReturn('dana-token');
+
+		$this->client->expects($this->once())->method('moveProject')
+			->with(self::PROJECT_A, 'team-NEW', 'dana-token');
+
+		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder()));
+	}
+
+	public function testAProjectFolderDraggedWithinItsTeamContactsNobody(): void {
+		// The position means nothing to Penpot; the NAME changed and PushService
+		// has already pushed that from the same event. Zero requests here.
+		$this->givenProjectFolder();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+		$this->client->expects($this->never())->method('moveProject');
+
+		self::assertFalse($this->motion->onMove($this->sourceFolder(), $this->folder()));
+	}
+
+	public function testAProjectFolderDraggedOutOfEveryMappingIsUnmapped(): void {
+		// NOTHING IS DELETED IN PENPOT. The project stands; the folder stops being
+		// the thing that mirrors it, which is the marker coming off.
+		$this->givenProjectFolder();
+		$this->givenMembership([
+			'target' => Membership::none(),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+
+		$this->client->expects($this->never())->method('moveProject');
+		$this->metadata->expects($this->once())->method('clear')->with(40);
+		$this->tags->expects($this->once())->method('remove')->with(40);
+
+		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder()));
+	}
+
+	public function testUnmappingReachesANestedProjectToo(): void {
+		// THE RESOLVER WALKS UP, so a `penpot_project_id` left on a nested folder in
+		// unmapped space is not inert — it would still answer for anything dropped
+		// beside it, reporting a project with no team above it.
+		$nested = $this->createMock(Folder::class);
+		$nested->method('getId')->willReturn(41);
+		$nested->method('getPath')->willReturn('/dana/files/Scratch/Let Go/Deeper');
+		$nested->method('getDirectoryListing')->willReturn([]);
+
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT_A, ''));
+		$this->givenMembership([
+			'target' => Membership::none(),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+
+		$cleared = [];
+		$this->metadata->method('clear')->willReturnCallback(
+			static function (int $id) use (&$cleared): void {
+				$cleared[] = $id;
+			},
+		);
+
+		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder([$nested])));
+		self::assertSame([40, 41], $cleared);
+	}
+
+	public function testAProjectFolderTidiedInsideUnmappedSpaceIsLeftAlone(): void {
+		// THE COMPARISON IS TEAM TO TEAM, not "is there a team now". Reading the
+		// destination alone would unmap this a second time — and would unmap a
+		// personal project (§6.31) the first time its owner tidied their home.
+		$this->givenProjectFolder();
+		$this->givenMembership([
+			'target' => Membership::none(),
+			'oldParent' => Membership::none(),
+		]);
+
+		$this->metadata->expects($this->never())->method('clear');
+		$this->client->expects($this->never())->method('moveProject');
+
+		self::assertFalse($this->motion->onMove($this->sourceFolder(), $this->folder()));
 	}
 
 	/**
@@ -259,15 +369,53 @@ final class MotionServiceTest extends TestCase {
 	}
 
 	/**
-	 * Program the resolver: the target file resolves to `target`, and the source's
-	 * old parent folder to `oldParent`. They are told apart by node id.
+	 * Program the resolver: the moved NODE resolves to `target`, and the source's
+	 * old parent folder to `oldParent`. They are told apart by node id — 30 is the
+	 * moved file, 40 the moved folder, and 11 the parent it came from.
 	 *
 	 * @param array{target: Membership, oldParent: Membership} $by
 	 */
 	private function givenMembership(array $by): void {
 		$this->resolver->method('resolve')->willReturnCallback(
-			static fn (Node $node): Membership => $node->getId() === 30 ? $by['target'] : $by['oldParent'],
+			static fn (Node $node): Membership => in_array($node->getId(), [30, 40], true)
+				? $by['target'] : $by['oldParent'],
 		);
+	}
+
+	/**
+	 * The pre-move FOLDER. Only its parent is ever read — the moved node itself is
+	 * `folder()` — but it is a Folder mock rather than {@see source()}'s File so
+	 * the fixture describes a gesture that can actually happen.
+	 */
+	private function sourceFolder(): Folder {
+		$oldParent = $this->createMock(Folder::class);
+		$oldParent->method('getId')->willReturn(11);
+
+		$source = $this->createMock(Folder::class);
+		$source->method('getId')->willReturn(40);
+		$source->method('getParent')->willReturn($oldParent);
+
+		return $source;
+	}
+
+	private function givenProjectFolder(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT_A, ''));
+	}
+
+	/**
+	 * The moved FOLDER. Shares node id 40 with nothing else, so
+	 * {@see givenMembership()} tells it apart from the source's old parent.
+	 *
+	 * @param list<Folder> $children
+	 */
+	private function folder(array $children = []): Folder {
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getId')->willReturn(40);
+		$folder->method('getName')->willReturn('Let Go');
+		$folder->method('getPath')->willReturn('/dana/files/Scratch/Let Go');
+		$folder->method('getDirectoryListing')->willReturn($children);
+
+		return $folder;
 	}
 
 	/** The pre-move node. Its parent is the folder the file came from. */

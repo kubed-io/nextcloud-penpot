@@ -26,7 +26,9 @@ use Psr\Log\LoggerInterface;
  *
  *   - a `.penpot` **file** rename → `rename-file` on its `penpot_id` (§6.54);
  *   - a **project folder** rename → `rename-project` on its `penpot_project_id`
- *     (§6.36/§6.39 — its own RPC, not a variant of file rename).
+ *     (§6.36/§6.39 — its own RPC, not a variant of file rename), and one more for
+ *     every project NESTED below it, because a project's name is its path
+ *     (§C6.38 — see {@see pushFolderRename()}).
  *
  * ## ATTRIBUTION (saga §6.18)
  *
@@ -51,6 +53,12 @@ use Psr\Log\LoggerInterface;
  * nothing. One hop each way, no echo.
  */
 final class PushService {
+	/**
+	 * A ceiling on the descent, mirroring {@see MembershipResolver}'s upward
+	 * seatbelt. A Nextcloud tree is finite; this only guards a pathological shape.
+	 */
+	private const MAX_DEPTH = 100;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
@@ -114,33 +122,120 @@ final class PushService {
 		return true;
 	}
 
+	/**
+	 * A folder moved or was renamed — so every project named THROUGH it renamed too.
+	 *
+	 * ## WHY THIS IS A SUBTREE AND NOT ONE FOLDER (§C6.38)
+	 *
+	 * A project's Penpot name is its path below the mapping, and Penpot has no
+	 * parent field — there is no atomic re-parent to send. So dragging
+	 * `Penpot/foo` into `Penpot/Clients` renames `foo/bar` to `Clients/foo/bar`,
+	 * and `foo/bar/baz` to `Clients/foo/bar/baz`, and everything else spelled
+	 * through it: one `rename-project` each.
+	 *
+	 * That is the cost of the path model, and it is stated here because this is
+	 * where someone meets it. It is survivable precisely because every project
+	 * keeps its ID: a run that fails halfway leaves projects correctly identified
+	 * and wrongly named, which the next pull reconciles. It would not be
+	 * survivable if a rename re-created anything.
+	 *
+	 * NOTE `foo` ITSELF NEED NOT BE A PROJECT. It very often is not — a plain
+	 * folder someone groups their projects under has no Penpot counterpart at all
+	 * (§6.29), and renaming it still renames everything below. Which is why the
+	 * walk starts unconditionally and the "is this one a project" test is per
+	 * folder, rather than an early return on the node the user actually touched.
+	 */
 	private function pushFolderRename(Folder $node): bool {
-		$markers = $this->metadata->readFolder($node->getId());
-		if (!$markers->hasProject()) {
-			// The team root carries only a team id, and a plain folder none — only
-			// a project folder renames a Penpot object. Teams are not renamed from
-			// here (the mapping owns the root's name).
+		if ($this->metadata->readFolder($node->getId())->hasTeam()) {
+			// THE MAPPING ROOT, and renaming it renames nothing. A project's name
+			// is its path BELOW the root, so moving or renaming the root itself
+			// leaves every one of those paths exactly as it was — walking the tree
+			// would send a `rename-project` per project, each to the name it
+			// already has. The mapping owns the root's name in any case
+			// (`mapping/view.feature`), not a Files gesture.
 			return false;
 		}
 
-		// A MOVE IS A RENAME, WHICH IS WHY THIS IS A PATH. Dragging
-		// `Penpot/Traveller` into `Penpot/Clients` does not change the folder's own
-		// name at all — only where it sits — and Penpot has to hear about that as
-		// `Clients/Traveller`. The bare name could not express it, so a move
-		// renamed the project to what it was already called.
-		$name = $this->resolver->pathBelowMapping($node);
-		if ($name === null || trim($name) === '') {
-			// Outside every mapping, or the team root itself. Neither is a project
-			// this app renames.
+		if ($this->resolver->resolve($node)->teamId === null) {
+			// Outside every mapping. Nothing below has a path below a mapping to be
+			// named by, so there is nothing to rename and no subtree worth walking
+			// — which is also what keeps an ordinary rename anywhere else in the
+			// instance from costing a directory listing.
+			//
+			// A project folder that has just been dragged OUT of a mapping lands
+			// here too, and that is correct: it stops being a mirror rather than
+			// being renamed. MotionService strips its markers on the same event.
 			return false;
 		}
 
-		$this->client->renameProject($markers->projectId, $name, $this->personalTokens->tokenForActor());
-		$this->logger->info('penpot_sync writeback: renamed Penpot project', [
-			'app' => Application::APP_ID,
-			'projectId' => $markers->projectId,
-			'name' => $name,
-		]);
-		return true;
+		return $this->renameProjectsIn($node, 0);
+	}
+
+	/** @return bool true when at least one project below (or at) $folder was renamed */
+	private function renameProjectsIn(Folder $folder, int $depth): bool {
+		if ($depth >= self::MAX_DEPTH) {
+			return false;
+		}
+
+		$pushed = false;
+
+		$markers = $this->metadata->readFolder($folder->getId());
+		if ($markers->hasProject()) {
+			// A MOVE IS A RENAME, WHICH IS WHY THIS IS A PATH. Dragging
+			// `Penpot/Traveller` into `Penpot/Clients` does not change the folder's
+			// own name at all — only where it sits — and Penpot has to hear about
+			// that as `Clients/Traveller`. The bare name could not express it, so a
+			// move renamed the project to what it was already called.
+			$name = $this->resolver->pathBelowMapping($folder);
+			if ($name !== null && trim($name) !== '') {
+				$this->client->renameProject($markers->projectId, trim($name), $this->personalTokens->tokenForActor());
+				$this->logger->info('penpot_sync writeback: renamed Penpot project', [
+					'app' => Application::APP_ID,
+					'projectId' => $markers->projectId,
+					'name' => $name,
+				]);
+				$pushed = true;
+			}
+		}
+
+		foreach ($this->subfolders($folder) as $child) {
+			// `||` the other way round would short-circuit the recursion the moment
+			// one child pushed, and silently skip its siblings.
+			$pushed = $this->renameProjectsIn($child, $depth + 1) || $pushed;
+		}
+
+		return $pushed;
+	}
+
+	/**
+	 * The folders directly inside $folder.
+	 *
+	 * A listing that throws is logged and treated as empty: the rename the user
+	 * asked for has already happened locally, and failing the whole push over one
+	 * unreadable subfolder would lose the renames that DID work above it.
+	 *
+	 * @return list<Folder>
+	 */
+	private function subfolders(Folder $folder): array {
+		try {
+			$children = $folder->getDirectoryListing();
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync writeback: could not list a folder while renaming the projects below it', [
+				'app' => Application::APP_ID,
+				'path' => $folder->getPath(),
+				'exception' => $e,
+			]);
+
+			return [];
+		}
+
+		$folders = [];
+		foreach ($children as $child) {
+			if ($child instanceof Folder) {
+				$folders[] = $child;
+			}
+		}
+
+		return $folders;
 	}
 }

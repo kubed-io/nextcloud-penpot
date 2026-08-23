@@ -117,6 +117,14 @@ final class PenpotClient {
 		// Note `ids` is a SET of file ids, the one command in this table whose
 		// value is not a scalar — see wireParams()' widened type.
 		'move-files' => ['project' => 'project-id', 'files' => 'ids'],
+		// ── confirmed against the server's own schema, Ch3 §C6.38 ──
+		// KEBAB `project-id`, and that is the trap: `rename-project` and
+		// `delete-project` both take a bare `id` for the same object, so the
+		// obvious `{id, team-id}` is a 400 from a command one line away in the
+		// same table. Read off `schema:move-project` in
+		// `app/rpc/commands/management.clj` in the running backend rather than
+		// guessed — which is also how `rename-file`'s `id` was corrected.
+		'move-project' => ['project' => 'project-id', 'team' => 'team-id'],
 		// ── confirmed live, Ch2 §C6.8 (the copy probe) ──
 		// KEBAB `file-id`, which CORRECTS §6.28's record of a camelCase `fileId`.
 		// The row exists because that correction cost a live call to find: the
@@ -502,6 +510,28 @@ final class PenpotClient {
 		}
 
 		$this->call('move-files', ['project' => $projectId, 'files' => $fileIds], $actorToken);
+	}
+
+	/**
+	 * Move a project into a team — the project-shaped twin of {@see moveFiles()}.
+	 *
+	 * ONE CALL CROSSES A TEAM BOUNDARY, which is the whole reason a project folder
+	 * may be dragged between two mapped folders at all (§C6.38). Nothing is
+	 * re-created: the project keeps its id, its files keep theirs, and every
+	 * history survives — so dragging it back is this same call the other way.
+	 *
+	 * The project's NAME is not touched here. A drag usually changes both (the
+	 * name is the path below the mapping), and the two are separate commands, so
+	 * {@see \OCA\PenpotSync\Listener\NodeRenamedListener} pushes the rename
+	 * first and this second. A failure between them leaves a correctly-named
+	 * project in the old team, which the next pull reconciles.
+	 *
+	 * Penpot answers 204 with no body, like `rename-project` and `move-files`.
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function moveProject(string $projectId, string $teamId, ?string $actorToken = null): void {
+		$this->call('move-project', ['project' => $projectId, 'team' => $teamId], $actorToken);
 	}
 
 	// ── the export surface ──────────────────────────────────────────────────

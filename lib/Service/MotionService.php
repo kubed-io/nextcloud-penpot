@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Service;
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use Psr\Log\LoggerInterface;
@@ -24,8 +25,9 @@ use Psr\Log\LoggerInterface;
  *
  * Both siblings have a `MotionService` and this is cut from theirs, but ours does
  * far less, because §6.1 removes the hard part: a move here never deletes, never
- * creates, and never touches content. There is exactly one call it can make —
- * `move-files` — and it is non-destructive and reversible by dragging back.
+ * creates, and never touches content. There are exactly two calls it can make —
+ * `move-files` for a design and `move-project` for a project folder — and both
+ * are non-destructive and reversible by dragging back.
  *
  * ## A MOVE IS CLASSIFIED BY WHERE THE FILE LANDS (saga §6.29)
  *
@@ -49,11 +51,25 @@ use Psr\Log\LoggerInterface;
  *     subject, and guessing at them from a move is precisely the destructive
  *     inference this app refuses to make.
  *
- * PROJECT FOLDERS DO NOT MOVE IN PENPOT. Nextcloud is authoritative for folder
- * layout (§6.29), so a project folder may be dragged anywhere **inside** its team
- * folder for free — Penpot has no concept of the position. Dragging it *out* of
- * its team is the one hard rule (§6.30) and is refused before it happens by
- * {@see \OCA\PenpotSync\Listener\MoveGuardListener}, not undone after.
+ * ## A PROJECT FOLDER MOVES TOO (§C6.38)
+ *
+ * This class used to say *project folders do not move in Penpot*, and refuse to
+ * look at one. Two things changed under §C6.38 and each takes a branch of
+ * {@see onFolderMove()}:
+ *
+ *   - a project's NAME is its path below the mapping, so a drag renames it. That
+ *     half is {@see PushService}'s, pushed from the same listener event.
+ *   - a project's TEAM is the mapping it sits under, and `move-project` carries a
+ *     project across one in a single call. So a drag between two mapped folders
+ *     is one request, and nothing is re-created to cross the boundary.
+ *
+ * And a project folder dragged OUT of every mapping is not a desync to be
+ * refused — it is an unmapping, the same thing a single design leaving already
+ * does. **Penpot is not contacted at all**: the project stands, its designs
+ * stand, and the folder stops being the thing that mirrors it. What that costs is
+ * the marker, which is why {@see unmap()} strips it rather than leaving a
+ * `penpot_project_id` sitting in unmapped space where the resolver would still
+ * read it (§6.29 walks UP, and does not care how it got there).
  *
  * ## ONLY `sync` FILES GET HERE (saga §6.43, locked)
  *
@@ -88,12 +104,21 @@ use Psr\Log\LoggerInterface;
  * ({@see PersonalTokenService::tokenForActor()}).
  */
 final class MotionService {
+	/**
+	 * A ceiling on the descent when unmapping a tree, mirroring the seatbelts in
+	 * {@see MembershipResolver} and {@see ProjectFolderService}. A Nextcloud tree
+	 * is finite and the walk terminates naturally.
+	 */
+	private const MAX_DEPTH = 100;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
 		private readonly DestinationResolver $destinations,
 		private readonly PersonalTokenService $personalTokens,
+		private readonly ProjectTags $tags,
+		private readonly SyncGuard $guard,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -102,18 +127,19 @@ final class MotionService {
 	 * Reconcile Penpot to a completed move of $target, which used to live under
 	 * $source's parent.
 	 *
-	 * @return bool true when a `move-files` was pushed; false when the move was
-	 *              none of Penpot's business (a plain file, an unmanaged
-	 *              `.penpot`, a folder, or a move that changed no project)
+	 * @return bool true when the move changed something — a `move-files`, a
+	 *              `move-project`, or an unmapping; false when it was none of
+	 *              Penpot's business (a plain file or folder, an unmanaged
+	 *              `.penpot`, or a move that changed neither project nor team)
 	 *
 	 * @throws PenpotApiException when Penpot rejects or cannot be reached — the
 	 *                            caller logs it; the file stays put and the next pull reconciles
 	 */
 	public function onMove(Node $source, Node $target): bool {
+		if ($target instanceof Folder) {
+			return $this->onFolderMove($source, $target);
+		}
 		if (!$target instanceof File) {
-			// Folder layout is Nextcloud's to decide (§6.29); a project folder has
-			// no position in Penpot to update. Moving one out of its team is the
-			// one refusal, and MoveGuardListener has already made it.
 			return false;
 		}
 		if (!str_ends_with($target->getName(), PullService::EXTENSION)) {
@@ -194,6 +220,116 @@ final class MotionService {
 		}
 
 		return true;
+	}
+
+	/**
+	 * A project folder that moved: it crossed a team, or it left every mapping.
+	 *
+	 * THE COMPARISON IS TEAM TO TEAM, not "is there a team now". A project folder
+	 * whose old parent resolved to no team either was never mirrored or had
+	 * already left, and in both cases a move within unmapped space changes
+	 * nothing — reading the destination alone would unmap it a second time, and
+	 * would unmap a personal project (§6.31: a project id with no team above it is
+	 * a valid state, not a broken one) the first time its owner tidied their home.
+	 */
+	private function onFolderMove(Node $source, Folder $target): bool {
+		$markers = $this->metadata->readFolder($target->getId());
+		if (!$markers->hasProject()) {
+			// A plain folder. Every PROJECT below it was named through it and has
+			// just been renamed — but that is a rename, and PushService pushes it
+			// from the same event. Nothing here.
+			return false;
+		}
+		$projectId = $markers->projectId;
+
+		$from = $this->sourceTeam($source);
+		$to = $this->resolver->resolve($target)->teamId;
+		if ($from === $to) {
+			// Dragged within its own team folder: the position means nothing to
+			// Penpot and the name has already been pushed. Zero requests.
+			return false;
+		}
+
+		if ($to === null) {
+			$this->unmap($target, 0);
+			$this->logger->info('penpot_sync writeback: a project folder left every mapping; Penpot untouched', [
+				'app' => Application::APP_ID,
+				'projectId' => $projectId,
+				'path' => $target->getPath(),
+			]);
+
+			return true;
+		}
+
+		$this->client->moveProject($projectId, $to, $this->personalTokens->tokenForActor());
+		$this->logger->info('penpot_sync writeback: moved Penpot project to another team', [
+			'app' => Application::APP_ID,
+			'projectId' => $projectId,
+			'fromTeam' => $from,
+			'toTeam' => $to,
+		]);
+
+		return true;
+	}
+
+	/**
+	 * Stop a folder tree from being a mirror: strip the markers, take the badge off.
+	 *
+	 * RECURSIVE, because the resolver is. Leaving a `penpot_project_id` on a
+	 * folder that now sits outside every mapping does not make it inert — §6.29
+	 * walks UP from whatever lands in it and would find that id, reporting a
+	 * project with no team above it. So a nested project has to be unmapped too,
+	 * or dropping a design into the unmapped tree would file it into a Penpot
+	 * project the folder no longer represents.
+	 *
+	 * The `penpot` tag goes with the marker. It is the opt-in badge
+	 * ({@see ProjectFolderService}), and a folder wearing it while carrying no
+	 * project id is the one place the badge would mean nothing. Inside the guard,
+	 * so the `TagUnassignedEvent` is unmistakably the app's own motion.
+	 *
+	 * Nothing here contacts Penpot, and nothing here is undone by a drag back:
+	 * moving the folder in again finds no marker and adopts nothing, which is
+	 * `projects/create.feature`'s subject rather than this one's.
+	 */
+	private function unmap(Folder $folder, int $depth): void {
+		if ($depth >= self::MAX_DEPTH) {
+			return;
+		}
+
+		$this->metadata->clear($folder->getId());
+		$this->guard->run(fn () => $this->tags->remove($folder->getId()));
+
+		try {
+			$children = $folder->getDirectoryListing();
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync writeback: could not list an unmapped folder; a nested project may keep its marker', [
+				'app' => Application::APP_ID,
+				'path' => $folder->getPath(),
+				'exception' => $e,
+			]);
+
+			return;
+		}
+
+		foreach ($children as $child) {
+			if ($child instanceof Folder && $this->metadata->readFolder($child->getId())->hasProject()) {
+				$this->unmap($child, $depth + 1);
+			}
+		}
+	}
+
+	/**
+	 * The team the node used to be under, resolved through its *old parent* for
+	 * the same reason {@see sourceProject()} is.
+	 */
+	private function sourceTeam(Node $source): ?string {
+		try {
+			$parent = $source->getParent();
+		} catch (NotFoundException) {
+			return null;
+		}
+
+		return $this->resolver->resolve($parent)->teamId;
 	}
 
 	/**

@@ -62,7 +62,8 @@ use OCP\SystemTag\TagAssignedEvent;
  * Nextcloud gestures are the app's whole write surface (§6.19) — content is
  * strictly one-way (§6.1), so nothing here ever pushes shape data:
  *
- *   rename / move  → `rename-file`, `rename-project`, `move-files`  (Course 4)
+ *   rename / move  → `rename-file`, `rename-project`, `move-files`,
+ *                    `move-project`                                  (Course 4)
  *   copy           → `duplicate-file` (+ a `move-files` when it lands elsewhere)
  *   write (+ New)  → `create-file`                                  (§6.33)
  *   delete         → `delete-file`            → Penpot's trash, ~7 days
@@ -70,8 +71,9 @@ use OCP\SystemTag\TagAssignedEvent;
  *   restore        → `restore-deleted-team-files`     — the inverse of the delete
  *
  * Two refusals sit in front of them ({@see MoveGuardListener}, on the event that
- * fires BEFORE the move): a project folder may not leave its team folder (§6.30),
- * and a `link` file may not leave the project it points into (§6.43). The
+ * fires BEFORE the move): nothing crosses the edge of a `link` mapping in either
+ * direction (§C6.38), and a `link` file may not leave the project it points into
+ * (§6.43). The
  * `SyncGuard` fences out the app's own motion — the pull renames, writes and
  * trashes mirrors constantly — so none of these loop.
  *
@@ -119,10 +121,11 @@ final class Application extends App implements IBootstrap {
 		// pull's own follow-renames are fenced out by the SyncGuard, so neither loops.
 		$context->registerEventListener(NodeRenamedEvent::class, NodeRenamedListener::class);
 
-		// The one refusal (§6.30), and it must happen BEFORE the move: a project
-		// folder may not leave its team folder, because neither honouring it
-		// (a cross-team reparent in Penpot) nor ignoring it (a silent desync) is
-		// acceptable. Aborting the event shows the user why, at the moment they try.
+		// The refusals (§C6.38, §6.43), and they must happen BEFORE the move: a
+		// `link` mapping holds pointers rather than designs, so anything dragged
+		// out of one arrives as empty files and anything dragged in is content
+		// Penpot never asked for. Aborting the event is the only hook that reaches
+		// every route; the readable half is LinkWriteGuardPlugin on method:MOVE.
 		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveGuardListener::class);
 
 		// A LINK IS READ-ONLY ON DISK, and here that needs saying out loud: a link

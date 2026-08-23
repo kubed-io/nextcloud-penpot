@@ -18,8 +18,12 @@ use OCP\IL10N;
 /**
  * WHICH MOVES THIS APP REFUSES, AND IN WHAT WORDS — asked, never thrown.
  *
- * The two rules are unchanged and still live in one place; what moved is who does
- * the throwing. They have to be ASKED from two places, because Nextcloud gives no
+ * There are two rules and they are both about MODE, which is the only thing a
+ * move must not change. §C6.38 retired the third — *a project folder stays inside
+ * its team folder* (§6.30, locked "for now" and now unlocked) — because it was
+ * guarding against a limit Penpot does not have; see {@see forFolder}.
+ *
+ * They live in one place and are ASKED from two, because Nextcloud gives no
  * single place that both stops a move and tells the person why.
  *
  *  - {@see \OCA\PenpotSync\Listener\MoveGuardListener} asks on
@@ -58,6 +62,7 @@ final class MoveRules {
 	public function __construct(
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
+		private readonly MappingService $mappings,
 		private readonly IL10N $l,
 	) {
 	}
@@ -91,7 +96,7 @@ final class MoveRules {
 	/** @param Membership|null $to where the source would end up, already resolved */
 	private function evaluate(Node $source, ?Membership $to): ?string {
 		if ($source instanceof Folder) {
-			return $this->forProjectFolder($source, $to);
+			return $this->forFolder($source, $to);
 		}
 		if ($source instanceof File) {
 			return $this->forLinkFile($source, $to);
@@ -100,31 +105,85 @@ final class MoveRules {
 		return null;
 	}
 
-	/** Rule 1 (§6.30) — a project folder stays inside the team folder it belongs to. */
-	private function forProjectFolder(Folder $source, ?Membership $to): ?string {
-		if (!$this->metadata->readFolder($source->getId())->hasProject()) {
-			// A plain folder has no Penpot identity to strand, and the team root
-			// is the mapping's business.
+	/**
+	 * Rule 1 (§C6.38) — a folder may not move in or out of a `link` mapping.
+	 *
+	 * ## WHAT THIS RULE REPLACED, AND WHY THE OLD ONE WAS WRONG
+	 *
+	 * Until §C6.38 this was §6.30: *a project folder stays inside the team folder
+	 * it belongs to*, refusing every move that changed the team — including one
+	 * that left every mapping. It was stated three times in the old spec and it
+	 * was wrong all three, for two separate reasons:
+	 *
+	 *   - `move-project` takes `{project-id, team-id}`, so crossing a team is ONE
+	 *     call, exactly as `move-files` is for a single design. The refusal was
+	 *     protecting against a limit Penpot does not have.
+	 *   - Dragging a project OUT of every mapping is not a desync, it is an
+	 *     unmapping — the same thing a single design leaving already does. The
+	 *     Penpot project stands untouched; the folder simply stops mirroring it.
+	 *
+	 * What is left is the rule that is actually about safety rather than about a
+	 * misread API, and it is a MODE rule: a mode belongs to the team, and no
+	 * gesture in Nextcloud may change one.
+	 *
+	 *   - **out of a `link` mapping** — a link folder holds no archives, only
+	 *     pointers, so wherever it went it would arrive as a tree of empty files.
+	 *     Its own team included: there is nowhere for it to go.
+	 *   - **into a `link` mapping** — a link mapping is filled FROM Penpot and
+	 *     nothing else, whatever is arriving.
+	 *
+	 * Applies to every folder, not only a project folder: "whatever is arriving"
+	 * is the destination half of the rule, and a plain folder full of designs
+	 * arriving in a link team would be the same empty-file surprise one level up.
+	 */
+	private function forFolder(Folder $source, ?Membership $to): ?string {
+		if ($this->metadata->readFolder($source->getId())->hasTeam()) {
+			// THE MAPPING ROOT ITSELF, which is the mapping's business and not a
+			// project's — the same carve-out the old rule made, for the same reason.
+			// Without it the source rule would read the root's own team marker and
+			// refuse to let anyone reorganise a link mapping's top-level folder,
+			// while the identical gesture on a sync mapping stayed free.
 			return null;
 		}
 
-		$from = $this->resolver->resolve($source)->teamId;
-		if ($from === null) {
-			// A project folder under no team folder is a personal project (§6.31),
-			// which has no team boundary to leave.
-			return null;
+		if ($this->isLinkTeam($this->resolver->resolve($source)->teamId)) {
+			return $this->l->t(
+				'"%s" is inside a folder that mirrors Penpot in link mode, so it holds pointers '
+				. 'rather than the designs themselves. Moving it would leave you with a folder of '
+				. 'empty files, so it has to stay where Penpot puts it — its own team folder '
+				. 'included. Move the project in Penpot instead.',
+				[$source->getName()],
+			);
 		}
 
-		if ($to?->teamId === $from) {
-			return null;
+		if ($this->isLinkTeam($to?->teamId)) {
+			return $this->l->t(
+				'"%s" cannot be moved in there: that folder mirrors a Penpot team in link mode, so '
+				. 'its contents are filled from Penpot and nothing may be added from this side. '
+				. 'Create the project in Penpot and it will appear here.',
+				[$source->getName()],
+			);
 		}
 
-		return $this->l->t(
-			'"%s" mirrors a Penpot project, so it has to stay inside the team folder it belongs '
-			. 'to. Moving a project between teams has to be done in Penpot itself. Move it '
-			. 'anywhere within that team folder instead, or move the individual designs.',
-			[$source->getName()],
-		);
+		return null;
+	}
+
+	/**
+	 * True when this team is mapped in `link` mode.
+	 *
+	 * A null team is not a link team — it is no team at all, which is the
+	 * unmapped destination §C6.38 explicitly allows. An UNMAPPED team id is not
+	 * one either: the resolver reads a marker off a folder, and a mapping torn
+	 * down since that marker was written leaves the folder still carrying it.
+	 * Refusing on a mapping that no longer exists would strand the folder for a
+	 * reason the user could not act on.
+	 */
+	private function isLinkTeam(?string $teamId): bool {
+		if ($teamId === null || $teamId === '') {
+			return false;
+		}
+
+		return $this->mappings->getByTeamId($teamId)?->mode === Mapping::MODE_LINK;
 	}
 
 	/** Rule 2 (§6.43) — a `link` file may not change project. */

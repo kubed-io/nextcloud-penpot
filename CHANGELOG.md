@@ -25,9 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Moving a project folder now renames the project in Penpot.** Dragging one into another folder used to leave Penpot calling it by its old name, and a project nested inside a folder was named after the folder alone instead of its path — so `Penpot/foo/Old` was announced as `Old`. Both sides now agree that a project's name is where it sits.
 
-- When a move is refused — a project leaving its team folder, a link leaving its project — Nextcloud now shows you the reason instead of an empty error.
+- When a move is refused — anything crossing the edge of a link folder — Nextcloud now shows you the reason instead of an empty error.
 
 ### Changed
+
+- **A project folder can now be dragged anywhere**, including into another team's folder or out of every mapped folder entirely. Crossing a team keeps the project, its designs and their history — nothing is re-created. Dragging one out simply stops it being a mirror: nothing is deleted in Penpot, and the folder becomes an ordinary Nextcloud folder. This used to be refused outright.
+
+- **Moving a folder now renames every project below it**, not just the one you dragged — a project's name is the path it sits at, so grouping three projects under a new folder renames all three.
 
 - Supports Nextcloud **34**, and every major in the supported range is now actually executed by the integration suite — after two patch releases of Nextcloud turned out to disagree about behaviour these apps rely on.
 

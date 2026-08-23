@@ -40,8 +40,8 @@ use Psr\Log\LoggerInterface;
  * that if the move then fails the Penpot name is at least already correct and the
  * next pull has less to reconcile.
  *
- * The move that *cannot* happen — a project folder leaving its team folder
- * (§6.30) — is refused before it happens by {@see MoveGuardListener}, so by the
+ * The move that *cannot* happen — anything crossing the edge of a `link` mapping
+ * (§C6.38) — is refused before it happens by {@see MoveGuardListener}, so by the
  * time this runs every move is already a legal one.
  *
  * ## THE GUARD IS THE WALL (saga Ch2 Course 4)
