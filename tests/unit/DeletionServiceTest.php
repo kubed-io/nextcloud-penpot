@@ -97,6 +97,32 @@ final class DeletionServiceTest extends TestCase {
 	}
 
 	/**
+	 * THE MAPPING ROOT IS THE ONE FOLDER THIS WALK MUST NOT START FROM.
+	 *
+	 * The root carries a team marker and no project of its own, so an unguarded
+	 * descent reaches every project in the team and deletes the lot — one local
+	 * folder delete destroying an entire Penpot team's work. Tearing a mapping
+	 * down is `occ penpot:remove-mapping`, which is deliberately non-destructive;
+	 * a Files gesture must not be a more powerful version of it.
+	 *
+	 * This test fails against the first cut of `onFolderTrashed()`, which had the
+	 * carve-out its rename-shaped twin already made.
+	 */
+	public function testTrashingTheMappedRootDeletesNothingInPenpot(): void {
+		$doomed = $this->folder(41);
+		$root = $this->folder(40, [$doomed]);
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => $id === 40
+				? new FolderMarkers('', 'team-abc')
+				: new FolderMarkers('project-doomed', ''),
+		);
+
+		$this->client->expects($this->never())->method('deleteProject');
+
+		$this->deletions->onFolderTrashed($root);
+	}
+
+	/**
 	 * A plain folder inside a mapping names no project, and deleting one must
 	 * cost nothing — that is what keeps a mapped folder usable as a folder.
 	 */

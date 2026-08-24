@@ -109,6 +109,20 @@ final class DeleteListenerTest extends TestCase {
 		$this->listener->handle($this->deleteOfFolder('/admin/files_trashbin/files/Doomed.d1700000000'));
 	}
 
+	/**
+	 * A USER FOLDER CANNOT IMPERSONATE THE TRASHBIN.
+	 *
+	 * The check was `/files_trashbin/`, which is a substring anyone can create: a
+	 * folder of that name in a home gives `/alice/files/files_trashbin/…` and every
+	 * delete inside it silently stopped reaching Penpot. Core's real path carries
+	 * `files/` after the mount, which is what makes it a mount rather than a name.
+	 */
+	public function testAUserFolderNamedLikeTheTrashbinIsStillRouted(): void {
+		$this->deletions->expects($this->once())->method('onFolderTrashed');
+
+		$this->listener->handle($this->deleteOfFolder('/admin/files/files_trashbin/Doomed'));
+	}
+
 	public function testAFolderDeleteFailureNeverAbortsTheGesture(): void {
 		// This event fires BEFORE the delete, so a throw would cancel a gesture
 		// the user has every right to make.

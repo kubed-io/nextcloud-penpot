@@ -366,6 +366,19 @@ existing*, and a project nested inside a trashed one is going too.
   that separates them, which is why `refusalForLandingIn()` now takes it: the DAV
   side asks before the destination exists, so it cannot read one off a node.
 
+**The subtree walk had a blast radius nobody had drawn.** Review caught it: the
+mapping ROOT carries a team marker and no project of its own, so `onFolderTrashed()`
+started from it would descend the whole mapping and delete every project in the
+team. One local folder delete destroying a Penpot team's work — from a walk written
+to be careful about exactly this.
+
+`PushService::pushFolderRename()` already had the carve-out and this did not, which
+is the tell: the same shape written twice, and the second copy lost the guard the
+first one had. It matters far more here, too — there, missing it costs a batch of
+no-op renames. Tearing a mapping down is `occ penpot:remove-mapping` and is
+deliberately non-destructive; a Files gesture must never be a more powerful version
+of the command that exists to do the job.
+
 **The harness and the rule turned out to agree already.** Refusing deletes inside a
 link mapping looked like it would break `ArrangeSteps::emptyMappedFolder()`, which
 clears mapped folders between scenarios. It does not: the arrange unmaps every

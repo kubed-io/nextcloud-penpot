@@ -57,7 +57,16 @@ final class DeleteListener implements IEventListener {
 	 * `delete-file` for a design already in Penpot's trash is a wasted call at
 	 * best. {@see TrashPurgeHook} owns everything on that side of the line.
 	 */
-	private const TRASHBIN_SEGMENT = '/files_trashbin/';
+	/**
+	 * The real trashbin mount, spelled tightly enough that a user cannot fake it.
+	 *
+	 * `/files_trashbin/` alone is a SUBSTRING a user can create: a folder called
+	 * `files_trashbin` in their home gives `/alice/files/files_trashbin/…`, which
+	 * matched — and silently stopped every delete inside it from reaching Penpot.
+	 * Core's own path is `/<uid>/files_trashbin/files/<name>.dNNNNNNNNNN`, so the
+	 * `files/` is what makes this the mount rather than a name.
+	 */
+	private const TRASHBIN_SEGMENT = '/files_trashbin/files/';
 
 	public function __construct(
 		private DeletionService $deletions,

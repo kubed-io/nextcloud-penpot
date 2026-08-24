@@ -58,6 +58,10 @@ use Psr\Log\LoggerInterface;
  * SOFT ON BOTH SIDES, which is what makes one gesture over many designs
  * acceptable at all: the folder goes to Nextcloud's trash, the projects go to
  * Penpot's, and both come back. See {@see PenpotClient::deleteProject()}.
+ *
+ * The one folder this refuses to act on is the MAPPING ROOT — see
+ * {@see onFolderTrashed()}. A walk that starts there reaches every project in the
+ * team, which is not something any Files gesture should be able to do.
  */
 final class DeletionService {
 	/**
@@ -123,6 +127,27 @@ final class DeletionService {
 	 * either way (§6.18 rule 3).
 	 */
 	public function onFolderTrashed(Folder $node): void {
+		if ($this->metadata->readFolder($node->getId())->hasTeam()) {
+			// THE MAPPING ROOT, AND THE ONE PLACE THIS WALK MUST NOT START.
+			//
+			// The root carries a team marker and no project of its own, so without
+			// this the descent would reach every project in the team and delete the
+			// lot — one local folder delete quietly destroying an entire Penpot
+			// team's work. It is the same carve-out
+			// {@see PushService::pushFolderRename()} makes, and it belongs here far
+			// more urgently: there, missing it costs a batch of no-op renames.
+			//
+			// Tearing a mapping down is `occ penpot:remove-mapping`, which is
+			// deliberately non-destructive. A gesture in the Files app must not be a
+			// more powerful version of the command that exists to do this.
+			$this->logger->info('penpot_sync delete: the mapped root was trashed; Penpot is left alone', [
+				'app' => Application::APP_ID,
+				'folder' => $node->getName(),
+			]);
+
+			return;
+		}
+
 		$projectIds = $this->projectsBelow($node, 0);
 		if ($projectIds === []) {
 			// A plain folder that names no project — an ordinary folder inside a

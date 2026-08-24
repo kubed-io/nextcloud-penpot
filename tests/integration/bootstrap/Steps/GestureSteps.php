@@ -685,9 +685,15 @@ trait GestureSteps {
 	/**
 	 * Every design id at or below $path, read from the app's own DAV properties.
 	 *
-	 * @return array<string, string> penpot_id keyed by the file's name, so a
+	 * @return array<string, string> penpot_id keyed by the file's PATH, so a
 	 *                               failure can say WHICH design is missing rather
-	 *                               than printing a bare uuid
+	 *                               than printing a bare uuid.
+	 *
+	 *                               The path and not the basename: `+` merges by
+	 *                               key, so two designs sharing a filename in two
+	 *                               subfolders would collapse to one and this
+	 *                               assertion would silently check less of the
+	 *                               subtree than it claims to.
 	 */
 	private function designIdsBelow(string $path, int $depth): array {
 		if ($depth > 20) {
@@ -698,7 +704,7 @@ trait GestureSteps {
 		if (str_ends_with($path, '.penpot')) {
 			$id = (string)$this->davReadMetadata($path, 'penpot_id');
 
-			return $id === '' ? [] : [basename($path) => $id];
+			return $id === '' ? [] : [$path => $id];
 		}
 
 		$found = [];
