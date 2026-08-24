@@ -452,6 +452,17 @@ loudly. The DELETE one passed: *"Penpot holds no project named `foo/bar/baz`"* i
 trivially true of a project that never existed. Both arranges now spell the nesting
 out with the `kind` column, which is what it is for.
 
+**BOTH ROUTES IN MUST MEAN THE SAME THING.** Review caught the second half of it:
+`onTagged()` re-files the designs already in the folder — that is the whole point
+of allowing a LATE opt-in — and `adoptForContent()` did not. A managed design can
+already be below a plain folder (one that left a mapping and came back, one whose
+own promotion Penpot refused), so filing only the newcomer left two designs in one
+folder showing up in two projects. Both routes now share `fileExistingDesigns()`,
+because which gesture promoted a folder must not change what the folder means.
+
+The same shape as #38's near-miss, one class over: a behaviour written twice, the
+second copy quietly weaker than the first.
+
 **A RACE THE OLD RULE DID NOT HAVE.** Review caught it: promotion reads "is this
 folder a project", then makes a network round trip, then stamps. Dragging three
 designs into a new folder is three concurrent requests in three processes, and

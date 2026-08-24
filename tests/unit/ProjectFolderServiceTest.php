@@ -27,13 +27,19 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 /**
- * A folder becomes a Penpot project — by opt-in (`create-project.feature`).
+ * A folder becomes a Penpot project — **when a design is in it**, or when someone
+ * tags it (`projects/create.feature`).
  *
  * The asymmetry under test: every Penpot project becomes a folder automatically,
- * but a folder becomes a project ONLY when someone tags it. So the interesting
- * cases are all about what does NOT happen — an untagged folder, a folder
- * outside every mapping, a folder that is already a project, an untracked
- * `.penpot` sitting inside one.
+ * but only SOME folders become projects. This file used to say that happened
+ * "ONLY when someone tags it", which stopped being true when promotion by content
+ * landed — so the two routes are now tested side by side, and the thing worth
+ * pinning is that they agree. Which gesture promoted a folder must not change
+ * what the folder means.
+ *
+ * The interesting cases are still mostly about what does NOT happen — an EMPTY
+ * folder, a folder outside every mapping, a mapping root, a folder that is
+ * already a project, an untracked `.penpot` sitting inside one.
  */
 final class ProjectFolderServiceTest extends TestCase {
 	private const TEAM = '4eda2e11-843e-8045-8008-51824bda07a1';
@@ -343,7 +349,6 @@ final class ProjectFolderServiceTest extends TestCase {
 		return new PenpotFileMetadata($penpotId, '5@t1', Mapping::MODE_LINK, self::TEAM);
 	}
 
-	/** @param list<Node> $children */
 	// ── adoptForContent: promotion by CONTENT rather than by tag ────────────
 
 	/**
@@ -407,6 +412,30 @@ final class ProjectFolderServiceTest extends TestCase {
 		$this->client->expects($this->never())->method('createProject');
 
 		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Holiday photos')));
+	}
+
+	/**
+	 * PROMOTION BY CONTENT RE-FILES WHAT WAS ALREADY THERE, exactly as the tag does.
+	 *
+	 * A managed design can already sit below a plain folder — one that left a
+	 * mapping and came back, or one whose own promotion Penpot refused a moment
+	 * earlier. Filing only the design that happened to arrive last would leave two
+	 * designs in one folder showing up in two Penpot projects, which is the failure
+	 * this class's late-opt-in contract exists to prevent. Which route promoted the
+	 * folder must not change what the folder means.
+	 */
+	public function testAdoptionFilesTheDesignsAlreadyInTheFolder(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelow = 'Team';
+		$this->client->method('createProject')->willReturn(['id' => 'project-new']);
+
+		$this->fileStamps[31] = $this->stamp('design-already-here');
+		$folder = $this->folder(20, 'Team', [$this->design(31, 'Older.penpot')]);
+
+		$this->client->expects($this->once())->method('moveFiles')
+			->with('project-new', ['design-already-here'], null);
+
+		self::assertSame('project-new', $this->projects->adoptForContent($folder));
 	}
 
 	/**
@@ -480,6 +509,7 @@ final class ProjectFolderServiceTest extends TestCase {
 		return $this->folder($id, 'Penpot');
 	}
 
+	/** @param list<Node> $children */
 	private function folder(int $id, string $name, array $children = []): Folder {
 		$node = $this->createMock(Folder::class);
 		$node->method('getId')->willReturn($id);

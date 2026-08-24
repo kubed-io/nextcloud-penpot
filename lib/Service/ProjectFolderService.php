@@ -59,6 +59,13 @@ use Psr\Log\LoggerInterface;
  *
  * ## LATE OPT-IN IS THE WHOLE POINT: THE CONTENTS COME TOO
  *
+ * True of BOTH routes in. {@see onTagged()} and {@see adoptForContent()} share
+ * {@see fileExistingDesigns()} deliberately: a folder promoted by a design
+ * arriving may already hold managed designs — one that left a mapping and came
+ * back, one whose own promotion Penpot refused — and filing only the newcomer
+ * would leave two designs in one folder showing up in two projects. Which route
+ * promoted the folder must not change what the folder means.
+ *
  * The interesting half is {@see fileExistingDesigns()}. A folder someone has
  * been filling with designs becomes a project *with those designs in it*, which
  * is the reason to allow opting in late rather than forcing the decision up
@@ -310,12 +317,29 @@ final class ProjectFolderService {
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
 		$this->guard->run(fn () => $this->tags->apply($folder->getId()));
 
+		// THE CONTENTS COME TOO, exactly as they do for a tag. A managed design can
+		// already be sitting below a plain folder — one that left a mapping and came
+		// back, or one whose own promotion Penpot refused a moment earlier — and
+		// filing only the design that happened to arrive last would leave the others
+		// in whichever project they were in before. Two designs in one folder,
+		// showing up in two projects, is precisely what this class's late-opt-in
+		// contract exists to prevent, and it must not depend on WHICH way the folder
+		// was promoted.
+		//
+		// The triggering design is not a special case. On a create it carries no id
+		// yet, so it is not collected; on a move-in it is, and it is filed here and
+		// then again by the caller — `move-files` is idempotent and non-destructive
+		// (§6.27/§6.34), so the cost is one redundant request in one branch and the
+		// benefit is that the two adoption paths cannot drift apart.
+		$filed = $this->fileExistingDesigns($folder, $projectId);
+
 		$this->logger->info('penpot_sync project: a design arrived, so the folder is a project', [
 			'app' => Application::APP_ID,
 			'folder' => $folder->getPath(),
 			'team' => $teamId,
 			'project' => $projectId,
 			'name' => $name,
+			'designs_filed' => $filed,
 		]);
 
 		return $projectId;
