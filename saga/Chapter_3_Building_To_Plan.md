@@ -186,12 +186,12 @@ there was no cheap batch to pick up; the shared Background had to be built first
 
 | | | after Round 2 | now |
 |---|---|---|---|
-| live | headers → executed | **15** → **41** | **19** → **49** |
-| `@todo` | the queue | 87 | 77 |
+| live | headers → executed | **15** → **41** | **23** → **54** |
+| `@todo` | the queue | 87 | 76 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
-| `@unbuilt` | each names what the code owes | 5 | 11 |
+| `@unbuilt` | each names what the code owes | 5 | 8 |
 
-The legs now stand at `admin` 25, `design` 9, `project` 13, `core` 2.
+The legs now stand at `admin` 25, `design` 10, `project` 17, `core` 2.
 
 **`@unbuilt` GROWING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
 3 and 13 → 11 across Round 4, and every move is the same measurement working:
@@ -322,6 +322,69 @@ SINGLE key — it can write keys and drop a whole record, and unmapping a design
 wants neither. Doing it here only for designs that happen to sit under a moved
 project would make the two paths disagree in a new direction instead of fixing the
 old one.
+
+### Round 5 — deleting a project, and a `@todo` that was a lie
+
+Round 4 ended by confirming `delete-project` exists and takes a bare `{id}`, and
+recorded it as no-longer-a-guess. Round 5 is the round that used it, and the first
+thing it found was that the whole verb was missing:
+
+- `DeleteListener` returned on anything that was not a `File`;
+- `DeletionService` had `onTrashed(File)` and `onPurged(File)`, and no folder path;
+- `PenpotClient` had `createProject`, `renameProject`, `moveProject` — and no
+  `deleteProject`.
+
+Trashing a project folder was a plain local delete that reached Penpot not at all.
+
+**AND `Trash a project folder` WAS TAGGED `@todo`**, which in this repo means *the
+code exists; only the test is missing*. It did not exist. That tag is the failure
+the four-tag vocabulary was introduced to prevent, arriving from the one direction
+the vocabulary does not defend: an `@unbuilt` mis-tagged as `@todo` reads as work
+QUEUED rather than work MISSING, and nothing collects on the promise until someone
+runs the scenario. Worth carrying forward — the remaining 76 `@todo` are promises,
+not an inventory.
+
+The round closed four scenarios and two shapes:
+
+**A gesture reaches everything named through the folder.** `DeletionService::
+onFolderTrashed()` is a subtree walk, the delete-shaped twin of Round 4's
+`PushService::pushFolderRename()`. It does NOT stop at a marked folder the way
+`ProjectFolderService::managedDesignsBelow()` does, and the difference is the
+question each is asking: that one wants *which designs belong to this project*, so
+a nearer project ancestor ends the descent; this one wants *what is about to stop
+existing*, and a project nested inside a trashed one is going too.
+
+**The guard covers every verb.** Two holes, one rule apiece:
+
+- `method:DELETE` reached nothing, so trashing a link project was a plain 204. A
+  read-only mirror you can delete is not read-only.
+- A link could be RENAMED, because a rename is a move to a sibling path — same
+  verb, same event, same pair of nodes — so the position test resolved it to the
+  project it started in and waved it through. `A link cannot be moved out of the
+  project it points into` had been green for courses while `Rename a link in
+  Nextcloud` sat `@unbuilt`, and the two are one rule. The NAME is the only thing
+  that separates them, which is why `refusalForLandingIn()` now takes it: the DAV
+  side asks before the destination exists, so it cannot read one off a node.
+
+**The subtree walk had a blast radius nobody had drawn.** Review caught it: the
+mapping ROOT carries a team marker and no project of its own, so `onFolderTrashed()`
+started from it would descend the whole mapping and delete every project in the
+team. One local folder delete destroying a Penpot team's work — from a walk written
+to be careful about exactly this.
+
+`PushService::pushFolderRename()` already had the carve-out and this did not, which
+is the tell: the same shape written twice, and the second copy lost the guard the
+first one had. It matters far more here, too — there, missing it costs a batch of
+no-op renames. Tearing a mapping down is `occ penpot:remove-mapping` and is
+deliberately non-destructive; a Files gesture must never be a more powerful version
+of the command that exists to do the job.
+
+**The harness and the rule turned out to agree already.** Refusing deletes inside a
+link mapping looked like it would break `ArrangeSteps::emptyMappedFolder()`, which
+clears mapped folders between scenarios. It does not: the arrange unmaps every
+mapping BEFORE it clears, and its own comment says why — *"while a mapping is live,
+deleting inside it is a gesture that reaches Penpot."* The same reasoning that
+makes `isLinkTeam()` return false for a torn-down mapping.
 
 ### The one harness wall left
 

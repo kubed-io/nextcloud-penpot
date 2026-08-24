@@ -1248,6 +1248,27 @@ The designs go to Penpot's trash with the project — Penpot deletes a project s
 so the whole gesture is reversible on both sides for the length of its grace window.
 The Nextcloud folder is recoverable from the Nextcloud trash, independently.
 
+**Confirmed against the server, not assumed.** `delete-project` sets `deleted-at` to
+a point in the future using the team's own deletion delay — the identical mechanism
+`delete-file` uses, and the one §C6.11 already established the app can trust. That
+matters because the softness is the entire argument for letting ONE gesture reach
+many designs without asking first. It also refuses to delete a team's DEFAULT
+project (`:non-deletable-project`), which this app cannot reach: Drafts is a state,
+not a folder (§6.35), so no folder carries the default project's id.
+
+**This scenario was tagged `@todo` and the code did not exist.** `@todo` means *the
+code exists; only the test is missing*, and nothing deleted a project at all —
+`DeleteListener` returned on anything that was not a `File`, `DeletionService` had
+only `onTrashed(File)` and `onPurged(File)`, and `PenpotClient` had no
+`delete-project`. Trashing a project folder was a plain local delete.
+
+Nobody had checked, and nothing would have made them: a `@todo` is a promise about
+code that only running the scenario collects on. It is the same failure the four-tag
+vocabulary was introduced to prevent, arriving from the one direction the vocabulary
+does not defend — a tag that is too OPTIMISTIC reads as work queued rather than work
+missing. Worth remembering when reading the remaining queue: 76 of these are
+promises.
+
 ### Trashing a folder takes every project its name spelled
 
 THE CONSEQUENCE OF THE PATH MODEL, and the one thing about deleting that does not

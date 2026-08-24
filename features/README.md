@@ -311,10 +311,10 @@ them the only sane place to break ground. Where the suite stands now:
 
 | status | scenarios | |
 |---|---|---|
-| *(none)* — runs in CI | 19 | 49 executed: `admin` 25, `design` 9, `project` 13, `core` 2 |
-| `@todo` | 77 | the queue |
+| *(none)* — runs in CI | 23 | 54 executed: `admin` 25, `design` 10, `project` 17, `core` 2 |
+| `@todo` | 76 | the queue |
 | `@blocked` | 9 | no browser, no app removal, no way to author a design |
-| `@unbuilt` | 11 | the app disagrees with the spec; see below |
+| `@unbuilt` | 8 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |
 
 **The `project` leg nearly doubled without a single test being written for it.**

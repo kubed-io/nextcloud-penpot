@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -39,8 +40,36 @@ use Psr\Log\LoggerInterface;
  * An id that is absent means the design was already purged, or someone restored
  * it in Penpot's own UI — and in both cases destroying it is not what the user
  * asked for. That check is not belt-and-braces; it is the entire seatbelt.
+ *
+ * ## A FOLDER IS A GESTURE ON EVERY PROJECT ITS NAME SPELLED (§C6.38)
+ *
+ * {@see onFolderTrashed()} is the delete-shaped twin of
+ * {@see PushService::pushFolderRename()}, and it is a subtree walk for the same
+ * reason: a project's name is its PATH below the mapping, so `Penpot/foo` is not
+ * merely a folder that happens to contain projects — `foo/bar` and `foo/bar/baz`
+ * are named THROUGH it and stop meaning anything the moment it goes.
+ *
+ * This was the last verb still acting on the node it touched alone. Until now
+ * nothing deleted a project at all: `DeleteListener` returned on anything that
+ * was not a `File`, and `PenpotClient` had no `delete-project`. The scenario for
+ * it was tagged `@todo` — *the code exists, only the test is missing* — which was
+ * simply untrue, and is the kind of claim only running the thing disproves.
+ *
+ * SOFT ON BOTH SIDES, which is what makes one gesture over many designs
+ * acceptable at all: the folder goes to Nextcloud's trash, the projects go to
+ * Penpot's, and both come back. See {@see PenpotClient::deleteProject()}.
+ *
+ * The one folder this refuses to act on is the MAPPING ROOT — see
+ * {@see onFolderTrashed()}. A walk that starts there reaches every project in the
+ * team, which is not something any Files gesture should be able to do.
  */
 final class DeletionService {
+	/**
+	 * A ceiling on the descent, mirroring the seatbelts in
+	 * {@see MembershipResolver} and {@see PushService}.
+	 */
+	private const MAX_DEPTH = 100;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
@@ -82,6 +111,113 @@ final class DeletionService {
 				'exception' => $e,
 			]);
 		}
+	}
+
+	/**
+	 * A FOLDER was trashed: every project named through it goes to Penpot's trash.
+	 *
+	 * Collected first, deleted second, and deliberately in that order — the walk
+	 * reads metadata off nodes that are on their way out, and doing it while
+	 * issuing network calls would interleave a filesystem read with a round trip
+	 * per project. It also makes the log line able to say how many.
+	 *
+	 * ONE FAILURE DOES NOT STOP THE REST. Each project is its own call and its own
+	 * try: a project Penpot will not delete (the team's default, say) must not
+	 * take its siblings down with it, and the local trash has already happened
+	 * either way (§6.18 rule 3).
+	 */
+	public function onFolderTrashed(Folder $node): void {
+		if ($this->metadata->readFolder($node->getId())->hasTeam()) {
+			// THE MAPPING ROOT, AND THE ONE PLACE THIS WALK MUST NOT START.
+			//
+			// The root carries a team marker and no project of its own, so without
+			// this the descent would reach every project in the team and delete the
+			// lot — one local folder delete quietly destroying an entire Penpot
+			// team's work. It is the same carve-out
+			// {@see PushService::pushFolderRename()} makes, and it belongs here far
+			// more urgently: there, missing it costs a batch of no-op renames.
+			//
+			// Tearing a mapping down is `occ penpot:remove-mapping`, which is
+			// deliberately non-destructive. A gesture in the Files app must not be a
+			// more powerful version of the command that exists to do this.
+			$this->logger->info('penpot_sync delete: the mapped root was trashed; Penpot is left alone', [
+				'app' => Application::APP_ID,
+				'folder' => $node->getName(),
+			]);
+
+			return;
+		}
+
+		$projectIds = $this->projectsBelow($node, 0);
+		if ($projectIds === []) {
+			// A plain folder that names no project — an ordinary folder inside a
+			// mapping, which is exactly what a mapped folder must stay usable as.
+			return;
+		}
+
+		$token = $this->personalTokens->tokenForActor();
+		foreach ($projectIds as $projectId) {
+			try {
+				$this->client->deleteProject($projectId, $token);
+				$this->logger->info('penpot_sync delete: moved a project to Penpot\'s trash', [
+					'app' => Application::APP_ID,
+					'project_id' => $projectId,
+					'folder' => $node->getName(),
+				]);
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync delete: could not move the project to Penpot\'s trash', [
+					'app' => Application::APP_ID,
+					'project_id' => $projectId,
+					'folder' => $node->getName(),
+					'exception' => $e,
+				]);
+			}
+		}
+	}
+
+	/**
+	 * Every project id at or below $folder.
+	 *
+	 * {@see MembershipResolver} read downwards, and it does NOT stop at a marked
+	 * folder the way {@see ProjectFolderService::managedDesignsBelow()} does. That
+	 * method is asking *which designs belong to this project*, so a nearer project
+	 * ancestor ends the descent. This one is asking *what is about to stop
+	 * existing*, and a project nested inside a trashed one is going too.
+	 *
+	 * @return list<string>
+	 */
+	private function projectsBelow(Folder $folder, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		$ids = [];
+		$markers = $this->metadata->readFolder($folder->getId());
+		if ($markers->hasProject()) {
+			$ids[] = $markers->projectId;
+		}
+
+		try {
+			$children = $folder->getDirectoryListing();
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync delete: could not list a trashed folder; a project below it may survive', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'exception' => $e,
+			]);
+
+			return $ids;
+		}
+
+		foreach ($children as $child) {
+			if ($child instanceof Folder) {
+				foreach ($this->projectsBelow($child, $depth + 1) as $id) {
+					$ids[] = $id;
+				}
+			}
+		}
+
+		return $ids;
 	}
 
 	/**

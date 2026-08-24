@@ -332,6 +332,57 @@ final class MoveGuardListenerTest extends TestCase {
 		$this->addToAssertionCount(1);
 	}
 
+	// ── §6.43, and the gesture the position test could not see ──────────────
+
+	/**
+	 * A RENAME IS A MOVE TO A SIBLING PATH — same verb, same event, same pair of
+	 * nodes — so the position comparison resolves it to the project it started in
+	 * and waves it through. That is exactly what happened: `A link cannot be moved
+	 * out of the project it points into` had been green for courses while
+	 * `Rename a link in Nextcloud` sat `@unbuilt`, and the two are one rule.
+	 *
+	 * The name is the only thing that separates them.
+	 */
+	public function testRefusesRenamingALinkFile(): void {
+		$this->givenFile(mode: 'link');
+		$this->givenPositions(
+			new Membership(self::PROJECT, self::TEAM),
+			new Membership(self::PROJECT, self::TEAM),
+		);
+
+		$this->expectException(AbortedEventException::class);
+		$this->expectExceptionMessageMatches('/its name is Penpot\'s to set/');
+
+		$this->listener->handle($this->move($this->file(), $this->destination('Renamed.penpot')));
+	}
+
+	public function testAllowsRenamingASyncFile(): void {
+		// A `sync` mirror holds the design, so its name is the user's to change —
+		// PushService pushes the rename on to Penpot.
+		$this->givenFile(mode: 'sync');
+		$this->givenPositions(
+			new Membership(self::PROJECT, self::TEAM),
+			new Membership(self::PROJECT, self::TEAM),
+		);
+
+		$this->listener->handle($this->move($this->file(), $this->destination('Renamed.penpot')));
+		$this->addToAssertionCount(1);
+	}
+
+	public function testAllowsMovingALinkFileWithinItsProjectWhenTheNameIsUnchanged(): void {
+		// The other half of the same rule, and the reason the discriminator is the
+		// NAME and not the gesture: Penpot cannot see a subfolder, so filing a link
+		// into one is pure local arrangement and stays free.
+		$this->givenFile(mode: 'link');
+		$this->givenPositions(
+			new Membership(self::PROJECT, self::TEAM),
+			new Membership(self::PROJECT, self::TEAM),
+		);
+
+		$this->listener->handle($this->move($this->file(), $this->destination()));
+		$this->addToAssertionCount(1);
+	}
+
 	// ── the wall between the two directions ─────────────────────────────────
 
 	public function testNeverRefusesTheAppsOwnMoves(): void {
@@ -379,13 +430,20 @@ final class MoveGuardListenerTest extends TestCase {
 		return $file;
 	}
 
-	/** The target of a before-move event: a node at the new path, parent existing. */
-	private function destination(): Folder {
+	/**
+	 * The target of a before-move event: a node at the new path, parent existing.
+	 *
+	 * The NAME defaults to the source's, so every move test reads as a move. A
+	 * test that passes a different one is describing a RENAME — which is the same
+	 * event, and the only thing that tells the two apart.
+	 */
+	private function destination(string $name = 'Login screen.penpot'): Folder {
 		$newParent = $this->createMock(Folder::class);
 		$newParent->method('getId')->willReturn(21);
 
 		$target = $this->createMock(Folder::class);
 		$target->method('getId')->willReturn(0);
+		$target->method('getName')->willReturn($name);
 		$target->method('getParent')->willReturn($newParent);
 
 		return $target;

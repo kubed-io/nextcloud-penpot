@@ -152,6 +152,14 @@ final class PenpotClientTest extends TestCase {
 		yield 'delete-file uses a bare id' => [
 			'delete-file', ['file' => 'f1'], ['id' => 'f1'],
 		];
+		// A BARE `id`, and it sits one row from `move-project`'s kebab `project-id`
+		// on purpose: the two commands take the SAME object under two different
+		// names. `delete-project` lives in `projects.clj` with `rename-project`,
+		// `move-project` in `management.clj` with `move-files`, and that namespace
+		// split is the whole explanation and no help at all at a call site.
+		yield 'delete-project uses a bare id, unlike move-project' => [
+			'delete-project', ['project' => 'p1'], ['id' => 'p1'],
+		];
 		yield 'restore-deleted-team-files uses team-id + ids' => [
 			'restore-deleted-team-files', ['team' => 't1', 'files' => ['f1']], ['team-id' => 't1', 'ids' => ['f1']],
 		];

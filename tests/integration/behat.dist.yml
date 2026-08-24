@@ -26,8 +26,8 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 19 OF 116 SCENARIO HEADERS RUN — 49 executed, on all four legs
-  # (admin 25, design 9, project 13, core 2). The spec was rewritten wholesale — the
+  # 23 OF 116 SCENARIO HEADERS RUN — 54 executed, on all four legs
+  # (admin 25, design 10, project 17, core 2). The spec was rewritten wholesale — the
   # noun became the folder and the verb the file — and rather than re-triage 116
   # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for
   # each later PR to draw from. Chapter 3 Round 1 drew the first nine: the ones
@@ -36,7 +36,7 @@ default:
   # its real status back on the PR that runs it.
   #
   # THREE OF THE FOUR TAGS HAVE MEMBERS: 9 @blocked (no browser, no app removal, no
-  # way to author a design's content) and 11 @unbuilt (places the app disagrees with
+  # way to author a design's content) and 8 @unbuilt (places the app disagrees with
   # the spec, each naming what the code owes). @decision is empty.
   #
   # THE PROJECT LEG NEARLY DOUBLED THIS ROUND (7 → 13), and not by writing tests:
@@ -48,6 +48,12 @@ default:
   # THE THIRD ONE FAILED, and is @unbuilt again for a wall neither the rule nor the
   # API: a move into a Team Folder crosses a storage boundary, which fires no
   # NodeRenamedEvent at all. Measured, not assumed — see projects/move.feature.
+  #
+  # THEN THE DELETE ROUND took the project leg to 17. One of the four it promoted
+  # was tagged @todo — "the code EXISTS, only the test is missing" — and nothing
+  # deleted a project at all: no folder branch, no `delete-project`. A tag nobody
+  # had checked, which is the failure mode this vocabulary exists to prevent and
+  # the reason `behat --tags @todo` is a queue rather than an inventory.
   #
   # THE FILTER STILL NAMES ALL FOUR, so re-triage is a tag edit and never a config
   # change. Do not "tidy" the empty two out — the collapse is the anomaly here,

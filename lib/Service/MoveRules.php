@@ -74,7 +74,35 @@ final class MoveRules {
 	 * `.penpot` is ordinary tolerated content — neither is constrained here.
 	 */
 	public function refusalFor(Node $source, Node $target): ?string {
-		return $this->evaluate($source, $this->positionOf($target));
+		return $this->evaluate($source, $this->positionOf($target), $target->getName());
+	}
+
+	/**
+	 * The reason this node may not be deleted, or null when it may.
+	 *
+	 * ONE QUESTION, NOT TWO, which is what makes this shorter than the move rules
+	 * rather than a copy of them. A move asks about the node AND where it is
+	 * going; a delete has only the node — and under a `link` mapping the answer is
+	 * the same whatever the node is. A file, a project folder, a plain folder
+	 * holding either: the tree is Penpot's and Nextcloud mirrors it read-only, so
+	 * the only thing worth asking is which mapping it sits under.
+	 *
+	 * Deliberately silent everywhere else. A `sync` mirror deleted here goes to
+	 * Penpot's trash and comes back (§C6.11), and an ordinary file in a mapped
+	 * folder is nobody's business but its owner's — refusing either would break
+	 * the thing that makes a mapped folder usable as a folder.
+	 */
+	public function refusalForDeleting(Node $node): ?string {
+		if (!$this->isLinkTeam($this->resolver->resolve($node)->teamId)) {
+			return null;
+		}
+
+		return $this->l->t(
+			'"%s" is inside a folder that mirrors a Penpot team in link mode, so what is here is '
+			. 'filled from Penpot and kept in step with it. Deleting it here would only bring it '
+			. 'back on the next sync. Delete it in Penpot instead.',
+			[$node->getName()],
+		);
 	}
 
 	/**
@@ -89,17 +117,27 @@ final class MoveRules {
 	 * for the reason {@see positionOf} gives: an unreadable destination is exactly
 	 * where a silent desync would be created.
 	 */
-	public function refusalForLandingIn(Node $source, ?Node $targetParent): ?string {
-		return $this->evaluate($source, $targetParent === null ? null : $this->resolver->resolve($targetParent));
+	public function refusalForLandingIn(Node $source, ?Node $targetParent, ?string $targetName = null): ?string {
+		return $this->evaluate(
+			$source,
+			$targetParent === null ? null : $this->resolver->resolve($targetParent),
+			$targetName,
+		);
 	}
 
-	/** @param Membership|null $to where the source would end up, already resolved */
-	private function evaluate(Node $source, ?Membership $to): ?string {
+	/**
+	 * @param Membership|null $to where the source would end up, already resolved
+	 * @param string|null $targetName the name it would land under, when the caller
+	 *                                knows it. A MOVE and a RENAME are the same DAV
+	 *                                verb and the same event, so the name is the only
+	 *                                thing that tells them apart — see {@see forLinkFile}.
+	 */
+	private function evaluate(Node $source, ?Membership $to, ?string $targetName): ?string {
 		if ($source instanceof Folder) {
 			return $this->forFolder($source, $to);
 		}
 		if ($source instanceof File) {
-			return $this->forLinkFile($source, $to);
+			return $this->forLinkFile($source, $to, $targetName);
 		}
 
 		return null;
@@ -186,8 +224,29 @@ final class MoveRules {
 		return $this->mappings->getByTeamId($teamId)?->mode === Mapping::MODE_LINK;
 	}
 
-	/** Rule 2 (§6.43) — a `link` file may not change project. */
-	private function forLinkFile(File $source, ?Membership $to): ?string {
+	/**
+	 * Rule 2 (§6.43) — a `link` file may not change project, and may not be renamed.
+	 *
+	 * ## TWO GESTURES, ONE EVENT, AND THE NAME IS ALL THAT SEPARATES THEM
+	 *
+	 * A rename IS a move to a sibling path: the same DAV verb, the same Nextcloud
+	 * event, the same pair of nodes. So the position test below cannot see one —
+	 * a rename resolves to the same project it started in and was waved straight
+	 * through. That is why the spec's `Rename a link in Nextcloud` was `@unbuilt`
+	 * while `A link cannot be moved out of the project it points into` had been
+	 * green for courses.
+	 *
+	 * The name is the discriminator, and it is passed in rather than read off a
+	 * node because the DAV side asks BEFORE the destination exists.
+	 *
+	 * **Why a rename is refused at all, when a move within the project is not.**
+	 * A pointer holds no bytes; its name is the design's name, and the design's
+	 * name is Penpot's. A local rename would therefore survive exactly until the
+	 * next pull renamed it back — a silent undo, which is a worse answer than a no.
+	 * Where the file SITS has no such owner: Penpot cannot see a subfolder, so
+	 * filing a link inside one is pure local arrangement and stays allowed.
+	 */
+	private function forLinkFile(File $source, ?Membership $to, ?string $targetName = null): ?string {
 		if (!str_ends_with($source->getName(), PullService::EXTENSION)) {
 			return null;
 		}
@@ -196,6 +255,15 @@ final class MoveRules {
 			// Untracked content, or a `sync` file — which earns its freedom by
 			// holding a real archive and is not constrained here.
 			return null;
+		}
+
+		if ($targetName !== null && $targetName !== $source->getName()) {
+			return $this->l->t(
+				'"%s" is a link to a design that lives in Penpot, so its name is Penpot\'s to set — '
+				. 'renaming it here would only be undone by the next sync. Rename the design in '
+				. 'Penpot and the new name will arrive here.',
+				[$source->getName()],
+			);
 		}
 
 		if ($to !== null && $this->samePosition($this->resolver->resolve($source), $to)) {

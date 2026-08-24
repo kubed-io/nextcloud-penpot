@@ -61,6 +61,15 @@ trait GestureSteps {
 	private string $idBeforeGesture = '';
 
 	/**
+	 * The designs that were under the node a gesture acted on, captured before it
+	 * ran. Keyed by PATH, so two designs sharing a filename in two subfolders stay
+	 * two entries; see {@see thoseDesignsAreInPenpotsTrash()}.
+	 *
+	 * @var array<string, string>
+	 */
+	private array $designIdsBeforeGesture = [];
+
+	/**
 	 * Read the design's id BEFORE a gesture, which is the last moment the old path
 	 * resolves. Every claim of the form "the id it had before …" rests on this, so
 	 * every gesture those specs cover has to record it: a rename, a move, and a
@@ -403,6 +412,68 @@ trait GestureSteps {
 	}
 
 	/**
+	 * The designs that were under the folder just trashed are in Penpot's trash.
+	 *
+	 * BY ID, NOT BY NAME, and that is the whole reliability of this assertion.
+	 * Penpot state accumulates across a leg (teams are find-or-create and survive
+	 * the scenario), so an earlier scenario's discarded `Alpha` is still sitting
+	 * in the team's deleted list — and a name check would pass against a design
+	 * this scenario never touched. This feature's own Background declares an
+	 * `Alpha.penpot` that must NOT be trashed, so that is not a hypothetical.
+	 *
+	 * @Then /^those designs are in Penpot's trash$/
+	 */
+	public function thoseDesignsAreInPenpotsTrash(): void {
+		if ($this->designIdsBeforeGesture === []) {
+			throw new \RuntimeException(
+				'the scenario says "those designs" but the gesture captured none — '
+				. 'nothing under the trashed folder carried a penpot_id.',
+			);
+		}
+
+		// The team the gesture happened in, not the default: this scenario is an
+		// Outline over both a plain folder and a Team Folder.
+		$team = $this->teamId(explode('/', trim($this->gestureTarget, '/'))[0]);
+
+		$this->until(
+			function () use ($team): bool {
+				$trashed = $this->penpotTrashIds($team);
+				foreach ($this->designIdsBeforeGesture as $id) {
+					if (!in_array($id, $trashed, true)) {
+						return false;
+					}
+				}
+
+				return true;
+			},
+			function () use ($team): string {
+				$trashed = $this->penpotTrashIds($team);
+				$missing = [];
+				foreach ($this->designIdsBeforeGesture as $path => $id) {
+					if (!in_array($id, $trashed, true)) {
+						$missing[] = "{$path} ({$id})";
+					}
+				}
+
+				return 'expected every design under the trashed folder to be in Penpot\'s trash; '
+					. 'still absent: ' . implode(', ', $missing);
+			},
+		);
+	}
+
+	/** @return list<string> the ids Penpot lists as deleted for this team */
+	private function penpotTrashIds(string $teamId): array {
+		$ids = [];
+		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $teamId]) as $file) {
+			if (isset($file['id']) && is_string($file['id'])) {
+				$ids[] = $file['id'];
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
 	 * The assertion that separates a soft delete from a destroyed one — and the
 	 * one the purge guard exists to keep honest.
 	 *
@@ -604,8 +675,52 @@ trait GestureSteps {
 	 */
 	public function iMoveToTheTrash(string $path): void {
 		$this->captureIdBeforeGesture($path);
+		// BEFORE the delete, because afterwards there is nothing left to read them
+		// off. A folder trash is a gesture on every design below it, and "those
+		// designs" in the Then has no other referent.
+		$this->designIdsBeforeGesture = $this->designIdsBelow($path, 0);
 		$this->davDelete($path);
 		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * Every design id at or below $path, read from the app's own DAV properties.
+	 *
+	 * @return array<string, string> penpot_id keyed by the file's PATH, so a
+	 *                               failure can say WHICH design is missing rather
+	 *                               than printing a bare uuid.
+	 *
+	 *                               The path and not the basename: `+` merges by
+	 *                               key, so two designs sharing a filename in two
+	 *                               subfolders would collapse to one and this
+	 *                               assertion would silently check less of the
+	 *                               subtree than it claims to.
+	 */
+	private function designIdsBelow(string $path, int $depth): array {
+		if ($depth > 20) {
+			return [];
+		}
+
+		$path = trim($path, '/');
+		if (str_ends_with($path, '.penpot')) {
+			$id = (string)$this->davReadMetadata($path, 'penpot_id');
+
+			return $id === '' ? [] : [$path => $id];
+		}
+
+		$found = [];
+		try {
+			$children = $this->davChildren($path);
+		} catch (\Throwable) {
+			// Not a folder, or gone. Either way it contributes no designs.
+			return [];
+		}
+
+		foreach ($children as $child) {
+			$found += $this->designIdsBelow($child, $depth + 1);
+		}
+
+		return $found;
 	}
 
 	/**

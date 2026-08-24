@@ -180,6 +180,91 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		self::assertNull($this->moveWithRules($this->refusingRules(), withUser: false));
 	}
 
+	// ── method:DELETE, the verb the guard had never covered ─────────────────
+
+	/**
+	 * A DELETE inside a `link` mapping is refused, WITH ITS REASON.
+	 *
+	 * This handler did not exist. `beforeWriteContent` catches PUT and Sabre runs
+	 * COPY through it per file, so a link could not be written or duplicated —
+	 * but DELETE reached nothing at all and trashing a link project was a plain
+	 * 204. A read-only mirror you can delete is not read-only.
+	 */
+	public function testARefusedDeleteCarriesItsReason(): void {
+		$refusal = $this->deleteWithTeam('team-link', linkTeam: 'team-link');
+
+		self::assertInstanceOf(Forbidden::class, $refusal);
+		self::assertNotSame('', trim($refusal->getMessage()));
+		self::assertStringContainsString('Existing', $refusal->getMessage());
+	}
+
+	/**
+	 * A DELETE under a `sync` mapping is handed straight on — it goes to Penpot's
+	 * trash and comes back (§C6.11), so refusing it would break the ordinary case.
+	 */
+	public function testADeleteUnderASyncMappingIsNotTouched(): void {
+		self::assertNull($this->deleteWithTeam('team-sync', linkTeam: 'team-link'));
+	}
+
+	/** FAIL OPEN, as everywhere in this plugin. */
+	public function testADeleteFailsOpenWithNoUserInSession(): void {
+		self::assertNull($this->deleteWithTeam('team-link', linkTeam: 'team-link', withUser: false));
+	}
+
+	/**
+	 * Run one DELETE through the plugin; returns the Forbidden it threw, or null.
+	 *
+	 * $team is what the node resolves to; $linkTeam is the one mapped in `link`
+	 * mode. Passing the same value for both is a delete inside a link mapping.
+	 */
+	private function deleteWithTeam(string $team, string $linkTeam, bool $withUser = true): ?Forbidden {
+		$node = $this->createStub(Folder::class);
+		$node->method('getName')->willReturn('Existing');
+		$node->method('getId')->willReturn(7);
+
+		$userFolder = $this->createStub(Folder::class);
+		$userFolder->method('get')->willReturn($node);
+		$root = $this->createStub(IRootFolder::class);
+		$root->method('getUserFolder')->willReturn($userFolder);
+
+		$session = $this->createStub(IUserSession::class);
+		if ($withUser) {
+			$user = $this->createStub(IUser::class);
+			$user->method('getUID')->willReturn('alice');
+			$session->method('getUser')->willReturn($user);
+		}
+
+		$resolver = $this->createStub(MembershipResolver::class);
+		$resolver->method('resolve')->willReturn(new Membership(null, $team));
+
+		$mappings = $this->createStub(MappingService::class);
+		$mappings->method('getByTeamId')->willReturnCallback(
+			static fn (string $id): Mapping => new Mapping(
+				'm1',
+				$id,
+				'A Team',
+				'Folder',
+				false,
+				$id === $linkTeam ? Mapping::MODE_LINK : Mapping::MODE_SYNC,
+			),
+		);
+
+		$rules = new MoveRules($this->metadata, $resolver, $mappings, $this->identityTranslator());
+		$plugin = new LinkWriteGuardPlugin($this->metadata, $rules, $root, $session, new NullLogger());
+		$plugin->initialize(new Server());
+
+		$request = $this->createStub(RequestInterface::class);
+		$request->method('getPath')->willReturn('files/alice/Pointers/Existing');
+
+		try {
+			$plugin->onDelete($request, $this->createStub(ResponseInterface::class));
+		} catch (Forbidden $e) {
+			return $e;
+		}
+
+		return null;
+	}
+
 	/** Run one MOVE through the plugin; returns the Forbidden it threw, or null. */
 	private function moveWithRules(MoveRules $rules, bool $withUser = true): ?Forbidden {
 		$source = $this->createStub(File::class);
