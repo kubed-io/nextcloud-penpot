@@ -83,9 +83,7 @@ Feature: Moving a project
     # ── RULE: arriving in a team makes every design in it real ────────────────
     # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
 
-  # @unbuilt — no project named "Adopt Me" appears. Arriving designs are not
-  # adopted: a folder becomes a project by being tagged, not by holding one.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move a folder of untracked designs into a team
     Given an untracked design file at "Scratch/Adopt Me/Alpha.penpot"
     When I move "Scratch/Adopt Me" into "Penpot"

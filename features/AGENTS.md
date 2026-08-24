@@ -1808,10 +1808,31 @@ gesture, same end state, so it is an `Examples` column rather than two scenarios
 
 ### A design created under the team but not under a project is a draft
 
-ONE RULE, AND DEPTH IS NOT PART OF IT. The team root and a plain folder three
-levels down are the same case: under a team, under no project, therefore Drafts.
-The second row came from `mapping-membership.feature`, where it read as a
-separate fact about nesting.
+**NARROWED, AND IT USED TO SAY THE OPPOSITE OF `projects/create.feature`.** The
+sentence here was *"ONE RULE, AND DEPTH IS NOT PART OF IT. The team root and a
+plain folder three levels down are the same case: under a team, under no project,
+therefore Drafts."* That is flatly incompatible with
+[a folder is a project when a design is in it](#a-folder-is-a-project-when-a-design-is-in-it),
+which says the first design landing in a plain folder is exactly what MAKES it a
+project. Both notes were in this file, and the two feature files each followed
+one of them: `designs/create.feature` filed a design in `Penpot/Inbox` into
+Drafts, while `projects/create.feature` expected a project called `Inbox`.
+
+Settled in favour of `projects/create.feature`, on the organising rule this suite
+already runs on: **`projects/` owns a folder's identity as a project**
+([README](README.md)), and `designs/create.feature`'s Drafts rows were a
+secondary claim in a file about something else. The adoption note also reasons
+about the choice — *"a move is a gesture people already make, and a tag is one
+they have to be taught"* — where this one only asserted uniformity.
+
+So the rule now has depth in it, in exactly one place: **the mapping ROOT is
+Drafts, and nothing else is.** That is not an exception bolted on, it is
+{@see MembershipResolver::pathBelowMapping()} returning null — a root has no path
+below a mapping to be named by, so there is no project it could become. Every
+other folder under the team does.
+
+The `Penpot/Inbox` row is gone from `designs/create.feature`, and the case it was
+testing lives in `projects/create.feature` where it belongs.
 
 ### A sync leaves content it does not manage alone
 
@@ -1861,6 +1882,21 @@ pull only ensures membership, never a particular path. That is what makes a
 plain subfolder a legitimate place to file work.
 
 ### Dragging a sync design into another project re-files it in Penpot
+
+**`@todo` FOR A CONTRADICTION INSIDE THE SCENARIO, not for missing code.** The
+`move-files` half has been built since Course 4 and §C6.38's round proved the
+folder half beside it. What stops this one running is its own `Then`: it asserts
+`content | an archive` for BOTH Examples blocks, and the second block deliberately
+carries a `Pointers` row — a LINK, which holds zero bytes by design and which
+`designs/view.feature` pins as `empty`, live and green.
+
+So the table says `penpot_mode | the mapping's mode` (which varies per row) and
+`content | an archive` (which does not), and the two cannot both be right for the
+same row. Left alone rather than trimmed: dropping the `content` row would make it
+pass while quietly giving up a real claim — that a move does not cost a sync design
+its archive. Settling it properly means either splitting the link row into its own
+scenario or growing the vocabulary a `the mapping's …` cell would need, and that is
+a spec decision rather than a test fix.
 
 Mapped in `sync` mode because a `link` is confined to its project (§6.43) and the
 guard refuses this drag before it happens — that refusal is its own scenario

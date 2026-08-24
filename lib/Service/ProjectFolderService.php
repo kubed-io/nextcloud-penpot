@@ -16,23 +16,46 @@ use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
 /**
- * A Nextcloud folder becomes a Penpot project — **by opt-in, never by accident**
- * (`project-folder.feature`, saga §C6.18).
+ * A Nextcloud folder becomes a Penpot project — **when a design is in it**
+ * (`projects/create.feature`).
  *
  * ## THE ASYMMETRY THIS SERVICE EXISTS TO CREATE
  *
  *     every Penpot project      →  a folder in Nextcloud     (automatic)
- *     SOME Nextcloud folders    →  a project in Penpot       (opt-in only)
+ *     SOME Nextcloud folders    →  a project in Penpot       (when a design lands)
  *
- * A folder created inside a mapped folder is an ORDINARY FOLDER. Nothing is
- * sent, nothing is inferred, and it can hold whatever the user likes — notes,
- * exports, a subfolder of references. That is not a gap: a mapped folder that
- * silently turned every subfolder into a Penpot project would be unusable for
- * anything else, and this app has refused inference everywhere it could (§6.33
- * on creation, §C6.4 on the drag-in).
+ * ## THE RULE REVERSED, AND THE OLD ONE IS WORTH READING
  *
- * The opt-in is the `penpot` tag ({@see ProjectTags}) — a deliberate act with a
- * name, exactly as "+ New → Penpot design" is for a file.
+ * This class used to say **by opt-in, never by accident**, and the opt-in was the
+ * `penpot` tag: *"a folder created inside a mapped folder is an ORDINARY FOLDER.
+ * Nothing is sent, nothing is inferred."* The reasoning was that a mapped folder
+ * which silently turned every subfolder into a project would be unusable for
+ * anything else.
+ *
+ * That reasoning was sound and the conclusion was too strong, because the thing
+ * it was protecting is protected by a narrower rule: **an EMPTY folder is still
+ * nobody's business but its owner's**, and `Create a folder in a mapping` pins
+ * exactly that. Notes, exports, a subfolder of references — none of them contain
+ * a design, so none of them become a project. What the old rule cost was the case
+ * that actually matters: someone makes a folder, puts designs in it, and Penpot
+ * never hears about it.
+ *
+ * **Promotion by content rather than by tag, because a move is a gesture people
+ * already make and a tag is one they have to be taught** (`AGENTS.md`). The tag
+ * still works — {@see onTagged()} is unchanged — it is simply no longer the only
+ * way in.
+ *
+ * ## WHAT COUNTS AS "IN IT" IS THE NEAREST-ANCESTOR RULE, UNCHANGED
+ *
+ * A design landing in `Penpot/Team/wip` does NOT make `wip` a project when
+ * `Team` already is one — §6.29 finds the nearest project ancestor and the design
+ * belongs to that. A plain subfolder of a project is Nextcloud's layout, which
+ * Penpot cannot see, and `designs/move.feature` pins it.
+ *
+ * And a design landing at the mapping ROOT is Drafts (§6.35), not a project named
+ * after the root. {@see MembershipResolver::pathBelowMapping()} returns null there,
+ * which is exactly the signal {@see adoptForContent()} needs — the same method
+ * §C6.38 added to name a project by its path.
  *
  * ## LATE OPT-IN IS THE WHOLE POINT: THE CONTENTS COME TOO
  *
@@ -195,6 +218,76 @@ final class ProjectFolderService {
 			'name' => $name,
 			'designs_filed' => $filed,
 		]);
+	}
+
+	/**
+	 * A design has landed in this folder, so the folder is a project now.
+	 *
+	 * The content-driven twin of {@see onTagged()}, and deliberately the QUIETER
+	 * of the two. Tagging is a person asking for something and being told when it
+	 * cannot happen; this fires as a side effect of a drag or a "+ New", so every
+	 * way out is a null and a log line. A design that cannot be promoted still
+	 * lands somewhere — the caller falls back to the team's Drafts — and the user
+	 * is never shown an error for a gesture that worked.
+	 *
+	 * @return string|null the project id to file the design into, or null when this
+	 *                     folder is not a project and the caller should use Drafts
+	 */
+	public function adoptForContent(Folder $folder): ?string {
+		$markers = $this->metadata->readFolder($folder->getId());
+		if ($markers->hasProject()) {
+			// Already one. The overwhelmingly common path — every design after the
+			// first — so it costs a single metadata read and no round trip.
+			return $markers->projectId;
+		}
+
+		$teamId = $this->resolver->resolve($folder)->teamId;
+		if ($teamId === null || $teamId === '') {
+			return null;
+		}
+
+		// NULL HERE MEANS THE MAPPING ROOT, WHICH IS DRAFTS AND NOT A PROJECT
+		// (§6.35). The same signal `onTagged()` reads to know a root was tagged,
+		// used here to know a design landed at one — a design dropped straight into
+		// `Penpot/` belongs to the team's Drafts, and naming a project after the
+		// mapped folder would invent a project nobody asked for on the first drag.
+		$name = trim((string)$this->resolver->pathBelowMapping($folder));
+		if ($name === '' || mb_strlen($name) > 250) {
+			return null;
+		}
+
+		try {
+			$created = $this->client->createProject($teamId, $name, $this->personalTokens->tokenForActor());
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync project: could not promote a folder holding a design; it stays a folder', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'team' => $teamId,
+				'exception' => $e,
+			]);
+
+			return null;
+		}
+
+		$projectId = (string)($created['id'] ?? '');
+		if ($projectId === '') {
+			return null;
+		}
+
+		// Stamp FIRST, for the reason `onTagged()` gives: the id is what every
+		// later lookup reads, and the tag is only the visible half.
+		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
+		$this->guard->run(fn () => $this->tags->apply($folder->getId()));
+
+		$this->logger->info('penpot_sync project: a design arrived, so the folder is a project', [
+			'app' => Application::APP_ID,
+			'folder' => $folder->getPath(),
+			'team' => $teamId,
+			'project' => $projectId,
+			'name' => $name,
+		]);
+
+		return $projectId;
 	}
 
 	/**

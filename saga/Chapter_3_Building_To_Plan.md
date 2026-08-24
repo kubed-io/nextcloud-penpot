@@ -186,12 +186,12 @@ there was no cheap batch to pick up; the shared Background had to be built first
 
 | | | after Round 2 | now |
 |---|---|---|---|
-| live | headers → executed | **15** → **41** | **23** → **54** |
+| live | headers → executed | **15** → **41** | **26** → **63** |
 | `@todo` | the queue | 87 | 76 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
-| `@unbuilt` | each names what the code owes | 5 | 8 |
+| `@unbuilt` | each names what the code owes | 5 | 5 |
 
-The legs now stand at `admin` 25, `design` 10, `project` 17, `core` 2.
+The legs now stand at `admin` 25, `design` 10, `project` 26, `core` 2.
 
 **`@unbuilt` GROWING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
 3 and 13 → 11 across Round 4, and every move is the same measurement working:
@@ -385,6 +385,68 @@ clears mapped folders between scenarios. It does not: the arrange unmaps every
 mapping BEFORE it clears, and its own comment says why — *"while a mapping is live,
 deleting inside it is a gesture that reaches Penpot."* The same reasoning that
 makes `isLinkTeam()` return false for a torn-down mapping.
+
+### Round 6 — a folder is a project when a design is in it, and a spec that fought itself
+
+The third doctrine reversal in as many rounds, and the same shape as §6.30:
+`ProjectFolderService` opened with **"by opt-in, never by accident"** and named the
+`penpot` tag as the only way in, while the spec had moved to *promotion by content*.
+
+The old reasoning was sound and the conclusion too strong. It was protecting the
+case where a mapped folder becomes unusable for anything else — notes, exports, a
+subfolder of references — and that case is protected by a NARROWER rule the suite
+already runs live: `Create a folder in a mapping` says an EMPTY folder is not a
+project. None of those folders holds a design. What the broad rule cost was the
+case that actually matters: someone makes a folder, fills it with designs, and
+Penpot never hears about it.
+
+**AND THE SPEC CONTRADICTED ITSELF, load-bearingly.** Two notes in `AGENTS.md`,
+each with a feature file following it:
+
+| | |
+|---|---|
+| *"the project is created as a CONSEQUENCE of the first design landing in it"* | `projects/create.feature` — `Penpot/Team` becomes the project `Team` |
+| *"ONE RULE, AND DEPTH IS NOT PART OF IT … a plain folder three levels down … therefore Drafts"* | `designs/create.feature` — `Penpot/Inbox` files into Drafts |
+
+Same situation, opposite answers, and no way to build the round without picking
+one. Settled in favour of `projects/create.feature` on the organising rule the
+suite already runs on — **`projects/` owns a folder's identity as a project** —
+and because the adoption note reasons about the choice (*"a move is a gesture
+people already make, and a tag is one they have to be taught"*) where the other
+only asserted uniformity.
+
+So the rule keeps depth in exactly one place: **the mapping ROOT is Drafts and
+nothing else is**, which is not an exception bolted on but
+`pathBelowMapping()` returning null. A root has no path below a mapping to be
+named by, so there is no project it could become — the same method §C6.38 added to
+NAME a project, read here to decide whether there is one.
+
+`designs/create.feature` lost the `Penpot/Inbox` row and the fixture behind it;
+the case now lives in `projects/create.feature` where the noun belongs.
+
+**One seam, three arrival paths.** `DestinationResolver::projectForContentIn()` is
+a second method rather than a flag on `projectFor()`, because it can CHANGE THE
+WORLD — it creates a project as a side effect, so every call site has to have
+decided it means to. Create, move-in and copy-in all adopt; the one that must
+never is `MotionService::sourceProject()`, which asks where a file CAME from, and
+adopting there would create a project for the folder someone just dragged a design
+out of. Two methods make that a compile-time distinction instead of a boolean
+nobody reads.
+
+**What the sweep for "anything else now doable" actually found.** Two more
+mis-tagged scenarios, in the other direction from Round 5's:
+
+- `designs/move.feature`'s `Move a design between projects` is `@todo` for a
+  contradiction inside itself — it asserts `content | an archive` across both
+  Examples blocks, and the second carries a link row, which is zero bytes by
+  design and which `designs/view.feature` pins as `empty`, live. Left alone rather
+  than trimmed: dropping the row would make it pass while giving up a real claim.
+- `designs/move.feature`'s `Move an untracked design file into a project` is
+  tagged `@todo` while its own comment says `@unbuilt`.
+
+Both are worth more than the scenarios they block: a `@todo` queue is only as good
+as the tags in it, and this is now three rounds running where reading one closely
+found it lying.
 
 ### The one harness wall left
 

@@ -119,6 +119,36 @@ trait GestureSteps {
 	}
 
 	/**
+	 * Drag THE file — the cursor's — into a folder.
+	 *
+	 * The path form says which thing moves; this one says it about the design the
+	 * scenario has already put on stage, which is how a reader describes the
+	 * second sentence of a story rather than the first. The cursor follows the
+	 * move, so anything after it still means the same file.
+	 *
+	 * @When /^I move the file into "([^"]*)"$/
+	 */
+	public function iMoveTheFileInto(string $folder): void {
+		if ($this->currentFilePath === '') {
+			throw new \RuntimeException('the scenario says "the file" but no file is on stage.');
+		}
+
+		$folder = trim($folder, '/');
+		$this->makeAncestors($folder . '/x');
+		$target = $folder . '/' . basename($this->currentFilePath);
+
+		$this->captureIdBeforeGesture($this->currentFilePath);
+		$this->davMove($this->currentFilePath, $target);
+
+		$this->gestureTarget = $target;
+		$this->currentFilePath = $target;
+		$this->currentFolder = $folder;
+		// RE-READ rather than keep the old value: the id must not change across a
+		// move, and reading it back is how the next assertion can prove it did not.
+		$this->currentFileId = $this->davReadMetadata($target, 'penpot_id') ?? '';
+	}
+
+	/**
 	 * The same drag, expected to be REFUSED — see {@see iTryToMove()} for why a
 	 * refusal needs its own step rather than a flag on this one.
 	 *

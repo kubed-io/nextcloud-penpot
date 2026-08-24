@@ -23,9 +23,7 @@ Feature: Creating a project
     # ── RULE: a folder is a project in Penpot when a design is in it ──────────
     # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
 
-  # @unbuilt — a design in a folder Penpot has never seen lands in the team's
-  # Drafts today; only a tagged folder becomes a project. The spec is the target.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Create a design in a folder Penpot has never seen
     Given the folder "<folder>" holding no designs
     When I create a new design in "<folder>"
@@ -43,9 +41,7 @@ Feature: Creating a project
 
   # notes: ../AGENTS.md#the-project-name-is-the-path-below-the-mapping
 
-  # @unbuilt — a design in a folder Penpot has never seen lands in the team's
-  # Drafts today; only a tagged folder becomes a project. The spec is the target.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Move a design into a folder Penpot has never seen
     Given a design file named "Travelling.penpot" in "<source>"
     And the folder "<folder>" holding no designs

@@ -581,6 +581,33 @@ trait ArrangeSteps {
 	}
 
 	/**
+	 * A folder that exists and holds no design — the pre-state for every scenario
+	 * about what a design's ARRIVAL makes of the folder it lands in.
+	 *
+	 * "Holding no designs" is the whole point rather than incidental: an empty
+	 * folder inside a mapping is not a project (`Create a folder in a mapping`
+	 * pins that, live), so the project appearing afterwards can only be the
+	 * design's doing. Emptied rather than merely created, because Penpot state
+	 * accumulates across a leg and a previous scenario may have left a mirror here
+	 * for the pull to restore.
+	 *
+	 * @Given /^the folder "([^"]*)" holding no designs$/
+	 */
+	public function theFolderHoldingNoDesigns(string $folder): void {
+		$folder = trim($folder, '/');
+		$this->makeAncestors($folder . '/x');
+		if (!$this->davExists($folder)) {
+			$this->davMkcol($folder);
+		}
+
+		foreach ($this->davChildren($folder) as $child) {
+			if (str_ends_with($child, '.penpot')) {
+				$this->davDeleteStatus($child);
+			}
+		}
+	}
+
+	/**
 	 * A design the scenario named, in a folder it named — and the cursor "the
 	 * file" points at from here on.
 	 *

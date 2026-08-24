@@ -344,6 +344,91 @@ final class ProjectFolderServiceTest extends TestCase {
 	}
 
 	/** @param list<Node> $children */
+	// ── adoptForContent: promotion by CONTENT rather than by tag ────────────
+
+	/**
+	 * A DESIGN LANDING IN A PLAIN FOLDER IS WHAT MAKES IT A PROJECT.
+	 *
+	 * The rule this class used to state the opposite of — *"by opt-in, never by
+	 * accident"* — and the reason the reversal is safe is the test below it: an
+	 * EMPTY folder is still nobody's business but its owner's.
+	 */
+	public function testADesignArrivingPromotesItsFolder(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelow = 'Team/Deep';
+		$this->client->method('createProject')->willReturn(['id' => 'project-new']);
+
+		$this->metadata->expects($this->once())->method('writeFolder')
+			->with(20, [PenpotMetadata::KEY_PROJECT_ID => 'project-new']);
+		$this->tags->expects($this->once())->method('apply')->with(20);
+
+		self::assertSame('project-new', $this->projects->adoptForContent($this->folder(20, 'Deep')));
+	}
+
+	/**
+	 * THE NAME IS THE PATH BELOW THE MAPPING, not the folder's own name — the same
+	 * rule §C6.38 made true for a rename, arriving here for a create.
+	 */
+	public function testTheAdoptedProjectIsNamedByItsPath(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelow = 'Team/Deep/Deeper';
+		$this->client->expects($this->once())->method('createProject')
+			->with(self::TEAM, 'Team/Deep/Deeper', null)
+			->willReturn(['id' => 'project-new']);
+
+		$this->projects->adoptForContent($this->folder(20, 'Deeper'));
+	}
+
+	/**
+	 * THE MAPPING ROOT IS DRAFTS, NOT A PROJECT (§6.35). `pathBelowMapping()`
+	 * returns null for a root, and reading that as "not a project" is what stops
+	 * the first design dropped into `Penpot/` inventing a project named after the
+	 * mapped folder. A null return sends the caller to Drafts.
+	 */
+	public function testADesignAtTheMappingRootPromotesNothing(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelowIsNull = true;
+		$this->client->expects($this->never())->method('createProject');
+
+		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Penpot')));
+	}
+
+	/** Already a project: the common path, and it must cost no round trip. */
+	public function testAFolderThatIsAlreadyAProjectIsReturnedAsIs(): void {
+		$this->folderMarkers[20] = new FolderMarkers('project-existing', '');
+		$this->client->expects($this->never())->method('createProject');
+
+		self::assertSame('project-existing', $this->projects->adoptForContent($this->folder(20, 'Team')));
+	}
+
+	/** Outside every mapping there is no team to create a project in. */
+	public function testAFolderOutsideEveryMappingPromotesNothing(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
+		$this->client->expects($this->never())->method('createProject');
+
+		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Holiday photos')));
+	}
+
+	/**
+	 * A REFUSAL FROM PENPOT IS A NULL AND A LOG LINE, NOT AN ERROR.
+	 *
+	 * This fires as a side effect of a drag or a "+ New", so the user is never
+	 * shown a failure for a gesture that worked — the design still lands, in the
+	 * team's Drafts, and the folder is simply not a project yet. The folder must
+	 * not be stamped: a marker naming a project that was never created is worse
+	 * than no marker.
+	 */
+	public function testAPenpotRefusalLeavesTheFolderUnstamped(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelow = 'Team';
+		$this->client->method('createProject')->willThrowException(new \RuntimeException('nope'));
+
+		$this->metadata->expects($this->never())->method('writeFolder');
+		$this->tags->expects($this->never())->method('apply');
+
+		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Team')));
+	}
+
 	/** A mapped ROOT: the resolver gives it no path below a mapping. */
 	private function rootFolder(int $id): Folder {
 		$this->pathBelowIsNull = true;

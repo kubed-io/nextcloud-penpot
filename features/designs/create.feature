@@ -15,7 +15,6 @@ Feature: Creating a design
     And the following items in the mappings:
       | path              | kind         |
       | /Penpot/Make Here | project      |
-      | /Penpot/Inbox     | plain folder |
       | /Shared/Quarterly | project      |
       | /Pointers/Nested  | project      |
     And a folder at "Scratch" that is not mapped
@@ -43,13 +42,12 @@ Feature: Creating a design
       | Penpot/Make Here/wip  | Make Here |
       | Shared/Quarterly      | Quarterly |
 
-    Examples: and with no project above it, the team's Drafts
-      | folder       | project |
-      | Penpot       | Drafts  |
-      | Penpot/Inbox | Drafts  |
+    Examples: and at the mapping root, which IS the team's Drafts
+      | folder | project |
+      | Penpot | Drafts  |
 
     # Drafts is a STATE, not a folder: the file stays where it was made, and only
-    # Penpot's side of it differs.
+    # Penpot's side of it differs — and the ROOT is the only folder it applies to.
 
     # ── RULE: a design made in Penpot arrives as a file ───────────────────────
     # notes: ../AGENTS.md#a-newly-created-design-is-born-in-its-mappings-mode
