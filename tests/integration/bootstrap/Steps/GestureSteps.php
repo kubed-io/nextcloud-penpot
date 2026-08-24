@@ -62,7 +62,8 @@ trait GestureSteps {
 
 	/**
 	 * The designs that were under the node a gesture acted on, captured before it
-	 * ran. Keyed by filename; see {@see thoseDesignsAreInPenpotsTrash()}.
+	 * ran. Keyed by PATH, so two designs sharing a filename in two subfolders stay
+	 * two entries; see {@see thoseDesignsAreInPenpotsTrash()}.
 	 *
 	 * @var array<string, string>
 	 */
@@ -448,9 +449,9 @@ trait GestureSteps {
 			function () use ($team): string {
 				$trashed = $this->penpotTrashIds($team);
 				$missing = [];
-				foreach ($this->designIdsBeforeGesture as $name => $id) {
+				foreach ($this->designIdsBeforeGesture as $path => $id) {
 					if (!in_array($id, $trashed, true)) {
-						$missing[] = "{$name} ({$id})";
+						$missing[] = "{$path} ({$id})";
 					}
 				}
 
