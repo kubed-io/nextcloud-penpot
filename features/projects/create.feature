@@ -41,7 +41,9 @@ Feature: Creating a project
 
   # notes: ../AGENTS.md#the-project-name-is-the-path-below-the-mapping
 
-  @in-nextcloud @gesture
+  # @unbuilt — one row of four works. The rest need capabilities this rule does not
+  # supply: importing an untracked archive (§6.33), and seeing a cross-storage move.
+  @in-nextcloud @gesture @unbuilt
   Scenario Outline: Move a design into a folder Penpot has never seen
     Given a design file named "Travelling.penpot" in "<source>"
     And the folder "<folder>" holding no designs

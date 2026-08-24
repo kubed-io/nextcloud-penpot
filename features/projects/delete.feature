@@ -46,9 +46,11 @@ Feature: Deleting a project
   @in-nextcloud @gesture
   Scenario: Trash a folder that other projects are named through
     Given the following items in the mappings:
-      | path                              |
-      | /Penpot/foo/bar/Alpha.penpot      |
-      | /Penpot/foo/bar/baz/Beta.penpot   |
+      | path                            | kind    |
+      | /Penpot/foo/bar                 | project |
+      | /Penpot/foo/bar/Alpha.penpot    | design  |
+      | /Penpot/foo/bar/baz             | project |
+      | /Penpot/foo/bar/baz/Beta.penpot | design  |
     When I move "Penpot/foo" to the trash
     Then Penpot holds no project named "foo/bar"
     And Penpot holds no project named "foo/bar/baz"
@@ -56,6 +58,9 @@ Feature: Deleting a project
 
     # "foo" is not a project itself, but every project below it is named THROUGH it,
     # so the one gesture ends all of them — which is why the trash entry matters.
+
+    # Both are spelled out as projects: without that, "holds no project named
+    # foo/bar/baz" would pass by the project never having existed at all.
 
     # ── RULE: a link team is Penpot's to change ───────────────────────────────
     # notes: ../AGENTS.md#trashing-a-project-folder-in-a-link-team-is-refused

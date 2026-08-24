@@ -917,6 +917,20 @@ as: decoration over an authoritative id, never at the cost of the pull.
 
 ### A folder is a project when a design is in it
 
+**A NESTED PROJECT IS STILL EXPLICIT, and that is this rule's own edge.** A design
+in `Penpot/foo/bar/baz` where `foo/bar` is already a project belongs to `foo/bar`
+— nearest ancestor, §6.29 — so `baz` does NOT become a project by holding it. Only
+a folder with no project above it is promoted.
+
+That reshaped two arranges rather than any behaviour. `Move a folder that other
+projects are named through` and its delete-side twin both need TWO projects, and
+used to get them because the harness tagged every folder it wrote a design into.
+With promotion by content it has to say so, which is what the `kind` column is for.
+The move scenario failed loudly when it stopped being true; **the delete one passed
+vacuously** — *"Penpot holds no project named `foo/bar/baz`"* is trivially true of a
+project that never existed. Worth remembering when a negative assertion goes green
+after a rule changes underneath it.
+
 **BUILT, and the boundary is where the EVENT is.** Promotion happens as a design
 arrives — created, moved in, copied in — because those are the three gestures that
 fire a per-file event the app can act on. `Create a design in a folder Penpot has
@@ -925,6 +939,13 @@ and three.
 
 `Move a folder of untracked designs into a team` does not, and it fails on two
 walls at once rather than on this rule:
+
+`Move a design into a folder Penpot has never seen` is `@unbuilt` for the same
+family of reasons, and only one of its four rows works today (`Penpot/Existing` →
+`Penpot/Team/Deep`, both inside one mapping and one storage). The other three want
+capabilities this rule does not supply: a source in `Scratch` is an UNTRACKED file,
+and importing one is the §6.33 carve-out; the two rows that cross between `Penpot`
+and `Shared` cross a STORAGE boundary, which fires no rename event at all.
 
 1. **A folder move fires one event, for the folder.** Core emits nothing per
    child, so no design inside ever arrives anywhere as far as the app can tell —

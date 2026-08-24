@@ -186,12 +186,12 @@ there was no cheap batch to pick up; the shared Background had to be built first
 
 | | | after Round 2 | now |
 |---|---|---|---|
-| live | headers → executed | **15** → **41** | **25** → **62** |
+| live | headers → executed | **15** → **41** | **24** → **58** |
 | `@todo` | the queue | 87 | 76 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
-| `@unbuilt` | each names what the code owes | 5 | 6 |
+| `@unbuilt` | each names what the code owes | 5 | 7 |
 
-The legs now stand at `admin` 25, `design` 10, `project` 25, `core` 2.
+The legs now stand at `admin` 25, `design` 10, `project` 21, `core` 2.
 
 **`@unbuilt` GROWING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
 3 and 13 → 11 across Round 4, and every move is the same measurement working:
@@ -441,6 +441,16 @@ the app does instead of working around what it did not. That also fixed the ROOT
 case for free: `a design file named … in "Penpot"` used to tag the mapping root,
 which `ProjectFolderService` correctly untags, leaving the arrange to throw about a
 folder that was never going to be a project.
+
+**A NEGATIVE ASSERTION WENT GREEN FOR THE WRONG REASON, and only reading it
+found that.** Both `Move a folder that other projects are named through` and its
+delete-side twin arrange `foo/bar` and `foo/bar/baz` as projects, and used to get
+them free because the harness tagged every folder it wrote a design into. Under
+promotion by content `baz` is a plain subfolder of `foo/bar` — nearest ancestor —
+so it is not a project unless the scenario says so. The MOVE scenario failed
+loudly. The DELETE one passed: *"Penpot holds no project named `foo/bar/baz`"* is
+trivially true of a project that never existed. Both arranges now spell the nesting
+out with the `kind` column, which is what it is for.
 
 **One seam, three arrival paths.** `DestinationResolver::projectForContentIn()` is
 a second method rather than a flag on `projectFor()`, because it can CHANGE THE
