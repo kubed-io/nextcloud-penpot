@@ -26,8 +26,8 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 26 OF 116 SCENARIO HEADERS RUN — 63 executed, on all four legs
-  # (admin 25, design 10, project 26, core 2). The spec was rewritten wholesale — the
+  # 25 OF 116 SCENARIO HEADERS RUN — 62 executed, on all four legs
+  # (admin 25, design 10, project 25, core 2). The spec was rewritten wholesale — the
   # noun became the folder and the verb the file — and rather than re-triage 116
   # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for
   # each later PR to draw from. Chapter 3 Round 1 drew the first nine: the ones
@@ -36,7 +36,7 @@ default:
   # its real status back on the PR that runs it.
   #
   # THREE OF THE FOUR TAGS HAVE MEMBERS: 9 @blocked (no browser, no app removal, no
-  # way to author a design's content) and 5 @unbuilt (places the app disagrees with
+  # way to author a design's content) and 6 @unbuilt (places the app disagrees with
   # the spec, each naming what the code owes). @decision is empty.
   #
   # THE PROJECT LEG NEARLY DOUBLED THIS ROUND (7 → 13), and not by writing tests:

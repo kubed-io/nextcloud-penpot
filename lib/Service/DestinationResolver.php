@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
+use OCP\Files\Folder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
@@ -103,6 +104,14 @@ final class DestinationResolver {
 			$parent = $node->getParent();
 		} catch (\Throwable) {
 			return $this->projectFor($membership);
+		}
+
+		if (!$parent instanceof Folder) {
+			// `Node::getParent()` is typed `Node`, not `Folder` — only a FOLDER can
+			// become a project, so anything else is not a promotion case and the
+			// design belongs in the team's Drafts. Reached in practice only past the
+			// storage root, where the walk has already run out of tree.
+			return $this->draftsProject($membership->teamId);
 		}
 
 		// A null adoption is not a failure — it is "this folder is not a project",

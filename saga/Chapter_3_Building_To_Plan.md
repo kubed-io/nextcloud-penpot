@@ -186,12 +186,12 @@ there was no cheap batch to pick up; the shared Background had to be built first
 
 | | | after Round 2 | now |
 |---|---|---|---|
-| live | headers → executed | **15** → **41** | **26** → **63** |
+| live | headers → executed | **15** → **41** | **25** → **62** |
 | `@todo` | the queue | 87 | 76 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
-| `@unbuilt` | each names what the code owes | 5 | 5 |
+| `@unbuilt` | each names what the code owes | 5 | 6 |
 
-The legs now stand at `admin` 25, `design` 10, `project` 26, `core` 2.
+The legs now stand at `admin` 25, `design` 10, `project` 25, `core` 2.
 
 **`@unbuilt` GROWING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
 3 and 13 → 11 across Round 4, and every move is the same measurement working:
@@ -423,6 +423,24 @@ NAME a project, read here to decide whether there is one.
 
 `designs/create.feature` lost the `Penpot/Inbox` row and the fixture behind it;
 the case now lives in `projects/create.feature` where the noun belongs.
+
+**Where the rule stops is where the EVENT stops.** `Create a design in a folder
+Penpot has never seen` passes on all four rows. `Move a folder of untracked designs
+into a team` does not, and it fails on two walls at once, neither of them this rule:
+a folder move fires ONE event for the folder and none per child, and the design
+inside is an uploaded archive, which §6.33 has always refused to import. Either
+alone would be enough. It reads as though it should work, which is why the note now
+says why it does not.
+
+**The round also retired a harness workaround it had written itself.**
+`ArrangeSteps::declareDesign()` tagged a folder before writing a design into it,
+with a comment explaining that a design alone would land in Drafts and that
+`projects/create.feature` "is still @todo and stays that way — this PR has not run
+it". It runs now, so the tag stopped being load-bearing and the arrange says what
+the app does instead of working around what it did not. That also fixed the ROOT
+case for free: `a design file named … in "Penpot"` used to tag the mapping root,
+which `ProjectFolderService` correctly untags, leaving the arrange to throw about a
+folder that was never going to be a project.
 
 **One seam, three arrival paths.** `DestinationResolver::projectForContentIn()` is
 a second method rather than a flag on `projectFor()`, because it can CHANGE THE

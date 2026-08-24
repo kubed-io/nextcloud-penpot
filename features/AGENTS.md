@@ -917,6 +917,26 @@ as: decoration over an authoritative id, never at the cost of the pull.
 
 ### A folder is a project when a design is in it
 
+**BUILT, and the boundary is where the EVENT is.** Promotion happens as a design
+arrives — created, moved in, copied in — because those are the three gestures that
+fire a per-file event the app can act on. `Create a design in a folder Penpot has
+never seen` passes on all four rows, plain folder and Team Folder, one level deep
+and three.
+
+`Move a folder of untracked designs into a team` does not, and it fails on two
+walls at once rather than on this rule:
+
+1. **A folder move fires one event, for the folder.** Core emits nothing per
+   child, so no design inside ever arrives anywhere as far as the app can tell —
+   the same wall `projects/copy` and the cross-team move sit behind.
+2. **The design in it is an uploaded ARCHIVE**, and importing one is the §6.33
+   carve-out this app has always refused: a `.penpot` someone drops in is content,
+   not a create, and turning it into a design is a human-directed act.
+
+Either alone would be enough. Worth stating because "a folder is a project when a
+design is in it" reads as though dragging a folder of designs in should work, and
+the reason it does not has nothing to do with folders becoming projects.
+
 The same rule both siblings state about folders, and the reason it works here is
 that Penpot never has to be told about a folder — only about a design, which it
 needs a project id for anyway. So the project is created as a CONSEQUENCE of the
