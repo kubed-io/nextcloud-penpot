@@ -452,6 +452,24 @@ loudly. The DELETE one passed: *"Penpot holds no project named `foo/bar/baz`"* i
 trivially true of a project that never existed. Both arranges now spell the nesting
 out with the `kind` column, which is what it is for.
 
+**A RACE THE OLD RULE DID NOT HAVE.** Review caught it: promotion reads "is this
+folder a project", then makes a network round trip, then stamps. Dragging three
+designs into a new folder is three concurrent requests in three processes, and
+Penpot allows two projects of the same name in one team — so the unmitigated race
+splits the designs across duplicates while the marker records whichever write
+landed last.
+
+Tagging had the same shape and was nearly unreachable, because tagging is one
+deliberate act by one person. Promotion by content is reachable by an ordinary
+multi-file drag, so the exposure is this round's.
+
+Not closed with a lock, which is a dependency and a failure mode of its own.
+Narrowed instead by re-reading the marker after the create: a loser returns the
+WINNER's id, so every design is filed into one project and the only casualty is an
+empty project nobody references. **Files together and one stray project beats files
+scattered across two**, and it costs one metadata read on a path that has just made
+a round trip. The residual window is written down where the code is.
+
 **One seam, three arrival paths.** `DestinationResolver::projectForContentIn()` is
 a second method rather than a flag on `projectFor()`, because it can CHANGE THE
 WORLD — it creates a project as a side effect, so every call site has to have

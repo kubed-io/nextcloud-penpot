@@ -603,9 +603,28 @@ trait ArrangeSteps {
 	 * "Holding no designs" is the whole point rather than incidental: an empty
 	 * folder inside a mapping is not a project (`Create a folder in a mapping`
 	 * pins that, live), so the project appearing afterwards can only be the
-	 * design's doing. Emptied rather than merely created, because Penpot state
-	 * accumulates across a leg and a previous scenario may have left a mirror here
-	 * for the pull to restore.
+	 * design's doing.
+	 *
+	 * ## THIS DELETE REACHES PENPOT, AND THAT IS THE POINT
+	 *
+	 * Unlike {@see emptyMappedFolder()}, which unmaps first precisely so its
+	 * clean-up stays local, this runs with the mapping LIVE — so a `.penpot` it
+	 * removes goes to Penpot's trash as well. Deliberate, and the alternative is
+	 * worse: Penpot state accumulates across a leg, so a project an earlier
+	 * scenario left behind is re-mirrored by the Background's pull, and a "folder
+	 * holding no designs" that quietly held one would arrange the opposite of what
+	 * it says.
+	 *
+	 * Safe because of WHAT it deletes: a mirror the pull restored a moment ago,
+	 * whose design is leftover state from a scenario that has already finished.
+	 * Both trashes are soft, so nothing is destroyed on either side.
+	 *
+	 * It cannot hide a failure either, which is the part worth checking rather
+	 * than assuming: a surviving project of the same name would make
+	 * `Penpot holds a project named "…"` pass on its own, but
+	 * {@see ProjectFolderSteps::theCursoredDesignIsInThePenpotProject()} matches by
+	 * ID — so the design has to be in THAT project, which only this round's
+	 * adoption puts it in.
 	 *
 	 * @Given /^the folder "([^"]*)" holding no designs$/
 	 */

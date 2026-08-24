@@ -274,6 +274,37 @@ final class ProjectFolderService {
 			return null;
 		}
 
+		// ── THE RACE, AND WHY THE RE-READ IS HERE RATHER THAN A LOCK ────────────
+		//
+		// Dragging three designs into a new folder is three concurrent DAV requests
+		// in three PHP processes, and nothing serialises them. All three can read
+		// "no marker", and Penpot happily holds two projects with the same name in
+		// one team (measured — see `The project name is the path below the mapping`),
+		// so without this the designs end up SPLIT across duplicate projects while
+		// the folder marker records whichever write landed last.
+		//
+		// Re-reading here does not close the window; it changes what happens when
+		// the window is hit. A loser now returns the WINNER's id, so every design
+		// is filed into one project and the only casualty is an empty project
+		// nobody references. Files together and one stray project beats files
+		// scattered across two, and it costs one metadata read on a path that has
+		// just made a network round trip.
+		//
+		// The real fix is serialising per folder through `ILockingProvider`, which
+		// is a dependency and a failure mode of its own; deliberately not taken on
+		// the round that introduced the exposure.
+		$landed = $this->metadata->readFolder($folder->getId());
+		if ($landed->hasProject()) {
+			$this->logger->warning('penpot_sync project: another arrival promoted this folder first; using theirs', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'kept' => $landed->projectId,
+				'orphaned' => $projectId,
+			]);
+
+			return $landed->projectId;
+		}
+
 		// Stamp FIRST, for the reason `onTagged()` gives: the id is what every
 		// later lookup reads, and the tag is only the visible half.
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);

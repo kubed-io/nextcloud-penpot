@@ -410,6 +410,50 @@ final class ProjectFolderServiceTest extends TestCase {
 	}
 
 	/**
+	 * TWO DESIGNS ARRIVING AT ONCE FILE INTO ONE PROJECT, not two.
+	 *
+	 * Dragging three designs into a new folder is three concurrent requests in
+	 * three processes, and Penpot allows two projects of the same name in a team —
+	 * so the unmitigated race splits the designs across duplicates. The loser now
+	 * returns the WINNER's id, which keeps the files together at the cost of one
+	 * empty project nobody references.
+	 *
+	 * Simulated by the marker appearing between the read and the stamp, which is
+	 * exactly where the window is.
+	 */
+	public function testAConcurrentArrivalDefersToTheProjectThatLanded(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelow = 'Team';
+
+		// Not a project when adoptForContent() looks; a project by the time the
+		// create returns — someone else got there during the round trip.
+		$reads = 0;
+		$this->metadata = $this->createMock(PenpotMetadata::class);
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static function () use (&$reads): FolderMarkers {
+				$reads++;
+
+				return $reads === 1 ? new FolderMarkers('', '') : new FolderMarkers('project-theirs', '');
+			},
+		);
+		$this->metadata->expects($this->never())->method('writeFolder');
+		$this->client->method('createProject')->willReturn(['id' => 'project-mine']);
+		$this->tags->expects($this->never())->method('apply');
+
+		$projects = new ProjectFolderService(
+			$this->client,
+			$this->metadata,
+			$this->resolver,
+			$this->createMock(PersonalTokenService::class),
+			$this->tags,
+			new SyncGuard(),
+			new NullLogger(),
+		);
+
+		self::assertSame('project-theirs', $projects->adoptForContent($this->folder(20, 'Team')));
+	}
+
+	/**
 	 * A REFUSAL FROM PENPOT IS A NULL AND A LOG LINE, NOT AN ERROR.
 	 *
 	 * This fires as a side effect of a drag or a "+ New", so the user is never
