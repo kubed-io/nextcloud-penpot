@@ -11,6 +11,8 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Service\FolderMarkers;
+use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MoveRules;
@@ -25,10 +27,17 @@ use OCP\Files\Node;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The two moves this app refuses (`move-design.feature` / `move-project.feature`):
+ * The two moves this app refuses (`projects/move.feature`, `designs/move.feature`):
  *
- *   §6.30 — a project folder may not leave its team folder;
- *   §6.43 — a `link` file may not change project.
+ *   §C6.38 — nothing crosses the edge of a `link` mapping, in either direction;
+ *   §6.43  — a `link` file may not change project.
+ *
+ * BOTH RULES ARE ABOUT MODE, and that is the whole shape of the guard now. It used
+ * to hold a third — §6.30, *a project folder may not leave its team folder* — which
+ * §C6.38 retired: `move-project` crosses a team in one call, and a project dragged
+ * out of every mapping is an unmapping rather than a desync. The tests that pinned
+ * that refusal are directly below, inverted, because a rule reversing is exactly
+ * where a test suite earns its keep: each one now asserts the move GOES THROUGH.
  *
  * These tests are as much about what must NOT be refused as what must. A guard
  * that over-refuses is worse than none, because it breaks ordinary tidying with
@@ -47,13 +56,39 @@ final class MoveGuardListenerTest extends TestCase {
 
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
+	private MappingService $mappings;
+
+	/**
+	 * Team ids the mapping stub should report as `link`. Empty by default — see
+	 * {@see setUp()} for why this is a property rather than a per-test stub.
+	 *
+	 * @var list<string>
+	 */
+	private array $linkTeams = [];
+
 	private SyncGuard $guard;
+	private \OCP\IL10N $l;
 	private MoveGuardListener $listener;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
+		$this->mappings = $this->createMock(MappingService::class);
+		// EVERY TEAM IS `sync` UNLESS A TEST NAMES IT. The stub reads a property
+		// rather than being re-stubbed per test, because a second `method()` call on
+		// a PHPUnit mock does not replace the first — it queues behind it and never
+		// runs, which would make a "link" test silently assert the sync path.
+		$this->mappings->method('getByTeamId')->willReturnCallback(
+			fn (string $teamId): ?Mapping => new Mapping(
+				'm1',
+				$teamId,
+				'A Team',
+				'Folder',
+				false,
+				in_array($teamId, $this->linkTeams, true) ? Mapping::MODE_LINK : Mapping::MODE_SYNC,
+			),
+		);
 		$this->guard = new SyncGuard();
 		$l = $this->createStub(\OCP\IL10N::class);
 		// The identity translator: these two messages are the app's only user-facing
@@ -62,42 +97,56 @@ final class MoveGuardListenerTest extends TestCase {
 			static fn (string $text, array $parameters = []): string => vsprintf($text, $parameters),
 		);
 
-		// The rules are a real MoveRules, not a double: they ARE the behaviour under
-		// test here, and the listener is now only the half that aborts.
+		$this->l = $l;
+		$this->rebuildListener();
+	}
+
+	/**
+	 * The rules are a real MoveRules, not a double: they ARE the behaviour under
+	 * test here, and the listener is now only the half that aborts.
+	 *
+	 * Extracted so one test can swap the mapping service for a stub that reports
+	 * no mapping at all — a case the property-driven stub in {@see setUp()} cannot
+	 * express, because it always answers with a mapping.
+	 */
+	private function rebuildListener(): void {
 		$this->listener = new MoveGuardListener(
-			new MoveRules($this->metadata, $this->resolver, $l),
+			new MoveRules($this->metadata, $this->resolver, $this->mappings, $this->l),
 			$this->guard,
 		);
 	}
 
-	// ── §6.30, project folders ──────────────────────────────────────────────
+	// ── §C6.38, the rule that reversed ──────────────────────────────────────
 
-	public function testRefusesAProjectFolderLeavingItsTeamFolder(): void {
+	public function testAllowsAProjectFolderCrossingIntoAnotherTeam(): void {
+		// WAS `testRefusesAProjectFolderLeavingItsTeamFolder`. `move-project` takes
+		// the project across in one call, keeping its id, its designs and their
+		// history — so the drag is a re-file, not the desync §6.30 assumed.
 		$this->givenProjectFolder();
 		$this->givenPositions(
 			new Membership(self::PROJECT, self::TEAM),
 			new Membership(null, self::OTHER_TEAM),
 		);
 
-		$this->expectException(AbortedEventException::class);
-		$this->expectExceptionMessageMatches('/mirrors a Penpot project/');
-
 		$this->listener->handle($this->move($this->folder(), $this->destination()));
+		$this->addToAssertionCount(1);
 	}
 
-	public function testRefusesAProjectFolderLeavingEveryTeamFolder(): void {
-		// Dragged out to the user's own files — no team above it at all.
+	public function testAllowsAProjectFolderLeavingEveryTeamFolder(): void {
+		// WAS `testRefusesAProjectFolderLeavingEveryTeamFolder`. Dragged out to the
+		// user's own files: nothing is deleted in Penpot and nothing is stranded —
+		// the folder simply stops being a mirror, which MotionService records by
+		// stripping the marker.
 		$this->givenProjectFolder();
 		$this->givenPositions(new Membership(self::PROJECT, self::TEAM), Membership::none());
 
-		$this->expectException(AbortedEventException::class);
-
 		$this->listener->handle($this->move($this->folder(), $this->destination()));
+		$this->addToAssertionCount(1);
 	}
 
 	public function testAllowsAProjectFolderMovingWithinItsTeamFolder(): void {
-		// Nextcloud owns folder layout (§6.29): Penpot has no notion of where the
-		// project folder sits, so nesting it under "Clients/" is free.
+		// Unchanged by §C6.38, and still worth pinning: this is the common case and
+		// the one a broadened guard would break first.
 		$this->givenProjectFolder();
 		$this->givenPositions(
 			new Membership(self::PROJECT, self::TEAM),
@@ -110,7 +159,7 @@ final class MoveGuardListenerTest extends TestCase {
 
 	public function testAllowsAPersonalProjectFolderWithNoTeamAboveIt(): void {
 		// §6.31: a personal project mounts at the user's home root, so it has no
-		// team boundary to leave.
+		// team above it — and no mapping to read a mode off either.
 		$this->givenProjectFolder();
 		$this->givenPositions(new Membership(self::PROJECT, null), Membership::none());
 
@@ -118,8 +167,74 @@ final class MoveGuardListenerTest extends TestCase {
 		$this->addToAssertionCount(1);
 	}
 
+	// ── §C6.38, the rule that replaced it: a link mapping has a hard edge ────
+
+	public function testRefusesAProjectFolderLeavingALinkMapping(): void {
+		// A link folder holds pointers, not designs. Wherever it went it would
+		// arrive as a tree of empty files.
+		$this->linkTeams = [self::TEAM];
+		$this->givenProjectFolder();
+		$this->givenPositions(
+			new Membership(self::PROJECT, self::TEAM),
+			new Membership(null, self::OTHER_TEAM),
+		);
+
+		$this->expectException(AbortedEventException::class);
+		$this->expectExceptionMessageMatches('/link mode/');
+
+		$this->listener->handle($this->move($this->folder(), $this->destination()));
+	}
+
+	public function testRefusesAProjectFolderMovingWithinItsOwnLinkMapping(): void {
+		// THE SOURCE RULE IS TOTAL — "its own team included". A link project has
+		// nowhere to go at all, which is the one place this differs from the file
+		// rule below, where a move within the project is pure local filing.
+		$this->linkTeams = [self::TEAM];
+		$this->givenProjectFolder();
+		$this->givenPositions(
+			new Membership(self::PROJECT, self::TEAM),
+			new Membership(null, self::TEAM),
+		);
+
+		$this->expectException(AbortedEventException::class);
+
+		$this->listener->handle($this->move($this->folder(), $this->destination()));
+	}
+
+	public function testRefusesAFolderMovingIntoALinkMapping(): void {
+		// The DESTINATION half, and it is about the plain folder as much as the
+		// project: a link mapping is filled from Penpot, whatever is arriving.
+		$this->linkTeams = [self::OTHER_TEAM];
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->givenPositions(
+			new Membership(null, self::TEAM),
+			new Membership(null, self::OTHER_TEAM),
+		);
+
+		$this->expectException(AbortedEventException::class);
+		$this->expectExceptionMessageMatches('/filled from Penpot/');
+
+		$this->listener->handle($this->move($this->folder(), $this->destination()));
+	}
+
+	public function testAllowsAFolderWhoseTeamIsNoLongerMapped(): void {
+		// The resolver reads a MARKER off a folder, and tearing a mapping down does
+		// not go round scrubbing them. Refusing on a mapping that no longer exists
+		// would strand the folder for a reason nobody could act on.
+		$this->mappings = $this->createMock(MappingService::class);
+		$this->mappings->method('getByTeamId')->willReturn(null);
+		$this->rebuildListener();
+
+		$this->givenProjectFolder();
+		$this->givenPositions(new Membership(self::PROJECT, self::TEAM), Membership::none());
+
+		$this->listener->handle($this->move($this->folder(), $this->destination()));
+		$this->addToAssertionCount(1);
+	}
+
 	public function testAllowsAPlainFolder(): void {
 		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->givenPositions(new Membership(null, self::TEAM), new Membership(null, self::TEAM));
 
 		$this->listener->handle($this->move($this->folder(), $this->destination()));
 		$this->addToAssertionCount(1);
@@ -129,6 +244,7 @@ final class MoveGuardListenerTest extends TestCase {
 		// The root carries only a team id — it is the mapping's folder, and moving
 		// or renaming it is the mapping's own business, not a project's.
 		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', self::TEAM));
+		$this->givenPositions(new Membership(null, self::TEAM), Membership::none());
 
 		$this->listener->handle($this->move($this->folder(), $this->destination()));
 		$this->addToAssertionCount(1);

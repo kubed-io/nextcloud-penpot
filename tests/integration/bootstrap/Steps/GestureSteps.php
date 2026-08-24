@@ -622,6 +622,33 @@ trait GestureSteps {
 	}
 
 	/**
+	 * @Then /^the move is refused with a message$/
+	 */
+	public function theMoveIsRefusedWithAMessage(): void {
+		$this->refusedWithAMessage('move');
+	}
+
+	/**
+	 * The refusal actually stopped it — the node is still at the path it started.
+	 *
+	 * PAIRED WITH THE STATUS, NEVER INSTEAD OF IT. A 403 is what the guard says;
+	 * this is whether Nextcloud listened. The two came apart once already in the
+	 * Grafana sibling, where swapping the exception type for one that carried a
+	 * message turned nine refusals into HTTP 201 — the message was perfect and the
+	 * move went through. So a "refused" scenario asserts both halves.
+	 *
+	 * @Then /^"([^"]*)" stays where it was$/
+	 */
+	public function staysWhereItWas(string $path): void {
+		if (!$this->davExists(trim($path, '/'))) {
+			throw new \RuntimeException(
+				"'{$path}' was supposed to stay put, but there is nothing there any more — "
+				. 'the refusal was reported and the move happened anyway.',
+			);
+		}
+	}
+
+	/**
 	 * @Then /^the trash is refused with a message$/
 	 */
 	public function theTrashIsRefusedWithAMessage(): void {

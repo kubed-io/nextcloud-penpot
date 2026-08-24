@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 use OCA\DAV\Connector\Sabre\File as DavFile;
 use OCA\PenpotSync\DAV\LinkWriteGuardPlugin;
 use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MoveRules;
@@ -60,7 +61,12 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->plugin = new LinkWriteGuardPlugin(
 			$this->metadata,
-			new MoveRules($this->metadata, $this->createStub(MembershipResolver::class), $this->createStub(IL10N::class)),
+			new MoveRules(
+				$this->metadata,
+				$this->createStub(MembershipResolver::class),
+				$this->createStub(MappingService::class),
+				$this->createStub(IL10N::class),
+			),
 			$this->createStub(IRootFolder::class),
 			$this->createStub(IUserSession::class),
 			new NullLogger(),
@@ -224,7 +230,7 @@ final class LinkWriteGuardPluginTest extends TestCase {
 			new Membership('project-1', 'team-1'),
 		);
 
-		return new MoveRules($this->metadata, $resolver, $this->identityTranslator());
+		return new MoveRules($this->metadata, $resolver, $this->noMappings(), $this->identityTranslator());
 	}
 
 	/** Rules that allow: a `sync` file holds a real archive and moves freely. */
@@ -232,7 +238,24 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		$this->metadata->method('readFile')
 			->willReturn(new PenpotFileMetadata('f1', 'r1', Mapping::MODE_SYNC, 't1'));
 
-		return new MoveRules($this->metadata, $this->createStub(MembershipResolver::class), $this->identityTranslator());
+		return new MoveRules(
+			$this->metadata,
+			$this->createStub(MembershipResolver::class),
+			$this->noMappings(),
+			$this->identityTranslator(),
+		);
+	}
+
+	/**
+	 * A mapping service that knows nothing, which is what every test in this file
+	 * wants: these are the FILE rules (§6.43), and the folder rules the mapping
+	 * service feeds are MoveGuardListenerTest's subject.
+	 */
+	private function noMappings(): MappingService {
+		$mappings = $this->createStub(MappingService::class);
+		$mappings->method('getByTeamId')->willReturn(null);
+
+		return $mappings;
 	}
 
 	private function identityTranslator(): IL10N {

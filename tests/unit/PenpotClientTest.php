@@ -127,6 +127,15 @@ final class PenpotClientTest extends TestCase {
 		yield 'move-files uses kebab project-id and a set under ids' => [
 			'move-files', ['project' => 'p1', 'files' => ['f1', 'f2']], ['project-id' => 'p1', 'ids' => ['f1', 'f2']],
 		];
+		// THE PAIR THAT DISAGREE ABOUT THE SAME OBJECT. `rename-project` and
+		// `delete-project` take a project under bare `id`; `move-project` takes it
+		// under kebab `project-id`. They live in different namespaces on the server
+		// — `projects.clj` and `management.clj` — which is the whole explanation and
+		// no help at all at the call site. §C6.38 recorded `{id, team-id}` from
+		// memory and it was wrong; this row is the schema.
+		yield 'move-project uses kebab project-id, unlike rename-project' => [
+			'move-project', ['project' => 'p1', 'team' => 't1'], ['project-id' => 'p1', 'team-id' => 't1'],
+		];
 		// KEBAB, and the saga said camel. §6.28 recorded `duplicate-file` as taking
 		// `fileId`; the live schema (§C6.8) says `file-id`. This row is the
 		// corrected one, and it is here because a wrong row in a table nobody

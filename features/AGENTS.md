@@ -1990,9 +1990,25 @@ With the name being the PATH, a move IS a rename, and Penpot is contacted every 
 Three of its scenarios also refused a move that should be allowed. `A project folder
 cannot be moved out of its team folder`, `The project-folder refusal explains why`
 and `A project folder cannot be moved into a different team's folder` were one rule
-stated three times, and the rule was wrong: `move-project` takes `{id, team-id}`
-(measured live), so crossing a team is one call, exactly as it is for a design and
-exactly as Grafana allows a folder to cross mappings.
+stated three times, and the rule was wrong: `move-project` crosses a team in one
+call, exactly as it is for a design and exactly as Grafana allows a folder to cross
+mappings.
+
+**The parameters recorded here were wrong, and the correction is worth keeping.**
+This note said `move-project` takes `{id, team-id}`. It takes
+`{project-id, team-id}` — read off `schema:move-project` in
+`app/rpc/commands/management.clj` in a running backend. The trap is that
+`rename-project` and `delete-project` both take a bare `id` for the same object,
+so the plausible guess is a 400 from a command defined a few lines away. This is
+the third time a wire key has been recorded from memory and been wrong
+(`rename-file`'s `id`, `duplicate-file`'s `file-id`), which is why
+`PenpotClient::PARAMS` carries the confirmed shape and the reason it was
+confirmed, one row at a time.
+
+The same read settled `projects/copy`: **`duplicate-project` exists**
+(`{project-id, name?}`, "Duplicate an entire project with all the files", since
+1.16). The claim that it does not was in README's two-noun table and in
+`projects/copy.feature`'s own closing comment.
 
 ### Moving a project folder renames the project
 
@@ -2017,11 +2033,57 @@ One move changing team and name together, keeping the id, the designs and their
 history. `move-project` carries the team, so nothing is re-created to cross a
 boundary — the same shape `move-files` gives a single design.
 
+**`@unbuilt` FOR A REASON THAT IS NEITHER THE RULE NOR THE API.** §C6.38 built
+`move-project` and `MotionService` calls it, and the three other scenarios in this
+file went green on it. This one did not, and the wall is underneath both:
+
+`Shared` is a **Team Folder**, so dragging `Penpot/Crossing` into it crosses a
+storage boundary. Core does not fire `NodeRenamedEvent` for those — it is a
+copy+delete underneath — and neither half routes a folder: `CopyListener` and
+`DeleteListener` both take a `File`, and core fires no per-child event for the
+designs inside. So nothing destructive happens. Nothing happens at all.
+
+Measured in CI rather than reasoned about: the drag returns success and the project
+is still in `Design Team` afterwards.
+
+**The Background is not the problem, and must not be "fixed".** Pointing this
+scenario at two admin-folder mappings would make it pass while testing something
+nobody asked about — the rule under test is that a project carries its team, and
+`the storage a mapping uses makes no difference to what a move is` is a claim this
+file makes out loud one scenario earlier.
+
+**The code owed is shared with `Move a folder of untracked designs into a team`**,
+and with all three of `projects/copy`'s: every one of them is *a folder arriving
+inside a mapping*, which this app currently has no way to notice. One capability,
+five scenarios.
+
 ### A project folder that leaves every mapping stops being a mirror
 
 Nothing is deleted in Penpot. The project stands, its designs stand, and the folder
 simply stops being the thing that mirrors it — the same rule a single design leaving
 its mapping already follows.
+
+**The folder loses its marker; the design keeps its id.** The scenario's two rows
+looked inconsistent and are not, and the difference is the resolver. Membership is
+derived by walking UP (§6.29), so a `penpot_project_id` left on a folder now sitting
+in unmapped space is not inert — it still answers for anything dropped beside it,
+reporting a project with no team above it. A design's `penpot_id` answers for
+nothing: it is a record of which design these bytes are, and it is what makes
+dragging the file back a RETURN rather than an import, which is exactly what
+`Move a design out of every mapping` asks for.
+
+That scenario's row said `absent` for the design until §C6.38 was implemented, which
+contradicted `designs/move.feature` and contradicted the sentence directly above it
+in this note. The note won.
+
+**What is not done yet, stated so nobody reads silence as coverage.** The designs
+under an unmapped folder keep their `penpot_team_id` and their `sync` mode, so they
+are half-unmapped. Finishing that is `designs/move.feature`'s `Move a design out of
+every mapping`, which needs `PenpotMetadata` to be able to remove ONE key — it can
+write keys and drop a whole record, and neither is what unmapping a design wants.
+Doing it here only for designs that happen to sit under a moved project, while a
+design dragged out on its own still keeps everything, would make the two paths
+disagree in a new direction rather than fix the old one.
 
 Worth knowing rather than asserting: the project still exists, so a later pull will
 build a folder for it again at its own path. That is a consequence of two rules

@@ -19,9 +19,9 @@ use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 /**
  * STOPS a refused move, on every route there is. What it cannot do is say why.
  *
- * The two rules — a project folder stays inside its team folder (§6.30), a `link`
- * file stays inside its project (§6.43) — are unchanged and now live in
- * {@see MoveRules}, which states them once and is asked twice. This is the half
+ * The two rules — nothing moves in or out of a `link` mapping (§C6.38), a `link`
+ * file stays inside its project (§6.43) — live in {@see MoveRules}, which states
+ * them once and is asked twice. This is the half
  * that reaches `occ`, another app and a script, none of which go near Sabre; the
  * half a person actually reads is
  * {@see \OCA\PenpotSync\DAV\LinkWriteGuardPlugin} on `method:MOVE`.
