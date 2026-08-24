@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\DeletionService;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
@@ -18,6 +19,7 @@ use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -54,6 +56,80 @@ final class DeletionServiceTest extends TestCase {
 			$tokens,
 			new NullLogger(),
 		);
+	}
+
+	// ── the folder step (§C6.38) ────────────────────────────────────────────
+
+	/**
+	 * A project folder trashed takes its project to Penpot's trash — SOFT, which
+	 * is the only reason one gesture is allowed to reach many designs at once.
+	 */
+	public function testTrashingAProjectFolderDeletesItsProject(): void {
+		$this->givenMarkers([40 => 'project-doomed']);
+
+		$this->client->expects($this->once())->method('deleteProject')
+			->with('project-doomed', null);
+
+		$this->deletions->onFolderTrashed($this->folder(40));
+	}
+
+	/**
+	 * THE COST OF THE PATH MODEL, on the delete side. `foo` is no project itself,
+	 * but `foo/bar` and `foo/bar/baz` are named THROUGH it and stop meaning
+	 * anything the moment it goes — so one gesture is one `delete-project` each,
+	 * exactly as one drag is one `rename-project` each in PushService.
+	 */
+	public function testTrashingAFolderTakesEveryProjectNamedThroughIt(): void {
+		$baz = $this->folder(42);
+		$bar = $this->folder(41, [$baz]);
+		$foo = $this->folder(40, [$bar]);
+		$this->givenMarkers([40 => '', 41 => 'project-bar', 42 => 'project-baz']);
+
+		$deleted = [];
+		$this->client->method('deleteProject')->willReturnCallback(
+			static function (string $id) use (&$deleted): void {
+				$deleted[] = $id;
+			},
+		);
+
+		$this->deletions->onFolderTrashed($foo);
+		self::assertSame(['project-bar', 'project-baz'], $deleted);
+	}
+
+	/**
+	 * A plain folder inside a mapping names no project, and deleting one must
+	 * cost nothing — that is what keeps a mapped folder usable as a folder.
+	 */
+	public function testTrashingAPlainFolderContactsNobody(): void {
+		$this->givenMarkers([40 => '']);
+		$this->client->expects($this->never())->method('deleteProject');
+
+		$this->deletions->onFolderTrashed($this->folder(40));
+	}
+
+	/**
+	 * ONE FAILURE DOES NOT TAKE ITS SIBLINGS DOWN. Penpot refuses to delete a
+	 * team's default project, and the local trash has already happened either way
+	 * (§6.18 rule 3) — so the second project must still be attempted.
+	 */
+	public function testAProjectPenpotWillNotDeleteDoesNotStopTheRest(): void {
+		$bar = $this->folder(41);
+		$baz = $this->folder(42);
+		$foo = $this->folder(40, [$bar, $baz]);
+		$this->givenMarkers([40 => '', 41 => 'project-refused', 42 => 'project-ok']);
+
+		$attempted = [];
+		$this->client->method('deleteProject')->willReturnCallback(
+			static function (string $id) use (&$attempted): void {
+				$attempted[] = $id;
+				if ($id === 'project-refused') {
+					throw new \RuntimeException('non-deletable-project');
+				}
+			},
+		);
+
+		$this->deletions->onFolderTrashed($foo);
+		self::assertSame(['project-refused', 'project-ok'], $attempted);
 	}
 
 	// ── the soft step ───────────────────────────────────────────────────────
@@ -178,4 +254,26 @@ final class DeletionServiceTest extends TestCase {
 
 		return $node;
 	}
+	/**
+	 * Which node ids carry which project id; '' means a plain folder.
+	 *
+	 * @param array<int, string> $byId
+	 */
+	private function givenMarkers(array $byId): void {
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => new FolderMarkers($byId[$id] ?? '', ''),
+		);
+	}
+
+	/** @param list<Folder> $children */
+	private function folder(int $id, array $children = []): Folder {
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getId')->willReturn($id);
+		$folder->method('getName')->willReturn('Doomed');
+		$folder->method('getPath')->willReturn('/admin/files/Penpot/Doomed');
+		$folder->method('getDirectoryListing')->willReturn($children);
+
+		return $folder;
+	}
+
 }

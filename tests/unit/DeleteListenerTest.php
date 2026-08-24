@@ -82,15 +82,51 @@ final class DeleteListenerTest extends TestCase {
 		$this->listener->handle($this->deleteOf('notes.txt', '/admin/files/Penpot/notes.txt'));
 	}
 
-	public function testAFolderIsNeverRouted(): void {
+	/**
+	 * WAS `testAFolderIsNeverRouted`, and the inversion is the point of §C6.38's
+	 * follow-up: nothing deleted a project, in any circumstance. This class
+	 * returned on anything that was not a `File`, `DeletionService` had no folder
+	 * method, and `PenpotClient` had no `delete-project` — while the scenario for
+	 * it sat tagged `@todo`, which claims the code exists.
+	 */
+	public function testAFolderIsRoutedToTheFolderDelete(): void {
+		$this->deletions->expects($this->once())->method('onFolderTrashed');
 		$this->deletions->expects($this->never())->method('onTrashed');
 		$this->deletions->expects($this->never())->method('onPurged');
 
-		$folder = $this->createMock(Folder::class);
-		$event = $this->createMock(BeforeNodeDeletedEvent::class);
-		$event->method('getNode')->willReturn($folder);
+		$this->listener->handle($this->deleteOfFolder('/admin/files/Penpot/Doomed'));
+	}
 
-		$this->listener->handle($event);
+	/**
+	 * A FOLDER ALREADY IN THE TRASH IS NOT THIS CLASS'S BUSINESS EITHER, and the
+	 * trashbin check has to come BEFORE the folder branch for that to hold — the
+	 * purge route reaches Penpot through its own hook, and routing a trashbin
+	 * folder here would delete the projects a second time.
+	 */
+	public function testAFolderInsideTheTrashbinIsNotRouted(): void {
+		$this->deletions->expects($this->never())->method('onFolderTrashed');
+
+		$this->listener->handle($this->deleteOfFolder('/admin/files_trashbin/files/Doomed.d1700000000'));
+	}
+
+	public function testAFolderDeleteFailureNeverAbortsTheGesture(): void {
+		// This event fires BEFORE the delete, so a throw would cancel a gesture
+		// the user has every right to make.
+		$this->deletions->method('onFolderTrashed')->willThrowException(new \RuntimeException('penpot said no'));
+
+		$this->listener->handle($this->deleteOfFolder('/admin/files/Penpot/Doomed'));
+		$this->addToAssertionCount(1);
+	}
+
+	private function deleteOfFolder(string $path): BeforeNodeDeletedEvent {
+		$node = $this->createMock(Folder::class);
+		$node->method('getName')->willReturn(basename($path));
+		$node->method('getPath')->willReturn($path);
+
+		$event = $this->createMock(BeforeNodeDeletedEvent::class);
+		$event->method('getNode')->willReturn($node);
+
+		return $event;
 	}
 
 	private function deleteOf(string $name, string $path): BeforeNodeDeletedEvent {

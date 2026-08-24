@@ -17,6 +17,8 @@ use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
 use OCP\Files\File;
+use OCP\Files\Folder;
+use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -77,23 +79,46 @@ final class DeleteListener implements IEventListener {
 		}
 
 		$node = $event->getNode();
+		if (str_contains($node->getPath(), self::TRASHBIN_SEGMENT)) {
+			return;
+		}
+
+		// A FOLDER IS A GESTURE ON EVERY PROJECT ITS NAME SPELLED (§C6.38), and
+		// this branch is the one that did not exist: the class returned on
+		// anything that was not a File, so trashing a project folder reached
+		// Penpot not at all. The scenario for it was tagged `@todo`.
+		if ($node instanceof Folder) {
+			$this->attempt('folder delete', $node, fn () => $this->deletions->onFolderTrashed($node));
+
+			return;
+		}
+
 		if (!$node instanceof File) {
 			return;
 		}
 		if (!str_ends_with($node->getName(), PullService::EXTENSION)) {
 			return;
 		}
-		if (str_contains($node->getPath(), self::TRASHBIN_SEGMENT)) {
-			return;
-		}
 
+		$this->attempt('delete', $node, fn () => $this->deletions->onTrashed($node));
+	}
+
+	/**
+	 * Run one delete handler, absorbing any failure into the log.
+	 *
+	 * NEVER ABORT THE DELETE. See the class docblock: the user's file is theirs,
+	 * and a remote failure is the next pull's problem. Shared by both branches so
+	 * the folder path cannot quietly acquire different behaviour from the file
+	 * one — this event fires BEFORE the delete, so a throw here would cancel a
+	 * gesture the user has every right to make.
+	 */
+	private function attempt(string $what, Node $node, callable $handle): void {
 		try {
-			$this->deletions->onTrashed($node);
+			$handle();
 		} catch (\Throwable $e) {
-			// Never abort the delete. See the class docblock: the user's file is
-			// theirs, and a remote failure is the next pull's problem.
-			$this->logger->warning('penpot_sync: delete handling failed; the local delete stands', [
+			$this->logger->warning('penpot_sync: {what} handling failed; the local delete stands', [
 				'app' => Application::APP_ID,
+				'what' => $what,
 				'file' => $node->getName(),
 				'exception' => $e,
 			]);

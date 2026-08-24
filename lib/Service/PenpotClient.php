@@ -138,6 +138,10 @@ final class PenpotClient {
 		// them. Closes open question #27.
 		'create-file' => ['project' => 'project-id', 'name' => 'name'],
 		'delete-file' => ['file' => 'id'],
+		// A BARE `id`, like `rename-project` and unlike `move-project`. Read off
+		// `schema:delete-project`; recorded in Ch3 §C6.38 when the same read
+		// established that this command exists at all.
+		'delete-project' => ['project' => 'id'],
 		'restore-deleted-team-files' => ['team' => 'team-id', 'files' => 'ids'],
 		'permanently-delete-team-files' => ['team' => 'team-id', 'files' => 'ids'],
 		// ── confirmed live, Chapter 1 §5.1/§5.4 ──
@@ -510,6 +514,30 @@ final class PenpotClient {
 		}
 
 		$this->call('move-files', ['project' => $projectId, 'files' => $fileIds], $actorToken);
+	}
+
+	/**
+	 * Move a project to Penpot's trash, taking its designs with it.
+	 *
+	 * SOFT, AND THAT IS THE WHOLE REASON THIS IS SAFE TO CALL FROM A DRAG. Read
+	 * off the server: `delete-project` sets `deleted-at` to a point in the future
+	 * using the team's own deletion delay — the identical mechanism `delete-file`
+	 * uses, and the identical one the app already trusts for a single design
+	 * (§C6.11). Nothing is destroyed here, on either side, which is what lets one
+	 * gesture take a whole project without asking.
+	 *
+	 * The permanent half is `permanently-delete-team-files` on the designs, which
+	 * the purge already does one file at a time.
+	 *
+	 * **Penpot refuses to delete a team's DEFAULT project** (`:non-deletable-project`).
+	 * That is not a case this app can reach — Drafts is a state, not a folder
+	 * (§6.35), so no folder carries the default project's id — but it arrives as a
+	 * plain validation error rather than anything special if it ever is.
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function deleteProject(string $projectId, ?string $actorToken = null): void {
+		$this->call('delete-project', ['project' => $projectId], $actorToken);
 	}
 
 	/**

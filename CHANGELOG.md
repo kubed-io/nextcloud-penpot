@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Deleting a project folder now deletes the project in Penpot.** It used to be a purely local delete — the folder went to your trash and the project sat in Penpot untouched. Both trashes are soft, so the whole gesture is reversible on both sides, and trashing a folder that several projects sit under takes all of them.
+
+- **A linked design can no longer be renamed or deleted from Nextcloud.** A link holds no copy of the design, so its name and its existence are Penpot's — renaming one used to appear to work and then be silently undone by the next sync. Both now say why instead.
+
 - **Moving a project folder now renames the project in Penpot.** Dragging one into another folder used to leave Penpot calling it by its old name, and a project nested inside a folder was named after the folder alone instead of its path — so `Penpot/foo/Old` was announced as `Old`. Both sides now agree that a project's name is where it sits.
 
 - When a move is refused — anything crossing the edge of a link folder — Nextcloud now shows you the reason instead of an empty error.

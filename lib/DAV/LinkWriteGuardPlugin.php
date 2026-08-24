@@ -101,6 +101,13 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		//
 		// The priority runs this ahead of Sabre's own `httpMove` (100).
 		$server->on('method:MOVE', [$this, 'onMove'], 10);
+
+		// THE VERB THE GUARD HAD NEVER COVERED. `beforeWriteContent` catches PUT
+		// and Sabre's COPY goes through it per file, so a link could not be
+		// written or duplicated — but DELETE reached nothing at all, and trashing
+		// a link project was a plain 204. A read-only mirror you can delete is not
+		// read-only; `projects/delete.feature` says so and nothing enforced it.
+		$server->on('method:DELETE', [$this, 'onDelete'], 10);
 	}
 
 	/**
@@ -141,7 +148,10 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 			return true;
 		}
 
-		$refusal = $this->rules->refusalForLandingIn($source, $targetParent);
+		// THE NAME AS WELL AS THE PARENT. A rename is a MOVE to a sibling path, so
+		// without the destination's name the rules cannot tell the two apart and a
+		// link rename reads as a move that changed nothing.
+		$refusal = $this->rules->refusalForLandingIn($source, $targetParent, basename($targetRelative));
 		if ($refusal === null) {
 			return true;
 		}
@@ -149,6 +159,47 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		$this->logger->warning('penpot_sync: refused a WebDAV move', [
 			'app' => Application::APP_ID,
 			'from' => $request->getPath(),
+		]);
+
+		throw new Forbidden($refusal);
+	}
+
+	/**
+	 * Refuse a DELETE inside a `link` mapping, in words the person can read.
+	 *
+	 * ONE RULE FOR THE WHOLE SUBTREE, and that is the difference from
+	 * {@see onMove()}. A move asks about the node and where it is going; a delete
+	 * only has the node, and under a link mapping the answer is the same whatever
+	 * it is — a file, a project folder, or a plain folder holding either. The tree
+	 * belongs to Penpot and Nextcloud is a read-only mirror of it, so the question
+	 * this asks is simply *which mapping is this under*.
+	 *
+	 * FAIL OPEN, as everywhere in this plugin: a node that cannot be resolved
+	 * leaves the delete alone.
+	 *
+	 * @param ResponseInterface $response unused; part of Sabre's `method:*` signature
+	 * @return bool always true — this handler either throws or hands the request on
+	 */
+	public function onDelete(RequestInterface $request, ResponseInterface $response): bool {
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		if ($uid === '') {
+			return true;
+		}
+
+		try {
+			$node = $this->rootFolder->getUserFolder($uid)->get($this->relativeTo($request->getPath()));
+		} catch (\Throwable) {
+			return true;
+		}
+
+		$refusal = $this->rules->refusalForDeleting($node);
+		if ($refusal === null) {
+			return true;
+		}
+
+		$this->logger->warning('penpot_sync: refused a WebDAV delete', [
+			'app' => Application::APP_ID,
+			'path' => $request->getPath(),
 		]);
 
 		throw new Forbidden($refusal);
