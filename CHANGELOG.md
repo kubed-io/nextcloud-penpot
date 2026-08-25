@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **A folder becomes a Penpot project when you put a design in it.** Previously a folder only became a project if you tagged it `penpot`, so designs dropped into a new folder landed loose in the team's Drafts and the folder meant nothing on the Penpot side. Making a folder, filling it with designs, and dragging designs into one all work now. An empty folder is still just a folder, and the tag still works.
+- **A folder becomes a Penpot project when you create a design in it.** Previously a folder only became a project if you tagged it `penpot`, so a design made in a new folder landed loose in the team's Drafts and the folder meant nothing on the Penpot side. Dragging an already-mirrored design into a new folder promotes it too, as long as both are in the same mapped folder. An empty folder is still just a folder, and the tag still works.
 
 - **Deleting a project folder now deletes the project in Penpot.** It used to be a purely local delete — the folder went to your trash and the project sat in Penpot untouched. Both trashes are soft, so the whole gesture is reversible on both sides, and trashing a folder that several projects sit under takes all of them.
 

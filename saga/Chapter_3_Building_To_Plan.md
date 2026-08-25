@@ -452,6 +452,24 @@ loudly. The DELETE one passed: *"Penpot holds no project named `foo/bar/baz`"* i
 trivially true of a project that never existed. Both arranges now spell the nesting
 out with the `kind` column, which is what it is for.
 
+**TWO THINGS LEFT OPEN, AND SAID OUT LOUD.**
+
+*A link mapping could be promoted.* A brand-new `.penpot` PUT into a link mapping
+is still created as a design, because `LinkWriteGuardPlugin` classifies from the
+file's OWN metadata and a new file has none. That is older than this round and is
+`designs/create.feature`'s `Creating a design in a link-mapped folder is refused`,
+still `@todo`. What this round DID close is promotion on top of it: a stray design
+is one thing, a stray design plus a project nobody asked for is another.
+
+*A failed re-file leaves a stamped folder.* `adoptForContent()` stamps the marker,
+then files the designs already in the folder, and swallows a failure from the
+second. So designs can stay in their old Penpot project while the folder claims a
+new one, and the marker's fast path stops a retry. `onTagged()` has had exactly
+this shape since it was written, and the docblock argues for it: an unstamped
+folder would be a project in Penpot that nothing in Nextcloud points at. Both
+orderings lose something, which is why this is recorded rather than quietly
+changed on a round that is green.
+
 **BOTH ROUTES IN MUST MEAN THE SAME THING.** Review caught the second half of it:
 `onTagged()` re-files the designs already in the folder — that is the whole point
 of allowing a LATE opt-in — and `adoptForContent()` did not. A managed design can
@@ -504,6 +522,35 @@ mis-tagged scenarios, in the other direction from Round 5's:
 Both are worth more than the scenarios they block: a `@todo` queue is only as good
 as the tags in it, and this is now three rounds running where reading one closely
 found it lying.
+
+### The wall that fell over without anyone pushing it
+
+**Penpot state no longer accumulates across a leg, and nobody built that on
+purpose.** Chapter 3 has carried this since Round 2: teams are find-or-create by
+name, so a project an earlier scenario made survives into the next one, and
+`projects/rename`'s Penpot-side outline is `@todo` because of it.
+
+Round 5 gave the app a folder delete. `ArrangeSteps::emptyMappedFolder()` clears
+each mapped folder between scenarios by deleting its children — and a child that
+carries a `penpot_project_id` now takes its Penpot project with it. The clean-up
+that used to be local reaches Penpot.
+
+Measured, not deduced. In one run of this round, `Create a design in a folder
+Penpot has never seen` made a project called `Team` in two different teams, and a
+scenario a few lines later reported the team's projects as
+`Drafts, Drafts, Existing, Drafts, Existing, Drafts`. The `Team` projects were
+gone.
+
+**It is load-bearing and it is incidental, which is the worst combination.** The
+adoption Outline in `projects/create.feature` relies on it: without it, row 1
+leaves `Penpot/Team` a project, and row 2's `Penpot/Team/Deep` resolves to it by
+nearest ancestor and is never promoted. A review raised exactly that and was right
+about the mechanism — the rows only pass because something else cleans up first.
+Written down here so the next person to touch `emptyMappedFolder()` or the delete
+carve-outs knows what they are holding.
+
+Whether `projects/rename`'s outline can now be picked up is a question for a round
+that tries it, not a claim to make from here.
 
 ### The one harness wall left
 

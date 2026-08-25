@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Service;
 use OCA\PenpotSync\AppInfo\Application;
 use OCP\Files\Folder;
 use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -102,7 +103,13 @@ final class DestinationResolver {
 
 		try {
 			$parent = $node->getParent();
-		} catch (\Throwable) {
+		} catch (NotFoundException) {
+			// PAST THE STORAGE ROOT, the one expected failure — and the only one that
+			// means "there is no folder to promote" rather than "the filesystem did
+			// not answer". Anything else propagates: a storage or metadata failure
+			// swallowed here would pick a destination without knowing where the file
+			// actually is, and the callers all have error containment of their own
+			// (§6.18 rule 3) that is a better place for it than a silent Drafts.
 			return $this->projectFor($membership);
 		}
 

@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
@@ -52,6 +53,10 @@ final class ProjectFolderServiceTest extends TestCase {
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
 	private ProjectTags $tags;
+	private MappingService $mappings;
+
+	/** The mode every mapping reports; see {@see setUp()}. */
+	private string $mappingMode = Mapping::MODE_SYNC;
 	private ProjectFolderService $projects;
 
 	/** @var array<int, FolderMarkers> node id -> folder markers */
@@ -84,6 +89,11 @@ final class ProjectFolderServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->tags = $this->createMock(ProjectTags::class);
+		// SYNC unless a test says otherwise — see testALinkMappingIsNeverPromoted().
+		$this->mappings = $this->createMock(MappingService::class);
+		$this->mappings->method('getByTeamId')->willReturnCallback(
+			fn (string $id): Mapping => new Mapping('m1', $id, 'A Team', 'Folder', false, $this->mappingMode),
+		);
 
 		$this->metadata->method('readFolder')->willReturnCallback(
 			fn (int $id): FolderMarkers => $this->folderMarkers[$id] ?? new FolderMarkers('', ''),
@@ -101,6 +111,7 @@ final class ProjectFolderServiceTest extends TestCase {
 			$this->resolver,
 			$this->createMock(PersonalTokenService::class),
 			$this->tags,
+			$this->mappings,
 			new SyncGuard(),
 			new NullLogger(),
 		);
@@ -415,6 +426,23 @@ final class ProjectFolderServiceTest extends TestCase {
 	}
 
 	/**
+	 * A LINK MAPPING'S TREE IS PENPOT'S, so nothing promotes a folder in one.
+	 *
+	 * Under a link the folders are filled FROM Penpot and mirror it read-only.
+	 * Creating a project because a file appeared would be this app inventing
+	 * structure in a team it is only supposed to be reading.
+	 */
+	public function testALinkMappingIsNeverPromoted(): void {
+		$this->mappingMode = Mapping::MODE_LINK;
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->pathBelow = 'Team';
+
+		$this->client->expects($this->never())->method('createProject');
+
+		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Team')));
+	}
+
+	/**
 	 * PROMOTION BY CONTENT RE-FILES WHAT WAS ALREADY THERE, exactly as the tag does.
 	 *
 	 * A managed design can already sit below a plain folder — one that left a
@@ -475,6 +503,7 @@ final class ProjectFolderServiceTest extends TestCase {
 			$this->resolver,
 			$this->createMock(PersonalTokenService::class),
 			$this->tags,
+			$this->mappings,
 			new SyncGuard(),
 			new NullLogger(),
 		);

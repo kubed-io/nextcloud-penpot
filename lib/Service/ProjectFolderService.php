@@ -114,6 +114,7 @@ final class ProjectFolderService {
 		private readonly MembershipResolver $resolver,
 		private readonly PersonalTokenService $personalTokens,
 		private readonly ProjectTags $tags,
+		private readonly MappingService $mappings,
 		private readonly SyncGuard $guard,
 		private readonly LoggerInterface $logger,
 	) {
@@ -215,6 +216,13 @@ final class ProjectFolderService {
 		// project in Penpot that nothing in Nextcloud points at.
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
 
+		// STAMPED BEFORE THIS, AND A FAILURE HERE IS SWALLOWED — the same order and
+		// the same trade `onTagged()` has always made. If the re-file fails, designs
+		// stay in their old project while the folder claims the new one, and the
+		// marker's fast path stops a retry. The other ordering loses more: an
+		// unstamped folder is a project in Penpot that nothing in Nextcloud points
+		// at. Neither is free; the choice is recorded in saga Ch3 rather than
+		// re-litigated per call site.
 		$filed = $this->fileExistingDesigns($folder, $projectId);
 
 		$this->logger->info('penpot_sync project: created a Penpot project from a tagged folder', [
@@ -250,6 +258,28 @@ final class ProjectFolderService {
 
 		$teamId = $this->resolver->resolve($folder)->teamId;
 		if ($teamId === null || $teamId === '') {
+			return null;
+		}
+
+		if ($this->mappings->getByTeamId($teamId)?->mode === Mapping::MODE_LINK) {
+			// A LINK MAPPING'S TREE IS PENPOT'S, and promotion is a write. Under a
+			// link the folders are filled FROM Penpot and mirror it read-only, so
+			// creating a project because a file appeared would be this app inventing
+			// structure in a team it is only supposed to be reading.
+			//
+			// NOT THE WHOLE HOLE, and worth being exact: a brand-new `.penpot` PUT
+			// into a link mapping is still created as a design, because
+			// `LinkWriteGuardPlugin` classifies from the file's OWN metadata and a new
+			// file has none. That is older than this rule and is
+			// `designs/create.feature`'s `Creating a design in a link-mapped folder is
+			// refused`, still @todo. This guard stops promotion making it worse — a
+			// stray design is one thing, a stray design plus a project nobody asked
+			// for is another.
+			$this->logger->debug('penpot_sync project: not promoting a folder in a link mapping', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+			]);
+
 			return null;
 		}
 
