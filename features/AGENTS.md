@@ -2709,7 +2709,18 @@ Not offering the action is still right; it is just not a behaviour with an end
 state. What IS a behaviour is what happens when a file arrives there anyway, by
 WebDAV or by a desktop client, and that is the scenario now.
 
-### A created design is attributed to the acting user when possible
+### A created design is attributed to the acting user when possible — WITHDRAWN
+
+**The two scenarios this note describes were removed, and the rule was not.** They
+were judged low quality and pulled to be redone properly rather than left standing
+as a spec nobody would want to build to. Nothing points at this anchor now; it is
+kept because the RULE is still wanted and the reasoning below is still the
+argument for it.
+
+What has to come back is a statement of authorship at creation — with a personal
+token the design is the user's, without one it is the service account's, and in
+the second case the user is TOLD. The shape below is the part worth keeping; the
+scenarios that carried it are not.
 
 Authorship is a durable property of a design rather than a line in its history,
 which is why this matters more at creation than for any other write. With a
