@@ -571,7 +571,12 @@ final class LinkWriteGuardPluginTest extends TestCase {
 
 		$metadata = $this->createMock(PenpotMetadata::class);
 		$metadata->method('readFile')->willReturn(
-			new PenpotFileMetadata('penpot-1', '', $link ? 'reference' : 'sync', ''),
+			// `Mapping::MODE_LINK`, NOT the stored `reference`. PenpotMetadata
+			// translates the wire value back on read (the literal `link` is
+			// is_callable() and crashes core's PROPFIND), so every consumer of
+			// PenpotFileMetadata sees `link` — including isLink(), which this test
+			// was silently failing to trigger.
+			new PenpotFileMetadata('penpot-1', '', $link ? Mapping::MODE_LINK : Mapping::MODE_SYNC, ''),
 		);
 
 		$resolver = $this->createStub(MembershipResolver::class);

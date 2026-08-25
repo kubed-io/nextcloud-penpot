@@ -13,6 +13,7 @@ use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
+use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MotionService;
 use OCA\PenpotSync\Service\PenpotClient;
@@ -97,6 +98,7 @@ final class MotionServiceTest extends TestCase {
 			$this->personalTokens,
 			$this->tags,
 			new SyncGuard(),
+			$this->createMock(ImportService::class),
 			new NullLogger(),
 		);
 	}

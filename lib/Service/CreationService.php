@@ -57,6 +57,7 @@ final class CreationService {
 		private readonly DestinationResolver $destinations,
 		private readonly ArchiveService $archives,
 		private readonly MappingService $mappings,
+		private readonly ImportService $imports,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -69,17 +70,7 @@ final class CreationService {
 			return;
 		}
 
-		if ($this->archives->holdsArchive($node)) {
-			// An uploaded archive. See the class docblock: importing it is a
-			// different, human-directed act, and creating an empty design for it
-			// would set the file and the design against each other.
-			$this->logger->info('penpot_sync create: a .penpot archive was added; left untracked (import is not a create)', [
-				'app' => Application::APP_ID,
-				'file' => $node->getName(),
-			]);
-
-			return;
-		}
+		$archive = $this->archives->holdsArchive($node);
 
 		$membership = $this->resolver->resolve($node);
 		// A DESIGN ARRIVING IS WHAT MAKES ITS FOLDER A PROJECT (`projects/create.feature`).
@@ -89,6 +80,17 @@ final class CreationService {
 		$project = $this->destinations->projectForContentIn($node, $membership);
 		if ($project === null) {
 			// Outside every mapping — an ordinary file in an ordinary folder.
+			return;
+		}
+
+		if ($archive) {
+			// AN ARCHIVE IS AN IMPORT, NOT A CREATE (§6.33), and this used to stop
+			// here with "left untracked". The danger the old comment named is real
+			// and is the argument FOR importing rather than against it: creating an
+			// empty design beside a full archive would set the file and the design
+			// against each other, and the next pull would overwrite the bytes.
+			$this->imports->adopt($node, $project, $membership->teamId);
+
 			return;
 		}
 

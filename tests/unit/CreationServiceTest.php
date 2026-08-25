@@ -15,6 +15,7 @@ use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
+use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
@@ -46,6 +47,7 @@ final class CreationServiceTest extends TestCase {
 	private ArchiveService $archives;
 	private MappingService $mappings;
 	private CreationService $creations;
+	private ImportService $imports;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -55,6 +57,7 @@ final class CreationServiceTest extends TestCase {
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->archives = $this->createMock(ArchiveService::class);
 		$this->mappings = $this->createMock(MappingService::class);
+		$this->imports = $this->createMock(ImportService::class);
 
 		// A design is born in its MAPPING's mode, so every test needs a mapping to
 		// resolve to. `link` is the default here because it is the app's default;
@@ -70,6 +73,7 @@ final class CreationServiceTest extends TestCase {
 			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$this->archives,
 			$this->mappings,
+			$this->imports,
 			new NullLogger(),
 		);
 	}
@@ -124,6 +128,7 @@ final class CreationServiceTest extends TestCase {
 			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$this->archives,
 			$mappings,
+			$this->imports,
 			new NullLogger(),
 		);
 
@@ -154,6 +159,7 @@ final class CreationServiceTest extends TestCase {
 			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$this->archives,
 			$mappings,
+			$this->imports,
 			new NullLogger(),
 		);
 

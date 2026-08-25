@@ -123,8 +123,7 @@ Feature: Moving a design
     # design it names is still there, so nothing new is created.
 
   # notes: ../AGENTS.md#a-design-file-arriving-in-a-project-becomes-a-design
-  # @unbuilt — its own note below said so already; the tag had not caught up.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move an untracked design file into a project
     Given an untracked design file at "Scratch/Uploaded.penpot"
     When I move the file into "Penpot/Adopt Me"
@@ -135,11 +134,11 @@ Feature: Moving a design
       | penpot_mode    | the mapping's mode |
       | content        | an archive         |
 
-    # THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: it leaves the file
-    # untracked. A mapping that ignores a design sitting inside it is not one.
+    # A mapping that ignores a design sitting inside it is not a mapping. The
+    # archive is imported (§6.33); nothing empty is invented beside it.
 
   # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
-  # @unbuilt — no import to fail, and no notifier to report it with.
+  # @unbuilt — the import exists now; the report still has nothing to travel on.
   @in-nextcloud @gesture @unbuilt
   Scenario: Move a ".penpot" file Penpot will not accept into a project
     Given an untracked design file at "Scratch/Broken.penpot" whose archive Penpot rejects

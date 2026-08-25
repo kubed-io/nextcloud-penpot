@@ -629,6 +629,141 @@ final class PenpotClient {
 	 *
 	 * @throws PenpotApiException
 	 */
+	/**
+	 * Turn a `.penpot` archive into a real design in a project (§6.20, §6.33).
+	 *
+	 * ## THE ONLY MULTIPART COMMAND IN THIS CLASS
+	 *
+	 * `import-binfile`'s schema takes `[:file media/schema:upload]`, so the archive
+	 * travels as a multipart part rather than in a JSON body — which is why this
+	 * cannot go through {@see postStream}. Everything after the request is the same
+	 * machinery as the export: an SSE stream, in Transit, where HTTP 200 does NOT
+	 * mean success and an error arrives as an event inside it.
+	 *
+	 * ## THE NAME IS SENT AND IGNORED
+	 *
+	 * Recorded live in §6.20 and worth repeating at the call site rather than
+	 * trusting memory: the imported design is named by what is INSIDE the archive,
+	 * not by this parameter. The schema requires `name`, so it is sent; the caller
+	 * renames afterwards if the filename is to be honoured (§6.4). `duplicate-file`
+	 * is the opposite and that asymmetry is the reason both notes exist.
+	 *
+	 * @return string the new design's id
+	 *
+	 * @throws PenpotApiException when Penpot refuses the archive or the stream ends
+	 *                            without naming a file
+	 */
+	public function importBinfile(string $projectId, string $name, string $archive, ?string $actorToken = null): string {
+		if (!str_starts_with($archive, self::ZIP_MAGIC)) {
+			// Refused HERE rather than by Penpot, because the caller's error path
+			// depends on telling "this is not an archive" from "Penpot said no": the
+			// first leaves an ordinary file alone, the second is worth reporting.
+			throw new PenpotApiException(
+				sprintf('Refusing to import %d bytes that are not a ZIP archive.', strlen($archive)),
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		$url = $this->getBaseUrl() . self::RPC_PATH . 'import-binfile';
+		try {
+			$response = $this->clientService->newClient()->post($url, [
+				'headers' => [
+					'Authorization' => 'Token ' . ($actorToken ?? $this->getToken()),
+					// No Content-Type: the client sets the multipart boundary. And
+					// still no Accept — the events are Transit like everything else.
+				],
+				'multipart' => [
+					['name' => 'project-id', 'contents' => $projectId],
+					['name' => 'name', 'contents' => mb_substr($name, 0, 250)],
+					['name' => 'version', 'contents' => '3'],
+					['name' => 'file', 'contents' => $archive, 'filename' => $name . PullService::EXTENSION],
+				],
+				'timeout' => self::EXPORT_TIMEOUT,
+				'http_errors' => false,
+			]);
+		} catch (LocalServerException $e) {
+			throw new PenpotApiException(
+				'Nextcloud refused to connect to a local address. Set `allow_local_remote_servers` '
+				. 'if Penpot is reachable only in-cluster. (' . $e->getMessage() . ')',
+				0,
+				$e,
+				PenpotApiException::KIND_UNREACHABLE,
+			);
+		} catch (\Throwable $e) {
+			throw new PenpotApiException(
+				'Could not reach Penpot at ' . $url . ': ' . $e->getMessage(),
+				0,
+				$e,
+				PenpotApiException::KIND_UNREACHABLE,
+			);
+		}
+
+		$status = $response->getStatusCode();
+		if ($status < 200 || $status >= 300) {
+			throw $this->errorFor('import-binfile', $status, (string)$response->getBody());
+		}
+
+		return $this->importedIdFrom((string)$response->getBody());
+	}
+
+	/**
+	 * The design id an import's SSE stream ended with.
+	 *
+	 * PENPOT HAS SAID THIS SEVERAL WAYS ACROSS VERSIONS — a bare uuid, a collection
+	 * of them (a `.penpot` may hold more than one file), or a map keyed by id — so
+	 * the decoded payload is walked for the first uuid rather than matched against
+	 * one shape. This app only ever imports single-file archives it exported
+	 * itself, so "the first" is "the one".
+	 */
+	private function importedIdFrom(string $stream): string {
+		$found = null;
+
+		foreach ($this->events($stream) as [$name, $data]) {
+			if ($name === 'error') {
+				throw new PenpotApiException(
+					'Penpot refused the import: ' . $this->errorHint($data),
+					0,
+					null,
+					PenpotApiException::KIND_PROTOCOL,
+				);
+			}
+			if ($name === 'end') {
+				$found = self::firstUuid($this->transit->decode($data));
+			}
+		}
+
+		if ($found === null) {
+			throw new PenpotApiException(
+				'Penpot\'s import ended without naming a design. The stream may have been cut '
+				. 'short by a proxy timeout.',
+				0,
+				null,
+				PenpotApiException::KIND_PROTOCOL,
+			);
+		}
+
+		return $found;
+	}
+
+	/** The first uuid anywhere in a decoded payload, however it is nested. */
+	private static function firstUuid(mixed $value): ?string {
+		if (is_string($value)) {
+			return preg_match('/^[0-9a-f-]{36}$/', $value) === 1 ? $value : null;
+		}
+		if (is_array($value)) {
+			foreach ($value as $key => $item) {
+				$hit = self::firstUuid(is_string($key) ? $key : null) ?? self::firstUuid($item);
+				if ($hit !== null) {
+					return $hit;
+				}
+			}
+		}
+
+		return null;
+	}
+
 	private function postStream(string $command, array $args, ?string $actorToken = null): string {
 		$url = $this->getBaseUrl() . self::RPC_PATH . $command;
 		$body = $this->wireParams($command, $args);
