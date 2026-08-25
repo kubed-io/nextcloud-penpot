@@ -492,7 +492,12 @@ trait CopySteps {
 	 */
 	private function freeCopyName(string $folder, string $filename): string {
 		$base = preg_replace('/\.penpot$/', '', $filename) ?? $filename;
-		for ($n = 1; $n < 100; $n++) {
+		// FROM 2, BECAUSE THAT IS WHERE CORE STARTS. `Folder::getNonExistingName()`
+		// sets `$counter = 2` for the first collision — read out of the running
+		// server, not remembered — so the first copy of `Original.penpot` is
+		// `Original (2).penpot`. Starting at 1 made this helper pick a name core
+		// never would, and the scenario then asserted the harness's own choice.
+		for ($n = 2; $n < 100; $n++) {
 			$candidate = sprintf('%s/%s (%d).penpot', $folder, $base, $n);
 			if (!$this->davExists($candidate)) {
 				return $candidate;

@@ -2692,6 +2692,26 @@ Both siblings state this rule; penpot had the mirroring half (`Rename a design i
 Penpot` covers a link) and not the refusing half, so a link could be renamed locally
 and silently reverted.
 
+### Nextcloud's collision suffix starts at (2)
+
+**Read out of the running server, not remembered.** `OC\Files\Node\Folder::getNonExistingName()`
+sets `$counter = 2` for the first collision and counts up, so a second
+`Original.penpot` in one folder is `Original (2).penpot` — there is no `(1)`.
+`PullService::freeName()` has always matched that; three scenarios did not.
+
+`designs/copy.feature` asked for `Original (1)` and for `Original`/`(1)`/`(2)`;
+`designs/rename.feature` asked for `Alpha (1)`. All three are corrected to what
+Nextcloud actually produces, which is what they meant all along: their own note
+says **the suffix is Nextcloud's alone**, and deferring to Nextcloud means
+deferring to its numbering too.
+
+Worth recording how it hid for three CI cycles. The copy row PASSED, because the
+harness placed the copy itself — WebDAV COPY overwrites rather than suffixing, so
+`CopySteps::freeCopyName()` had to choose a name, and it chose `(1)` to match the
+table. A scenario asserting a name the harness picked proves nothing about the
+app; it was two halves of the same wrong assumption agreeing with each other. The
+helper now starts where core starts, so a future disagreement fails instead.
+
 ### The suffix is Nextcloud's alone
 
 Two designs may share a name in Penpot; two files in one folder may not. When a
@@ -2939,6 +2959,31 @@ wall and it gets mistaken for two others:
 The scenarios waiting on it are not confined to this file — `projects/create.feature`
 ends on *"the user is notified that the project could not be placed"* — so the count
 this unblocks is larger than any one feature's `@unbuilt` list suggests.
+
+### Penpot's destroy leaves the row behind
+
+**§C6.11 recorded that `permanently-delete-team-files` puts a design "not in
+Penpot's trash". True, and only until something touches it again.** Read off the
+running backend rather than inferred: the command's own docstring says *"Mark the
+specified files to be deleted **immediatelly**"*, and what it does is
+`db/update! :file {:deleted-at request-at}`. It sets the clock to NOW instead of a
+week out. **The row survives**; a collector removes it later.
+
+So `delete-file` on that same id still succeeds — `mark-file-deleted` re-stamps
+`deleted_at` a week into the future — and the design reappears in
+`get-team-deleted-files`. Which is exactly what `Trash a design that is already
+gone from Penpot` does: destroy the design, then trash the file, which makes the
+app call `delete-file` on an id it has every reason to think is live.
+
+That leaves the scenario `@blocked` rather than `@unbuilt`, and the distinction is
+the point. The app is not wrong. Avoiding this would mean a pre-flight existence
+check before every delete — a wasted round trip on a hot path, to guard against a
+state a user reaches only by destroying a design in Penpot and then trashing its
+mirror before the next sync. The harness cannot hold the state still either: there
+is no id Penpot will report as *gone* rather than *deleted*.
+
+Measured across three CI cycles: the destroy was confirmed by re-reading (the
+design did leave the listing), and it came back after the app's own delete.
 
 ### Deleting a mirror moves the design into Penpot's trash
 

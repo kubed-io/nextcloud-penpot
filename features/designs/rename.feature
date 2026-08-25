@@ -85,12 +85,12 @@ Feature: Renaming a design
     When someone renames the "Beta" design to "Alpha" in Penpot
     Then "Penpot/Crowded/Alpha.penpot" holds:
       | penpot_id | the original id |
-    And "Penpot/Crowded/Alpha (1).penpot" holds:
+    And "Penpot/Crowded/Alpha (2).penpot" holds:
       | penpot_id | the id of the renamed design |
     And both designs are named "Alpha" in Penpot
 
-    # The file that held the name keeps it; the arriving one takes the suffix. The
-    # suffix is Nextcloud's alone — Penpot is perfectly happy with two "Alpha"s.
+    # notes: ../AGENTS.md#nextclouds-collision-suffix-starts-at-2
+    # The file that held the name keeps it; the arriving one takes the suffix.
 
     # ── RULE: a rename outside every mapping is Nextcloud's business alone ────
     # notes: ../AGENTS.md#renaming-an-untracked-penpot-file-is-not-a-failure

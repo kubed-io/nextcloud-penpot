@@ -41,7 +41,7 @@ Feature: Copying a design
 
     Examples: Nextcloud names the copy, and that is its name everywhere
       | source           | destination      | copy                | named        | lands in  |
-      | Penpot/Copy Here | Penpot/Copy Here | Original (1).penpot | Original (1) | Copy Here |
+      | Penpot/Copy Here | Penpot/Copy Here | Original (2).penpot | Original (2) | Copy Here |
       | Scratch          | Penpot/Copy Here | Original.penpot     | Original     | Copy Here |
       | Penpot/Copy Here | Shared/Handover  | Original.penpot     | Original     | Handover  |
 
@@ -118,6 +118,7 @@ Feature: Copying a design
       | Scratch         |
 
   # notes: ../AGENTS.md#exactly-one-file-per-design-id-under-a-project-always
+  # notes: ../AGENTS.md#nextclouds-collision-suffix-starts-at-2
   @in-penpot @gesture
   Scenario: Three designs in Penpot wearing one name
     Given a design file named "Original.penpot" in "Penpot/Crowded"
@@ -125,8 +126,8 @@ Feature: Copying a design
     And someone duplicates its design in Penpot and names it "Original"
     Then "Penpot/Crowded" holds one file per design, named:
       | Original.penpot     |
-      | Original (1).penpot |
       | Original (2).penpot |
+      | Original (3).penpot |
     And all three designs are still named "Original" in Penpot
 
     # ── RULE: a copy Penpot will not take stays a plain file ──────────────────

@@ -38,7 +38,10 @@ Feature: Trashing a design
     # Penpot needs no recycle-bin setting: it HAS a trash, so a delete is already
     # reversible there. The siblings bolt one on because their services have none.
 
-  @in-nextcloud @gesture
+  # notes: ../AGENTS.md#penpots-destroy-leaves-the-row-behind
+  # @blocked — Penpot's own delete re-marks the destroyed row, so the state this
+  # scenario needs cannot be held still long enough to observe.
+  @in-nextcloud @gesture @blocked
   Scenario: Trash a design that is already gone from Penpot
     Given a design file named "Twice Dead.penpot" in "Penpot/Left Alone"
     And its design is permanently deleted in Penpot
