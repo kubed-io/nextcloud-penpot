@@ -26,7 +26,7 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 24 OF 116 SCENARIO HEADERS RUN — 58 executed, on all four legs
+  # 24 OF 114 SCENARIO HEADERS RUN — 58 executed, on all four legs
   # (admin 25, design 10, project 21, core 2). The spec was rewritten wholesale — the
   # noun became the folder and the verb the file — and rather than re-triage 116
   # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for

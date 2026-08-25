@@ -292,7 +292,7 @@ scenario executes today; it is about **who picks it up**.
 it: the list is now things a person can sit down and do, with no triage step in
 front of it.
 
-#### The queue is 87 of 116 — the arrange spine is in and four legs are green
+#### Why the queue is one flat list, and how a scenario earns its status back
 
 The reorganisation this file describes — the folder became the noun, the file
 became the verb, `reconcile.feature` stopped being a feature — rewrote the spec
@@ -312,7 +312,7 @@ them the only sane place to break ground. Where the suite stands now:
 | status | scenarios | |
 |---|---|---|
 | *(none)* — runs in CI | 24 | 58 executed: `admin` 25, `design` 10, `project` 21, `core` 2 |
-| `@todo` | 76 | the queue |
+| `@todo` | 74 | the queue |
 | `@blocked` | 9 | no browser, no app removal, no way to author a design |
 | `@unbuilt` | 7 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |

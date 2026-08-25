@@ -187,7 +187,7 @@ there was no cheap batch to pick up; the shared Background had to be built first
 | | | after Round 2 | now |
 |---|---|---|---|
 | live | headers → executed | **15** → **41** | **24** → **58** |
-| `@todo` | the queue | 87 | 76 |
+| `@todo` | the queue | 87 | 74 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
 | `@unbuilt` | each names what the code owes | 5 | 7 |
 

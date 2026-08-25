@@ -78,38 +78,17 @@ Feature: Creating a design
     Given the user has a personal Penpot token
     And a folder at "Sketchbook" in the user's home that is not a project
     When I create a new design in "<folder>"
-    Then the user's personal "Drafts" project holds a design named "New design"
+    Then the user's personal "<project>" project holds a design named "New design"
     And "<folder>/New design.penpot" holds:
       | penpot_id | set |
 
-    Examples: the home root and a plain folder in it are both outside every project
-      | folder     |
-      |            |
-      | Sketchbook |
+    Examples: the home root is this team's Drafts, and a folder in it is a project
+      | folder     | project    |
+      |            | Drafts     |
+      | Sketchbook | Sketchbook |
 
-    # The same nearest-ancestor rule: no project id on the way up, a team id at the
-    # root. The personal team is the one team with no folder of its own.
-
-    # ── RULE: authorship is durable, so it follows whoever made the design ────
-    # notes: ../AGENTS.md#a-created-design-is-attributed-to-the-acting-user-when-possible
-
-  @in-nextcloud @gesture @todo
-  Scenario: Create a design as a user with a personal token
-    Given the user has a personal Penpot token
-    When I create a new design in "Penpot/Make Here"
-    Then the "Make Here" Penpot project holds a design named "New design"
-    And Penpot records that user as the design's author
-
-  @in-nextcloud @gesture @todo
-  Scenario: Create a design as a user with no personal token
-    Given the user has no personal Penpot token
-    When I create a new design in "Penpot/Make Here"
-    Then the "Make Here" Penpot project holds a design named "New design"
-    And Penpot records the service account as the design's author
-    And the user is told the design will be authored by the service account
-
-    # Authorship is a durable property of a design rather than a line of history,
-    # so it matters more here than for any other write.
+    # The ordinary rules with a different mapping: the home root is where this team
+    # is mounted, so it is Drafts, and a folder in it promotes like any other.
 
     # ── RULE: a design has to have somewhere to go ───────────────────────────
     # notes: ../AGENTS.md#a-design-has-to-have-somewhere-to-go
