@@ -886,7 +886,26 @@ THE WHOLE POINT OF THE IMPLICIT MAPPING. Without a team ancestor this file
 resolves to nothing and stays inert (create-design.feature's rule). With
 one it is the ordinary team-root case (§6.35) — same rule, new root.
 
-### A design created in a plain folder in the user's home also lands in personal Drafts
+**AND ONLY THE ROOT.** A folder in the home is promoted to a personal project by
+the first design landing in it, exactly as a folder under any other mapping is —
+see [a folder is a project when a design is in it](#a-folder-is-a-project-when-a-design-is-in-it).
+
+This scenario said the opposite until it was read again: a plain `Sketchbook` in
+the home landed in Drafts too, under the caption *"the home root and a plain
+folder in it are both outside every project"*. That is the retired
+"depth is not part of it" reading of §6.35, and the personal-mapping TWIN of the
+`Penpot/Inbox` row the same round removed from this very file — the contradiction
+was settled in one mapping and left standing in the other.
+
+Worth noticing how it survived: nothing was wrong with the sentence on its own
+terms. It only reads as a contradiction next to a rule that lives in a different
+file, which is the failure mode of splitting a spec by noun and the reason
+`README`'s claim that personal projects are *"the ordinary rules with a different
+mapping"* has to be load-bearing rather than decorative. If the home root is a
+mapping root, promotion works there the way it works everywhere, and an exception
+for personal would be the special case needing an argument.
+
+### A design crossing between a home and a shared team is a move, not a create
 
 ── crossing the boundary: personal ⇄ a shared team ─────────────────────────
 A user's home and a mapped Team Folder are two mappings to two different
