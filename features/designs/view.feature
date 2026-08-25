@@ -36,10 +36,10 @@ Feature: Looking at a design file
     Given a design file named "Brand Kit.penpot" in "<folder>"
     When a WebDAV client requests the file's properties
     Then the file holds:
-      | penpot_id      | the design's id |
-      | penpot_team_id | the team's id   |
-      | penpot_mode    | <mode>          |
-      | content        | <content>       |
+      | penpot_id      | the design's id    |
+      | penpot_team_id | the mapping's team |
+      | penpot_mode    | <mode>             |
+      | content        | <content>          |
 
     Examples: both modes a mapping can hold, and only one of them stores the design
       | folder         | mode      | content    |

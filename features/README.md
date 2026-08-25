@@ -587,8 +587,20 @@ Penpot link" are promises this app makes; as prose they are comments nobody
 executes, and as rows they are assertions.
 
 The vocabulary is deliberately small — a table that can say anything stops being
-readable: `the design's id`, `the team's id`, `set`, `absent`, `an archive`,
-`empty`, `the design's` (for a clock), or a quoted literal.
+readable: `the design's id`, `set`, `absent`, `an archive`, `empty`, `the
+design's` (for a clock), or a quoted literal.
+
+Three more name no value on purpose, because the point of the row is that the
+*mapping* decided it — an outline sends one gesture into a `sync` mapping, a Team
+Folder and a `link` one, and spelling `sync` would split one claim into three
+scenarios: `the mapping's team`, `the mapping's mode`, `the mapping's body`.
+
+That trio is spelt as a trio deliberately. The team half was written both ways —
+`the team's id` in four files and `the mapping's team` in nine, with
+`connection/sync-now.feature` using **both**, twenty-six lines apart — and only
+the first spelling was ever implemented. So every scenario reaching for the
+second one failed on "not a value this vocabulary knows": a fixture failure
+wearing the shape of an app failure. One claim, one spelling.
 
 `penpot_mode` reads `"link"` in a table even though the stored value is
 `reference` (the literal string `link` is `is_callable()` and crashes core's

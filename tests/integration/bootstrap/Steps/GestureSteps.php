@@ -163,6 +163,178 @@ trait GestureSteps {
 	}
 
 	/**
+	 * The cursor's file, dragged where it is not allowed to go.
+	 *
+	 * The cursor twin of {@see iTryToMoveInto()}, for the same reason
+	 * {@see iMoveTheFileInto()} is the twin of {@see iMoveInto()}: a scenario that
+	 * has already said `a design file named "Pointer.penpot" in "Pointers/Confined"`
+	 * should not have to say the path again to try moving it.
+	 *
+	 * NO `makeAncestors()` HERE, and that is the difference that matters. The
+	 * allowed twin creates the destination because a drag in the Files app lands in
+	 * a folder that exists; this one must not, because several of the destinations
+	 * it is pointed at are inside a `link` mapping — and creating them would be
+	 * this step arranging a write into a tree the app refuses writes to. Every
+	 * destination a refusal scenario names already exists, or is the mapping root.
+	 *
+	 * The cursor deliberately does NOT follow: the whole claim is that the file did
+	 * not move, so `the file stays in "…"` has to be asking about the old path.
+	 *
+	 * @When /^I try to move the file into "([^"]*)"$/
+	 */
+	public function iTryToMoveTheFileInto(string $folder): void {
+		if ($this->currentFilePath === '') {
+			throw new \RuntimeException('the scenario says "the file" but no file is on stage.');
+		}
+
+		$target = trim($folder, '/') . '/' . basename($this->currentFilePath);
+		$result = $this->davMoveResult($this->currentFilePath, $target);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+		$this->gestureTarget = $this->currentFilePath;
+	}
+
+	/**
+	 * The refusal actually stopped it — the cursor's file is still in the folder
+	 * the scenario put it in.
+	 *
+	 * The cursor twin of {@see staysWhereItWas()}, and it asserts one thing more
+	 * than "something is there": the file at that path still carries the id the
+	 * arrange recorded. A refused move that somehow left a DIFFERENT file behind
+	 * would pass a bare existence check, and a copy-then-fail is exactly the shape
+	 * a half-done move takes.
+	 *
+	 * @Then /^the file stays in "([^"]*)"$/
+	 */
+	public function theFileStaysIn(string $folder): void {
+		$folder = trim($folder, '/');
+		$expected = $folder . '/' . basename($this->currentFilePath);
+
+		if (!$this->davExists($expected)) {
+			throw new \RuntimeException(sprintf(
+				"'%s' was supposed to stay put, but there is nothing there any more — the refusal "
+				. "was reported and the move happened anyway. '%s' now holds: %s",
+				$expected,
+				$folder,
+				implode(', ', $this->davChildren($folder)) ?: '(nothing)',
+			));
+		}
+
+		if ($this->currentFileId === '') {
+			return;
+		}
+
+		$now = $this->davReadMetadata($expected, 'penpot_id') ?? '';
+		if ($now !== $this->currentFileId) {
+			throw new \RuntimeException(
+				"something is at '{$expected}', but it is not the file the scenario put there: "
+				. "expected the design {$this->currentFileId}, found '" . ($now ?: '(untracked)') . "'",
+			);
+		}
+	}
+
+	/**
+	 * A refused move changed NEITHER side.
+	 *
+	 * ## WHY BOTH HALVES, AND WHY THIS IS NOT THE SAME AS "IT STAYED PUT"
+	 *
+	 * `the file stays in "…"` is about Nextcloud: the node is where it was. This is
+	 * about the two things a half-applied move would have damaged anyway —
+	 *
+	 *   - the LOCAL bytes, because the guard runs on `method:MOVE` and a MOVE that
+	 *     got as far as its copy leg would leave the original readable but wrong;
+	 *   - the REMOTE design, because `MotionService` re-files in Penpot and a
+	 *     refusal that fired after the RPC would leave Penpot moved and Nextcloud
+	 *     not — the silent desync this whole rule exists to prevent.
+	 *
+	 * The body is checked against what the file's MAPPING implies rather than
+	 * against a snapshot, which is the stronger claim: a `link` still holds zero
+	 * bytes and a `sync` still holds an archive, so a refusal that blanked a mirror
+	 * on its way out is caught even though the file never moved.
+	 *
+	 * @Then /^the original file and its design are unchanged$/
+	 */
+	public function theOriginalFileAndItsDesignAreUnchanged(): void {
+		$path = $this->currentFilePath;
+		if ($path === '' || !$this->davExists($path)) {
+			throw new \RuntimeException(
+				"the scenario says the original file is unchanged, but there is nothing at '{$path}'.",
+			);
+		}
+
+		$want = $this->modeOfMappingFor($path) === 'link' ? 'empty' : 'archive';
+		$body = $this->contentKind($path);
+		if ($body !== $want) {
+			throw new \RuntimeException(
+				"'{$path}' survived the refusal but its content did not: expected '{$want}' "
+				. "(what its mapping implies), found '{$body}'.",
+			);
+		}
+
+		if ($this->currentFileId === '') {
+			return;
+		}
+		$this->theDesignStillExistsInPenpot();
+	}
+
+	/**
+	 * The cursor's design is still a live design in Penpot.
+	 *
+	 * BY ID ACROSS THE WHOLE PROBE, not by name inside one project, and both halves
+	 * of that are deliberate. By id, because Penpot state accumulates across a leg
+	 * and a same-named leftover from an earlier scenario would answer for a design
+	 * this one destroyed. Across the whole listing, because the scenarios saying
+	 * this sentence are precisely the ones where the design's project is in
+	 * question — "it is still SOMEWHERE" is the claim, and naming a project would
+	 * turn it into a different, narrower one.
+	 *
+	 * @Then /^the design still exists in Penpot$/
+	 */
+	public function theDesignStillExistsInPenpot(): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException(
+				'the scenario says "the design" but the arrange put none on stage — '
+				. 'nothing it named carried a penpot_id.',
+			);
+		}
+
+		$this->until(
+			fn (): bool => in_array($this->currentFileId, $this->penpotLiveDesignIds(), true),
+			fn (): string => sprintf(
+				"the design %s is gone from Penpot; the teams on stage now hold: %s",
+				$this->currentFileId,
+				implode(', ', $this->penpotLiveDesignIds()) ?: '(none)',
+			),
+		);
+	}
+
+	/**
+	 * Every design id the probe can see, across every mapped team.
+	 *
+	 * The probe nests `<design>  revn=<n>  <uuid>` under its project, and the
+	 * trailing uuid on those lines is the only one this needs — a project line
+	 * carries a uuid too, which is why the `revn=` is part of the match rather
+	 * than a bare uuid grep.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotLiveDesignIds(): array {
+		$res = $this->occ('penpot_sync:probe --files');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("probe failed while listing Penpot's designs:\n{$res['output']}");
+		}
+
+		$ids = [];
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/\srevn=\S+\s+([0-9a-f-]{36})\s*$/', $line, $m) === 1) {
+				$ids[] = $m[1];
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
 	 * A rename is a MOVE to a sibling path — the same DAV verb and the same
 	 * Nextcloud event. Telling the two apart is the listener's job, not the
 	 * transport's, so this step deliberately goes through the same call.

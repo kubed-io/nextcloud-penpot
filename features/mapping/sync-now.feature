@@ -31,11 +31,11 @@ Feature: Syncing one mapping from its card
     And there is no node at "One Mapping/Drafts"
     And the folder "One Mapping/Cogs" carries its Penpot dates
     And "One Mapping/Cogs/Gizmo.penpot" holds:
-      | penpot_id       | the design's id |
-      | penpot_team_id  | the team's id   |
-      | penpot_revision | set             |
-      | penpot_mode     | "link"          |
-      | content         | empty           |
-      | modified        | the design's    |
-      | created         | the design's    |
+      | penpot_id       | the design's id    |
+      | penpot_team_id  | the mapping's team |
+      | penpot_revision | set                |
+      | penpot_mode     | "link"             |
+      | content         | empty              |
+      | modified        | the design's       |
+      | created         | the design's       |
     # notes: ../AGENTS.md#syncing-one-mapping-brings-its-projects-and-designs-into-nextcloud

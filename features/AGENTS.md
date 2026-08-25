@@ -2018,6 +2018,20 @@ symmetrical and are two different rules read from opposite ends.
 (Written as a comment, not a Gherkin `Rule:` block — Behat's parser rejects
 that keyword outright. See features/README.md.)
 
+**WHY `Move a design out of every mapping` IS `@unbuilt`, AND WHY THE TAG SAID
+`@todo` UNTIL THE DESIGN-MOVE ROUND.** The app does the opposite, and says so in
+as many words. `MotionService::onMove()` logs *"move landed outside any Penpot
+project; leaving Penpot untouched"* and returns, so the file keeps both its team
+and its mode — both rows the scenario asserts are wrong today. Nothing outside
+`CopyService` has ever written `PenpotMetadata::MODE_UNMAPPED`; grep it.
+
+The comment at that return calls the unmapping *"Course 5's decision to make
+explicitly, not one to infer from a drag"*. The spec has since decided the other
+way twice over: this scenario, and the folder twin that IS built (§C6.38 — a
+project dragged out of every mapping becomes a plain Nextcloud folder). A design
+is the smaller half of a rule whose bigger half already ships, which is what makes
+this a gap rather than a disagreement.
+
 ### A duplicate arriving in a project keeps the id already there
 
 THE PERSON ANSWERS WHAT THE CONTENT SHOULD BE; the identity is never theirs to
@@ -2782,6 +2796,30 @@ came back. Best-effort in, honest about failure.
 This also settles the question `designs/create.feature` raised and pushed away: a
 file arriving with content already in it is not a create, it is an import — and
 this is where it belongs.
+
+### There is nowhere for a failure to be reported to
+
+**This app has no notifier, and every "the failure is reported to the user" in the
+spec is waiting on that one missing class.** Both siblings ship a
+`lib/Notification/Notifier.php` and a `Service/SyncNotifier.php`; penpot has
+neither, and `lib/Listener/NodeRenamedListener.php` already says so in a comment —
+*"There is no notifier yet."*
+
+It is worth separating from the walls around it, because it is a different KIND of
+wall and it gets mistaken for two others:
+
+- **Not a harness limit.** The faults these scenarios need are all arrangeable from
+  `occ` — point the instance URL at a dead host, hand Penpot an archive it rejects.
+  Nothing here is `@blocked`; the fault is reachable and the report is not.
+- **Not the same gap as the behaviour under it.** `Move a ".penpot" file Penpot
+  will not accept` owes an import AND a report; `Move a design while Penpot is
+  unreachable` owes only the report, and its other three lines would pass today.
+  So building the notifier alone moves scenarios, which is what makes it a good
+  standalone round rather than a prerequisite to fold into a bigger one.
+
+The scenarios waiting on it are not confined to this file — `projects/create.feature`
+ends on *"the user is notified that the project could not be placed"* — so the count
+this unblocks is larger than any one feature's `@unbuilt` list suggests.
 
 ### Deleting a mirror moves the design into Penpot's trash
 
