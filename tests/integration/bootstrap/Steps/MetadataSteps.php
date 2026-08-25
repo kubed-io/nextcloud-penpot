@@ -163,7 +163,7 @@ trait MetadataSteps {
 
 			case 'the id of the renamed design':
 				// THE DESIGN THE SCENARIO JUST RENAMED IN PENPOT, captured by
-				// {@see RenameSteps::someoneRenamesTheDesignToInPenpot()} before the
+				// {@see RenameSteps::someoneRenamesTheNamedDesignToInPenpot()} before the
 				// pull moved the name out from under it.
 				//
 				// Needed because the arrival is the file that DID NOT keep the name:

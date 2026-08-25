@@ -190,7 +190,6 @@ trait WebDavTrait {
 		return ['status' => $res->getStatusCode(), 'body' => (string)$res->getBody()];
 	}
 
-	/** COPY a file within the user's files root (fires NodeCopiedEvent in NC). */
 	/**
 	 * The same COPY, handing the response back instead of asserting it.
 	 *

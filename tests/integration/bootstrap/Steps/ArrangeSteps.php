@@ -938,7 +938,14 @@ trait ArrangeSteps {
 			throw new \RuntimeException("no mapping is declared for the folder '{$mappedFolder}'");
 		}
 
-		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $team]) as $project) {
+		// `get-all-projects`, NOT `get-projects`. Only the former carries
+		// `is-default` — the same read {@see \OCA\PenpotSync\Service\DestinationResolver}
+		// does, and the reason the first cut of this reported "no default (Drafts)
+		// project" for a team that plainly has one.
+		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			if (($project['team-id'] ?? null) !== $team) {
+				continue;
+			}
 			if (filter_var($project['is-default'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
 				$id = $project['id'] ?? '';
 				if (is_string($id) && $id !== '') {

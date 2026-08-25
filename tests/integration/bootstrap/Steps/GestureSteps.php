@@ -82,6 +82,14 @@ trait GestureSteps {
 	private array $designIdsBeforeRefusal = [];
 
 	/**
+	 * The app's keys on the cursor's file the instant before it was trashed, since
+	 * a trashed file's properties are no longer readable at its old path.
+	 *
+	 * @var list<string>
+	 */
+	private array $penpotKeysAtTrashTime = [];
+
+	/**
 	 * Read the design's id BEFORE a gesture, which is the last moment the old path
 	 * resolves. Every claim of the form "the id it had before …" rests on this, so
 	 * every gesture those specs cover has to record it: a rename, a move, and a
@@ -274,13 +282,21 @@ trait GestureSteps {
 			);
 		}
 
-		$want = $this->modeOfMappingFor($path) === 'link' ? 'empty' : 'archive';
-		$body = $this->contentKind($path);
-		if ($body !== $want) {
-			throw new \RuntimeException(
-				"'{$path}' survived the refusal but its content did not: expected '{$want}' "
-				. "(what its mapping implies), found '{$body}'.",
-			);
+		// OUTSIDE EVERY MAPPING THERE IS NO IMPLIED BODY, and asserting one is how
+		// this step failed a scenario it should have passed. `modeOfMappingFor()`
+		// answers `link` for an unmapped path — a safe default where a MODE is
+		// wanted, and a wrong one here, because it made an untracked archive in
+		// "Scratch" read as "should be empty". A file the app does not manage holds
+		// whatever its owner put in it.
+		if (isset($this->mappingModes[$this->mappingRootOf($path)])) {
+			$want = $this->modeOfMappingFor($path) === 'link' ? 'empty' : 'archive';
+			$body = $this->contentKind($path);
+			if ($body !== $want) {
+				throw new \RuntimeException(
+					"'{$path}' survived the refusal but its content did not: expected '{$want}' "
+					. "(what its mapping implies), found '{$body}'.",
+				);
+			}
 		}
 
 		if ($this->currentFileId === '') {
@@ -1097,6 +1113,12 @@ trait GestureSteps {
 	public function iMoveItToTheTrash(): void {
 		$path = $this->currentFile();
 		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
+		// READ BEFORE THE DELETE, because afterwards the path resolves to nothing
+		// and the trashbin endpoint is a different DAV root that does not carry
+		// these properties. `it still holds no Penpot metadata` is a claim about
+		// what the app stamped on the way out, and this is the last moment it can
+		// be read.
+		$this->penpotKeysAtTrashTime = $this->penpotKeysOn($path);
 		$this->captureIdBeforeGesture($path);
 		$this->davDelete($path);
 		$this->gestureTarget = $path;

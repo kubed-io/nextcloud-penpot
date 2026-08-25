@@ -455,10 +455,14 @@ trait CopySteps {
 	/**
 	 * The name core would pick for a collision: `Original (1).penpot`, then `(2)`.
 	 *
-	 * Resolved the same way {@see \OCA\PenpotSync\Service\PullService::freeName()}
-	 * does, because the assertion is that the two AGREE — a COPY over WebDAV does
-	 * not add a suffix by itself, it overwrites, so the harness has to place the
-	 * copy where the Files app would have.
+	 * NOT a port of {@see \OCA\PenpotSync\Service\PullService::freeName()} — that one
+	 * resolves a collision the PULL hit, and its numbering is its own. This mirrors
+	 * what the FILES APP does when you copy a file onto its own folder, because
+	 * that is the gesture the scenario describes and the `filename` row asserts the
+	 * answer. A COPY over WebDAV adds no suffix by itself; it overwrites. So the
+	 * harness has to place the copy where a person's client would have, and any
+	 * drift between this and core's naming shows up as a failed `filename` row
+	 * rather than being hidden.
 	 */
 	private function freeCopyName(string $folder, string $filename): string {
 		$base = preg_replace('/\.penpot$/', '', $filename) ?? $filename;

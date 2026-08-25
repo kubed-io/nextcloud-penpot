@@ -203,6 +203,23 @@ trait RenameSteps {
 	private string $idOfRenamedDesign = '';
 
 	/**
+	 * Both of the above are SCENARIO state and are cleared between scenarios.
+	 *
+	 * Without this a stale id survives into the next scenario, where
+	 * `the id of the renamed design` would compare against a design nobody on stage
+	 * has touched — and its guard ("no design was renamed") could never fire,
+	 * because the field is only empty on the very first scenario of a leg.
+	 *
+	 * @BeforeScenario
+	 */
+	public function armRename(): void {
+		$this->idOfRenamedDesign = '';
+		$this->designNamesBeforeRename = [];
+		$this->lastRenameStatus = 0;
+		$this->lastRenameBody = '';
+	}
+
+	/**
 	 * @Then /^"([^"]*)" holds no file named "([^"]*)"$/
 	 */
 	public function holdsNoFileNamed(string $folder, string $filename): void {
@@ -359,7 +376,32 @@ trait RenameSteps {
 	 * @Then /^it still holds no Penpot metadata$/
 	 */
 	public function theFileHoldsNoPenpotMetadataAtAll(): void {
-		$path = $this->currentFile();
+		// A TRASHED FILE IS NOT READABLE AT ITS OLD PATH, and the trashbin lives
+		// under a different DAV root that does not carry these properties. So a
+		// scenario that trashed the file asserts on what
+		// {@see GestureSteps::iMoveItToTheTrash()} read the instant before — which
+		// is the same claim, since what is being denied is that the app stamped
+		// anything on the way out.
+		$path = $this->currentFilePath;
+		$found = $this->davExists($path) ? $this->penpotKeysOn($path) : $this->penpotKeysAtTrashTime;
+
+		if ($found !== []) {
+			throw new \RuntimeException(
+				"'{$path}' was supposed to carry nothing of this app's, and holds: " . implode(', ', $found),
+			);
+		}
+	}
+
+	/**
+	 * Every key of this app's that a path carries, as `key=value` strings.
+	 *
+	 * STRONGER THAN "no penpot_id". A file the app declined to track must carry
+	 * NONE of its keys: a lone `penpot_mode` left behind would make the file read
+	 * as managed-but-broken to every later walk.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotKeysOn(string $path): array {
 		$found = [];
 		foreach (['penpot_id', 'penpot_mode', 'penpot_team_id', 'penpot_revision', 'penpot_project_id'] as $key) {
 			$value = $this->davReadMetadata($path, $key) ?? '';
@@ -368,11 +410,7 @@ trait RenameSteps {
 			}
 		}
 
-		if ($found !== []) {
-			throw new \RuntimeException(
-				"'{$path}' was supposed to carry nothing of this app's, and holds: " . implode(', ', $found),
-			);
-		}
+		return $found;
 	}
 
 	/**

@@ -111,18 +111,6 @@ final class MoveRules {
 	}
 
 	/**
-	 * The same question asked from the DAV layer, where the destination is a path.
-	 *
-	 * Sabre knows the FOLDER a move is binding into, and nothing about the node that
-	 * will appear there — which is the same information {@see positionOf} distils a
-	 * target down to, one step earlier. Passing the parent straight in is therefore
-	 * the identical question, not an approximation of it.
-	 *
-	 * A null parent means the destination could not be read, which refuses the move
-	 * for the reason {@see positionOf} gives: an unreadable destination is exactly
-	 * where a silent desync would be created.
-	 */
-	/**
 	 * Rule 3 (§6.34, §6.44) — where a NEW `.penpot` may be authored.
 	 *
 	 * ## TWO REFUSALS, AND ONLY ONE OF THEM CARES WHAT IS IN THE FILE
@@ -200,6 +188,33 @@ final class MoveRules {
 	 * whatever is arriving — so it is delegated rather than restated.
 	 */
 	public function refusalForCopying(Node $source, ?Node $targetParent, string $targetName): ?string {
+		// ── A FOLDER FIRST, BECAUSE IT CARRIES EVERYTHING BELOW IT ──────────────
+		//
+		// A collection COPY is one request that creates the whole subtree, and
+		// Sabre does the recursive creates itself — so none of the per-file hooks
+		// fire and the destination's basename is a folder name, which ends in no
+		// extension and would fall straight through a `.penpot` test. That is a
+		// bypass of both halves of this rule at once: a folder of links copied out
+		// becomes a tree of empty husks, and a folder of designs copied INTO a link
+		// mapping adds to a tree that is Penpot's to fill.
+		//
+		// Asked WITHOUT {@see forFolder}'s mapping-root carve-out, deliberately.
+		// That carve-out exists because reorganising a link mapping's own top-level
+		// folder is the mapping's business; copying one is not reorganising it, it
+		// is making a second tree somewhere else.
+		if ($source instanceof Folder) {
+			if ($this->isLinkTeam($this->resolver->resolve($source)->teamId)) {
+				return $this->l->t(
+					'"%s" is inside a folder that mirrors Penpot in link mode, so it holds pointers '
+					. 'rather than the designs themselves. Copying it would leave you with a folder of '
+					. 'empty files. Duplicate what you need in Penpot instead.',
+					[$source->getName()],
+				);
+			}
+
+			return $targetParent === null ? null : $this->refusalForLandingInLinkTeam($targetParent, $source->getName());
+		}
+
 		if (!str_ends_with($targetName, PullService::EXTENSION)) {
 			return null;
 		}
@@ -225,6 +240,31 @@ final class MoveRules {
 		return $this->refusalForCreating($targetParent, $targetName, false);
 	}
 
+	/** The destination half of the link rule, shared by the file and folder arms. */
+	private function refusalForLandingInLinkTeam(Node $targetParent, string $name): ?string {
+		if (!$this->isLinkTeam($this->resolver->resolve($targetParent)->teamId)) {
+			return null;
+		}
+
+		return $this->l->t(
+			'"%s" cannot be copied in there: that folder mirrors a Penpot team in link mode, so its '
+			. 'contents are filled from Penpot and nothing may be added from this side.',
+			[$name],
+		);
+	}
+
+	/**
+	 * The same question asked from the DAV layer, where the destination is a path.
+	 *
+	 * Sabre knows the FOLDER a move is binding into, and nothing about the node that
+	 * will appear there — which is the same information {@see positionOf} distils a
+	 * target down to, one step earlier. Passing the parent straight in is therefore
+	 * the identical question, not an approximation of it.
+	 *
+	 * A null parent means the destination could not be read, which refuses the move
+	 * for the reason {@see positionOf} gives: an unreadable destination is exactly
+	 * where a silent desync would be created.
+	 */
 	public function refusalForLandingIn(Node $source, ?Node $targetParent, ?string $targetName = null): ?string {
 		return $this->evaluate(
 			$source,
