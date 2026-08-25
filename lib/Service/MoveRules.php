@@ -178,6 +178,53 @@ final class MoveRules {
 		);
 	}
 
+	/**
+	 * Rule 4 (§6.43, §6.34) — which copies this app refuses.
+	 *
+	 * ## BOTH ENDS, UNLIKE A CREATE, AND FOR A REASON A CREATE DOES NOT HAVE
+	 *
+	 * {@see refusalForCreating} asks only about the destination, because a file
+	 * being made has no history. A copy does: it has a SOURCE, and if that source
+	 * is a `link` then what would be copied is a zero-byte pointer. The person
+	 * would be left holding an empty file that looks like a design and is not —
+	 * anywhere at all, including inside the same link mapping, because nothing on
+	 * either side can ever fill it in.
+	 *
+	 * That is the same sentence {@see forLinkFile} makes about a move, minus its
+	 * one carve-out: a link may MOVE within its own project, since Penpot cannot
+	 * see a subfolder and the file keeps being the pointer it was. A copy makes a
+	 * SECOND file, and the second one is the empty husk.
+	 *
+	 * The destination half is {@see refusalForCreating}'s link rule exactly —
+	 * a link mapping is filled from Penpot and nothing may be added from this side,
+	 * whatever is arriving — so it is delegated rather than restated.
+	 */
+	public function refusalForCopying(Node $source, ?Node $targetParent, string $targetName): ?string {
+		if (!str_ends_with($targetName, PullService::EXTENSION)) {
+			return null;
+		}
+
+		if ($source instanceof File) {
+			$meta = $this->metadata->readFile($source->getId());
+			if ($meta !== null && $meta->isManaged() && $meta->isLink()) {
+				return $this->l->t(
+					'"%s" is a link to a design that lives in Penpot — it holds no copy of the design '
+					. 'itself, so copying it would leave you with an empty file. Duplicate the design '
+					. 'in Penpot instead, and the copy will appear here.',
+					[$source->getName()],
+				);
+			}
+		}
+
+		if ($targetParent === null) {
+			return null;
+		}
+
+		// A copy always carries bytes, so the "empty create" half of the rule below
+		// cannot apply — `false` says so rather than leaving it to be inferred.
+		return $this->refusalForCreating($targetParent, $targetName, false);
+	}
+
 	public function refusalForLandingIn(Node $source, ?Node $targetParent, ?string $targetName = null): ?string {
 		return $this->evaluate(
 			$source,

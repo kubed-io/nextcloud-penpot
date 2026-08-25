@@ -165,12 +165,29 @@ trait CopySteps {
 				$actual = $this->davReadMetadata($path, 'penpot_revision') ?? '';
 				return $actual !== '' ? null : 'expected a revision, found nothing';
 			case 'Created':
-				// A COPY'S CLOCKS ARE ITS OWN. The file was written a moment ago, but
-				// the design it mirrors was created in Penpot just as recently — so
-				// this asserts they AGREE, which is what §C6.24 promises and what
-				// distinguishes a mirrored clock from the filesystem's.
-				$this->theDesignWasCreatedWhenItWasCreated($path);
-				return null;
+				// A COPY'S CLOCKS ARE ITS OWN (§C6.24): its creation time is the
+				// DESIGN's, not the moment the file was written.
+				//
+				// RESOLVED BY ID, and it cannot be resolved any other way here.
+				// {@see PullSteps::penpotFileRecordFor()} reads the project out of the
+				// PATH — `<mapped folder>/<project>/<design>.penpot` — which is true
+				// for a mirror the pull placed and false for every row of this
+				// outline: a copy landing in `Penpot` or `Shared` is in Drafts, one
+				// landing in `…/wip` is in the project above it, and neither folder
+				// name is a project at all. It failed on all six for exactly that.
+				if ($id === '') {
+					return 'the copy carries no Penpot id, so it names no design to date it from';
+				}
+				$created = $this->penpotCreatedAt($id);
+				if ($created === null) {
+					return "Penpot reported no creation time for the design {$id}";
+				}
+				$actual = $this->davTime($path, 'creation_time');
+				return $actual === $created ? null : sprintf(
+					"expected the design's creation time (%s), the file carries %s",
+					gmdate('c', $created),
+					$actual === null ? 'none' : gmdate('c', $actual),
+				);
 			default:
 				throw new \RuntimeException(
 					"'{$property}' is not a row this table knows. Known: filename, name in Penpot, "
@@ -453,5 +470,27 @@ trait CopySteps {
 		}
 
 		throw new \RuntimeException("could not find a free name for a copy of '{$filename}' in '{$folder}'");
+	}
+	/**
+	 * When Penpot says a design was created, by id.
+	 *
+	 * Scanned out of the probe's own listing rather than a `get-file` call: the
+	 * team is not known here (a copy may have crossed one) and the probe already
+	 * walks every mapped team, which is the same reason `penpotLiveDesignIds()`
+	 * reads it whole.
+	 */
+	private function penpotCreatedAt(string $id): ?int {
+		foreach ($this->mappingTeamIds as $teamId) {
+			foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+				$files = $this->penpotRpcRead('get-project-files', ['project-id' => (string)($project['id'] ?? '')]);
+				foreach ($files as $file) {
+					if (($file['id'] ?? null) === $id) {
+						return self::penpotSecond($file['createdAt'] ?? $file['created-at'] ?? null);
+					}
+				}
+			}
+		}
+
+		return null;
 	}
 }

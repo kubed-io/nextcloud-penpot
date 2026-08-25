@@ -431,6 +431,13 @@ trait GestureSteps {
 		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the
 		// only thing the upload-vs-create guard looks at.
 		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+		// AND IT IS ON STAGE NOW. An arrange that puts a file in the world seats the
+		// cursor, exactly as `a design file named … in …` does — otherwise the very
+		// next line, `When I move it to the trash`, has nothing to act on. Every
+		// untracked scenario in delete.feature and rename.feature failed on that.
+		$this->currentFilePath = $path;
+		$this->currentFolder = dirname($path);
+		$this->currentFileId = '';
 		$this->gestureTarget = $path;
 	}
 

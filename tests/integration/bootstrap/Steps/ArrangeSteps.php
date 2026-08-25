@@ -480,9 +480,6 @@ trait ArrangeSteps {
 	private function seedDesignViaPull(string $path, string $name): void {
 		$root = $this->mappingRootOf($path);
 		$project = trim(substr(dirname($path), strlen($root)), '/');
-		if ($project === '') {
-			throw new \RuntimeException("a link mirror needs a project folder, got '{$path}'");
-		}
 
 		// Point "that team" at the mapping being seeded, rather than relying on
 		// whichever row the mappings table named last.
@@ -493,8 +490,15 @@ trait ArrangeSteps {
 		$this->namedTeamId = $team;
 		$this->pulledTeamId = $team;
 
+		// AT THE MAPPING ROOT THERE IS NO PROJECT FOLDER, AND THAT IS NOT AN ERROR.
+		// The root IS the team's Drafts (§6.35), which is a real Penpot project —
+		// the `is-default` one. This used to throw "a link mirror needs a project
+		// folder", which made `a design file named "…" in "Pointers"` unarrangeable
+		// and took out every link row of `designs/copy.feature`'s refusal outline.
 		$this->penpotRpc('create-file', [
-			'project-id' => $this->penpotProjectIn($root, $project),
+			'project-id' => $project === ''
+				? $this->penpotDraftsProjectIn($root)
+				: $this->penpotProjectIn($root, $project),
 			'name' => $name,
 		]);
 		$this->theAdminRunsAPull();
@@ -920,5 +924,29 @@ trait ArrangeSteps {
 		}
 
 		return null;
+	}
+	/**
+	 * A mapped team's Drafts — the project Penpot flags `is-default`.
+	 *
+	 * NOT resolved by the name "Drafts": that is the label a person sees, it is
+	 * localised, and §6.35 is explicit that the flag is the only reliable handle.
+	 * The same read {@see \OCA\PenpotSync\Service\DestinationResolver} does.
+	 */
+	private function penpotDraftsProjectIn(string $mappedFolder): string {
+		$team = $this->mappingTeamIds[$mappedFolder] ?? '';
+		if ($team === '') {
+			throw new \RuntimeException("no mapping is declared for the folder '{$mappedFolder}'");
+		}
+
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $team]) as $project) {
+			if (filter_var($project['is-default'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+				$id = $project['id'] ?? '';
+				if (is_string($id) && $id !== '') {
+					return $id;
+				}
+			}
+		}
+
+		throw new \RuntimeException("the team behind '{$mappedFolder}' reports no default (Drafts) project");
 	}
 }
