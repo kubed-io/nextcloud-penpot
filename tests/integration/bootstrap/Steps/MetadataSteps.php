@@ -99,6 +99,25 @@ trait MetadataSteps {
 	 * @Then /^"([^"]*)" holds:$/
 	 */
 	public function holds(string $path, TableNode $table): void {
+		// A MISSING PATH IS A DIAGNOSTIC, NOT A 404. Without this the failure is
+		// Sabre's "File with name … could not be located", which says nothing about
+		// WHY — and the answer is almost always "it is there under the name core
+		// actually chose". Listing the folder turns three CI cycles into one.
+		if (!$this->davExists($path)) {
+			$folder = dirname($path);
+			$held = [];
+			foreach ($this->davChildren($folder) as $child) {
+				$held[] = basename($child) . ' (' . (($this->davReadMetadata($child, 'penpot_id') ?? '') ?: 'untracked') . ')';
+			}
+
+			throw new \RuntimeException(sprintf(
+				"the scenario expects '%s', and it is not there. '%s' holds: %s",
+				$path,
+				$folder,
+				implode(', ', $held) ?: '(nothing)',
+			));
+		}
+
 		// READ ONLY WHAT THE TABLE ASKS FOR. Reading the whole set eagerly meant
 		// every table paid for `content`, which is resolved from `occ status` and
 		// exists only for FILES — so `"Penpot/Notes" holds: | penpot_project_id |`

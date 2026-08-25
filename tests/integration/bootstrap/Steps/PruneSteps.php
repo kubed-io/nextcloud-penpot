@@ -109,12 +109,25 @@ trait PruneSteps {
 				if (($file['id'] ?? null) !== $fileId) {
 					continue;
 				}
-				$this->penpotRpc('permanently-delete-team-files', [
-					'team-id' => $team,
-					'ids' => [$fileId],
-				]);
+				// TWICE, AND THEN CONFIRMED BY RE-READING. §6.49 recorded this exact
+				// shape on the restore twin: `restore-deleted-team-files` reported
+				// `end` while `deleted_at` was still set, and a second call cleared
+				// it. Success is not proof of success on these commands, so the
+				// suite does what it holds the app to and re-reads.
+				for ($attempt = 0; $attempt < 3; $attempt++) {
+					$this->penpotRpc('permanently-delete-team-files', [
+						'team-id' => $team,
+						'ids' => [$fileId],
+					]);
+					if (!$this->inTeamTrash($team, $fileId)) {
+						return;
+					}
+				}
 
-				return;
+				throw new \RuntimeException(
+					"Penpot accepted permanently-delete-team-files for {$fileId} three times "
+					. "and the design is still in team {$team}'s trash.",
+				);
 			}
 		}
 
@@ -152,6 +165,17 @@ trait PruneSteps {
 			'team-id' => $this->teamId(),
 			'ids' => [$fileId],
 		]);
+	}
+
+	/** Whether this team's trash still lists that design. */
+	private function inTeamTrash(string $team, string $fileId): bool {
+		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $team]) as $file) {
+			if (($file['id'] ?? null) === $fileId) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/** @Then /^the pull pruned (\d+) mirrors?$/ */

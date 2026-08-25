@@ -46,11 +46,15 @@ trait CopySteps {
 	/** What the destination folder held before, for the same claim locally. */
 	private array $childrenBeforeCopy = [];
 
+	/** Whether this scenario's duplicate fixture has already been made. */
+	private bool $projectCleared = false;
+
 	/** @BeforeScenario */
 	public function armCopy(): void {
 		$this->copyPath = '';
 		$this->designIdsBeforeCopy = [];
 		$this->childrenBeforeCopy = [];
+		$this->projectCleared = false;
 	}
 
 	/**
@@ -318,7 +322,15 @@ trait CopySteps {
 
 	/** `duplicate-file` on the cursor's design, then the pull that mirrors it. */
 	private function duplicateInPenpot(string $name): void {
-		$this->leaveOnlyTheCursorInItsProject();
+		// ONCE PER SCENARIO, NOT ONCE PER CALL. Running it before every duplicate
+		// meant the SECOND call deleted the design the FIRST had just made — the
+		// folder came back holding two files where the scenario made three, and the
+		// suffix had climbed past the one the spec names. The fixture is a statement
+		// about the starting position, so it is made once, at the start.
+		if (!$this->projectCleared) {
+			$this->projectCleared = true;
+			$this->leaveOnlyTheCursorInItsProject();
+		}
 
 		// KEBAB `file-id`, which corrects §6.28's record of a camelCase `fileId` —
 		// see PenpotClient::PARAMS, where the same row carries the same warning.
