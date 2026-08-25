@@ -6,6 +6,21 @@ on:
   pull_request:
     branches:
     - main
+    # `labeled`/`unlabeled` on top of the defaults (opened, synchronize,
+    # reopened), because the changelog check's own escape hatch is a LABEL:
+    # it tells you to add "no changelog" for a change that is not user-visible,
+    # and without these types adding one re-runs nothing. A re-run does not
+    # help either — it replays the stored event payload, so the label is still
+    # absent and the job fails again with NO_CHANGELOG_LABEL: false.
+    #
+    # Found the only way it can be: by hitting it on a spec-only PR that
+    # correctly had nothing to put in the changelog.
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - labeled
+    - unlabeled
 
 permissions:
   contents: read
