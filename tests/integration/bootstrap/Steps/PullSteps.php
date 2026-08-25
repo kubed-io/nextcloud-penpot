@@ -1174,7 +1174,23 @@ trait PullSteps {
 
 		$teams = $this->penpotProjectTeams($project);
 		if (count($teams) === 1) {
-			return (string)$this->penpotProjectIdInTeam($project, $teams[0]);
+			$found = $this->penpotProjectIdInTeam($project, $teams[0]);
+			if ($found === null) {
+				// THE TWO READS DISAGREED, which is worth its own sentence rather
+				// than a cast. `penpotProjectTeams()` just said this project is in
+				// exactly this team and the scoped lookup then could not find it —
+				// so the probe's output has drifted from the shape both parse. An
+				// empty id here would reach `create-file` as a missing project and
+				// fail somewhere with nothing to trace it back to.
+				throw new \RuntimeException(sprintf(
+					"the probe lists '%s' in the team '%s' but cannot resolve its id — "
+					. 'the two reads of that listing disagree, so one of their patterns is stale.',
+					$project,
+					$teams[0],
+				));
+			}
+
+			return $found;
 		}
 
 		throw new \RuntimeException(sprintf(

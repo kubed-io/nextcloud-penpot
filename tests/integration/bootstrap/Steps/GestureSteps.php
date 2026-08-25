@@ -1033,14 +1033,26 @@ trait GestureSteps {
 	 * The spec names the FOLDER and lets the app pick the filename, because that is
 	 * what the button does — `New design.penpot` is core's, not the scenario's.
 	 *
+	 * THE FOLDER IS MADE IF IT IS NOT THERE, the same way {@see iMoveTheFileInto()}
+	 * makes a drag's destination. A person clicking "+ New" is standing IN a
+	 * folder, so a scenario naming one is describing where they are, not asking for
+	 * it to be created — and `Penpot/Make Here/wip` is a plain subfolder that no
+	 * Background declares, because the whole point of that row is that a plain
+	 * subfolder is not a project. Without this the step 404s on the PUT and the
+	 * scenario fails at the arrange rather than at its claim.
+	 *
 	 * @When /^I create a new design in "([^"]*)"$/
 	 */
 	public function iCreateANewDesignIn(string $folder): void {
-		$path = trim($folder, '/') . '/' . self::NEW_DESIGN;
+		$folder = trim($folder, '/');
+		if ($folder !== '') {
+			$this->makeAncestors($folder . '/x');
+		}
+		$path = ($folder === '' ? '' : $folder . '/') . self::NEW_DESIGN;
 		$this->davPut($path, '');
 		$this->gestureTarget = $path;
 		$this->currentFilePath = $path;
-		$this->currentFolder = trim($folder, '/');
+		$this->currentFolder = $folder;
 		$this->currentFileId = $this->davReadMetadata($path, 'penpot_id') ?? '';
 	}
 

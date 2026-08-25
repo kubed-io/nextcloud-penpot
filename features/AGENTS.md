@@ -870,11 +870,45 @@ ever turn into an archive, sitting in a folder whose every other design holds on
 It is an outline over both modes because the mode is now the only variable —
 there is no per-file override left for a second scenario to describe.
 
-NO ARCHIVE IS STORED **YET**, in either mode, and the "yet" is doing real work.
-The design is created empty, so there is nothing worth exporting at that instant;
-no revision is stamped either, which is what makes the next pull's drift check run
-and fill a `sync` file's body in on the same self-healing path it uses for an
-archive that went missing.
+**THE ARCHIVE IS STORED AT ONCE, and this note used to say the opposite.** It read
+*"no archive is stored YET, in either mode, and the 'yet' is doing real work"* —
+the design is created empty, so there is nothing worth exporting at that instant,
+and leaving the revision unstamped is what makes the next pull's drift check fill
+the body in on its self-healing path.
+
+Every clause of that is true and the conclusion was still wrong, which is why it is
+worth keeping rather than quietly replacing. It left a state nothing else in the
+app produces on purpose: a file stamped `sync` holding zero bytes and carrying no
+revision — which is exactly what `occ penpot_sync:status` prints as `sync` /
+`pointer` and its own comment calls *"precisely the drift"*. The app was
+manufacturing, on every creation, the condition it has a self-healing path to
+repair.
+
+The scenario asserts an archive and a revision on the line after the gesture, and
+it is right to. "The design is created" and "the file is its mirror" should not be
+minutes apart with the gap visible to anyone who opens the folder. An empty design
+exports to a perfectly valid `.penpot`, so there is no such thing as too early; the
+cost is one export per creation, and a creation is a human gesture rather than a
+bulk path. A failed export is still not a failed creation (§6.18 rule 3) — the
+revision simply stays unstamped and the old path runs after all.
+
+### A link carries a revision too, because it is the pull's stamp
+
+**Two live feature files disagreed about this, and the one that was green won.**
+`mapping/sync-now.feature` asserts `penpot_revision | set` on a `link` file and has
+been passing for courses; `designs/create.feature` said `absent`, reasoning *"a
+revision records what a push last sent, and a link never pushes"*.
+
+That reasoning describes a `penpot_revision` this app does not have. The stamp is
+`revn` + `modified-at` joined (§5.5) and it is the PULL's drift signal — what the
+mirror last saw upstream, not what anything sent. `PullService` writes it for every
+mode because every mode is pulled; a link's body is empty, but the question "has
+this design changed since I looked?" is the same question for both.
+
+Worth noticing HOW the two got out of step, because it is the same shape as the
+`Penpot/Inbox` row and the home-root row before it: nothing is wrong with either
+sentence read alone. The contradiction is only visible with both files open, and
+one of them had never run.
 
 ── creating in a personal team ─────────────────────────────────────────────
 Same behaviour, different destination: the user's own Drafts rather than the

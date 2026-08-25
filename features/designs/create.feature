@@ -67,10 +67,10 @@ Feature: Creating a design
       | project   | folder           | mode      | revision | content    |
       | Make Here | Penpot/Make Here | sync      | set      | an archive |
       | Quarterly | Shared/Quarterly | sync      | set      | an archive |
-      | Nested    | Pointers/Nested  | reference | absent   | empty      |
+      | Nested    | Pointers/Nested  | reference | set      | empty      |
 
-    # A revision records what a push last sent, and a link never pushes. Mode is the
-    # one thing about an arriving design that Nextcloud decides rather than Penpot.
+    # notes: ../AGENTS.md#a-link-carries-a-revision-too-because-it-is-the-pulls-stamp
+    # Mode is the one thing about an arriving design that Nextcloud decides.
 
   # notes: ../AGENTS.md#a-design-created-in-the-users-own-home-lands-in-their-personal-drafts
   # notes: ../AGENTS.md#the-personal-mapping-is-held-until-the-siblings-have-one

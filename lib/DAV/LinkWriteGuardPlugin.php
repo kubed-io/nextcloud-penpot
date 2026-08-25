@@ -245,19 +245,30 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		}
 
 		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		if ($uid === '' || $this->server === null || !isset($this->server->httpRequest)) {
+		if ($uid === '' || $this->server === null) {
 			return true;
 		}
 
+		// THE HEADER READ IS INSIDE THE TRY, and that is the guard rather than an
+		// `isset`. `Server::$httpRequest` is a typed property with no default, so
+		// reading it before Sabre has served a request raises an Error — which this
+		// catch already answers, in the same fail-open way as an unresolvable path.
+		//
+		// An `isset()` says the same thing at runtime and reads better, but Psalm
+		// takes the stub's non-nullable declaration to mean the property is always
+		// initialised and calls the check impossible (TypeDoesNotContainType). One
+		// catch covering both failures is true for a stronger reason anyway: there
+		// is nothing this method can usefully do without either the parent or the
+		// body, so they belong in one place.
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($uid);
 			$parentPath = dirname($this->relativeTo($path));
 			$parent = $parentPath === '.' || $parentPath === '' ? $userFolder : $userFolder->get($parentPath);
+			$length = $this->server->httpRequest->getHeader('Content-Length');
 		} catch (\Throwable) {
 			return true;
 		}
 
-		$length = $this->server->httpRequest->getHeader('Content-Length');
 		$refusal = $this->rules->refusalForCreating($parent, $name, $length === '0');
 		if ($refusal === null) {
 			return true;
