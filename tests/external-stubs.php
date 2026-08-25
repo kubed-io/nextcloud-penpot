@@ -75,6 +75,19 @@ namespace Sabre\DAV {
 	}
 	if (!class_exists(Server::class, false)) {
 		class Server {
+			/**
+			 * The request being served, which real Sabre exposes as a public
+			 * property and this stub therefore does too.
+			 *
+			 * NEEDED BY `beforeCreateFile`, which is the one hook that is handed
+			 * neither the request nor the node — only a path and the parent. Telling
+			 * a "+ New" (zero bytes) from an upload without consuming the body means
+			 * reading `Content-Length`, and the server is where it is reachable from.
+			 * The MOVE and DELETE handlers take a RequestInterface argument and do
+			 * not need this.
+			 */
+			public \Sabre\HTTP\RequestInterface $httpRequest;
+
 			public function on(string $eventName, callable $callBack, int $priority = 100): bool {
 				return true;
 			}

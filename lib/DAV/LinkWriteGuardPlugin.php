@@ -245,7 +245,7 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		}
 
 		$uid = $this->userSession->getUser()?->getUID() ?? '';
-		if ($uid === '' || $this->server === null) {
+		if ($uid === '' || $this->server === null || !isset($this->server->httpRequest)) {
 			return true;
 		}
 

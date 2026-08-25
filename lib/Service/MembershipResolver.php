@@ -65,7 +65,29 @@ final class MembershipResolver {
 
 	public function __construct(
 		private readonly PenpotMetadata $metadata,
+		private readonly PersonalTeamService $personalTeams,
 	) {
+	}
+
+	/**
+	 * ## THE ONE MAPPING ROOT THAT CARRIES NO MARKER
+	 *
+	 * A user's home root is their personal team's mapping root (§6.45), and unlike
+	 * every admin mapping it has no `penpot_team_id` written on it — there is no
+	 * `add-mapping` that created it, and no pull that stamped it. It exists exactly
+	 * as long as the user's personal token does.
+	 *
+	 * So the walks below treat one extra rung as marked: the rung whose id is the
+	 * acting user's home folder, when that user has a personal team. Everything
+	 * downstream is then unchanged — the root resolves to Drafts because it is a
+	 * team with no project, a folder in it is named by its path below the root, and
+	 * moving, renaming and deleting all take the same paths they always did.
+	 *
+	 * Null in every ordinary case (no session, no token, Penpot unreachable), and
+	 * cached per request, so this costs nothing on the overwhelmingly common walk.
+	 */
+	private function personalRootId(): ?int {
+		return $this->personalTeams->rootIdForActor();
 	}
 
 	/**
@@ -81,6 +103,7 @@ final class MembershipResolver {
 	public function resolve(Node $node): Membership {
 		$projectId = null;
 		$teamId = null;
+		$personalRoot = $this->personalRootId();
 
 		$current = $node;
 		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
@@ -95,6 +118,13 @@ final class MembershipResolver {
 				}
 				if ($teamId === null && $markers->hasTeam()) {
 					$teamId = $markers->teamId;
+				}
+				// THE UNMARKED MAPPING ROOT — see {@see personalRootId}. Checked
+				// AFTER the markers so an admin mapping mounted inside a home still
+				// wins on its own rung, which is the nearest-ancestor rule doing
+				// exactly what it says.
+				if ($teamId === null && $personalRoot !== null && $id === $personalRoot) {
+					$teamId = $this->personalTeams->teamIdForActor();
 				}
 				if ($projectId !== null && $teamId !== null) {
 					// Both found: nothing above can be nearer, so stop.
@@ -144,12 +174,16 @@ final class MembershipResolver {
 	 */
 	public function pathBelowMapping(Node $node): ?string {
 		$segments = [];
+		$personalRoot = $this->personalRootId();
 
 		$current = $node;
 		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
 			$id = $current->getId();
-			if ($id > 0 && $this->metadata->readFolder($id)->hasTeam()) {
+			if ($id > 0 && ($this->metadata->readFolder($id)->hasTeam() || $id === $personalRoot)) {
 				// This rung is the mapping root; what we collected below it is the name.
+				// A home root counts as one though it carries no marker (§6.45), which
+				// is what makes `Sketchbook` a project called `Sketchbook` and the home
+				// root itself nameless — that is the null that means Drafts.
 				return $segments === [] ? null : implode('/', array_reverse($segments));
 			}
 

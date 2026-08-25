@@ -905,6 +905,38 @@ mapping"* has to be load-bearing rather than decorative. If the home root is a
 mapping root, promotion works there the way it works everywhere, and an exception
 for personal would be the special case needing an argument.
 
+**HOW IT IS BUILT (§6.45), and the one thing that is genuinely different.** Every
+admin mapping's root carries a `penpot_team_id` marker, written by the pull. A
+home root carries nothing — there is no `add-mapping` that created it and no pull
+that stamped it, because the mapping is not a stored decision at all. It has no
+folder to choose (it *is* the home root), no mode to choose (`sync`; a `link`
+mapping is filled from Penpot and a person's own home is theirs to write), no
+groups, and no lifetime of its own: it exists exactly as long as the token does.
+
+So `MembershipResolver` treats one extra rung as marked — the rung whose id is the
+acting user's home folder, when that user has a personal team. That is the entire
+change, and everything downstream is untouched: Drafts at the root because it is a
+team with no project, promotion by path below the root, and the same move, rename
+and delete paths. `PersonalTeamService` resolves the team by asking `get-teams`
+with the user's own token, where Penpot computes `is-default` as
+`(t.id = profile.default_team_id)` — read out of the backend's `teams.clj`, not
+inferred. That makes the token the single source of truth: replace it with another
+account's and the home follows, with nothing to migrate.
+
+Two consequences worth having written down.
+
+`Membership::STATE_PERSONAL` — *a project id with no team above it* — was the
+anticipated shape of this and is now unreachable through a home, because the home
+root supplies a team. Nothing branches on it, so it is left as the record of a
+state the resolver can still describe rather than deleted.
+
+And **the token changes what other scenarios mean.** `Create a design outside every
+mapping` puts its file in `Scratch`; for a user holding a personal token that is
+not outside every mapping at all, it is a folder in their own team, and the app
+would rightly allow the create. That is the rule working, not a harness wrinkle —
+which is why the integration Background clears the token before every scenario
+rather than after, where a failing scenario could skip it.
+
 ### A design crossing between a home and a shared team is a move, not a create
 
 ── crossing the boundary: personal ⇄ a shared team ─────────────────────────

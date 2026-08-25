@@ -13,6 +13,7 @@ use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotMetadata;
+use OCA\PenpotSync\Service\PersonalTeamService;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use PHPUnit\Framework\TestCase;
@@ -37,20 +38,37 @@ final class MembershipResolverTest extends TestCase {
 	private const TEAM_ID = 'team-northwind';
 	private const PROJECT_ID = 'proj-my-stuff';
 	private const OTHER_PROJECT_ID = 'proj-design-system';
+	private const PERSONAL_TEAM = 'team-my-own';
 
 	/** @var array<int, FolderMarkers> node id → its own markers */
 	private array $markers = [];
 
 	private MembershipResolver $resolver;
+	private PenpotMetadata $metadata;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->markers = [];
-		$metadata = $this->createStub(PenpotMetadata::class);
-		$metadata->method('readFolder')->willReturnCallback(
+		$this->metadata = $this->createStub(PenpotMetadata::class);
+		$this->metadata->method('readFolder')->willReturnCallback(
 			fn (int $id): FolderMarkers => $this->markers[$id] ?? new FolderMarkers('', ''),
 		);
-		$this->resolver = new MembershipResolver($metadata);
+		// NO PERSONAL TEAM by default, which is the overwhelmingly common case: most
+		// users never set a token, and every test below is about folder markers.
+		$this->resolver = new MembershipResolver($this->metadata, $this->personalTeams(null, null));
+	}
+
+	/**
+	 * A {@see PersonalTeamService} that reports one home root and one team, or
+	 * neither. Stubbed rather than built because resolving a personal team is an
+	 * HTTP round trip; what this suite is about is the WALK.
+	 */
+	private function personalTeams(?int $rootId, ?string $teamId): PersonalTeamService {
+		$stub = $this->createStub(PersonalTeamService::class);
+		$stub->method('rootIdForActor')->willReturn($rootId);
+		$stub->method('teamIdForActor')->willReturn($teamId);
+
+		return $stub;
 	}
 
 	public function testFileDirectlyInProjectFolderResolvesToProjectAndTeam(): void {
@@ -188,6 +206,94 @@ final class MembershipResolverTest extends TestCase {
 	}
 
 	// ── helpers ──────────────────────────────────────────────────────────────
+
+	// ── the home root, the one mapping root that carries no marker (§6.45) ───
+
+	/**
+	 * A user with a personal token has a Penpot team, and their home root is where
+	 * it is mounted — so a file sitting loose in the home is in that team, in no
+	 * project, which is precisely Drafts (§6.35).
+	 */
+	public function testAFileInTheHomeRootIsInThePersonalTeamsDrafts(): void {
+		$home = $this->node(1, null);
+		$file = $this->node(2, $home);
+
+		$membership = $this->withPersonalHome(1)->resolve($file);
+
+		self::assertSame(self::PERSONAL_TEAM, $membership->teamId);
+		self::assertNull($membership->projectId);
+		self::assertSame(Membership::STATE_DRAFTS, $membership->state());
+	}
+
+	/** A project folder in the home belongs to the personal team, like any other. */
+	public function testAProjectFolderInTheHomeBelongsToThePersonalTeam(): void {
+		$home = $this->node(1, null);
+		$project = $this->folder(2, $home, projectId: self::PROJECT_ID);
+		$file = $this->node(3, $project);
+
+		$membership = $this->withPersonalHome(1)->resolve($file);
+
+		self::assertTrue($membership->inProject());
+		self::assertSame(self::PROJECT_ID, $membership->projectId);
+		self::assertSame(self::PERSONAL_TEAM, $membership->teamId);
+	}
+
+	/**
+	 * AN ADMIN MAPPING MOUNTED INSIDE A HOME STILL WINS, because the personal root
+	 * is checked after the markers on the same rung and only ever on the home rung
+	 * itself. Nearest ancestor means nearest, and a mapped folder in someone's home
+	 * is nearer than the home.
+	 */
+	public function testAnAdminMappingInsideTheHomeBeatsThePersonalTeam(): void {
+		$home = $this->node(1, null);
+		$mapped = $this->folder(2, $home, teamId: self::TEAM_ID);
+		$file = $this->node(3, $mapped);
+
+		self::assertSame(self::TEAM_ID, $this->withPersonalHome(1)->resolve($file)->teamId);
+	}
+
+	/** No token, no personal team, no change: the home is an ordinary folder tree. */
+	public function testAFileInTheHomeOfAUserWithNoTokenIsUnmapped(): void {
+		$home = $this->node(1, null);
+		$file = $this->node(2, $home);
+
+		self::assertSame(Membership::STATE_NONE, $this->resolver->resolve($file)->state());
+	}
+
+	/**
+	 * The home root is nameless below itself, and that null is what says "Drafts"
+	 * to every caller — the same answer an admin mapping root gives.
+	 */
+	public function testTheHomeRootHasNoProjectName(): void {
+		self::assertNull($this->withPersonalHome(1)->pathBelowMapping($this->node(1, null)));
+	}
+
+	/** …and a folder in it is named by its path below the home, as anywhere else. */
+	public function testAFolderInTheHomeIsNamedByItsPathBelowIt(): void {
+		$home = $this->node(1, null);
+		$sketchbook = $this->named(2, $home, 'Sketchbook');
+
+		self::assertSame('Sketchbook', $this->withPersonalHome(1)->pathBelowMapping($sketchbook));
+	}
+
+	/** A resolver whose acting user has a personal team mounted at $rootId. */
+	private function withPersonalHome(int $rootId): MembershipResolver {
+		return new MembershipResolver($this->metadata, $this->personalTeams($rootId, self::PERSONAL_TEAM));
+	}
+
+	/** A node that also answers getName(), for the path-below assertions. */
+	private function named(int $id, ?Node $parent, string $name): Node {
+		$node = $this->createMock(Node::class);
+		$node->method('getId')->willReturn($id);
+		$node->method('getName')->willReturn($name);
+		if ($parent === null) {
+			$node->method('getParent')->willThrowException(new NotFoundException('no parent above ' . $id));
+		} else {
+			$node->method('getParent')->willReturn($parent);
+		}
+
+		return $node;
+	}
 
 	/** A folder node that also records its own Penpot markers by id. */
 	private function folder(int $id, ?Node $parent, string $projectId = '', string $teamId = ''): Node {

@@ -328,11 +328,14 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		$rules = new MoveRules($this->metadata, $resolver, $mappings, $this->identityTranslator());
 		$plugin = new LinkWriteGuardPlugin($this->metadata, $rules, $root, $session, new NullLogger());
 
+		// A STUBBED RequestInterface, not a real `Sabre\HTTP\Request`: the unit
+		// bootstrap provides the OCP and Sabre INTERFACES, not the HTTP package, so
+		// constructing one errors with "Class Sabre\HTTP\Request not found" — which
+		// is what eight of these tests did on their first CI run.
+		$request = $this->createStub(RequestInterface::class);
+		$request->method('getHeader')->willReturn($length);
+
 		$server = new Server();
-		$request = new \Sabre\HTTP\Request('PUT', '/remote.php/dav/files/alice/Pointers/Confined/' . $name);
-		if ($length !== null) {
-			$request->setHeader('Content-Length', $length);
-		}
 		$server->httpRequest = $request;
 		$plugin->initialize($server);
 
