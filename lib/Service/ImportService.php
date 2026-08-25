@@ -91,11 +91,19 @@ final class ImportService {
 			return null;
 		}
 
+		// A HANDLE, NOT `getContent()`. A `.penpot` export is the whole design and
+		// is routinely tens of megabytes; reading one into a string would hold it
+		// twice inside a request that is already holding a filesystem open.
+		$handle = null;
 		try {
+			$handle = $node->fopen('rb');
+			if (!is_resource($handle)) {
+				throw new \RuntimeException('could not open the archive for reading');
+			}
 			$newId = $this->client->importBinfile(
 				$project,
 				$name,
-				$node->getContent(),
+				$handle,
 				$this->personalTokens->tokenForActor(),
 			);
 		} catch (\Throwable $e) {
@@ -109,6 +117,10 @@ final class ImportService {
 			]);
 
 			return null;
+		} finally {
+			if (is_resource($handle)) {
+				fclose($handle);
+			}
 		}
 
 		$this->renameToMatchTheFile($newId, $name);

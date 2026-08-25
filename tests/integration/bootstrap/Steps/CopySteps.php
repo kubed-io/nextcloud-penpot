@@ -43,10 +43,14 @@ trait CopySteps {
 	/** Penpot's design ids before the copy, so a refusal can prove it added none. */
 	private array $designIdsBeforeCopy = [];
 
+	/** What the destination folder held before, for the same claim locally. */
+	private array $childrenBeforeCopy = [];
+
 	/** @BeforeScenario */
 	public function armCopy(): void {
 		$this->copyPath = '';
 		$this->designIdsBeforeCopy = [];
+		$this->childrenBeforeCopy = [];
 	}
 
 	/**
@@ -91,6 +95,12 @@ trait CopySteps {
 	 */
 	public function iTryToCopyTheFileInto(string $folder): void {
 		$this->designIdsBeforeCopy = $this->penpotLiveDesignIds();
+		// WHAT THE DESTINATION HELD BEFORE, because "no file is added" is about this
+		// gesture and "Scratch" is never emptied between scenarios — only MAPPED
+		// folders are (see ArrangeSteps). `Copy a design into an unmapped folder`
+		// runs earlier in this very file and puts `Original.penpot` there on purpose,
+		// so a bare existence check found ITS file and failed a refusal that worked.
+		$this->childrenBeforeCopy = $this->davChildren(trim($folder, '/'));
 		$source = $this->currentFile();
 		$target = trim($folder, '/') . '/' . basename($source);
 		$result = $this->davCopyResult($source, $target);
@@ -242,11 +252,13 @@ trait CopySteps {
 	 */
 	public function noFileIsAddedTo(string $folder): void {
 		$folder = trim($folder, '/');
-		$name = basename($this->copyPath);
-		if ($this->davExists($folder . '/' . $name)) {
-			throw new \RuntimeException(
-				"the copy was refused, and '{$folder}/{$name}' is there anyway — the refusal did not stop it",
-			);
+		$added = array_values(array_diff($this->davChildren($folder), $this->childrenBeforeCopy));
+		if ($added !== []) {
+			throw new \RuntimeException(sprintf(
+				"the copy was refused, and '%s' gained %s anyway — the refusal did not stop it",
+				$folder,
+				implode(', ', $added),
+			));
 		}
 	}
 

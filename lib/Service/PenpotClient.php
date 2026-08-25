@@ -617,19 +617,6 @@ final class PenpotClient {
 	}
 
 	/**
-	 * POST any SSE command and return the raw event-stream text.
-	 *
-	 * Shared by the export (which reads the asset URL out of the `end` event) and
-	 * by {@see consumeEventStream()} (which only needs to know the stream got
-	 * there). Three commands stream today — export, permanent delete, and restore
-	 * when it lands — and they all need the same non-Accept headers and the same
-	 * long timeout, so they share one door.
-	 *
-	 * @param array<string, string|list<string>|bool> $args logical args, mapped through PARAMS
-	 *
-	 * @throws PenpotApiException
-	 */
-	/**
 	 * Turn a `.penpot` archive into a real design in a project (§6.20, §6.33).
 	 *
 	 * ## THE ONLY MULTIPART COMMAND IN THIS CLASS
@@ -648,18 +635,31 @@ final class PenpotClient {
 	 * renames afterwards if the filename is to be honoured (§6.4). `duplicate-file`
 	 * is the opposite and that asymmetry is the reason both notes exist.
 	 *
+	 * ## THE ARCHIVE IS A STREAM, NOT A STRING
+	 *
+	 * A `.penpot` export is the whole design — pages, assets, embedded media — and
+	 * routinely tens of megabytes. Reading one into a PHP string to post it would
+	 * hold it twice (the string, then the client's copy) inside a web request that
+	 * is already holding a Nextcloud filesystem open. The multipart writer takes a
+	 * resource, so it gets one, and only the first four bytes are ever read into
+	 * memory here.
+	 *
+	 * @param resource $archive the file's own read handle, at position 0
+	 *
 	 * @return string the new design's id
 	 *
 	 * @throws PenpotApiException when Penpot refuses the archive or the stream ends
 	 *                            without naming a file
 	 */
-	public function importBinfile(string $projectId, string $name, string $archive, ?string $actorToken = null): string {
-		if (!str_starts_with($archive, self::ZIP_MAGIC)) {
-			// Refused HERE rather than by Penpot, because the caller's error path
-			// depends on telling "this is not an archive" from "Penpot said no": the
-			// first leaves an ordinary file alone, the second is worth reporting.
+	public function importBinfile(string $projectId, string $name, $archive, ?string $actorToken = null): string {
+		// REFUSED HERE RATHER THAN BY PENPOT, because the caller's error path
+		// depends on telling "this is not an archive" from "Penpot said no": the
+		// first leaves an ordinary file alone, the second is worth reporting.
+		$head = (string)fread($archive, strlen(self::ZIP_MAGIC));
+		rewind($archive);
+		if ($head !== self::ZIP_MAGIC) {
 			throw new PenpotApiException(
-				sprintf('Refusing to import %d bytes that are not a ZIP archive.', strlen($archive)),
+				'Refusing to import bytes that are not a ZIP archive.',
 				0,
 				null,
 				PenpotApiException::KIND_PROTOCOL,
@@ -764,6 +764,19 @@ final class PenpotClient {
 		return null;
 	}
 
+	/**
+	 * POST any SSE command and return the raw event-stream text.
+	 *
+	 * Shared by the export (which reads the asset URL out of the `end` event) and
+	 * by {@see consumeEventStream()} (which only needs to know the stream got
+	 * there). Three commands stream today — export, permanent delete, and restore
+	 * when it lands — and they all need the same non-Accept headers and the same
+	 * long timeout, so they share one door.
+	 *
+	 * @param array<string, string|list<string>|bool> $args logical args, mapped through PARAMS
+	 *
+	 * @throws PenpotApiException
+	 */
 	private function postStream(string $command, array $args, ?string $actorToken = null): string {
 		$url = $this->getBaseUrl() . self::RPC_PATH . $command;
 		$body = $this->wireParams($command, $args);

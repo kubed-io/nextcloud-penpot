@@ -103,10 +103,9 @@ Feature: Renaming a design
     And no design is renamed in Penpot
     And the file holds no Penpot metadata at all
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                                      |
-      | Penpot/Untracked Rename/Dragged In.penpot |
-      | Scratch/Dragged In.penpot                 |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                      |
+      | Scratch/Dragged In.penpot |
 
     # ── RULE: a rename we cannot propagate still stands locally ───────────────
     # notes: ../AGENTS.md#a-failed-propagation-never-reverts-the-users-local-rename

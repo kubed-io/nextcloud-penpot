@@ -2880,6 +2880,22 @@ A missing token never blocks the restore. Attribution is the personal token's on
 job, and the app says whose name went on the change rather than leaving the user to
 find out from Penpot's history.
 
+**AND IT ABOLISHED A STATE TWO OTHER FILES WERE DESCRIBING.** `designs/delete.feature`
+and `designs/rename.feature` each ran an outline over *"inside a mapping and outside
+every mapping alike"*, asserting that an untracked `.penpot` stays untracked in both.
+The second half still holds. The first cannot: an archive inside a mapping is adopted
+the moment it lands, so there is no untracked design file there to trash or rename.
+
+Measured rather than argued — CI failed exactly those two rows and passed their
+`Scratch` twins, on the commit that turned the import on. They are removed, for the
+same reason `Rename a design to a name Penpot cannot hold` was: a scenario whose
+premise the rules make unreachable is not a test, and the rule it was guarding is
+stated where it is true.
+
+What survives is the narrower and still-real case the anchor above ends on: a file
+PENPOT will not take stays untracked wherever it is. That is the only way a `.penpot`
+inside a mapping is Nextcloud's alone now.
+
 ### A design file arriving in a project becomes a design
 
 **A mapping that ignores a design sitting inside it is not a mapping.** A `.penpot`

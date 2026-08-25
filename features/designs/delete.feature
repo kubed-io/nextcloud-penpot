@@ -74,10 +74,9 @@ Feature: Trashing a design
     And the file is recoverable from the Nextcloud trash
     And it still holds no Penpot metadata
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                             |
-      | Penpot/Untouched/Not Ours.penpot |
-      | Scratch/Not Ours.penpot          |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                    |
+      | Scratch/Not Ours.penpot |
 
     # ── RULE: a design deleted in Penpot takes its mirror to the trash ────────
     # notes: ../AGENTS.md#a-design-deleted-in-penpot-is-snapshotted-then-moved-to-the-trash
