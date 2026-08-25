@@ -196,11 +196,23 @@ namespace OCP\Settings {
 			public function getSchema(): array;
 		}
 	}
+	// AutoSyncSettings implements the WithHandlers variant, which is what lets it
+	// own its own storage and dodge core's two typed-getter bugs (see that class).
+	// Extending the base interface here mirrors upstream, so a test that only knows
+	// about IDeclarativeSettingsForm still sees the form as one.
+	if (!interface_exists(IDeclarativeSettingsFormWithHandlers::class, false)) {
+		interface IDeclarativeSettingsFormWithHandlers extends IDeclarativeSettingsForm {
+			public function getValue(string $fieldId, \OCP\IUser $user): mixed;
+
+			public function setValue(string $fieldId, mixed $value, \OCP\IUser $user): void;
+		}
+	}
 	if (!class_exists(DeclarativeSettingsTypes::class, false)) {
 		final class DeclarativeSettingsTypes {
 			public const SECTION_TYPE_ADMIN = 'admin';
 			public const SECTION_TYPE_PERSONAL = 'personal';
 			public const STORAGE_TYPE_INTERNAL = 'internal';
+			public const STORAGE_TYPE_EXTERNAL = 'external';
 			public const TEXT = 'text';
 			public const URL = 'url';
 			public const PASSWORD = 'password';

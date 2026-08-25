@@ -85,16 +85,16 @@ Feature: Moving a design
     # One move changing team and project together, keeping the id, the revision and
     # the history. A design is never re-created to cross a team boundary.
 
-    # ── RULE: leaving every mapping leaves the bytes, and coming back adopts ──
+    # ── RULE: leaving every mapping trashes the design, and coming back revives it ──
     # notes: ../AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
   # @unbuilt — `MotionService::onMove()` leaves a design that landed outside every
-  # mapping exactly as it was, so both rows below are wrong today.
+  # mapping exactly as it was, so nothing below is true today.
   @in-nextcloud @gesture @unbuilt
   Scenario Outline: Move a design out of every mapping
     Given a design file named "Going Loose.penpot" in "<source>"
     When I move the file into "Scratch"
-    Then the design still exists in Penpot
+    Then the design "Going Loose" is in Penpot's trash
     And the file holds:
       | penpot_id      | the original id |
       | penpot_team_id | absent          |
@@ -106,25 +106,50 @@ Feature: Moving a design
       | Penpot/Let Go   |
       | Shared/Let Go   |
 
-    # Penpot has no recycle bin and needs none: the archive is a valid ".penpot" on
-    # its own, so nothing is lost — the app simply stops mirroring it.
+    # The id stays on the file because it is what makes the return below a reattach
+    # rather than an import, and the trash is what keeps that id worth naming.
 
-  @in-nextcloud @gesture @todo
-  Scenario: Move an unmapped design back into a project
-    Given an unmapped design file at "Scratch/Going Loose.penpot" whose design is still in Penpot
+  # notes: ../AGENTS.md#coming-back-revives-whatever-penpot-still-has
+  # @unbuilt — nothing untrashes a design today; a return is a plain re-stamp.
+  @in-nextcloud @gesture @unbuilt
+  Scenario Outline: Move a design file that still carries its Penpot id into a project
+    Given an unmapped design file at "Scratch/Going Loose.penpot" carrying its Penpot id
+    And its design is <where> in Penpot
     When I move the file into "Penpot/Welcome Back"
     Then the design is in the "Welcome Back" Penpot project
+    And the design "Going Loose" is not in Penpot's trash
     And the file holds:
       | penpot_id      | the original id    |
       | penpot_team_id | the mapping's team |
       | penpot_mode    | the mapping's mode |
 
-    # The id in the file is what makes this a RETURN rather than an import — the
-    # design it names is still there, so nothing new is created.
+    Examples: whichever layer it is on, the id in the file still names it
+      | where   |
+      | trashed |
+      | live    |
+
+    # A third layer — the id naming nothing, once Penpot's grace window passes — is
+    # the scenario below, not a row: an id that cannot be revived is replaced.
+
+  # notes: ../AGENTS.md#a-return-penpot-cannot-honour-imports-the-bytes-instead
+  # @unbuilt — the fallback needs the return above to exist before it is a fallback.
+  @in-nextcloud @gesture @unbuilt
+  Scenario: Move a design file whose Penpot id names nothing into a project
+    Given an unmapped design file at "Scratch/Going Loose.penpot" carrying its Penpot id
+    And its design has been permanently deleted in Penpot
+    When I move the file into "Penpot/Welcome Back"
+    Then the design is in the "Welcome Back" Penpot project
+    And the file holds:
+      | penpot_id      | its own, not the one it arrived with |
+      | penpot_team_id | the mapping's team                   |
+      | penpot_mode    | the mapping's mode                   |
+
+    # Nothing is lost, because the bytes never left Nextcloud: the archive is imported
+    # as a new design (§6.33). Only the id and the history start again.
 
   # notes: ../AGENTS.md#a-design-file-arriving-in-a-project-becomes-a-design
   @in-nextcloud @gesture
-  Scenario: Move an untracked design file into a project
+  Scenario: Move a design file carrying no Penpot id into a project
     Given an untracked design file at "Scratch/Uploaded.penpot"
     When I move the file into "Penpot/Adopt Me"
     Then the design is in the "Adopt Me" Penpot project
@@ -134,8 +159,8 @@ Feature: Moving a design
       | penpot_mode    | the mapping's mode |
       | content        | an archive         |
 
-    # A mapping that ignores a design sitting inside it is not a mapping. The
-    # archive is imported (§6.33); nothing empty is invented beside it.
+    # The two above carry an id and this one does not, which is the whole difference:
+    # with nothing to reattach to, the archive is imported (§6.33) and an id is minted.
 
   # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
   # @unbuilt — the import exists now; the report still has nothing to travel on.
@@ -151,19 +176,19 @@ Feature: Moving a design
 
   # notes: ../AGENTS.md#a-design-moved-to-another-team-in-penpot-leaves-this-mapping
   @in-penpot @gesture @todo
-  Scenario: Move a design out of a sync mapping in Penpot
+  Scenario: Someone moves a design into an unmapped team in Penpot
     Given a design file named "Departing.penpot" in "Penpot/Upstream"
     When someone moves the design into the "Archive Team" Penpot team
     Then the file is gone from "Penpot/Upstream"
     And the file is recoverable from the Nextcloud trash
     And the design still exists in Penpot
 
-    # The file IS the design's content, and what happened in Penpot is reversible,
-    # so the local gesture must be too.
+    # NOT the drag above: the design left, the file did not. Penpot is reversible
+    # here, so the local half is a trashing rather than an unmapping.
 
   # notes: ../AGENTS.md#a-design-moved-to-another-team-in-penpot-leaves-this-mapping
   @in-penpot @gesture @todo
-  Scenario: Move a design out of a link mapping in Penpot
+  Scenario: Someone moves a linked design into an unmapped team in Penpot
     Given a design file named "Departing.penpot" in "Pointers/Upstream"
     When someone moves the design into the "Archive Team" Penpot team
     Then the file is gone from "Pointers/Upstream", leaving no trash entry

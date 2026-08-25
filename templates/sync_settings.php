@@ -8,15 +8,14 @@
  * sync_settings.php so the three look the same:
  *
  *   • Manual bulk sync — "Sync from Penpot"
- *   • Purge — remove the design files this app created (Nextcloud side only)
  *   • Connection test — "Test connection"
  *
- * NB (honest UI, saga Ch2): **Test connection and "Sync from Penpot" both work
- * today** — the latter since the triggers slice. Only "Purge" is still disabled,
- * awaiting Course 5's delete machine. Present-but-disabled rather than absent,
- * so the finished shape of the section is visible from the first release and
- * enabling one later is deleting an attribute — which is literally what enabling
- * the sync button was.
+ * EVERY BUTTON IN HERE WORKS. That was not true while "Purge Nextcloud files" sat
+ * between them, disabled, promising a delete machine that the spec then decided
+ * never to build (features/AGENTS.md#retired--the-admin-purge — n8n and grafana
+ * dropped theirs for the same reason). A disabled button is only honest while
+ * someone still intends to enable it; past that it is a promise nobody is keeping,
+ * and it had been making the panel lie for two courses.
  *
  * THERE IS NO "Sync to Penpot", and there never will be: this app is read-only
  * for file content (§6.1). That is the spine of the design, not a phase-ordering
@@ -26,16 +25,13 @@
  *
  * @var \OCP\IL10N $l
  */
-
-// Tooltip on every not-yet-live button — one string, so the promise is consistent.
-$soon = $l->t('Available once the purge machine lands (a later release). Everything else in this panel works now.');
 ?>
 <div class="section">
 <div id="penpot-sync-manual" class="penpot-sync-manual">
 	<h3><?php p($l->t('Sync Actions')); ?></h3>
 
 	<p class="settings-hint">
-		<?php p($l->t('Run a one-shot bulk sync at any time. Sync from Penpot mirrors every mapped team\'s designs into Nextcloud. Nothing is ever written back to Penpot — this app mirrors designs, it does not edit them. Purge arrives with a later release; Test connection and Sync from Penpot work now.')); ?>
+		<?php p($l->t('Run a one-shot bulk sync at any time. Sync from Penpot mirrors every mapped team\'s designs into Nextcloud. Nothing is ever written back to Penpot — this app mirrors designs, it does not edit them.')); ?>
 	</p>
 
 	<div class="penpot-sync-manual__row" data-direction="pull">
@@ -44,15 +40,6 @@ $soon = $l->t('Available once the purge machine lands (a later release). Everyth
 
 	<div class="penpot-sync-manual__footer">
 		<span id="penpot-sync-manual-status" class="msg"></span>
-	</div>
-
-	<p class="settings-hint penpot-sync-actions__sep">
-		<?php p($l->t('Reset the Nextcloud side. Purge removes the design files this app created (sync & link). Penpot is never touched, and unmapped files are kept — get the rest back any time with “Sync from Penpot”.')); ?>
-	</p>
-
-	<div class="penpot-sync-manual__row" data-action="purge">
-		<button type="button" class="button js-purge" disabled title="<?php p($soon); ?>"><?php p($l->t('Purge Nextcloud files')); ?></button>
-		<span id="penpot-sync-purge-status" class="msg"></span>
 	</div>
 
 	<p class="settings-hint penpot-sync-actions__sep">

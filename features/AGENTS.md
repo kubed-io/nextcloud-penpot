@@ -2122,6 +2122,125 @@ project dragged out of every mapping becomes a plain Nextcloud folder). A design
 is the smaller half of a rule whose bigger half already ships, which is what makes
 this a gap rather than a disagreement.
 
+**AND WHY LEAVING NOW TRASHES THE DESIGN, WHICH IT DID NOT BEFORE.** The scenario
+used to assert `the design still exists in Penpot` and explained itself with *"Penpot
+has no recycle bin and needs none"*. That reads as a decision and was really an
+absence: the app stopped mirroring the design and left it sitting in a project whose
+folder no longer maps anywhere, visible to everyone in the team, indistinguishable
+from work still being mirrored. Both siblings park it instead — n8n ARCHIVES the
+workflow (`workflows/move.feature`, live), Grafana moves the dashboard into its
+`nextcloud-trash` folder (`dashboards/move.feature`, live) — and the reason is the
+same on both: a design nobody is mirroring should stop being underfoot without being
+destroyed.
+
+Penpot needs neither of the siblings' inventions, because it HAS the thing they are
+each simulating. `designs/delete.feature` already says so in as many words: *"Penpot
+needs no recycle-bin setting: it HAS a trash… The siblings bolt one on because their
+services have none."* So leaving a mapping trashes the design — the same soft delete
+`designs/delete.feature` pins for the trash gesture, keeping the id, the revision and
+the history — and the `penpot_id` STAYS ON THE FILE, which is the whole trick. An
+unmapped file is not a file that forgot; it is a file holding a claim on something
+parked.
+
+### Coming back revives whatever Penpot still has
+
+The return is one gesture over three possible far-side states, which is exactly the
+shape `designs/restore.feature` already uses for the trash (*"the three layers a
+restore can land in"*). Two of those layers behave identically here and so share one
+scenario's Examples: whether the design is sitting in Penpot's trash or was restored
+there by someone in the meantime, the `penpot_id` on the file names a design that
+exists, so the app untrashes it if it needs to, files it into the destination project,
+and re-stamps the file. **The id, the revision and the history all survive**, which is
+the entire reason leaving was a trashing rather than a delete.
+
+WHY THE TWO ROWS ARE ONE SCENARIO AND NOT TWO. The outcome is identical and the code
+path is identical — "make sure the design exists and is in this project" absorbs both.
+Splitting them would state the same claim twice and imply a difference that is not
+there. Contrast the third layer below, which genuinely cannot reach the same outcome.
+
+### A return Penpot cannot honour imports the bytes instead
+
+The third layer: the design is gone for good — past Penpot's grace window, or purged
+by hand. There is nothing to untrash and no way to resurrect an id (§6.20), so the
+file's `penpot_id` is now a claim on nothing.
+
+**Nothing is lost, and that is the point.** A `sync` file IS the design — a complete,
+valid `.penpot` archive that has been sitting in Nextcloud the whole time — so the
+return imports it (§6.33) and the user gets their design back. What they do not get
+back is the id and the version history, which is why this is a separate scenario
+rather than another row above: the file comes home with `penpot_id | its own, not the
+one it arrived with`, and a reader has to be able to see that.
+
+This is n8n's `Restoring when the n8n workflow was hard-deleted falls back to create`,
+in Penpot's terms. Same fallback, same reason, one file's worth of bytes doing the
+work instead of a JSON body.
+
+### The three arrivals are told apart by the id, not by their history
+
+THREE ARRIVALS THAT LOOKED ALIKE AND ARE NOT. They were called *"Move an unmapped
+design back into a project"* and *"Move an untracked design file into a project"* —
+two spellings of "it was outside, now it is inside", giving a reader nothing to tell
+them apart by.
+
+The first repair was worse in a way worth recording, because it is a mistake that
+reads as a fix: retitling one of them *"Move a design that **left a mapping** back
+into a project"*. That names how the file GOT into its state, and a scenario cannot
+assert its own backstory — the `Given` places a file with an id at a path, and nothing
+about it establishes that the file was ever mapped, or that it came back rather than
+arriving for the first time. Worse, the implication is not even reliable: **unmapped
+does not imply an id**. A file can be sitting outside every mapping with no `penpot_id`
+on it at all, which is precisely the untracked case two scenarios down.
+
+So the discriminator is not the history and not the folder. It is **what the file
+carries**, and all three titles now say so:
+
+| the file carries | what the arrival does | scenario |
+| --- | --- | --- |
+| an id naming a live or trashed design | REATTACHES — untrash if needed, re-file, re-stamp | `…that still carries its Penpot id` |
+| an id naming nothing (past the grace window) | IMPORTS, and the stale id is replaced | `…whose Penpot id names nothing` |
+| no id at all | IMPORTS, and an id is minted | `…carrying no Penpot id` |
+
+One axis, three values, three outcomes — which is what makes them three scenarios and
+not one outline (the middle and bottom rows cannot assert `penpot_id | the original
+id`, so no Examples table can hold them together).
+
+The words `unmapped` and `untracked` stay in the `Given`s, where they are precise and
+already load-bearing elsewhere — `designs/delete.feature` has a `Trash an untracked
+design file` scenario and the rule *"a file the app never mirrored is Nextcloud's
+alone"*. The first outline's `Given` now says `carrying its Penpot id` out loud rather
+than leaning on `unmapped` to imply it, the same way the duplicate scenarios further
+down have always spelled out `carrying "<its id>"`.
+
+### The two Penpot-side departures are not the Nextcloud drag, or each other
+
+THREE SCENARIOS READ AS ONE IF YOU ONLY READ THE TITLES, and they were called `Move a
+design out of a sync mapping in Penpot`, `Move a design out of a link mapping in
+Penpot` and `Move a design out of every mapping`. The trailing *"in Penpot"* was doing
+all the disambiguating, and it is the easiest three words in a title to skip.
+
+They are separated by the `@in-penpot` / `@in-nextcloud` tag, which is the real answer
+and is not visible while you are reading a title:
+
+- **the drag** (`@in-nextcloud`) — a person moves the FILE in Nextcloud, out to an
+  unmapped folder. The file goes where they put it; the design gets trashed.
+- **the sync departure** (`@in-penpot`) — someone moves the DESIGN in Penpot's own UI,
+  into a team this app does not map. The design is fine; it is the FILE that has lost
+  its subject, so the mirror goes to the Nextcloud trash where the user decides.
+- **the link departure** (`@in-penpot`) — the same gesture on a `link` mapping, and it
+  leaves NO trash entry, because a restored pointer would point at nothing this mapping
+  mirrors.
+
+Retitled to lead with the actor — `Someone moves a design into an unmapped team in
+Penpot` — because `someone` is already this spec's word for the far-side actor in
+every `When` it appears in. Grafana carries the identical pair under the older titles
+(`dashboards/move.feature`); this is a divergence from the sibling that improves on it
+rather than drifting from it.
+
+AND THE LINK DEPARTURE IS NOT THE REFUSAL EITHER. `Moving a link, or into a link
+mapping, is refused` is a person being stopped by the guard in Nextcloud. Nothing
+happens in Nextcloud here, so no guard is ever consulted — `MoveRules` has no say over
+what someone does in Penpot's UI.
+
 ### A duplicate arriving in a project keeps the id already there
 
 THE PERSON ANSWERS WHAT THE CONTENT SHOULD BE; the identity is never theirs to
@@ -3073,6 +3192,23 @@ scenario was @unbuilt or @blocked — so retiring it is a matter of deleting the
 
 Purge now means the same thing in all three apps: emptying the Nextcloud trash,
 which finishes the delete the trash gesture started.
+
+**AND THE BUTTON OUTLIVED THE SPEC BY TWO COURSES.** Retiring the scenarios left
+`templates/sync_settings.php` still rendering a *disabled* "Purge Nextcloud files"
+between the two working buttons, with a tooltip promising it was *"available once
+the purge machine lands"*, two settings-hint paragraphs describing what it would
+spare, and matching notes in `SyncSettings.php` and `js/sync-settings.js`. Nothing
+was ever wired to it — no route, no controller action, no `occ` command — so this
+was pure dead surface, and the only thing it did was tell every admin who read the
+panel that a feature was coming which had already been cancelled.
+
+The general rule, since this is the second time a *present-but-disabled* control has
+gone stale here: the argument for shipping one is that the finished shape of the
+section is visible early and enabling it later is deleting an attribute. That holds
+exactly as long as somebody still intends to enable it. The sync button earned it and
+went live; this one's feature was cancelled underneath it, and at that moment the
+button stopped being a preview and became a lie. **When a feature is retired, the
+retirement includes its UI.**
 
 ### A link is never deleted from Nextcloud
 

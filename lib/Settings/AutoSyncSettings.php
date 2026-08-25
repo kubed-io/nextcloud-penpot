@@ -10,8 +10,11 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Settings;
 
 use OCA\PenpotSync\AppInfo\Application;
+use OCA\PenpotSync\Service\AppConfigReader;
+use OCP\IAppConfig;
+use OCP\IUser;
 use OCP\Settings\DeclarativeSettingsTypes;
-use OCP\Settings\IDeclarativeSettingsForm;
+use OCP\Settings\IDeclarativeSettingsFormWithHandlers;
 
 /**
  * The scheduled-pull card: whether the pull runs on a timer, and how often.
@@ -39,13 +42,54 @@ use OCP\Settings\IDeclarativeSettingsForm;
  *
  * Nextcloud schedules by interval (`TimedJob`), not cron expressions — hence a
  * duration rather than a crontab line.
+ *
+ * ## WHY THIS FORM HANDLES ITS OWN STORAGE, AND WHY THE RADIO IS GONE
+ *
+ * The toggle used to be a RADIO with `yes`/`no` options. That was a workaround for
+ * a real core bug, and the diagnosis was right as far as it went:
+ * `DeclarativeManager::saveInternalValue()` hands an admin form's value straight to
+ * `IAppConfig::setValueString()`, so the real `bool` a CHECKBOX posts raises a
+ * TypeError, the save aborts, and the toggle springs back with nothing shown to the
+ * admin. What the diagnosis MISSED is the second half, which both siblings found
+ * afterwards: `getInternalValue()` passes the schema's `default` into
+ * `IConfig::getAppValue()`, also typed `string`, so a `'default' => false` throws on
+ * the way back OUT. Both spellings are broken, in opposite directions — and a radio
+ * dodges both by never being a bool at all.
+ *
+ * So the radio worked, and the price was a settings panel that asked a yes/no
+ * question with two fat radio buttons where every other app in the family — and
+ * every other checkbox in Nextcloud — has a switch.
+ *
+ * `STORAGE_TYPE_EXTERNAL` + {@see IDeclarativeSettingsFormWithHandlers} is the fix
+ * the siblings converged on: core calls {@see getValue}/{@see setValue} on this
+ * object directly and NEVER touches the two typed core methods above, so the bug is
+ * not worked around, it is stepped past. No listener class and no event wiring —
+ * `DeclarativeManager::getValue()` prefers the interface and only falls back to
+ * `DeclarativeSettingsGetValueEvent` for forms that do not implement it.
+ *
+ * THE KEY AND ITS PLACE ARE UNCHANGED. `occ config:app:set penpot_sync
+ * schedule_enabled --value=1` still does exactly what it did, which is what the
+ * integration suite has always used. Only who does the read and the write moves,
+ * and {@see AppConfigReader} makes the read tolerate every spelling the key has
+ * ever held — including the `yes` this app itself wrote all through the radio era.
+ *
+ * The interface is `@since 31.0.0`; `appinfo/info.xml` already requires more.
  */
-final class AutoSyncSettings implements IDeclarativeSettingsForm {
+final class AutoSyncSettings implements IDeclarativeSettingsFormWithHandlers {
 	/** AppConfig key: whether the scheduled pull is enabled. */
 	public const KEY_ENABLED = 'schedule_enabled';
 
 	/** AppConfig key: how often to pull, as a duration string. */
 	public const KEY_INTERVAL = 'schedule_interval';
+
+	/** Fallback pull cadence, used as both the placeholder and the stored default. */
+	public const DEFAULT_INTERVAL = '1h';
+
+	public function __construct(
+		private readonly IAppConfig $config,
+		private readonly AppConfigReader $reader,
+	) {
+	}
 
 	#[\Override]
 	public function getSchema(): array {
@@ -55,7 +99,9 @@ final class AutoSyncSettings implements IDeclarativeSettingsForm {
 			'priority' => 20,
 			'section_type' => DeclarativeSettingsTypes::SECTION_TYPE_ADMIN,
 			'section_id' => Application::APP_ID,
-			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_INTERNAL,
+			// EXTERNAL so getValue()/setValue() below own the coercion — see the
+			// class docblock for why INTERNAL cannot carry a checkbox either way.
+			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_EXTERNAL,
 			'title' => 'Sync Settings',
 			'description' => 'How often Nextcloud mirrors mapped Penpot teams. The pull is read-only — '
 				. 'it never changes anything in Penpot. Runs unattended on this interval; '
@@ -64,33 +110,12 @@ final class AutoSyncSettings implements IDeclarativeSettingsForm {
 				[
 					'id' => self::KEY_ENABLED,
 					'title' => 'Pull from Penpot on a schedule',
-					'description' => 'When on, Nextcloud periodically refreshes mirrored files from Penpot.',
-					// RADIO, not CHECKBOX — and this is a bug workaround, not a
-					// style choice.
-					//
-					// A declarative CHECKBOX sends a real PHP bool, and core's
-					// DeclarativeManager::saveInternalValue() hands that straight
-					// to IAppConfig::setValueString(), which is typed `string`:
-					//
-					//   TypeError: setValueString(): Argument #3 ($value) must be
-					//   of type string, true given
-					//
-					// The save aborts, nothing persists, and the toggle springs
-					// back to its default on the next page load with no error the
-					// admin can see. Reproduced on this NC 33 instance by driving
-					// the manager directly — and BOTH sibling apps have the same
-					// bug: n8n_sync's stored value came from `occ`, not from its
-					// toggle, and grafana_sync's key is simply unset.
-					//
-					// A RADIO sends a string, which survives that path — verified
-					// against n8n's own `timing` radio, which round-trips fine.
-					// Same two choices for the admin, one that actually saves.
-					'type' => DeclarativeSettingsTypes::RADIO,
-					'default' => 'no',
-					'options' => [
-						['name' => 'Off — mirror only when run manually', 'value' => 'no'],
-						['name' => 'On — pull from Penpot automatically', 'value' => 'yes'],
-					],
+					'description' => 'Nextcloud periodically refreshes mirrored files from Penpot — read-only, so nothing in Penpot changes. When off, use "Sync from Penpot" under Sync Actions.',
+					'type' => DeclarativeSettingsTypes::CHECKBOX,
+					// A real bool: this is what the frontend round-trips. It is safe
+					// here only because EXTERNAL storage never feeds it to
+					// IConfig::getAppValue() (see the class docblock).
+					'default' => false,
 				],
 				[
 					'id' => self::KEY_INTERVAL,
@@ -100,10 +125,55 @@ final class AutoSyncSettings implements IDeclarativeSettingsForm {
 						. 'request per team plus one per project, and anything faster spends '
 						. 'requests without catching meaningfully fresher designs.',
 					'type' => DeclarativeSettingsTypes::TEXT,
-					'placeholder' => '1h',
-					'default' => '1h',
+					'placeholder' => self::DEFAULT_INTERVAL,
+					'default' => self::DEFAULT_INTERVAL,
 				],
 			],
 		];
+	}
+
+	/**
+	 * Read one field for the settings UI, in the type that field actually means —
+	 * a real `bool` for the toggle, a `string` for the interval.
+	 *
+	 * Both go through {@see AppConfigReader} rather than the typed getters,
+	 * because a value stored by the old RADIO (`yes`/`no`) or by `occ` (`1`/`0`)
+	 * is string-typed and `getValueBool()` would throw on it until the admin
+	 * saved once — which is the toggle reading as OFF on every existing install.
+	 */
+	#[\Override]
+	public function getValue(string $fieldId, IUser $user): mixed {
+		return match ($fieldId) {
+			self::KEY_ENABLED => $this->reader->bool(self::KEY_ENABLED),
+			self::KEY_INTERVAL => $this->reader->string(self::KEY_INTERVAL, self::DEFAULT_INTERVAL),
+			default => null,
+		};
+	}
+
+	/**
+	 * Persist one field, normalising what the frontend sent.
+	 *
+	 * The interval is stored trimmed but otherwise verbatim, because
+	 * {@see \OCA\PenpotSync\Service\ScheduleConfig} already owns parsing it and
+	 * falls back to hourly on anything it cannot read. Validating here as well
+	 * would put the rule in two places and let them disagree.
+	 */
+	#[\Override]
+	public function setValue(string $fieldId, mixed $value, IUser $user): void {
+		switch ($fieldId) {
+			case self::KEY_ENABLED:
+				// setValueBool, not a '1'/'0' string, so ScheduleConfig's primary
+				// typed read succeeds instead of falling through the rescue path.
+				$this->config->setValueBool(Application::APP_ID, self::KEY_ENABLED, AppConfigReader::coerceBool($value));
+				break;
+			case self::KEY_INTERVAL:
+				$raw = is_string($value) ? trim($value) : '';
+				$this->config->setValueString(
+					Application::APP_ID,
+					self::KEY_INTERVAL,
+					$raw === '' ? self::DEFAULT_INTERVAL : $raw,
+				);
+				break;
+		}
 	}
 }

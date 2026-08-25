@@ -4,10 +4,9 @@
  *
  * "Sync Actions" panel handlers.
  *
- * Test connection and "Sync from Penpot" are wired. "Purge" is still rendered
- * `disabled` (see templates/sync_settings.php) until its engine lands — giving
- * it a handler that reports "not implemented" would be a worse lie than a
- * disabled button.
+ * Test connection and "Sync from Penpot" are wired, and they are now the only two
+ * buttons here — the disabled "Purge" that used to sit between them went with the
+ * feature it was waiting for (features/AGENTS.md#retired--the-admin-purge).
  *
  * "Sync from Penpot" is ASYNC: the click queues a job and returns, then this
  * polls for the outcome. A bulk pull walks every mapped team and exports an

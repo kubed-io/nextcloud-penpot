@@ -32,13 +32,13 @@ use OCP\Util;
  *
  * ## HONEST BUTTONS (saga Ch2)
  *
- * **Test connection and "Sync from Penpot" both work today** — the latter since
- * the triggers slice. Only "Purge" is still rendered **disabled**, awaiting
- * Course 5's delete machine. Present-but-disabled rather than absent, for the
- * same reason the siblings do it: the shape of the finished section is visible
- * from the first release, and enabling one later is deleting a `disabled`
- * attribute — not redesigning the page, which is exactly how the sync button
- * went live.
+ * **Every button in this panel works.** It used to hold one that did not: "Purge
+ * Nextcloud files", rendered `disabled`, waiting on a delete machine the spec has
+ * since decided never to build (features/AGENTS.md#retired--the-admin-purge). The
+ * present-but-disabled argument is sound only while somebody still means to enable
+ * the thing — the sync button earned it and went live. Once the feature is
+ * cancelled the same button is just a promise nobody is keeping, so it is gone
+ * rather than greyed out.
  *
  * There is deliberately **no "Sync to Penpot"** button, and there never will be.
  * This app is read-only for file *content* (§6.1) — that is the spine of the
