@@ -70,6 +70,18 @@ trait GestureSteps {
 	private array $designIdsBeforeGesture = [];
 
 	/**
+	 * Every design in the whole instance before a REFUSED create, so
+	 * {@see ProjectFolderSteps::noDesignIsCreatedInPenpot()} can prove the refusal
+	 * added nothing anywhere.
+	 *
+	 * A flat list rather than the keyed map above, because there is no node to key
+	 * it by: the question is "did Penpot gain anything?", not "did these survive?".
+	 *
+	 * @var list<string>
+	 */
+	private array $designIdsBeforeRefusal = [];
+
+	/**
 	 * Read the design's id BEFORE a gesture, which is the last moment the old path
 	 * resolves. Every claim of the form "the id it had before …" rests on this, so
 	 * every gesture those specs cover has to record it: a rename, a move, and a
@@ -1035,9 +1047,16 @@ trait GestureSteps {
 	/**
 	 * The same act where the app is expected to say no.
 	 *
+	 * IT SNAPSHOTS PENPOT FIRST, because the scenarios using it go on to say "no
+	 * design is created in Penpot" and there is no sentence in the spec where a
+	 * snapshot would belong. Taking it here keeps harness bookkeeping out of the
+	 * specification; the alternative is a `Given` that exists only for the harness,
+	 * which is the thing this suite's Backgrounds were rewritten to stop doing.
+	 *
 	 * @When /^I try to create a new design in "([^"]*)"$/
 	 */
 	public function iTryToCreateANewDesignIn(string $folder): void {
+		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
 		$path = trim($folder, '/') . '/' . self::NEW_DESIGN;
 		$res = $this->davClient()->request('PUT', $this->davEncode($path), ['body' => '']);
 		$this->lastGestureStatus = $res->getStatusCode();

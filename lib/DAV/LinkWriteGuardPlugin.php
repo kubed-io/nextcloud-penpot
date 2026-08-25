@@ -108,6 +108,17 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		// a link project was a plain 204. A read-only mirror you can delete is not
 		// read-only; `projects/delete.feature` says so and nothing enforced it.
 		$server->on('method:DELETE', [$this, 'onDelete'], 10);
+
+		// AND THE VERB `beforeWriteContent` CANNOT SEE AT ALL. That event fires for
+		// an EXISTING node, and it classifies from the file's own metadata — so a
+		// brand new `.penpot` has none, reads as "not a link", and was written
+		// straight into a link mapping. Sabre emits `beforeCreateFile` instead when
+		// the path does not exist yet, and it hands over the PARENT, which is the
+		// only thing that can answer where a file that does not exist may be made.
+		//
+		// Two scenarios in `designs/create.feature` were @todo against this hole and
+		// one of them was tagged as though the code existed.
+		$server->on('beforeCreateFile', [$this, 'beforeCreateFile'], 10);
 	}
 
 	/**
@@ -200,6 +211,61 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		$this->logger->warning('penpot_sync: refused a WebDAV delete', [
 			'app' => Application::APP_ID,
 			'path' => $request->getPath(),
+		]);
+
+		throw new Forbidden($refusal);
+	}
+
+	/**
+	 * Refuse a NEW `.penpot` the rules will not let exist there.
+	 *
+	 * ## WHY THE BODY IS READ FROM A HEADER AND NOT FROM `$data`
+	 *
+	 * `$data` is the request stream. Reading it here to see whether it is empty
+	 * would consume the bytes Sabre is about to hand to the storage, so the one
+	 * safe way to ask "is this a create or an upload?" before anything is written
+	 * is `Content-Length` — which is exactly the distinction
+	 * {@see \OCA\PenpotSync\Service\CreationService} draws one layer down, from the
+	 * node's size. Same question, same answer, asked early enough to refuse.
+	 *
+	 * A CHUNKED PUT SENDS NO `Content-Length`, and that reads as non-empty here,
+	 * which is the right way round: an upload big enough to be chunked is
+	 * self-evidently not "+ New → Penpot design", and the link rule above does not
+	 * consult the body at all.
+	 *
+	 * FAIL OPEN, as everywhere in this plugin.
+	 *
+	 * @param mixed $data unused; reading it would consume the upload stream
+	 * @param bool|null $modified
+	 */
+	public function beforeCreateFile(string $path, &$data, INode $parentNode, &$modified): bool {
+		$name = basename($path);
+		if (!str_ends_with($name, PullService::EXTENSION)) {
+			return true;
+		}
+
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		if ($uid === '' || $this->server === null) {
+			return true;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($uid);
+			$parentPath = dirname($this->relativeTo($path));
+			$parent = $parentPath === '.' || $parentPath === '' ? $userFolder : $userFolder->get($parentPath);
+		} catch (\Throwable) {
+			return true;
+		}
+
+		$length = $this->server->httpRequest->getHeader('Content-Length');
+		$refusal = $this->rules->refusalForCreating($parent, $name, $length === '0');
+		if ($refusal === null) {
+			return true;
+		}
+
+		$this->logger->warning('penpot_sync: refused a WebDAV create', [
+			'app' => Application::APP_ID,
+			'path' => $path,
 		]);
 
 		throw new Forbidden($refusal);

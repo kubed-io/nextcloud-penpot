@@ -16,12 +16,17 @@ use OCP\Files\NotFoundException;
 use OCP\IL10N;
 
 /**
- * WHICH MOVES THIS APP REFUSES, AND IN WHAT WORDS — asked, never thrown.
+ * WHICH GESTURES THIS APP REFUSES, AND IN WHAT WORDS — asked, never thrown.
  *
- * There are two rules and they are both about MODE, which is the only thing a
- * move must not change. §C6.38 retired the third — *a project folder stays inside
- * its team folder* (§6.30, locked "for now" and now unlocked) — because it was
- * guarding against a limit Penpot does not have; see {@see forFolder}.
+ * Three rules. Two are about MODE, which is the only thing a move must not
+ * change; the third ({@see refusalForCreating}) is about a design having
+ * somewhere to go at all. §C6.38 retired a fourth — *a project folder stays
+ * inside its team folder* (§6.30, locked "for now" and now unlocked) — because it
+ * was guarding against a limit Penpot does not have; see {@see forFolder}.
+ *
+ * The class is still called MoveRules because a move is where it started and
+ * three of the four verbs it now answers for (move, delete, create) reduce to the
+ * same question: what does the MAPPING at that position allow?
  *
  * They live in one place and are ASKED from two, because Nextcloud gives no
  * single place that both stops a move and tells the person why.
@@ -117,6 +122,62 @@ final class MoveRules {
 	 * for the reason {@see positionOf} gives: an unreadable destination is exactly
 	 * where a silent desync would be created.
 	 */
+	/**
+	 * Rule 3 (§6.34, §6.44) — where a NEW `.penpot` may be authored.
+	 *
+	 * ## TWO REFUSALS, AND ONLY ONE OF THEM CARES WHAT IS IN THE FILE
+	 *
+	 * A `link` mapping is filled FROM Penpot and nothing may be added from this
+	 * side, *whatever is arriving* — the same sentence {@see forFolder} already
+	 * says about a folder. An empty create and a dragged-in archive are refused
+	 * alike, because neither could ever become the design it looks like: Penpot has
+	 * no write path for design content, so a file authored into a link tree would
+	 * be emptied again by the next pull ({@see ArchiveService::storeLink()}).
+	 *
+	 * Landing outside every mapping is the other rule, and it is narrower: it
+	 * refuses the CREATE and allows the UPLOAD. "+ New → Penpot design" writes an
+	 * empty file, and an empty `.penpot` is not a document someone can go on to
+	 * author the way an empty JSON is — Penpot has no rootless design and
+	 * `create-file` requires a project, so there is nowhere for it to become real.
+	 * An archive someone drags into a plain folder is a different act entirely: it
+	 * is a file, it holds something, and Nextcloud stores files.
+	 *
+	 * THIS IS WHERE THIS APP DIVERGES FROM BOTH SIBLINGS, which write the plain
+	 * file and leave it inert. They can afford to: an empty `.json` dashboard is
+	 * still a thing you can type into. A zero-byte `.penpot` is not.
+	 *
+	 * @param bool $empty whether the body is empty — the app's own create/upload
+	 *                    discriminator, read from `Content-Length` at the DAV edge
+	 *                    and from the node's size in the listener
+	 */
+	public function refusalForCreating(Node $parent, string $name, bool $empty): ?string {
+		if (!str_ends_with($name, PullService::EXTENSION)) {
+			return null;
+		}
+
+		$membership = $this->resolver->resolve($parent);
+
+		if ($this->isLinkTeam($membership->teamId)) {
+			return $this->l->t(
+				'"%s" cannot be created there: that folder mirrors a Penpot team in link mode, so '
+				. 'what is in it is filled from Penpot and nothing may be added from this side. '
+				. 'Create the design in Penpot and it will appear here.',
+				[$name],
+			);
+		}
+
+		if (!$empty || $membership->state() !== Membership::STATE_NONE) {
+			return null;
+		}
+
+		return $this->l->t(
+			'"%s" cannot be created there: a new design has to be made inside a folder that '
+			. 'mirrors a Penpot team, because Penpot keeps every design in a project and there '
+			. 'is no project here to put it in. Make it inside a mapped folder instead.',
+			[$name],
+		);
+	}
+
 	public function refusalForLandingIn(Node $source, ?Node $targetParent, ?string $targetName = null): ?string {
 		return $this->evaluate(
 			$source,

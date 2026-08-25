@@ -24,7 +24,7 @@ Feature: Creating a design
     # ── RULE: a new design belongs to the nearest project, or to Drafts ───────
     # notes: ../AGENTS.md#a-design-created-under-the-team-but-not-under-a-project-is-a-draft
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Create a design in a mapped folder
     When I create a new design in "<folder>"
     Then a matching design is created in Penpot
@@ -52,7 +52,7 @@ Feature: Creating a design
     # ── RULE: a design made in Penpot arrives as a file ───────────────────────
     # notes: ../AGENTS.md#a-newly-created-design-is-born-in-its-mappings-mode
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Create a design in Penpot
     When someone creates a design in the "<project>" Penpot project
     Then a matching file is created in "<folder>"
@@ -93,9 +93,7 @@ Feature: Creating a design
     # ── RULE: a design has to have somewhere to go ───────────────────────────
     # notes: ../AGENTS.md#a-design-has-to-have-somewhere-to-go
 
-  # @unbuilt — allowed today (HTTP 201). The spec refuses it because there is no
-  # rootless design; the app writes the plain file the siblings write.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Create a design outside every mapping
     When I try to create a new design in "Scratch"
     Then the creation is refused with a message
@@ -107,7 +105,7 @@ Feature: Creating a design
     # ── RULE: a link mapping authors nothing ─────────────────────────────────
     # notes: ../AGENTS.md#a-link-mapping-authors-nothing
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Creating a design in a link-mapped folder is refused
     When I try to create a new design in "<folder>"
     Then the creation is refused with a message
