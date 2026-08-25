@@ -876,6 +876,57 @@ no revision is stamped either, which is what makes the next pull's drift check r
 and fill a `sync` file's body in on the same self-healing path it uses for an
 archive that went missing.
 
+### Why a create cannot write the bytes itself, and why the spec does not mention it
+
+**A code note, not a spec one.** The scenario says the file holds an archive after
+the gesture, and it is right to: that is the state the user ends up in. How long
+the app takes to get there is an implementation detail, and a scheduled sync the
+person never sees is not something Gherkin describes.
+
+Worth writing down because the obvious fix is a wall. Exporting during the create
+looks like it would remove a self-inflicted transient — a file stamped `sync`
+holding zero bytes is what `occ penpot_sync:status` prints as `sync` / `pointer`
+and calls *"precisely the drift"*. It cannot be done from there, and the reason is
+Nextcloud's locking rather than anything about Penpot. `CreateListener` runs on
+`NodeWrittenEvent`, which `OCA\DAV\Connector\Sabre\File::finalizeUpload()` emits
+*after* downgrading the file to a **shared** lock — its own comment says so:
+*"Downgrade to shared lock before post hooks so legacy hook consumers can still
+access the file."* `Node::putContent()` goes through `View::file_put_contents()`,
+which takes a shared lock and then `changeLock(…LOCK_EXCLUSIVE)`, and that upgrade
+cannot succeed while the DAV request still holds its own shared lock.
+
+nextcloud-n8n's `CreateService` carries the same finding, from the round that paid
+for it: *"this runs INSIDE the handler for the very write that created the file, so
+`putContent()` on the same node hits Nextcloud's lock and the whole create fails.
+Tried; it took out every arrange in the suite that lands a file in a mapped
+folder."*
+
+So the body arrives on the next sync, down `ArchiveService`'s self-healing path.
+**The harness collapses that wait rather than the spec describing it** — the
+`Then a matching design is created in Penpot` step runs the sync itself, the same
+way the arrange spine already does after seeding a design. A scenario must never
+grow a `When the admin syncs every mapping` to reach a later state: it is a `When`
+after a `Then`, and it puts an admin's button into a story about a user making a
+file.
+
+### A link carries a revision too, because it is the pull's stamp
+
+**Two live feature files disagreed about this, and the one that was green won.**
+`mapping/sync-now.feature` asserts `penpot_revision | set` on a `link` file and has
+been passing for courses; `designs/create.feature` said `absent`, reasoning *"a
+revision records what a push last sent, and a link never pushes"*.
+
+That reasoning describes a `penpot_revision` this app does not have. The stamp is
+`revn` + `modified-at` joined (§5.5) and it is the PULL's drift signal — what the
+mirror last saw upstream, not what anything sent. `PullService` writes it for every
+mode because every mode is pulled; a link's body is empty, but the question "has
+this design changed since I looked?" is the same question for both.
+
+Worth noticing HOW the two got out of step, because it is the same shape as the
+`Penpot/Inbox` row and the home-root row before it: nothing is wrong with either
+sentence read alone. The contradiction is only visible with both files open, and
+one of them had never run.
+
 ── creating in a personal team ─────────────────────────────────────────────
 Same behaviour, different destination: the user's own Drafts rather than the
 team's. `connection/personal.feature` owns why that destination differs.
@@ -904,6 +955,45 @@ file, which is the failure mode of splitting a spec by noun and the reason
 mapping"* has to be load-bearing rather than decorative. If the home root is a
 mapping root, promotion works there the way it works everywhere, and an exception
 for personal would be the special case needing an argument.
+
+### The personal mapping is held until the siblings have one
+
+**Every `@todo` in this app is a promise except these, and they are a DECISION —
+one taken on where this app sits next to its siblings rather than on what the rule
+should be.** `nextcloud-grafana` and `nextcloud-n8n` have no per-user connection at
+all: one instance token, one set of admin mappings, and nothing that belongs to a
+single person. The personal mapping would put penpot ahead of both on an axis
+neither has started, and parity is the goal until it is not.
+
+So the rule stated above stands as the spec, and the scenarios resting on it wait:
+`designs/create.feature`'s `Create a design in the user's own home`,
+`designs/move.feature`'s `Move a design into another team`, and all three of
+`connection/personal.feature`. They are `@todo` rather than `@unbuilt` because
+nothing about them is owed by the code *yet* — the queue is where they belong, and
+this note is why they will still be there after a round that clears the rest.
+
+**What exists today, and what it is NOT.** `PersonalTokenService` is real and
+shipped, and it is attribution only — its own docblock says so. A user's token is
+passed as an actor token to RPC calls so Penpot records the change as theirs, and
+it is read nowhere else. It maps nothing.
+
+**What it would take**, recorded so the next round does not have to re-derive it.
+One extra rung on the `MembershipResolver` walk: the acting user's home folder,
+counted as marked when they have a personal team. Everything downstream is
+untouched — Drafts at the root, promotion by path below it, the same move, rename
+and delete code — because a home root then behaves exactly like a mapping root that
+happens to carry no marker. The team itself comes from `get-teams` asked with the
+USER's own token, where Penpot computes `is-default` as
+`(t.id = profile.default_team_id)`; that is read out of the backend's `teams.clj`,
+not inferred, and it makes the token the single source of truth.
+
+One consequence to carry into that round, because it reaches past the feature:
+**a personal token changes what other scenarios mean.** `Create a design outside
+every mapping` puts its file in `Scratch`, and for a token holder that is not
+outside every mapping at all — it is a folder in their own team, and the app would
+rightly allow the create the scenario expects it to refuse. Any harness that
+arranges a token has to clear it before every scenario, in the arrange rather than
+after, where a failing scenario could skip it.
 
 ### A design crossing between a home and a shared team is a move, not a create
 

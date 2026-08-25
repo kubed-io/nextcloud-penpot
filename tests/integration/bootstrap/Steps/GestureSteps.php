@@ -70,6 +70,18 @@ trait GestureSteps {
 	private array $designIdsBeforeGesture = [];
 
 	/**
+	 * Every design in the whole instance before a REFUSED create, so
+	 * {@see ProjectFolderSteps::noDesignIsCreatedInPenpot()} can prove the refusal
+	 * added nothing anywhere.
+	 *
+	 * A flat list rather than the keyed map above, because there is no node to key
+	 * it by: the question is "did Penpot gain anything?", not "did these survive?".
+	 *
+	 * @var list<string>
+	 */
+	private array $designIdsBeforeRefusal = [];
+
+	/**
 	 * Read the design's id BEFORE a gesture, which is the last moment the old path
 	 * resolves. Every claim of the form "the id it had before …" rests on this, so
 	 * every gesture those specs cover has to record it: a rename, a move, and a
@@ -1021,23 +1033,42 @@ trait GestureSteps {
 	 * The spec names the FOLDER and lets the app pick the filename, because that is
 	 * what the button does — `New design.penpot` is core's, not the scenario's.
 	 *
+	 * THE FOLDER IS MADE IF IT IS NOT THERE, the same way {@see iMoveTheFileInto()}
+	 * makes a drag's destination. A person clicking "+ New" is standing IN a
+	 * folder, so a scenario naming one is describing where they are, not asking for
+	 * it to be created — and `Penpot/Make Here/wip` is a plain subfolder that no
+	 * Background declares, because the whole point of that row is that a plain
+	 * subfolder is not a project. Without this the step 404s on the PUT and the
+	 * scenario fails at the arrange rather than at its claim.
+	 *
 	 * @When /^I create a new design in "([^"]*)"$/
 	 */
 	public function iCreateANewDesignIn(string $folder): void {
-		$path = trim($folder, '/') . '/' . self::NEW_DESIGN;
+		$folder = trim($folder, '/');
+		if ($folder !== '') {
+			$this->makeAncestors($folder . '/x');
+		}
+		$path = ($folder === '' ? '' : $folder . '/') . self::NEW_DESIGN;
 		$this->davPut($path, '');
 		$this->gestureTarget = $path;
 		$this->currentFilePath = $path;
-		$this->currentFolder = trim($folder, '/');
+		$this->currentFolder = $folder;
 		$this->currentFileId = $this->davReadMetadata($path, 'penpot_id') ?? '';
 	}
 
 	/**
 	 * The same act where the app is expected to say no.
 	 *
+	 * IT SNAPSHOTS PENPOT FIRST, because the scenarios using it go on to say "no
+	 * design is created in Penpot" and there is no sentence in the spec where a
+	 * snapshot would belong. Taking it here keeps harness bookkeeping out of the
+	 * specification; the alternative is a `Given` that exists only for the harness,
+	 * which is the thing this suite's Backgrounds were rewritten to stop doing.
+	 *
 	 * @When /^I try to create a new design in "([^"]*)"$/
 	 */
 	public function iTryToCreateANewDesignIn(string $folder): void {
+		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
 		$path = trim($folder, '/') . '/' . self::NEW_DESIGN;
 		$res = $this->davClient()->request('PUT', $this->davEncode($path), ['body' => '']);
 		$this->lastGestureStatus = $res->getStatusCode();

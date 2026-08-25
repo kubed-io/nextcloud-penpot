@@ -44,6 +44,15 @@ use GuzzleHttp\Client;
  * the occ transport and the team helpers from the other traits.
  */
 trait PullSteps {
+	/**
+	 * What a design made in Penpot is called.
+	 *
+	 * NOT `New design`, which is core's name for a file made from the Files app —
+	 * keeping the two apart is what lets a failure say which SIDE authored the
+	 * thing it found, in a suite where both directions write into the same project.
+	 */
+	private const MADE_IN_PENPOT = 'Made in Penpot';
+
 	/** The Penpot id of the team the current scenario mapped. */
 	private string $pulledTeamId = '';
 
@@ -1047,5 +1056,148 @@ trait PullSteps {
 				(string)$response->getBody(),
 			));
 		}
+	}
+
+	// ── a design born in Penpot, arriving as a file ──────────────────────────
+
+	/** The design {@see someoneCreatesADesignInThePenpotProject()} just made. */
+	private string $designMadeInPenpot = '';
+
+	/**
+	 * Someone opens Penpot and makes a design in one of the mapped projects.
+	 *
+	 * ## THE PROJECT IS RESOLVED FROM WHAT THE BACKGROUND DECLARED, NOT BY NAME
+	 *
+	 * A by-name lookup across the probe is the obvious implementation and it is the
+	 * bug this suite has been bitten by three times: Penpot state accumulates across
+	 * a leg, teams are find-or-create, and the Backgrounds deliberately put projects
+	 * of the same name in two teams. `Nested` in the link team and a `Nested` some
+	 * earlier scenario left in the sync team are indistinguishable by name.
+	 *
+	 * {@see ArrangeSteps::$declaredProjectIds} is keyed by the FOLDER the Background
+	 * declared, which carries the team in its first segment — so the folder whose
+	 * basename is this project name identifies the project exactly. The by-name
+	 * probe stays as a fallback for a scenario that names a project it did not
+	 * declare, and it raises rather than guessing when the name is ambiguous.
+	 *
+	 * The pull follows in the same step because the spec says "someone creates a
+	 * design" and then asserts a FILE: the sync is how one becomes the other, and it
+	 * is not a gesture the person in the scenario performs.
+	 *
+	 * @When /^someone creates a design in the "([^"]*)" Penpot project$/
+	 */
+	public function someoneCreatesADesignInThePenpotProject(string $project): void {
+		$projectId = $this->declaredProjectIdNamed($project);
+
+		$before = $this->penpotFileIdsInProject($projectId);
+		$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => self::MADE_IN_PENPOT]);
+
+		$made = array_values(array_diff($this->penpotFileIdsInProject($projectId), $before));
+		if (count($made) !== 1) {
+			throw new \RuntimeException(sprintf(
+				"creating a design in '%s' should have added exactly one; it added %d",
+				$project,
+				count($made),
+			));
+		}
+		$this->designMadeInPenpot = $made[0];
+
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * The pull brought it down, as a file carrying that design's id.
+	 *
+	 * BY ID, so this cannot pass on a file an earlier scenario left in the folder,
+	 * and so the `Then the file holds:` that follows is talking about the arrival
+	 * rather than about whatever else is there. Finding it is also what seats the
+	 * cursor — the scenario never names the filename because Penpot chose it.
+	 *
+	 * @Then /^a matching file is created in "([^"]*)"$/
+	 */
+	public function aMatchingFileIsCreatedIn(string $folder): void {
+		if ($this->designMadeInPenpot === '') {
+			throw new \RuntimeException(
+				'the scenario says "a matching file" but nothing was created in Penpot first.',
+			);
+		}
+
+		$folder = trim($folder, '/');
+		$this->until(
+			fn (): bool => $this->fileInCarrying($folder, $this->designMadeInPenpot) !== null,
+			fn (): string => sprintf(
+				"no file under '%s' carries the design %s; it holds: %s",
+				$folder,
+				$this->designMadeInPenpot,
+				implode(', ', $this->davChildren($folder)) ?: '(nothing)',
+			),
+		);
+
+		$this->currentFilePath = (string)$this->fileInCarrying($folder, $this->designMadeInPenpot);
+		$this->currentFolder = $folder;
+		$this->currentFileId = $this->designMadeInPenpot;
+	}
+
+	/** The `.penpot` in a folder carrying this design id, or null. */
+	private function fileInCarrying(string $folder, string $id): ?string {
+		foreach ($this->davChildren($folder) as $child) {
+			if (!str_ends_with($child, '.penpot')) {
+				continue;
+			}
+			if (($this->davReadMetadata($child, 'penpot_id') ?? '') === $id) {
+				return $child;
+			}
+		}
+
+		return null;
+	}
+
+	/** The ids in a project, straight from Penpot. @return list<string> */
+	private function penpotFileIdsInProject(string $projectId): array {
+		$ids = [];
+		foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $projectId]) as $file) {
+			if (isset($file['id']) && is_string($file['id'])) {
+				$ids[] = $file['id'];
+			}
+		}
+
+		return $ids;
+	}
+
+	/** A declared project's id by its folder's basename; see the caller for why. */
+	private function declaredProjectIdNamed(string $project): string {
+		foreach ($this->declaredProjectIds as $folder => $id) {
+			if (basename($folder) === $project) {
+				return $id;
+			}
+		}
+
+		$teams = $this->penpotProjectTeams($project);
+		if (count($teams) === 1) {
+			$found = $this->penpotProjectIdInTeam($project, $teams[0]);
+			if ($found === null) {
+				// THE TWO READS DISAGREED, which is worth its own sentence rather
+				// than a cast. `penpotProjectTeams()` just said this project is in
+				// exactly this team and the scoped lookup then could not find it —
+				// so the probe's output has drifted from the shape both parse. An
+				// empty id here would reach `create-file` as a missing project and
+				// fail somewhere with nothing to trace it back to.
+				throw new \RuntimeException(sprintf(
+					"the probe lists '%s' in the team '%s' but cannot resolve its id — "
+					. 'the two reads of that listing disagree, so one of their patterns is stale.',
+					$project,
+					$teams[0],
+				));
+			}
+
+			return $found;
+		}
+
+		throw new \RuntimeException(sprintf(
+			"'%s' is not a project this scenario declared, and Penpot has it in %s — "
+			. 'declare it in the Background so the team is unambiguous.',
+			$project,
+			$teams === [] ? 'no team at all' : count($teams) . ' teams (' . implode(', ', $teams) . ')',
+		));
 	}
 }

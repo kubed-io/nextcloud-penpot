@@ -211,6 +211,150 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		self::assertNull($this->deleteWithTeam('team-link', linkTeam: 'team-link', withUser: false));
 	}
 
+	// ── beforeCreateFile: where a NEW design may be authored (§6.34, §6.44) ──
+
+	/**
+	 * A link mapping is filled FROM Penpot and nothing may be added from this side.
+	 *
+	 * THE HOLE THIS CLOSES IS THE ONE `beforeWriteContent` CANNOT SEE. That hook
+	 * classifies from the file's own metadata, and a file that does not exist yet
+	 * has none — so it read as "not a link" and the write went through. Two
+	 * scenarios in `designs/create.feature` were tagged against this, and one of
+	 * them claimed the code already existed.
+	 */
+	public function testRefusesANewDesignInALinkMapping(): void {
+		$refusal = $this->createIn('team-link', linkTeam: 'team-link', length: '0');
+
+		self::assertInstanceOf(Forbidden::class, $refusal);
+		self::assertStringContainsString('New design.penpot', $refusal->getMessage());
+	}
+
+	/** Whatever is arriving — an upload is refused there too, not only a create. */
+	public function testRefusesAnUploadedArchiveIntoALinkMapping(): void {
+		self::assertInstanceOf(
+			Forbidden::class,
+			$this->createIn('team-link', linkTeam: 'team-link', length: '2048'),
+		);
+	}
+
+	/**
+	 * Outside every mapping there is nowhere for a design to become real: Penpot
+	 * has no rootless design and `create-file` requires a project (§6.44).
+	 */
+	public function testRefusesANewDesignOutsideEveryMapping(): void {
+		$refusal = $this->createIn(null, linkTeam: 'team-link', length: '0');
+
+		self::assertInstanceOf(Forbidden::class, $refusal);
+		self::assertStringContainsString('New design.penpot', $refusal->getMessage());
+	}
+
+	/**
+	 * …but an ARCHIVE dropped in a plain folder is a file like any other.
+	 *
+	 * The narrow half of the rule, and the one that keeps Nextcloud being Nextcloud:
+	 * the refusal above is about the "+ New" gesture writing zero bytes, not about
+	 * `.penpot` being an unwelcome extension. Getting this wrong would make the app
+	 * refuse to store a design someone downloaded.
+	 */
+	public function testAllowsAnUploadedArchiveOutsideEveryMapping(): void {
+		self::assertNull($this->createIn(null, linkTeam: 'team-link', length: '4096'));
+	}
+
+	/** A chunked PUT sends no Content-Length, and an upload is never the create. */
+	public function testAChunkedUploadOutsideEveryMappingIsAllowed(): void {
+		self::assertNull($this->createIn(null, linkTeam: 'team-link', length: null));
+	}
+
+	/** The ordinary case: a sync mapping's root is that team's Drafts (§6.35). */
+	public function testAllowsANewDesignInASyncMapping(): void {
+		self::assertNull($this->createIn('team-sync', linkTeam: 'team-link', length: '0'));
+	}
+
+	/** Only designs are constrained; the folder is nobody's business otherwise. */
+	public function testIgnoresANewFileThatIsNotADesign(): void {
+		self::assertNull($this->createIn(null, linkTeam: 'team-link', length: '0', name: 'notes.txt'));
+	}
+
+	/** FAIL OPEN, as everywhere in this plugin. */
+	public function testACreateFailsOpenWithNoUserInSession(): void {
+		self::assertNull($this->createIn('team-link', linkTeam: 'team-link', length: '0', withUser: false));
+	}
+
+	/**
+	 * Run one create through the plugin; returns the Forbidden it threw, or null.
+	 *
+	 * $team is what the DESTINATION FOLDER resolves to — null meaning outside every
+	 * mapping — and $length is the request's `Content-Length`, which is how the
+	 * plugin tells a create from an upload without consuming the body.
+	 */
+	private function createIn(
+		?string $team,
+		string $linkTeam,
+		?string $length,
+		string $name = 'New design.penpot',
+		bool $withUser = true,
+	): ?Forbidden {
+		$parent = $this->createStub(Folder::class);
+		$parent->method('getName')->willReturn('Confined');
+		$parent->method('getId')->willReturn(7);
+
+		$userFolder = $this->createStub(Folder::class);
+		$userFolder->method('get')->willReturn($parent);
+		$root = $this->createStub(IRootFolder::class);
+		$root->method('getUserFolder')->willReturn($userFolder);
+
+		$session = $this->createStub(IUserSession::class);
+		if ($withUser) {
+			$user = $this->createStub(IUser::class);
+			$user->method('getUID')->willReturn('alice');
+			$session->method('getUser')->willReturn($user);
+		}
+
+		$resolver = $this->createStub(MembershipResolver::class);
+		$resolver->method('resolve')->willReturn(new Membership(null, $team));
+
+		$mappings = $this->createStub(MappingService::class);
+		$mappings->method('getByTeamId')->willReturnCallback(
+			static fn (string $id): Mapping => new Mapping(
+				'm1',
+				$id,
+				'A Team',
+				'Folder',
+				false,
+				$id === $linkTeam ? Mapping::MODE_LINK : Mapping::MODE_SYNC,
+			),
+		);
+
+		$rules = new MoveRules($this->metadata, $resolver, $mappings, $this->identityTranslator());
+		$plugin = new LinkWriteGuardPlugin($this->metadata, $rules, $root, $session, new NullLogger());
+
+		// A STUBBED RequestInterface, not a real `Sabre\HTTP\Request`: the unit
+		// bootstrap provides the OCP and Sabre INTERFACES, not the HTTP package, so
+		// constructing one errors with "Class Sabre\HTTP\Request not found" — which
+		// is what eight of these tests did on their first CI run.
+		$request = $this->createStub(RequestInterface::class);
+		$request->method('getHeader')->willReturn($length);
+
+		$server = new Server();
+		$server->httpRequest = $request;
+		$plugin->initialize($server);
+
+		$data = null;
+		$modified = false;
+		try {
+			$plugin->beforeCreateFile(
+				'files/alice/Pointers/Confined/' . $name,
+				$data,
+				$this->createStub(INode::class),
+				$modified,
+			);
+		} catch (Forbidden $e) {
+			return $e;
+		}
+
+		return null;
+	}
+
 	/**
 	 * Run one DELETE through the plugin; returns the Forbidden it threw, or null.
 	 *

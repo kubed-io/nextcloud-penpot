@@ -307,6 +307,146 @@ trait ProjectFolderSteps {
 	}
 
 	/**
+	 * The design the gesture just made exists in Penpot, and the file knows its id.
+	 *
+	 * THE WEAKEST HALF OF THE CLAIM ON PURPOSE — the scenario says this first and
+	 * then says WHERE, so this one only asks whether anything was created at all.
+	 * Splitting it that way makes the two failures read differently: "the app never
+	 * called `create-file`" and "it created the design in the wrong project" are
+	 * different bugs, and a single combined step would report them identically.
+	 *
+	 * ## IT RUNS THE SYNC, AND THAT IS THE HARNESS'S JOB RATHER THAN THE SPEC'S
+	 *
+	 * A create cannot write the design's bytes itself — `CreateListener` runs
+	 * inside the DAV write handler, where the file is under a shared lock and
+	 * `putContent()` cannot take the exclusive one it needs (see
+	 * `features/AGENTS.md`, and nextcloud-n8n's `CreateService`, which measured the
+	 * same wall). The archive therefore lands on the next scheduled sync, down
+	 * {@see \OCA\PenpotSync\Service\ArchiveService}'s self-healing path.
+	 *
+	 * None of that belongs in the Gherkin. The scenario describes what the person
+	 * ends up with; how long the app takes to get there is an implementation
+	 * detail, and a scheduled job they never see is not a step they perform. So the
+	 * wait is collapsed HERE — exactly as {@see ArrangeSteps::declareDesign()}
+	 * already does after seeding a design, and for the same reason.
+	 *
+	 * The alternative is a `When the admin syncs every mapping` wedged between two
+	 * `Then`s, which is invalid Gherkin twice over: a `When` after a `Then`, and an
+	 * admin's button in a story about a user making a file.
+	 *
+	 * @Then /^a matching design is created in Penpot$/
+	 */
+	public function aMatchingDesignIsCreatedInPenpot(): void {
+		$this->theAdminRunsAPull();
+
+		$path = $this->currentFilePath;
+		$id = $this->davReadMetadata($path, 'penpot_id') ?? '';
+		if ($id === '') {
+			throw new \RuntimeException(
+				"'{$path}' was created but carries no Penpot id — the app did not make a design "
+				. "for it:\n" . $this->status($path),
+			);
+		}
+		// Re-seat the cursor: the arrange read the id before the listener had
+		// finished on some routes, and every later assertion in these scenarios is
+		// about THIS design.
+		$this->currentFileId = $id;
+
+		$this->until(
+			fn (): bool => in_array($id, $this->penpotLiveDesignIds(), true),
+			fn (): string => sprintf(
+				"'%s' carries the id %s, but Penpot has no such design; it holds: %s",
+				$path,
+				$id,
+				implode(', ', $this->penpotLiveDesignIds()) ?: '(none)',
+			),
+		);
+	}
+
+	/**
+	 * …and it is that project's, under the name the FILE chose.
+	 *
+	 * ## BOTH FACTS AT ONCE, BECAUSE EITHER ALONE PASSES FOR THE WRONG REASON
+	 *
+	 * Penpot state accumulates across a leg, and every scenario using this creates
+	 * a design called `New design`. So a name check alone goes green against a
+	 * leftover from a scenario that finished minutes ago, and an id check alone
+	 * cannot see that the app named the design after the wrong thing — §6.4 says a
+	 * design's name is its filename minus the extension Penpot never carries, and
+	 * that invariant is half of what "a matching design" means.
+	 *
+	 * Pairing them is why this reads the project listing as id → name rather than
+	 * as two lists.
+	 *
+	 * @Then /^the design is named after the file, in the "([^"]*)" Penpot project$/
+	 */
+	public function theDesignIsNamedAfterTheFileIn(string $project): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException(
+				'the scenario says "the design" but nothing on stage carries a penpot_id.',
+			);
+		}
+
+		$team = $this->mappingTeamNames[$this->mappingRootOf($this->currentFilePath)] ?? '';
+		if ($team === '') {
+			throw new \RuntimeException(
+				"'{$this->currentFilePath}' is not under any declared mapping, so there is no team "
+				. "to look for the project '{$project}' in.",
+			);
+		}
+
+		$want = preg_replace('/\.penpot$/', '', basename($this->currentFilePath)) ?? '';
+
+		$this->until(
+			fn (): bool => ($this->penpotFileEntriesIn($project, $team)[$this->currentFileId] ?? null) === $want,
+			function () use ($project, $team, $want): string {
+				$entries = $this->penpotFileEntriesIn($project, $team);
+				$named = $entries[$this->currentFileId] ?? null;
+
+				return $named === null
+					? sprintf(
+						"the design %s is not in the '%s' project of team '%s'; it holds: %s",
+						$this->currentFileId,
+						$project,
+						$team,
+						implode(', ', $entries) ?: '(nothing, or no such project)',
+					)
+					: sprintf(
+						"the design %s is in '%s' as expected, but Penpot named it '%s' and the file "
+						. "is '%s' — a design's name is its filename without the extension (§6.4)",
+						$this->currentFileId,
+						$project,
+						$named,
+						basename($this->currentFilePath),
+					);
+			},
+		);
+	}
+
+	/**
+	 * The refused gesture created nothing on the far side.
+	 *
+	 * COUNTED ACROSS THE WHOLE INSTANCE, not inside one project, because a refusal
+	 * that leaked would put the design wherever the app THOUGHT it belonged — and
+	 * naming a project here would be assuming the answer to that. The "before" is
+	 * snapshotted by {@see GestureSteps::iTryToCreateANewDesignIn()}, which is the
+	 * only step that can precede this one.
+	 *
+	 * @Then /^no design is created in Penpot$/
+	 */
+	public function noDesignIsCreatedInPenpot(): void {
+		$now = $this->penpotLiveDesignIds();
+		$new = array_values(array_diff($now, $this->designIdsBeforeRefusal));
+		if ($new !== []) {
+			throw new \RuntimeException(sprintf(
+				'the creation was refused, but Penpot gained %d design(s) anyway: %s',
+				count($new),
+				implode(', ', $new),
+			));
+		}
+	}
+
+	/**
 	 * The Penpot file ids in a named project of a named team.
 	 *
 	 * Team-scoped, because two teams may hold a project with the same name and the
@@ -315,19 +455,28 @@ trait ProjectFolderSteps {
 	 * @return list<string>
 	 */
 	private function penpotFileIdsIn(string $project, string $team): array {
+		return array_keys($this->penpotFileEntriesIn($project, $team));
+	}
+
+	/**
+	 * The same listing as id → name, for the assertions that need both.
+	 *
+	 * @return array<string, string>
+	 */
+	private function penpotFileEntriesIn(string $project, string $team): array {
 		$projectId = $this->penpotProjectIdInTeam($project, $team);
 		if ($projectId === null) {
 			return [];
 		}
 
-		$ids = [];
+		$entries = [];
 		foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $projectId]) as $file) {
 			if (isset($file['id']) && is_string($file['id'])) {
-				$ids[] = $file['id'];
+				$entries[$file['id']] = is_string($file['name'] ?? null) ? $file['name'] : '';
 			}
 		}
 
-		return $ids;
+		return $entries;
 	}
 
 	/**

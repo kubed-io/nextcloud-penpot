@@ -23,8 +23,9 @@ Feature: Creating a design
 
     # ── RULE: a new design belongs to the nearest project, or to Drafts ───────
     # notes: ../AGENTS.md#a-design-created-under-the-team-but-not-under-a-project-is-a-draft
+    # the archive is empty on create because a scheduled sync will eventually fill it in
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Create a design in a mapped folder
     When I create a new design in "<folder>"
     Then a matching design is created in Penpot
@@ -52,7 +53,7 @@ Feature: Creating a design
     # ── RULE: a design made in Penpot arrives as a file ───────────────────────
     # notes: ../AGENTS.md#a-newly-created-design-is-born-in-its-mappings-mode
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Create a design in Penpot
     When someone creates a design in the "<project>" Penpot project
     Then a matching file is created in "<folder>"
@@ -67,12 +68,14 @@ Feature: Creating a design
       | project   | folder           | mode      | revision | content    |
       | Make Here | Penpot/Make Here | sync      | set      | an archive |
       | Quarterly | Shared/Quarterly | sync      | set      | an archive |
-      | Nested    | Pointers/Nested  | reference | absent   | empty      |
+      | Nested    | Pointers/Nested  | reference | set      | empty      |
 
-    # A revision records what a push last sent, and a link never pushes. Mode is the
-    # one thing about an arriving design that Nextcloud decides rather than Penpot.
+    # notes: ../AGENTS.md#a-link-carries-a-revision-too-because-it-is-the-pulls-stamp
+    # Mode is the one thing about an arriving design that Nextcloud decides.
 
   # notes: ../AGENTS.md#a-design-created-in-the-users-own-home-lands-in-their-personal-drafts
+  # notes: ../AGENTS.md#the-personal-mapping-is-held-until-the-siblings-have-one
+  # @todo — held deliberately; the personal mapping is ahead of both siblings.
   @in-nextcloud @gesture @todo
   Scenario Outline: Create a design in the user's own home
     Given the user has a personal Penpot token
@@ -93,9 +96,7 @@ Feature: Creating a design
     # ── RULE: a design has to have somewhere to go ───────────────────────────
     # notes: ../AGENTS.md#a-design-has-to-have-somewhere-to-go
 
-  # @unbuilt — allowed today (HTTP 201). The spec refuses it because there is no
-  # rootless design; the app writes the plain file the siblings write.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Create a design outside every mapping
     When I try to create a new design in "Scratch"
     Then the creation is refused with a message
@@ -107,7 +108,7 @@ Feature: Creating a design
     # ── RULE: a link mapping authors nothing ─────────────────────────────────
     # notes: ../AGENTS.md#a-link-mapping-authors-nothing
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Creating a design in a link-mapped folder is refused
     When I try to create a new design in "<folder>"
     Then the creation is refused with a message

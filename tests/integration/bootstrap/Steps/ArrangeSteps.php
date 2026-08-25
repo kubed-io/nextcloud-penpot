@@ -404,7 +404,14 @@ trait ArrangeSteps {
 			// project to be in and no id to record; it is an ordinary file that
 			// happens to end in `.penpot`, and demanding an id below would fail the
 			// arrange for doing exactly what the sentence said.
-			$this->davPut($path, '');
+			//
+			// WITH BYTES, NOT EMPTY, since `designs/create.feature` started running.
+			// An empty `.penpot` outside every mapping is the "+ New" gesture and the
+			// app now refuses it (§6.44: there is no rootless design); an archive
+			// someone put there is a file like any other and is allowed. This arrange
+			// means the second thing — a design that EXISTS, sitting outside — so it
+			// has to say so in the only way the app can read, which is the body.
+			$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
 			$this->currentFilePath = $path;
 			$this->currentFolder = $folder;
 			$this->currentFileId = '';
