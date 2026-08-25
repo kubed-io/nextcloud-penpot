@@ -11,9 +11,9 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\CopyService;
 use OCA\PenpotSync\Service\DestinationResolver;
+use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
-use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
@@ -211,6 +211,12 @@ final class CopyServiceTest extends TestCase {
 
 	/** Copying a `.penpot` we never tracked is copying a file. Nothing happens. */
 	public function testCopyingAnUntrackedFileNeverContactsPenpot(): void {
+		// SINCE §6.33 AN UNTRACKED `.penpot` IS NOT AUTOMATICALLY NOBODY'S: if it
+		// holds an archive and landed inside a mapping it is imported. So this
+		// path now RESOLVES the destination, and the resolver has to answer with
+		// a real Membership — a stub's readonly properties are uninitialised, and
+		// reading one is a fatal rather than a null.
+		$this->resolver->method('resolve')->willReturn(Membership::none());
 		$this->metadata->method('readFile')->willReturn(null);
 
 		$this->client->expects($this->never())->method('duplicateFile');
