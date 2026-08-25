@@ -26,9 +26,9 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # THE SCENARIO COUNTS BELOW ARE THE PRE-SPLIT ONES and the per-leg breakdown is
-  # gone with the four legs that carried it; the totals are re-measured from the
-  # first green run on the eleven. The spec was rewritten wholesale — the
+  # 42 OF 113 SCENARIO HEADERS RUN — 102 executed, across eleven legs (admin 25,
+  # copying 17, authoring 10, motion 10, naming 10, project-motion 8, projects 5,
+  # trash 5, core 4, project-copy 4, project-trash 4). The spec was rewritten — the
   # noun became the folder and the verb the file — and rather than re-triage 116
   # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for
   # each later PR to draw from. Chapter 3 Round 1 drew the first nine: the ones
