@@ -1183,9 +1183,15 @@ trait GestureSteps {
 	/**
 	 * Someone deletes the cursor's design in Penpot, and the sync carries the news.
 	 *
+	 * NAMED FOR THE CURSOR, not for the sentence. {@see PruneSteps} already has a
+	 * `someoneDeletesTheDesignInPenpot()` for the path form, and two traits cannot
+	 * contribute one method name to the same class — PHP fatals on the collision
+	 * before Behat sees a single scenario, which is how this took out all four legs
+	 * at once rather than failing one test.
+	 *
 	 * @When /^someone deletes the design in Penpot$/
 	 */
-	public function someoneDeletesTheDesignInPenpot(): void {
+	public function someoneDeletesTheCursoredDesignInPenpot(): void {
 		if ($this->currentFileId === '') {
 			throw new \RuntimeException('no design is on stage to delete in Penpot');
 		}

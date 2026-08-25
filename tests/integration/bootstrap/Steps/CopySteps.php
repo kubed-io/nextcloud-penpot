@@ -134,7 +134,6 @@ trait CopySteps {
 			case 'filename':
 				$actual = basename($path);
 				return $actual === $expected ? null : "expected '{$expected}', found '{$actual}'";
-
 			case 'name in Penpot':
 				if ($id === '') {
 					return 'the copy carries no Penpot id, so it names no design';
@@ -142,7 +141,6 @@ trait CopySteps {
 				$named = $this->penpotDesignNameById($id);
 				return $named === $expected
 					? null : "expected the design to be called '{$expected}', Penpot calls it '" . ($named ?? '(gone)') . "'";
-
 			case 'penpot_id':
 				// `a new id` is the anti-hijack claim and the whole point of the
 				// feature: the copy must not be a second file pointing at the
@@ -155,21 +153,17 @@ trait CopySteps {
 				}
 				return $id === $this->currentFileId
 					? "expected an id of its own, found the original's ({$id})" : null;
-
 			case 'penpot_mode':
 				$want = $this->modeOfMappingFor($path) === 'link' ? 'reference' : $this->modeOfMappingFor($path);
 				$actual = $this->davReadMetadata($path, 'penpot_mode') ?? '';
 				return $actual === $want ? null : "expected '{$want}', found '{$actual}'";
-
 			case 'penpot_team_id':
 				$want = $this->teamIdForPath($path);
 				$actual = $this->davReadMetadata($path, 'penpot_team_id') ?? '';
 				return $actual === $want ? null : "expected the mapped team ({$want}), found '{$actual}'";
-
 			case 'penpot_revision':
 				$actual = $this->davReadMetadata($path, 'penpot_revision') ?? '';
 				return $actual !== '' ? null : 'expected a revision, found nothing';
-
 			case 'Created':
 				// A COPY'S CLOCKS ARE ITS OWN. The file was written a moment ago, but
 				// the design it mirrors was created in Penpot just as recently — so
@@ -177,7 +171,6 @@ trait CopySteps {
 				// distinguishes a mirrored clock from the filesystem's.
 				$this->theDesignWasCreatedWhenItWasCreated($path);
 				return null;
-
 			default:
 				throw new \RuntimeException(
 					"'{$property}' is not a row this table knows. Known: filename, name in Penpot, "
