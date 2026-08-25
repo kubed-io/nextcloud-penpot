@@ -470,8 +470,12 @@ final class MotionServiceTest extends TestCase {
 	 * @param array{target: Membership, oldParent: Membership} $by
 	 */
 	private function givenMembership(array $by): void {
+		// 31 is the destination FOLDER — the node MotionService now asks about for a
+		// file move. 30 and 40 are the moved nodes themselves, still resolved
+		// directly for a FOLDER move (a folder's own markers are the answer) and
+		// still reached by the promotion walk inside DestinationResolver.
 		$this->resolver->method('resolve')->willReturnCallback(
-			static fn (Node $node): Membership => in_array($node->getId(), [30, 40], true)
+			static fn (Node $node): Membership => in_array($node->getId(), [30, 31, 40], true)
 				? $by['target'] : $by['oldParent'],
 		);
 	}
@@ -554,11 +558,27 @@ final class MotionServiceTest extends TestCase {
 		return $source;
 	}
 
+	/**
+	 * The file AFTER the move, and the folder it landed in.
+	 *
+	 * THE PARENT IS NOT DECORATION. {@see MotionService} resolves membership from
+	 * the destination FOLDER rather than from the file, because a design file
+	 * carries its own cached `penpot_team_id` (§C6.7) and would otherwise answer
+	 * about the team it used to be in — which is how a design that had left every
+	 * mapping got re-filed into its old team's Drafts instead of being parked.
+	 *
+	 * So a target with no parent is a fixture that cannot exercise the real path.
+	 * Id 31 is the destination folder, and {@see givenMembership()} answers for it.
+	 */
 	private function target(string $name = 'Login screen.penpot'): File {
+		$parent = $this->createMock(Folder::class);
+		$parent->method('getId')->willReturn(31);
+
 		$file = $this->createMock(File::class);
 		$file->method('getId')->willReturn(30);
 		$file->method('getName')->willReturn($name);
 		$file->method('getPath')->willReturn('/dana/files/Design/' . $name);
+		$file->method('getParent')->willReturn($parent);
 
 		return $file;
 	}
