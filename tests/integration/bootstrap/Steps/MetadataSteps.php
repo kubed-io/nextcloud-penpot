@@ -161,6 +161,23 @@ trait MetadataSteps {
 				return $actual === $this->idBeforeGesture
 					? null : "expected the id it already had ({$this->idBeforeGesture}), found '{$actual}'";
 
+			case 'the id of the renamed design':
+				// THE DESIGN THE SCENARIO JUST RENAMED IN PENPOT, captured by
+				// {@see RenameSteps::someoneRenamesTheDesignToInPenpot()} before the
+				// pull moved the name out from under it.
+				//
+				// Needed because the arrival is the file that DID NOT keep the name:
+				// two designs are called "Alpha" in Penpot, one file is
+				// `Alpha.penpot` and the other `Alpha (1).penpot`, and the whole
+				// claim is which id sits at which path. A by-name lookup cannot
+				// answer that — both designs answer to "Alpha" — so the id has to
+				// come from the gesture rather than from a listing.
+				if ($this->idOfRenamedDesign === '') {
+					return 'no design was renamed in Penpot for this to refer to';
+				}
+				return $actual === $this->idOfRenamedDesign
+					? null : "expected the renamed design ({$this->idOfRenamedDesign}), found '{$actual}'";
+
 			case 'the original id':
 				// THE CURSOR'S ID, captured when the scenario put the file on stage.
 				// Stronger than `the design's id`, which resolves whatever design now

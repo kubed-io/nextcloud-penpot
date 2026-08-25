@@ -19,7 +19,7 @@ Feature: Copying a design
     # ── RULE: the copy belongs to where it lands, never to where it came from ─
     # notes: ../AGENTS.md#the-copy-belongs-to-where-it-lands
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Copy a design into a mapped project
     Given a design file named "Original.penpot" in "<source>"
     When I copy the file into "<destination>"
@@ -57,7 +57,7 @@ Feature: Copying a design
     # ── RULE: a design duplicated in Penpot arrives as its own file ───────────
     # notes: ../AGENTS.md#a-design-duplicated-in-penpot-is-mirrored-like-any-other-new-design
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Duplicate a design in Penpot
     Given a design file named "Original.penpot" in "<folder>/Duplicated"
     When someone duplicates its design in Penpot
@@ -78,7 +78,7 @@ Feature: Copying a design
     # ── RULE: a link is not copyable, and a link mapping is not a destination ─
     # notes: ../AGENTS.md#a-link-file-copies-exactly-like-a-sync-file
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Copying a link, or into a link mapping, is refused
     Given a design file named "Original.penpot" in "<source>"
     When I try to copy the file into "<destination>"
@@ -101,7 +101,7 @@ Feature: Copying a design
     # notes: ../AGENTS.md#copying-a-penpot-file-outside-every-mapping-never-contacts-penpot
     # notes: ../AGENTS.md#copying-outside-every-mapping-creates-nothing-in-penpot
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Copy a design into an unmapped folder
     Given a design file named "Original.penpot" in "<source>"
     When I copy the file into "Scratch"
@@ -118,7 +118,7 @@ Feature: Copying a design
       | Scratch         |
 
   # notes: ../AGENTS.md#exactly-one-file-per-design-id-under-a-project-always
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Three designs in Penpot wearing one name
     Given a design file named "Original.penpot" in "Penpot/Crowded"
     When someone duplicates its design in Penpot and names it "Original"
@@ -133,7 +133,9 @@ Feature: Copying a design
     # notes: ../AGENTS.md#a-copy-that-cannot-be-tracked-says-so-rather-than-looking-finished
     # notes: ../AGENTS.md#a-failed-duplicate-leaves-the-nextcloud-copy-standing
 
-  @in-nextcloud @gesture @todo
+  # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
+  # @unbuilt — the untracked copy is right already; the report is what is missing.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Copy a design while Penpot is unreachable
     Given a design file named "Original.penpot" in "Penpot/Offline"
     And Penpot is unreachable

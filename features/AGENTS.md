@@ -2704,6 +2704,19 @@ Penpot is perfectly happy with two "Alpha"s and never sees the suffix at all.
 
 ### An empty file name is refused before it is sent
 
+**WITHDRAWN as a scenario — the note stands, the test does not.**
+`Rename a design to a name Penpot cannot hold` was removed from
+`designs/rename.feature` because it is unreachable through the gesture it
+describes: **Nextcloud's filename rules are strictly tighter than Penpot's**, so a
+rename the Files app or WebDAV will accept is one Penpot would accept too. There
+is no name a user can type that gets far enough to be refused for Penpot's sake.
+
+The paragraph below is why, and it is the same fact read from the other end — it
+was already written here before the scenario was questioned. The guard is still
+worth having (see the last line: a better message and a saved round trip), and the
+pull direction still needs one, which is the "/" section that follows. What is gone
+is a *rename* scenario asserting a refusal no rename can trigger.
+
 ── the name guard: the same shape at both levels ───────────────────────────
 THE GUARD RUNS BACKWARDS FROM EXPECTATION (saga §6.38). Penpot accepts
 essentially any non-empty string up to 250 characters — confirmed live:
@@ -2917,6 +2930,31 @@ Both sides go soft together: the design lands in Penpot's own trash keeping its 
 revision and history, and the file lands in the Nextcloud trash keeping its
 metadata. Nothing here is irreversible, which is what makes it safe to do without
 asking — the irreversible half is the purge.
+
+### A trash Penpot cannot take is not aborted today
+
+**The one place this app's failure rule and the spec disagree, and it is worth
+being precise about why.** §6.18 rule 3 — *a remote failure never rewrites local
+state* — is why a failed rename still stands locally and a failed copy stays as an
+untracked file. `DeletionService::onTrashed()` follows it: `delete-file` throws, the
+warning is logged, and the local delete stands. `DeleteListener::attempt()` says so
+in as many words: *"the local delete stands"*.
+
+`Trash a design while Penpot is unreachable` asks for the opposite — the trash
+aborted, the file left where it was, its metadata intact — and it is right to,
+because **a delete is the one gesture where the rule inverts**. Everywhere else the
+local state is the thing the user just made and the remote is a mirror catching up.
+Here the local state is the only *pointer* to a design that still exists: remove it
+while Penpot keeps the design, and the design is stranded with nothing naming it
+until the next pull mirrors it back as a surprise.
+
+**What it would take.** The Penpot delete has to move ahead of the local one — try
+`delete-file` first, and abort the Nextcloud delete if it fails, which is the shape
+`MoveGuardListener` already uses for refusals and which `LinkWriteGuardPlugin::onDelete()`
+can already carry a message for. Not a large change; it is left out of the round
+that promoted the rest of `designs/delete.feature` because it reorders the delete
+path for every caller — folders, restore and purge included — and that deserves its
+own PR rather than riding along with thirteen test promotions.
 
 ### A Team Folder's trash reaches Penpot after all
 

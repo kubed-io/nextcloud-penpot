@@ -191,6 +191,24 @@ trait WebDavTrait {
 	}
 
 	/** COPY a file within the user's files root (fires NodeCopiedEvent in NC). */
+	/**
+	 * The same COPY, handing the response back instead of asserting it.
+	 *
+	 * The twin of {@see davMoveResult()}, and it exists for the same reason: a
+	 * refusal's interesting result IS the response, and a helper that threw on a
+	 * non-2xx could never let a scenario assert one.
+	 *
+	 * @return array{status: int, body: string}
+	 */
+	private function davCopyResult(string $from, string $to): array {
+		$dest = $this->ncBaseUrl . '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/' . $this->davEncode($to);
+		$res = $this->davClient()->request('COPY', $this->davEncode($from), [
+			'headers' => ['Destination' => $dest, 'Overwrite' => 'F'],
+		]);
+
+		return ['status' => $res->getStatusCode(), 'body' => (string)$res->getBody()];
+	}
+
 	private function davCopy(string $from, string $to): void {
 		$dest = $this->ncBaseUrl . '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/' . $this->davEncode($to);
 		$res = $this->davClient()->request('COPY', $this->davEncode($from), [

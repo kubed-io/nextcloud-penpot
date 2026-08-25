@@ -1075,4 +1075,157 @@ trait GestureSteps {
 		$this->lastGestureBody = (string)$res->getBody();
 		$this->gestureTarget = $path;
 	}
+	// ── the trash, said about the file the scenario has on stage ─────────────
+
+	/**
+	 * Trash THE file — the cursor's.
+	 *
+	 * The cursor twin of {@see iMoveToTheTrash()}, and it snapshots Penpot's design
+	 * ids for the same reason the create refusal does: the untracked scenarios go on
+	 * to say "no design is deleted in Penpot", and there is no sentence in the spec
+	 * where a "before" would belong.
+	 *
+	 * @When /^I move it to the trash$/
+	 */
+	public function iMoveItToTheTrash(): void {
+		$path = $this->currentFile();
+		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
+		$this->captureIdBeforeGesture($path);
+		$this->davDelete($path);
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The same gesture, expected to be REFUSED.
+	 *
+	 * @When /^I try to move it to the trash$/
+	 */
+	public function iTryToMoveItToTheTrash(): void {
+		$path = $this->currentFile();
+		$result = $this->davDeleteResult($path);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The cursor's file survived, in the Nextcloud trash.
+	 *
+	 * MATCHED THROUGH `nc:trashbin-filename`, like its path-form twin, because core
+	 * appends a `.dNNNNN` deletion stamp to the entry.
+	 *
+	 * @Then /^the file is recoverable from the Nextcloud trash$/
+	 */
+	public function theFileIsRecoverableFromTheNextcloudTrash(): void {
+		$path = $this->currentFilePath;
+		if ($this->trashbinPathFor($path) === null) {
+			throw new \RuntimeException("nothing in the Nextcloud trash came from '{$path}'");
+		}
+	}
+
+	/**
+	 * The delete reached nothing on the far side.
+	 *
+	 * COUNTED ACROSS THE WHOLE INSTANCE and BY ID: an untracked file names no
+	 * project, so there is nowhere narrower to look, and Penpot state accumulates
+	 * across a leg so a name check would answer about the wrong design.
+	 *
+	 * @Then /^no design is deleted in Penpot$/
+	 */
+	public function noDesignIsDeletedInPenpot(): void {
+		$gone = array_values(array_diff($this->designIdsBeforeRefusal, $this->penpotLiveDesignIds()));
+		if ($gone !== []) {
+			throw new \RuntimeException(sprintf(
+				'the trash was supposed to reach no design, and Penpot lost %d: %s',
+				count($gone),
+				implode(', ', $gone),
+			));
+		}
+	}
+
+	/**
+	 * A project holds no design by this name — said the way `designs/delete.feature`
+	 * says it, with the project first.
+	 *
+	 * A SECOND SPELLING OF ONE CLAIM, and deliberately not deduplicated into
+	 * `Penpot project "X" holds no design named "Y"`. The two read differently in
+	 * their own scenarios ("the `Bin Me` Penpot project" is a noun phrase mid
+	 * sentence; the other opens one) and Behat matches on text, so collapsing them
+	 * would mean rewriting a Gherkin line to suit a regex. That is the wrong way
+	 * round — see features/README.md on the vocabulary.
+	 *
+	 * @Then /^the "([^"]*)" Penpot project holds no design named "([^"]*)"$/
+	 */
+	public function theNamedPenpotProjectHoldsNoDesignNamed(string $project, string $design): void {
+		$this->until(
+			fn (): bool => !in_array($design, $this->penpotFileNamesIn($project), true),
+			fn (): string => sprintf(
+				"the Penpot project '%s' still holds a design named '%s'; it holds: %s",
+				$project,
+				$design,
+				implode(', ', $this->penpotFileNamesIn($project)) ?: '(nothing)',
+			),
+		);
+	}
+
+	/**
+	 * The design behind the cursor is erased in Penpot, past its trash.
+	 *
+	 * @Given /^its design is permanently deleted in Penpot$/
+	 */
+	public function itsDesignIsPermanentlyDeletedInPenpot(): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException('no design is on stage to delete in Penpot');
+		}
+		$this->permanentlyDeleteDesignById($this->currentFileId);
+	}
+
+	/**
+	 * Someone deletes the cursor's design in Penpot, and the sync carries the news.
+	 *
+	 * @When /^someone deletes the design in Penpot$/
+	 */
+	public function someoneDeletesTheDesignInPenpot(): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException('no design is on stage to delete in Penpot');
+		}
+		$this->penpotRpc('delete-file', ['id' => $this->currentFileId]);
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * The file is no longer at that path.
+	 *
+	 * @Then /^the file is gone from "([^"]*)"$/
+	 */
+	public function theFileIsGoneFrom(string $folder): void {
+		$folder = trim($folder, '/');
+		$name = basename($this->currentFilePath);
+		$this->until(
+			fn (): bool => !$this->davExists($folder . '/' . $name),
+			fn (): string => sprintf("'%s/%s' is still there", $folder, $name),
+		);
+	}
+
+	/**
+	 * The file still carries what this app stored on it.
+	 *
+	 * The mirror image of `the file holds no Penpot metadata at all`: after a
+	 * gesture the app could not complete, the identity must survive intact, because
+	 * an id lost here is a design nothing points at any more.
+	 *
+	 * @Then /^the file keeps its Penpot metadata$/
+	 */
+	public function theFileKeepsItsPenpotMetadata(): void {
+		$path = $this->currentFile();
+		$id = $this->davReadMetadata($path, 'penpot_id') ?? '';
+		if ($id === '') {
+			throw new \RuntimeException("'{$path}' survived the gesture but lost its Penpot id");
+		}
+		if ($this->currentFileId !== '' && $id !== $this->currentFileId) {
+			throw new \RuntimeException(
+				"'{$path}' carries {$id}, but the scenario put {$this->currentFileId} on stage",
+			);
+		}
+	}
 }

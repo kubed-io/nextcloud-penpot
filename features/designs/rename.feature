@@ -78,7 +78,7 @@ Feature: Renaming a design
     # ── RULE: two designs may share a name, two files may not ─────────────────
     # notes: ../AGENTS.md#the-suffix-is-nextclouds-alone
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Rename a design in Penpot to a name another one already has
     Given a design file named "Alpha.penpot" in "Penpot/Crowded"
     And a design file named "Beta.penpot" in "Penpot/Crowded"
@@ -92,26 +92,10 @@ Feature: Renaming a design
     # The file that held the name keeps it; the arriving one takes the suffix. The
     # suffix is Nextcloud's alone — Penpot is perfectly happy with two "Alpha"s.
 
-    # ── RULE: a name Penpot cannot hold is refused before it is sent ──────────
-    # notes: ../AGENTS.md#an-empty-file-name-is-refused-before-it-is-sent
-
-  @in-nextcloud @gesture @todo
-  Scenario Outline: Rename a design to a name Penpot cannot hold
-    Given a design file named "Old Name.penpot" in "Penpot/Refusals"
-    When I try to rename it to <name>
-    Then the rename is refused with a message
-    And the file is named "Old Name.penpot"
-    And the design is named "Old Name" in Penpot
-
-    Examples: two names, one refusal — neither ever reaches Penpot
-      | name                                       |
-      | a name that is empty once ".penpot" is off |
-      | a name longer than Penpot allows           |
-
     # ── RULE: a rename outside every mapping is Nextcloud's business alone ────
     # notes: ../AGENTS.md#renaming-an-untracked-penpot-file-is-not-a-failure
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Rename an untracked design file
     Given an untracked design file at "<path>"
     When I rename the file to "Renamed Anyway.penpot"
@@ -127,7 +111,9 @@ Feature: Renaming a design
     # ── RULE: a rename we cannot propagate still stands locally ───────────────
     # notes: ../AGENTS.md#a-failed-propagation-never-reverts-the-users-local-rename
 
-  @in-nextcloud @gesture @todo
+  # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
+  # @unbuilt — the rename itself stands; the report has nothing to travel on.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Rename a design while Penpot is unreachable
     Given a design file named "Old Name.penpot" in "Penpot/Offline"
     And Penpot is unreachable
