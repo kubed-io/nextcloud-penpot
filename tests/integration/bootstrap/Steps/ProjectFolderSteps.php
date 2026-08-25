@@ -267,6 +267,70 @@ trait ProjectFolderSteps {
 	}
 
 	/**
+	 * Where THE design — the cursor's — ended up, asserted by id.
+	 *
+	 * The named sibling above matches on NAME, which is right for a scenario that
+	 * says which design it means. This one is used where the scenario has already
+	 * put one design on stage and the interesting fact is the PROJECT, often a
+	 * project that did not exist a moment ago. Matching by id is what makes that
+	 * claim honest: Penpot state accumulates across a leg, so a design of the same
+	 * name from an earlier scenario is genuinely sitting in the team.
+	 *
+	 * @Then /^the design is in the "([^"]*)" Penpot project$/
+	 */
+	public function theCursoredDesignIsInThePenpotProject(string $project): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException(
+				'the scenario says "the design" but no design is on stage, or the one that is '
+				. 'carries no penpot_id — so there is nothing to look for in Penpot.',
+			);
+		}
+
+		$team = $this->mappingTeamNames[$this->mappingRootOf($this->currentFilePath)] ?? '';
+		if ($team === '') {
+			throw new \RuntimeException(
+				"'{$this->currentFilePath}' is not under any declared mapping, so there is no team "
+				. "to look for the project '{$project}' in.",
+			);
+		}
+
+		$this->until(
+			fn (): bool => in_array($this->currentFileId, $this->penpotFileIdsIn($project, $team), true),
+			fn (): string => sprintf(
+				"expected the design %s in the '%s' project of team '%s'; it holds: %s",
+				$this->currentFileId,
+				$project,
+				$team,
+				implode(', ', $this->penpotFileIdsIn($project, $team)) ?: '(nothing, or no such project)',
+			),
+		);
+	}
+
+	/**
+	 * The Penpot file ids in a named project of a named team.
+	 *
+	 * Team-scoped, because two teams may hold a project with the same name and the
+	 * Backgrounds arrange exactly that on purpose.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotFileIdsIn(string $project, string $team): array {
+		$projectId = $this->penpotProjectIdInTeam($project, $team);
+		if ($projectId === null) {
+			return [];
+		}
+
+		$ids = [];
+		foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $projectId]) as $file) {
+			if (isset($file['id']) && is_string($file['id'])) {
+				$ids[] = $file['id'];
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
 	 * Every team a project of this name appears in.
 	 *
 	 * A LIST, not a single answer, because two teams may hold a project with the

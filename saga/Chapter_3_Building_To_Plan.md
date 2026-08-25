@@ -186,12 +186,12 @@ there was no cheap batch to pick up; the shared Background had to be built first
 
 | | | after Round 2 | now |
 |---|---|---|---|
-| live | headers → executed | **15** → **41** | **23** → **54** |
+| live | headers → executed | **15** → **41** | **24** → **58** |
 | `@todo` | the queue | 87 | 76 |
 | `@blocked` | no browser (6), no app removal (1), no way to author a design (2) | 9 | 9 |
-| `@unbuilt` | each names what the code owes | 5 | 8 |
+| `@unbuilt` | each names what the code owes | 5 | 7 |
 
-The legs now stand at `admin` 25, `design` 10, `project` 17, `core` 2.
+The legs now stand at `admin` 25, `design` 10, `project` 21, `core` 2.
 
 **`@unbuilt` GROWING IS THE HEALTHY DIRECTION HERE.** It went 5 → 13 across Round
 3 and 13 → 11 across Round 4, and every move is the same measurement working:
@@ -385,6 +385,172 @@ clears mapped folders between scenarios. It does not: the arrange unmaps every
 mapping BEFORE it clears, and its own comment says why — *"while a mapping is live,
 deleting inside it is a gesture that reaches Penpot."* The same reasoning that
 makes `isLinkTeam()` return false for a torn-down mapping.
+
+### Round 6 — a folder is a project when a design is in it, and a spec that fought itself
+
+The third doctrine reversal in as many rounds, and the same shape as §6.30:
+`ProjectFolderService` opened with **"by opt-in, never by accident"** and named the
+`penpot` tag as the only way in, while the spec had moved to *promotion by content*.
+
+The old reasoning was sound and the conclusion too strong. It was protecting the
+case where a mapped folder becomes unusable for anything else — notes, exports, a
+subfolder of references — and that case is protected by a NARROWER rule the suite
+already runs live: `Create a folder in a mapping` says an EMPTY folder is not a
+project. None of those folders holds a design. What the broad rule cost was the
+case that actually matters: someone makes a folder, fills it with designs, and
+Penpot never hears about it.
+
+**AND THE SPEC CONTRADICTED ITSELF, load-bearingly.** Two notes in `AGENTS.md`,
+each with a feature file following it:
+
+| | |
+|---|---|
+| *"the project is created as a CONSEQUENCE of the first design landing in it"* | `projects/create.feature` — `Penpot/Team` becomes the project `Team` |
+| *"ONE RULE, AND DEPTH IS NOT PART OF IT … a plain folder three levels down … therefore Drafts"* | `designs/create.feature` — `Penpot/Inbox` files into Drafts |
+
+Same situation, opposite answers, and no way to build the round without picking
+one. Settled in favour of `projects/create.feature` on the organising rule the
+suite already runs on — **`projects/` owns a folder's identity as a project** —
+and because the adoption note reasons about the choice (*"a move is a gesture
+people already make, and a tag is one they have to be taught"*) where the other
+only asserted uniformity.
+
+So the rule keeps depth in exactly one place: **the mapping ROOT is Drafts and
+nothing else is**, which is not an exception bolted on but
+`pathBelowMapping()` returning null. A root has no path below a mapping to be
+named by, so there is no project it could become — the same method §C6.38 added to
+NAME a project, read here to decide whether there is one.
+
+`designs/create.feature` lost the `Penpot/Inbox` row and the fixture behind it;
+the case now lives in `projects/create.feature` where the noun belongs.
+
+**Where the rule stops is where the EVENT stops.** `Create a design in a folder
+Penpot has never seen` passes on all four rows. `Move a folder of untracked designs
+into a team` does not, and it fails on two walls at once, neither of them this rule:
+a folder move fires ONE event for the folder and none per child, and the design
+inside is an uploaded archive, which §6.33 has always refused to import. Either
+alone would be enough. It reads as though it should work, which is why the note now
+says why it does not.
+
+**The round also retired a harness workaround it had written itself.**
+`ArrangeSteps::declareDesign()` tagged a folder before writing a design into it,
+with a comment explaining that a design alone would land in Drafts and that
+`projects/create.feature` "is still @todo and stays that way — this PR has not run
+it". It runs now, so the tag stopped being load-bearing and the arrange says what
+the app does instead of working around what it did not. That also fixed the ROOT
+case for free: `a design file named … in "Penpot"` used to tag the mapping root,
+which `ProjectFolderService` correctly untags, leaving the arrange to throw about a
+folder that was never going to be a project.
+
+**A NEGATIVE ASSERTION WENT GREEN FOR THE WRONG REASON, and only reading it
+found that.** Both `Move a folder that other projects are named through` and its
+delete-side twin arrange `foo/bar` and `foo/bar/baz` as projects, and used to get
+them free because the harness tagged every folder it wrote a design into. Under
+promotion by content `baz` is a plain subfolder of `foo/bar` — nearest ancestor —
+so it is not a project unless the scenario says so. The MOVE scenario failed
+loudly. The DELETE one passed: *"Penpot holds no project named `foo/bar/baz`"* is
+trivially true of a project that never existed. Both arranges now spell the nesting
+out with the `kind` column, which is what it is for.
+
+**TWO THINGS LEFT OPEN, AND SAID OUT LOUD.**
+
+*A link mapping could be promoted.* A brand-new `.penpot` PUT into a link mapping
+is still created as a design, because `LinkWriteGuardPlugin` classifies from the
+file's OWN metadata and a new file has none. That is older than this round and is
+`designs/create.feature`'s `Creating a design in a link-mapped folder is refused`,
+still `@todo`. What this round DID close is promotion on top of it: a stray design
+is one thing, a stray design plus a project nobody asked for is another.
+
+*A failed re-file leaves a stamped folder.* `adoptForContent()` stamps the marker,
+then files the designs already in the folder, and swallows a failure from the
+second. So designs can stay in their old Penpot project while the folder claims a
+new one, and the marker's fast path stops a retry. `onTagged()` has had exactly
+this shape since it was written, and the docblock argues for it: an unstamped
+folder would be a project in Penpot that nothing in Nextcloud points at. Both
+orderings lose something, which is why this is recorded rather than quietly
+changed on a round that is green.
+
+**BOTH ROUTES IN MUST MEAN THE SAME THING.** Review caught the second half of it:
+`onTagged()` re-files the designs already in the folder — that is the whole point
+of allowing a LATE opt-in — and `adoptForContent()` did not. A managed design can
+already be below a plain folder (one that left a mapping and came back, one whose
+own promotion Penpot refused), so filing only the newcomer left two designs in one
+folder showing up in two projects. Both routes now share `fileExistingDesigns()`,
+because which gesture promoted a folder must not change what the folder means.
+
+The same shape as #38's near-miss, one class over: a behaviour written twice, the
+second copy quietly weaker than the first.
+
+**A RACE THE OLD RULE DID NOT HAVE.** Review caught it: promotion reads "is this
+folder a project", then makes a network round trip, then stamps. Dragging three
+designs into a new folder is three concurrent requests in three processes, and
+Penpot allows two projects of the same name in one team — so the unmitigated race
+splits the designs across duplicates while the marker records whichever write
+landed last.
+
+Tagging had the same shape and was nearly unreachable, because tagging is one
+deliberate act by one person. Promotion by content is reachable by an ordinary
+multi-file drag, so the exposure is this round's.
+
+Not closed with a lock, which is a dependency and a failure mode of its own.
+Narrowed instead by re-reading the marker after the create: a loser returns the
+WINNER's id, so every design is filed into one project and the only casualty is an
+empty project nobody references. **Files together and one stray project beats files
+scattered across two**, and it costs one metadata read on a path that has just made
+a round trip. The residual window is written down where the code is.
+
+**One seam, three arrival paths.** `DestinationResolver::projectForContentIn()` is
+a second method rather than a flag on `projectFor()`, because it can CHANGE THE
+WORLD — it creates a project as a side effect, so every call site has to have
+decided it means to. Create, move-in and copy-in all adopt; the one that must
+never is `MotionService::sourceProject()`, which asks where a file CAME from, and
+adopting there would create a project for the folder someone just dragged a design
+out of. Two methods make that a compile-time distinction instead of a boolean
+nobody reads.
+
+**What the sweep for "anything else now doable" actually found.** Two more
+mis-tagged scenarios, in the other direction from Round 5's:
+
+- `designs/move.feature`'s `Move a design between projects` is `@todo` for a
+  contradiction inside itself — it asserts `content | an archive` across both
+  Examples blocks, and the second carries a link row, which is zero bytes by
+  design and which `designs/view.feature` pins as `empty`, live. Left alone rather
+  than trimmed: dropping the row would make it pass while giving up a real claim.
+- `designs/move.feature`'s `Move an untracked design file into a project` is
+  tagged `@todo` while its own comment says `@unbuilt`.
+
+Both are worth more than the scenarios they block: a `@todo` queue is only as good
+as the tags in it, and this is now three rounds running where reading one closely
+found it lying.
+
+### The wall that fell over without anyone pushing it
+
+**Penpot state no longer accumulates across a leg, and nobody built that on
+purpose.** Chapter 3 has carried this since Round 2: teams are find-or-create by
+name, so a project an earlier scenario made survives into the next one, and
+`projects/rename`'s Penpot-side outline is `@todo` because of it.
+
+Round 5 gave the app a folder delete. `ArrangeSteps::emptyMappedFolder()` clears
+each mapped folder between scenarios by deleting its children — and a child that
+carries a `penpot_project_id` now takes its Penpot project with it. The clean-up
+that used to be local reaches Penpot.
+
+Measured, not deduced. In one run of this round, `Create a design in a folder
+Penpot has never seen` made a project called `Team` in two different teams, and a
+scenario a few lines later reported the team's projects as
+`Drafts, Drafts, Existing, Drafts, Existing, Drafts`. The `Team` projects were
+gone.
+
+**It is load-bearing and it is incidental, which is the worst combination.** The
+adoption Outline in `projects/create.feature` relies on it: without it, row 1
+leaves `Penpot/Team` a project, and row 2's `Penpot/Team/Deep` resolves to it by
+nearest ancestor and is never promoted. A review raised exactly that and was right
+about the mechanism — the rows only pass because something else cleans up first.
+Written down here so the next person to touch `emptyMappedFolder()` or the delete
+carve-outs knows what they are holding.
+
+Whether `projects/rename`'s outline can now be picked up is a question for a round
+that tries it, not a claim to make from here.
 
 ### The one harness wall left
 

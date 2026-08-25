@@ -21,6 +21,8 @@ Feature: Moving a design
     # The base case from both sides — a re-file in Penpot, never a delete and recreate.
     # notes: ../AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
+  # @todo — the Then asserts `content | an archive` for BOTH Examples blocks, and
+  # the second one holds a link row, which is zero bytes by design.
   @in-nextcloud @gesture @todo
   Scenario Outline: Move a design between projects
     Given a design file named "Travelling.penpot" in "<source>"

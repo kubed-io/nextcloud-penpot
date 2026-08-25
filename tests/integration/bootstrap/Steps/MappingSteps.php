@@ -86,6 +86,25 @@ trait MappingSteps {
 	}
 
 	/**
+	 * A Penpot team this app deliberately does NOT map.
+	 *
+	 * The far side of every "leaves this mapping" scenario: somewhere real for a
+	 * design to be moved TO in Penpot that Nextcloud has no folder for. Without
+	 * one, "moved out of the mapping" and "deleted" are indistinguishable from
+	 * this side, which is the confusion those scenarios exist to settle.
+	 *
+	 * Created but never mapped, and pointedly NOT recorded as the team the
+	 * scenario is talking about — `aPenpotTeamNamedExists()` sets that cursor, and
+	 * a Background sentence about scenery must not steal it from the mapping the
+	 * scenario is actually about.
+	 *
+	 * @Given /^a Penpot team "([^"]*)" that this app does not map$/
+	 */
+	public function aPenpotTeamThatThisAppDoesNotMap(string $team): void {
+		$this->teamNamed($team);
+	}
+
+	/**
 	 * The team a scenario names, whether or not it was already there.
 	 *
 	 * Seeding it here is what lets a scenario say which team it means instead of

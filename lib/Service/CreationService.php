@@ -82,7 +82,11 @@ final class CreationService {
 		}
 
 		$membership = $this->resolver->resolve($node);
-		$project = $this->destinations->projectFor($membership);
+		// A DESIGN ARRIVING IS WHAT MAKES ITS FOLDER A PROJECT (`projects/create.feature`).
+		// Not `projectFor()`: that one only answers, and a "+ New" in a folder Penpot
+		// has never seen used to file the design into Drafts and leave the folder
+		// meaning nothing.
+		$project = $this->destinations->projectForContentIn($node, $membership);
 		if ($project === null) {
 			// Outside every mapping — an ordinary file in an ordinary folder.
 			return;

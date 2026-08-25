@@ -393,29 +393,45 @@ trait ArrangeSteps {
 			}
 		}
 
-		if (($this->mappingModes[$this->mappingRootOf($path)] ?? '') === 'link') {
+		$mapped = isset($this->mappingModes[$this->mappingRootOf($path)]);
+
+		if ($mapped && ($this->mappingModes[$this->mappingRootOf($path)] ?? '') === 'link') {
 			$this->seedDesignViaPull($path, $name);
+		} elseif (!$mapped) {
+			// OUTSIDE EVERY MAPPING, which is a thing a scenario may legitimately ask
+			// for — `a design file named "Travelling.penpot" in "Scratch"` is the
+			// starting position for every "and then I drag it in" story. There is no
+			// project to be in and no id to record; it is an ordinary file that
+			// happens to end in `.penpot`, and demanding an id below would fail the
+			// arrange for doing exactly what the sentence said.
+			$this->davPut($path, '');
+			$this->currentFilePath = $path;
+			$this->currentFolder = $folder;
+			$this->currentFileId = '';
+
+			return;
 		} else {
-			// ── THE FOLDER HAS TO BE A PROJECT FIRST, AND TAGGING IS HOW ──────────
+			// ── THE WRITE IS ALL IT TAKES NOW, AND IT USED NOT TO BE ──────────────
 			//
-			// A design written into a folder Penpot has never seen does NOT make that
-			// folder a project today: it lands in the team's Drafts. CI said so in one
-			// line — `expected a Penpot project named 'New'; found: Drafts, Drafts,
-			// Drafts` — after three designs had been created perfectly happily.
+			// This block used to tag the folder first, because a design written into
+			// a folder Penpot had never seen did NOT make that folder a project — it
+			// landed in the team's Drafts, and CI said so in one line: `expected a
+			// Penpot project named 'New'; found: Drafts, Drafts, Drafts`. Tagging
+			// then writing was the only supported way to arrange "this design is in
+			// this project".
 			//
-			// `ProjectFolderService` is the only thing that turns a folder into a
-			// project, and its own log line names its trigger: "created a Penpot
-			// project from a tagged folder". So the supported way to arrange "this
-			// design is in this project" is to tag the folder, then write the design
-			// into it — in that order, or the design is already in Drafts by the time
-			// the project exists.
+			// The comment that stood here said `projects/create.feature` specs the
+			// other route as well and that the scenario "is still @todo and stays
+			// that way — this PR has not run it". It runs now, and it passes, so the
+			// tag has stopped being load-bearing and the arrange says what the app
+			// does rather than working around what it did not.
 			//
-			// NOT A WORKAROUND FOR A MISSING FEATURE, and worth being precise about:
-			// `projects/create.feature` specs the other route as well ("Create a
-			// design in a folder Penpot has never seen" → the folder becomes a
-			// project). That scenario is still @todo and stays that way — this PR has
-			// not run it, and the observation above is not the same as running it.
-			$this->ensureProjectFolder($folder);
+			// IT ALSO FIXES THE ROOT CASE. `a design file named … in "Penpot"` used
+			// to tag the mapping root, which `ProjectFolderService` correctly untags
+			// — leaving `ensureProjectFolder()` to throw about a folder that was
+			// never going to be a project. A design at the root is Drafts, and now
+			// simply arranges itself.
+			//
 			// Empty body: that is what "+ New → Penpot design" writes, and the app
 			// tells a CREATE from an UPLOAD by exactly this (see GestureSteps).
 			$this->davPut($path, '');
@@ -577,6 +593,52 @@ trait ArrangeSteps {
 					"the identity column says '{$want}', which is not a value this vocabulary knows."
 					. ' Use "the original id", "a new id", "set" or "absent".',
 				);
+		}
+	}
+
+	/**
+	 * A folder that exists and holds no design — the pre-state for every scenario
+	 * about what a design's ARRIVAL makes of the folder it lands in.
+	 *
+	 * "Holding no designs" is the whole point rather than incidental: an empty
+	 * folder inside a mapping is not a project (`Create a folder in a mapping`
+	 * pins that, live), so the project appearing afterwards can only be the
+	 * design's doing.
+	 *
+	 * ## THIS DELETE REACHES PENPOT, AND THAT IS THE POINT
+	 *
+	 * Unlike {@see emptyMappedFolder()}, which unmaps first precisely so its
+	 * clean-up stays local, this runs with the mapping LIVE — so a `.penpot` it
+	 * removes goes to Penpot's trash as well. Deliberate, and the alternative is
+	 * worse: Penpot state accumulates across a leg, so a project an earlier
+	 * scenario left behind is re-mirrored by the Background's pull, and a "folder
+	 * holding no designs" that quietly held one would arrange the opposite of what
+	 * it says.
+	 *
+	 * Safe because of WHAT it deletes: a mirror the pull restored a moment ago,
+	 * whose design is leftover state from a scenario that has already finished.
+	 * Both trashes are soft, so nothing is destroyed on either side.
+	 *
+	 * It cannot hide a failure either, which is the part worth checking rather
+	 * than assuming: a surviving project of the same name would make
+	 * `Penpot holds a project named "…"` pass on its own, but
+	 * {@see ProjectFolderSteps::theCursoredDesignIsInThePenpotProject()} matches by
+	 * ID — so the design has to be in THAT project, which only this round's
+	 * adoption puts it in.
+	 *
+	 * @Given /^the folder "([^"]*)" holding no designs$/
+	 */
+	public function theFolderHoldingNoDesigns(string $folder): void {
+		$folder = trim($folder, '/');
+		$this->makeAncestors($folder . '/x');
+		if (!$this->davExists($folder)) {
+			$this->davMkcol($folder);
+		}
+
+		foreach ($this->davChildren($folder) as $child) {
+			if (str_ends_with($child, '.penpot')) {
+				$this->davDeleteStatus($child);
+			}
 		}
 	}
 

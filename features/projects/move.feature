@@ -48,9 +48,11 @@ Feature: Moving a project
   @in-nextcloud @gesture
   Scenario: Move a folder that other projects are named through
     Given the following items in the mappings:
-      | path                            |
-      | /Penpot/foo/bar/Alpha.penpot    |
-      | /Penpot/foo/bar/baz/Beta.penpot |
+      | path                            | kind    |
+      | /Penpot/foo/bar                 | project |
+      | /Penpot/foo/bar/Alpha.penpot    | design  |
+      | /Penpot/foo/bar/baz             | project |
+      | /Penpot/foo/bar/baz/Beta.penpot | design  |
     When I move "Penpot/foo" into "Penpot/Clients"
     Then Penpot holds a project named "Clients/foo/bar"
     And Penpot holds a project named "Clients/foo/bar/baz"
@@ -61,6 +63,9 @@ Feature: Moving a project
 
     # "foo" is no project itself, but every project below it is named THROUGH it —
     # so one drag is one rename per project, and each keeps the id it always had.
+
+    # "baz" is spelled out as a project because a design alone would not make it one:
+    # it sits under "foo/bar", and the nearest project ancestor already owns it.
 
     # ── RULE: leaving every mapping leaves the project standing ───────────────
     # notes: ../AGENTS.md#a-project-folder-that-leaves-every-mapping-stops-being-a-mirror
@@ -83,8 +88,8 @@ Feature: Moving a project
     # ── RULE: arriving in a team makes every design in it real ────────────────
     # notes: ../AGENTS.md#a-folder-is-a-project-when-a-design-is-in-it
 
-  # @unbuilt — no project named "Adopt Me" appears. Arriving designs are not
-  # adopted: a folder becomes a project by being tagged, not by holding one.
+  # @unbuilt — TWO walls, measured. A folder move fires one event for the folder
+  # and none per child, and an uploaded archive is never imported (§6.33).
   @in-nextcloud @gesture @unbuilt
   Scenario: Move a folder of untracked designs into a team
     Given an untracked design file at "Scratch/Adopt Me/Alpha.penpot"

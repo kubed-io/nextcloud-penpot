@@ -18,6 +18,7 @@ use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
+use OCA\PenpotSync\Service\ProjectFolderService;
 use OCP\Files\File;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -37,6 +38,7 @@ use Psr\Log\NullLogger;
  */
 final class CopyServiceTest extends TestCase {
 	private const SOURCE_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
+	private ProjectFolderService $projects;
 	private const NEW_ID = '86f123cb-0682-808c-8008-6885698e25e5';
 	private const PROJECT_A = '61d8ecb9-c430-8120-8008-622627f23540';
 	private const DRAFTS = '4eda2e11-843e-8045-8008-51824bdafd88';
@@ -49,6 +51,7 @@ final class CopyServiceTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		$this->projects = $this->createMock(ProjectFolderService::class);
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
@@ -62,7 +65,7 @@ final class CopyServiceTest extends TestCase {
 			$this->resolver,
 			// The REAL resolver over the mocked client. Stubbing this out is
 			// exactly how the team-root bug shipped green (§C6.10).
-			new DestinationResolver($this->client, new NullLogger()),
+			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$tokens,
 			new NullLogger(),
 		);

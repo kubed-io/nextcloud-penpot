@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A folder becomes a Penpot project when you create a design in it.** Previously a folder only became a project if you tagged it `penpot`, so a design made in a new folder landed loose in the team's Drafts and the folder meant nothing on the Penpot side. Dragging an already-mirrored design into a new folder promotes it too, as long as both are in the same mapped folder. An empty folder is still just a folder, and the tag still works.
+
 - **Deleting a project folder now deletes the project in Penpot.** It used to be a purely local delete — the folder went to your trash and the project sat in Penpot untouched. Both trashes are soft, so the whole gesture is reversible on both sides, and trashing a folder that several projects sit under takes all of them.
 
 - **A linked design can no longer be renamed or deleted from Nextcloud.** A link holds no copy of the design, so its name and its existence are Penpot's — renaming one used to appear to work and then be silently undone by the next sync. Both now say why instead.

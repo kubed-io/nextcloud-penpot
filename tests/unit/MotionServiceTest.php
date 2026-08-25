@@ -19,6 +19,7 @@ use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
+use OCA\PenpotSync\Service\ProjectFolderService;
 use OCA\PenpotSync\Service\ProjectTags;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
@@ -62,6 +63,7 @@ use Psr\Log\NullLogger;
  */
 final class MotionServiceTest extends TestCase {
 	private const PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
+	private ProjectFolderService $projects;
 	private const PROJECT_A = '4eda2e11-843e-8045-8008-51824bdafd88';
 	private const PROJECT_B = '7c11a0d4-1f52-4a7e-9b3c-2f9d0e4a1b66';
 	private const DRAFTS = '0f9b6c2a-5d31-4e88-a1f0-9c7b3d2e5a44';
@@ -77,6 +79,7 @@ final class MotionServiceTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
+		$this->projects = $this->createMock(ProjectFolderService::class);
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
@@ -85,7 +88,7 @@ final class MotionServiceTest extends TestCase {
 		// The REAL destination resolver over the mocked client, deliberately: the
 		// Drafts lookup is the behaviour a team-root move depends on, and mocking
 		// it away is what let the copy path ship with the opposite rule (§C6.10).
-		$this->destinations = new DestinationResolver($this->client, new NullLogger());
+		$this->destinations = new DestinationResolver($this->client, $this->projects, new NullLogger());
 		$this->motion = new MotionService(
 			$this->client,
 			$this->metadata,

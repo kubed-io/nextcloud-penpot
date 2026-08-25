@@ -10,6 +10,9 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
+use OCP\Files\Folder;
+use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -49,6 +52,7 @@ use Psr\Log\LoggerInterface;
 final class DestinationResolver {
 	public function __construct(
 		private readonly PenpotClient $client,
+		private readonly ProjectFolderService $projects,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -61,6 +65,68 @@ final class DestinationResolver {
 	 * treat it as a reason to leave Penpot alone, because the alternative is
 	 * inventing a destination for someone's file.
 	 */
+	/**
+	 * Where a DESIGN THAT HAS JUST ARRIVED belongs — promoting its folder to a
+	 * project if that is what its arrival means (`projects/create.feature`).
+	 *
+	 * ## WHY THIS IS A SECOND METHOD AND NOT A FLAG ON THE FIRST
+	 *
+	 * {@see projectFor()} answers a question; this one can CHANGE THE WORLD. It
+	 * creates a Penpot project as a side effect, so every call site has to have
+	 * decided it means to — and exactly one kind does: a design arriving somewhere
+	 * (created, moved in, copied in). The place that must never adopt is the other
+	 * half of a move, {@see MotionService::sourceProject()}, which asks where a
+	 * file CAME from; adopting there would create a project for the folder someone
+	 * just dragged a design OUT of.
+	 *
+	 * Two methods make that a compile-time distinction instead of a boolean nobody
+	 * reads.
+	 *
+	 * The three outcomes, and they are the nearest-ancestor rule (§6.29) with one
+	 * new branch in the middle:
+	 *
+	 *   - a project ancestor → that project, unchanged. A plain subfolder of a
+	 *     project is Nextcloud's layout, which Penpot cannot see.
+	 *   - a team but no project → the containing folder BECOMES a project, named
+	 *     by its path below the mapping.
+	 *   - a team, and the design landed at the mapping ROOT → Drafts (§6.35).
+	 *     `pathBelowMapping()` returns null there, which is what
+	 *     {@see ProjectFolderService::adoptForContent()} reads to say "not me".
+	 */
+	public function projectForContentIn(Node $node, Membership $membership): ?string {
+		if ($membership->projectId !== null) {
+			return $membership->projectId;
+		}
+		if ($membership->teamId === null) {
+			return null;
+		}
+
+		try {
+			$parent = $node->getParent();
+		} catch (NotFoundException) {
+			// PAST THE STORAGE ROOT, the one expected failure — and the only one that
+			// means "there is no folder to promote" rather than "the filesystem did
+			// not answer". Anything else propagates: a storage or metadata failure
+			// swallowed here would pick a destination without knowing where the file
+			// actually is, and the callers all have error containment of their own
+			// (§6.18 rule 3) that is a better place for it than a silent Drafts.
+			return $this->projectFor($membership);
+		}
+
+		if (!$parent instanceof Folder) {
+			// `Node::getParent()` is typed `Node`, not `Folder` — only a FOLDER can
+			// become a project, so anything else is not a promotion case and the
+			// design belongs in the team's Drafts. Reached in practice only past the
+			// storage root, where the walk has already run out of tree.
+			return $this->draftsProject($membership->teamId);
+		}
+
+		// A null adoption is not a failure — it is "this folder is not a project",
+		// which the mapping root always is and a Penpot refusal temporarily is.
+		// Either way the design still belongs in the team, so Drafts is the answer.
+		return $this->projects->adoptForContent($parent) ?? $this->draftsProject($membership->teamId);
+	}
+
 	public function projectFor(Membership $membership): ?string {
 		if ($membership->projectId !== null) {
 			return $membership->projectId;

@@ -97,7 +97,9 @@ final class CopyService {
 		// the team's Drafts, a real project (§6.35). Reading the raw projectId
 		// here is what made "copy up a directory" produce a Nextcloud file and no
 		// design at all, silently (§C6.10).
-		$project = $this->destinations->projectFor($membership);
+		// The same rule as a create or a move-in: how the design got here is not
+		// what decides whether the folder is a project (`projects/create.feature`).
+		$project = $this->destinations->projectForContentIn($target, $membership);
 		if ($project === null) {
 			// OUTSIDE EVERY MAPPING. There is no project to create in, and
 			// inventing one would be the surprise write §6.1 refuses. The source's

@@ -917,6 +917,47 @@ as: decoration over an authoritative id, never at the cost of the pull.
 
 ### A folder is a project when a design is in it
 
+**A NESTED PROJECT IS STILL EXPLICIT, and that is this rule's own edge.** A design
+in `Penpot/foo/bar/baz` where `foo/bar` is already a project belongs to `foo/bar`
+— nearest ancestor, §6.29 — so `baz` does NOT become a project by holding it. Only
+a folder with no project above it is promoted.
+
+That reshaped two arranges rather than any behaviour. `Move a folder that other
+projects are named through` and its delete-side twin both need TWO projects, and
+used to get them because the harness tagged every folder it wrote a design into.
+With promotion by content it has to say so, which is what the `kind` column is for.
+The move scenario failed loudly when it stopped being true; **the delete one passed
+vacuously** — *"Penpot holds no project named `foo/bar/baz`"* is trivially true of a
+project that never existed. Worth remembering when a negative assertion goes green
+after a rule changes underneath it.
+
+**BUILT, and the boundary is where the EVENT is.** Promotion happens as a design
+arrives — created, moved in, copied in — because those are the three gestures that
+fire a per-file event the app can act on. `Create a design in a folder Penpot has
+never seen` passes on all four rows, plain folder and Team Folder, one level deep
+and three.
+
+`Move a folder of untracked designs into a team` does not, and it fails on two
+walls at once rather than on this rule:
+
+`Move a design into a folder Penpot has never seen` is `@unbuilt` for the same
+family of reasons, and only one of its four rows works today (`Penpot/Existing` →
+`Penpot/Team/Deep`, both inside one mapping and one storage). The other three want
+capabilities this rule does not supply: a source in `Scratch` is an UNTRACKED file,
+and importing one is the §6.33 carve-out; the two rows that cross between `Penpot`
+and `Shared` cross a STORAGE boundary, which fires no rename event at all.
+
+1. **A folder move fires one event, for the folder.** Core emits nothing per
+   child, so no design inside ever arrives anywhere as far as the app can tell —
+   the same wall `projects/copy` and the cross-team move sit behind.
+2. **The design in it is an uploaded ARCHIVE**, and importing one is the §6.33
+   carve-out this app has always refused: a `.penpot` someone drops in is content,
+   not a create, and turning it into a design is a human-directed act.
+
+Either alone would be enough. Worth stating because "a folder is a project when a
+design is in it" reads as though dragging a folder of designs in should work, and
+the reason it does not has nothing to do with folders becoming projects.
+
 The same rule both siblings state about folders, and the reason it works here is
 that Penpot never has to be told about a folder — only about a design, which it
 needs a project id for anyway. So the project is created as a CONSEQUENCE of the
@@ -1808,10 +1849,31 @@ gesture, same end state, so it is an `Examples` column rather than two scenarios
 
 ### A design created under the team but not under a project is a draft
 
-ONE RULE, AND DEPTH IS NOT PART OF IT. The team root and a plain folder three
-levels down are the same case: under a team, under no project, therefore Drafts.
-The second row came from `mapping-membership.feature`, where it read as a
-separate fact about nesting.
+**NARROWED, AND IT USED TO SAY THE OPPOSITE OF `projects/create.feature`.** The
+sentence here was *"ONE RULE, AND DEPTH IS NOT PART OF IT. The team root and a
+plain folder three levels down are the same case: under a team, under no project,
+therefore Drafts."* That is flatly incompatible with
+[a folder is a project when a design is in it](#a-folder-is-a-project-when-a-design-is-in-it),
+which says the first design landing in a plain folder is exactly what MAKES it a
+project. Both notes were in this file, and the two feature files each followed
+one of them: `designs/create.feature` filed a design in `Penpot/Inbox` into
+Drafts, while `projects/create.feature` expected a project called `Inbox`.
+
+Settled in favour of `projects/create.feature`, on the organising rule this suite
+already runs on: **`projects/` owns a folder's identity as a project**
+([README](README.md)), and `designs/create.feature`'s Drafts rows were a
+secondary claim in a file about something else. The adoption note also reasons
+about the choice — *"a move is a gesture people already make, and a tag is one
+they have to be taught"* — where this one only asserted uniformity.
+
+So the rule now has depth in it, in exactly one place: **the mapping ROOT is
+Drafts, and nothing else is.** That is not an exception bolted on, it is
+{@see MembershipResolver::pathBelowMapping()} returning null — a root has no path
+below a mapping to be named by, so there is no project it could become. Every
+other folder under the team does.
+
+The `Penpot/Inbox` row is gone from `designs/create.feature`, and the case it was
+testing lives in `projects/create.feature` where it belongs.
 
 ### A sync leaves content it does not manage alone
 
@@ -1861,6 +1923,21 @@ pull only ensures membership, never a particular path. That is what makes a
 plain subfolder a legitimate place to file work.
 
 ### Dragging a sync design into another project re-files it in Penpot
+
+**`@todo` FOR A CONTRADICTION INSIDE THE SCENARIO, not for missing code.** The
+`move-files` half has been built since Course 4 and §C6.38's round proved the
+folder half beside it. What stops this one running is its own `Then`: it asserts
+`content | an archive` for BOTH Examples blocks, and the second block deliberately
+carries a `Pointers` row — a LINK, which holds zero bytes by design and which
+`designs/view.feature` pins as `empty`, live and green.
+
+So the table says `penpot_mode | the mapping's mode` (which varies per row) and
+`content | an archive` (which does not), and the two cannot both be right for the
+same row. Left alone rather than trimmed: dropping the `content` row would make it
+pass while quietly giving up a real claim — that a move does not cost a sync design
+its archive. Settling it properly means either splitting the link row into its own
+scenario or growing the vocabulary a `the mapping's …` cell would need, and that is
+a spec decision rather than a test fix.
 
 Mapped in `sync` mode because a `link` is confined to its project (§6.43) and the
 guard refuses this drag before it happens — that refusal is its own scenario

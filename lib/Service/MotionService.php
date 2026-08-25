@@ -171,7 +171,10 @@ final class MotionService {
 		// the truth (§C6.7).
 		$membership = $this->resolver->resolve($target);
 
-		$to = $this->destinations->projectFor($membership);
+		// THE DESTINATION SIDE ADOPTS; the source side must never (see
+		// `sourceProject()` below). A design dragged into a folder Penpot has never
+		// seen makes that folder a project.
+		$to = $this->destinations->projectForContentIn($target, $membership);
 		if ($to === null) {
 			// Landed outside every mapped folder, or in a team whose Drafts we
 			// could not resolve. Penpot keeps the file where it is: unmapping is
