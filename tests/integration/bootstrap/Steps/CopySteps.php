@@ -539,6 +539,20 @@ trait CopySteps {
 			return;
 		}
 
+		// THE FOLDER TOO, and this is the half the first cut missed. Deleting the
+		// designs in Penpot left their MIRRORS on disk, so core's free-name search
+		// still stepped over them and the suffixes kept climbing — the folder came
+		// back holding `Original` and `Original (3)`. Clearing the files locally is
+		// also what sends their designs to Penpot's trash, so one pass does both.
+		foreach ($this->davChildren($folder) as $child) {
+			if (!str_ends_with($child, '.penpot')) {
+				continue;
+			}
+			if (($this->davReadMetadata($child, 'penpot_id') ?? '') !== $keep) {
+				$this->davDeleteStatus($child);
+			}
+		}
+
 		foreach ($this->penpotFileIdsIn($project, $team) as $id) {
 			if ($id !== $keep) {
 				$this->penpotRpc('delete-file', ['id' => $id]);

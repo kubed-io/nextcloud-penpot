@@ -831,15 +831,20 @@ final class PullService {
 			return;
 		}
 		if ($parent->nodeExists($name)) {
-			// The desired name is already taken by a different node, so this rename
-			// would collide. Keep the old name rather than clobber — but say so, or
-			// a mirror stuck on a stale name looks like a silent bug.
-			$this->logger->debug('penpot_sync pull: skipping rename, target name already exists', [
-				'app' => Application::APP_ID,
-				'from' => $node->getName(),
-				'to' => $name,
-			]);
-			return;
+			// ── TWO DESIGNS, ONE NAME, AND THE SUFFIX IS NEXTCLOUD'S ALONE ───────
+			//
+			// Penpot is perfectly happy with two designs called `Alpha`; a folder
+			// cannot hold two files called `Alpha.penpot`. So the arriving one takes
+			// the suffix core would have given it, exactly as a design that arrives
+			// NEW into a crowded folder already does — `freeName()` is the same call.
+			//
+			// This used to keep the OLD name and log it, on the reasoning "keep the
+			// old name rather than clobber". Clobbering was never the alternative:
+			// a free name clobbers nothing, and the state it avoided instead was a
+			// mirror stuck on a name its design no longer has — `Beta.penpot` for a
+			// design called `Alpha`, which is the drift the rename exists to
+			// prevent. `designs/rename.feature` spells the wanted outcome out.
+			$name = $this->freeName($parent, $name);
 		}
 		try {
 			$node->move($parent->getPath() . '/' . $name);

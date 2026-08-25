@@ -95,19 +95,32 @@ trait PruneSteps {
 		// rule it holds the app to.
 		$this->penpotRpc('delete-file', ['id' => $fileId]);
 
-		// EVERY MAPPED TEAM, NOT ONE GUESSED FROM A PATH. `permanently-delete-team-files`
-		// takes a team AND ids, and it is a silent no-op when the two do not match —
-		// which looks exactly like success and then fails three lines later on
-		// "still listed". Guessing from `currentFilePath` was right for the design
-		// under test and wrong whenever the cursor sat under a different mapping.
-		// Firing it at each mapped team costs a few requests and cannot miss.
-		$teams = array_values($this->mappingTeamIds) ?: [$this->firstVisibleTeamId()];
-		foreach (array_unique($teams) as $team) {
-			$this->penpotRpc('permanently-delete-team-files', [
-				'team-id' => $team,
-				'ids' => [$fileId],
-			]);
+		// THE ID HAS TO COME OFF THE TRASH LISTING, and the team has to be the one
+		// that listing came from. `permanently-delete-team-files` is a SILENT no-op
+		// when the team and the ids do not match — it looks exactly like success and
+		// then fails three lines later on "still listed". Firing it at every mapped
+		// team was not enough either: §C6.11 says the ids may only ever come from a
+		// real trash listing, and this suite holds itself to the rule it holds the
+		// app to. So the design is found in a team's trash first, and destroyed
+		// against THAT team.
+		$teams = array_values(array_unique($this->mappingTeamIds)) ?: [$this->firstVisibleTeamId()];
+		foreach ($teams as $team) {
+			foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $team]) as $file) {
+				if (($file['id'] ?? null) !== $fileId) {
+					continue;
+				}
+				$this->penpotRpc('permanently-delete-team-files', [
+					'team-id' => $team,
+					'ids' => [$fileId],
+				]);
+
+				return;
+			}
 		}
+
+		throw new \RuntimeException(
+			"the design {$fileId} is in no mapped team's trash after being deleted, so it cannot be destroyed",
+		);
 	}
 
 	/**
