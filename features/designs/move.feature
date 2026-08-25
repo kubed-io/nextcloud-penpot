@@ -21,9 +21,7 @@ Feature: Moving a design
     # The base case from both sides — a re-file in Penpot, never a delete and recreate.
     # notes: ../AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
-  # @todo — the Then asserts `content | an archive` for BOTH Examples blocks, and
-  # the second one holds a link row, which is zero bytes by design.
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Move a design between projects
     Given a design file named "Travelling.penpot" in "<source>"
     When I move the file into "<destination>"
@@ -32,7 +30,7 @@ Feature: Moving a design
       | penpot_id      | the original id    |
       | penpot_team_id | the mapping's team |
       | penpot_mode    | the mapping's mode |
-      | content        | an archive         |
+      | content        | the mapping's body |
 
   # notes: ../AGENTS.md#filing-a-draft-dragging-from-the-team-root-into-a-project
   # notes: ../AGENTS.md#un-filing-dragging-from-a-project-out-to-the-team-root
@@ -46,9 +44,9 @@ Feature: Moving a design
   # notes: ../AGENTS.md#a-subfolder-is-nextclouds-layout-not-penpots
 
     Examples: and a plain subfolder is Nextcloud's layout, which Penpot cannot see
-      | source           | destination          | lands in  |
-      | Penpot/Move From | Penpot/Move From/wip | Move From |
-      | Pointers/Confined | Pointers/Confined/wip | Confined |
+      | source            | destination           | lands in  |
+      | Penpot/Move From  | Penpot/Move From/wip  | Move From |
+      | Pointers/Confined | Pointers/Confined/wip | Confined  |
 
   # notes: ../AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
   @in-penpot @gesture @todo
@@ -90,7 +88,9 @@ Feature: Moving a design
     # ── RULE: leaving every mapping leaves the bytes, and coming back adopts ──
     # notes: ../AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
-  @in-nextcloud @gesture @todo
+  # @unbuilt — `MotionService::onMove()` leaves a design that landed outside every
+  # mapping exactly as it was, so both rows below are wrong today.
+  @in-nextcloud @gesture @unbuilt
   Scenario Outline: Move a design out of every mapping
     Given a design file named "Going Loose.penpot" in "<source>"
     When I move the file into "Scratch"
@@ -123,7 +123,8 @@ Feature: Moving a design
     # design it names is still there, so nothing new is created.
 
   # notes: ../AGENTS.md#a-design-file-arriving-in-a-project-becomes-a-design
-  @in-nextcloud @gesture @todo
+  # @unbuilt — its own note below said so already; the tag had not caught up.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move an untracked design file into a project
     Given an untracked design file at "Scratch/Uploaded.penpot"
     When I move the file into "Penpot/Adopt Me"
@@ -134,10 +135,12 @@ Feature: Moving a design
       | penpot_mode    | the mapping's mode |
       | content        | an archive         |
 
-    # @unbuilt — THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: it leaves
-    # the file untracked. A mapping that ignores a design sitting inside it is not one.
+    # THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: it leaves the file
+    # untracked. A mapping that ignores a design sitting inside it is not one.
 
-  @in-nextcloud @gesture @todo
+  # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
+  # @unbuilt — no import to fail, and no notifier to report it with.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a ".penpot" file Penpot will not accept into a project
     Given an untracked design file at "Scratch/Broken.penpot" whose archive Penpot rejects
     When I move the file into "Penpot/Adopt Me"
@@ -174,7 +177,9 @@ Feature: Moving a design
     # The person answers what the CONTENT should be; the identity is never theirs to pick.
     # notes: ../AGENTS.md#a-duplicate-arriving-in-a-project-keeps-the-id-already-there
 
-  @in-nextcloud @gesture @todo
+  # @blocked — `I select "<kept>"` is Nextcloud's conflict dialog and there is no
+  # browser here; WebDAV never asks the question, it just overwrites.
+  @in-nextcloud @gesture @blocked
   Scenario Outline: Keeping one version of a duplicate leaves one file and one design
     Given a design file named "Turnbuckle.penpot" in "Penpot/Crowded"
     And an unmapped design file at "Scratch/Turnbuckle.penpot" carrying "<its id>"
@@ -198,7 +203,9 @@ Feature: Moving a design
       | the new version      | no penpot_id at all   | the file that arrived  |
 
   # notes: ../AGENTS.md#keeping-both-versions-of-a-duplicate-makes-the-arrival-its-own-design
-  @in-nextcloud @gesture @todo
+  # @blocked — the same dialog as above, and `both versions` is the branch of it
+  # that only a browser can take.
+  @in-nextcloud @gesture @blocked
   Scenario: Keeping both versions of a duplicate makes the arrival its own design
     Given a design file named "Turnbuckle.penpot" in "Penpot/Crowded"
     And an unmapped design file at "Scratch/Turnbuckle.penpot" carrying "the same penpot_id"
@@ -217,7 +224,7 @@ Feature: Moving a design
     # ── RULE: a link is not movable, and a link mapping is not a destination ──
     # notes: ../AGENTS.md#a-link-cannot-be-moved-out-of-the-project-it-points-into
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Moving a link, or into a link mapping, is refused
     Given a design file named "Pointer.penpot" in "<source>"
     When I try to move the file into "<destination>"
@@ -239,7 +246,9 @@ Feature: Moving a design
 
     # ── RULE: a move that cannot finish leaves the file as it was ─────────────
 
-  @in-nextcloud @gesture @todo
+  # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
+  # @unbuilt — the fault is arrangeable; the report has nothing to travel on.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Move a design while Penpot is unreachable
     Given a design file named "Travelling.penpot" in "Penpot/Move From"
     And Penpot is unreachable

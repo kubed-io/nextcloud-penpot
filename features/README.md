@@ -311,10 +311,10 @@ them the only sane place to break ground. Where the suite stands now:
 
 | status | scenarios | |
 |---|---|---|
-| *(none)* — runs in CI | 24 | 58 executed: `admin` 25, `design` 10, `project` 21, `core` 2 |
-| `@todo` | 74 | the queue |
-| `@blocked` | 9 | no browser, no app removal, no way to author a design |
-| `@unbuilt` | 7 | the app disagrees with the spec; see below |
+| *(none)* — runs in CI | 26 | 67 executed: `admin` 25, `design` 19, `project` 21, `core` 2 |
+| `@todo` | 66 | the queue |
+| `@blocked` | 11 | no browser, no app removal, no way to author a design |
+| `@unbuilt` | 11 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |
 
 **The `project` leg nearly doubled without a single test being written for it.**
@@ -328,6 +328,20 @@ in CI, and went back to `@unbuilt` naming a wall nobody had measured — a move 
 Team Folder crosses a storage boundary and fires no rename event at all. **That
 round trip is the point**: promoting it was how the wall got found, and the tag now
 records a fact rather than an assumption.
+
+**The `design` leg then nearly doubled too, and the tests were the small half.**
+`designs/move.feature` held thirteen scenarios and ran none; the round promoted two
+and retagged six, and only ONE of the two was a test anyone could simply have
+written. `Move a design between projects` was held off the run by a defect in the
+**spec** — its shared `Then` demanded `content | an archive` of both Examples
+blocks, and the second block moves a `link`, which holds zero bytes on purpose. The
+row now reads `the mapping's body`, so both modes can answer the same claim.
+
+So the queue shrank by eight and gained two passing scenarios. **That gap is the
+finding, not an accounting error**: `@todo` means *the code exists and only the
+test is missing*, and six of these were something else — four places the app
+contradicts the spec, and two the harness cannot reach without a browser. A queue
+that cannot be read at face value costs more than a short one.
 
 **All four legs report tests now**, so the empty-suite exemption in the workflow
 no longer carries any of them. It stays, because it is self-healing in both
@@ -587,8 +601,20 @@ Penpot link" are promises this app makes; as prose they are comments nobody
 executes, and as rows they are assertions.
 
 The vocabulary is deliberately small — a table that can say anything stops being
-readable: `the design's id`, `the team's id`, `set`, `absent`, `an archive`,
-`empty`, `the design's` (for a clock), or a quoted literal.
+readable: `the design's id`, `set`, `absent`, `an archive`, `empty`,
+`the design's` (for a clock), or a quoted literal.
+
+Three more name no value on purpose, because the point of the row is that the
+*mapping* decided it — an outline sends one gesture into a `sync` mapping, a Team
+Folder and a `link` one, and spelling `sync` would split one claim into three
+scenarios: `the mapping's team`, `the mapping's mode`, `the mapping's body`.
+
+That trio is spelt as a trio deliberately. The team half was written both ways —
+`the team's id` in four files and `the mapping's team` in nine, with
+`connection/sync-now.feature` using **both**, twenty-six lines apart — and only
+the first spelling was ever implemented. So every scenario reaching for the
+second one failed on "not a value this vocabulary knows": a fixture failure
+wearing the shape of an app failure. One claim, one spelling.
 
 `penpot_mode` reads `"link"` in a table even though the stored value is
 `reference` (the literal string `link` is `is_callable()` and crashes core's

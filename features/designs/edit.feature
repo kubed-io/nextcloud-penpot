@@ -21,12 +21,12 @@ Feature: Editing a design
     When the design "Cover" is edited in Penpot
     Then "Penpot/Brand/Cover.penpot" holds the design as it is now
     And "Penpot/Brand/Cover.penpot" holds:
-      | penpot_id       | the design's id |
-      | penpot_team_id  | the team's id   |
-      | penpot_revision | set             |
-      | penpot_mode     | "sync"          |
-      | content         | an archive      |
-      | modified        | the design's    |
+      | penpot_id       | the design's id    |
+      | penpot_team_id  | the mapping's team |
+      | penpot_revision | set                |
+      | penpot_mode     | "sync"             |
+      | content         | an archive         |
+      | modified        | the design's       |
 
     # notes: ../AGENTS.md#an-edit-in-penpot-reaches-the-stored-archive
 

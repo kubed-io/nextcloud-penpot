@@ -26,8 +26,8 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 24 OF 114 SCENARIO HEADERS RUN — 58 executed, on all four legs
-  # (admin 25, design 10, project 21, core 2). The spec was rewritten wholesale — the
+  # 26 OF 114 SCENARIO HEADERS RUN — 67 executed, on all four legs
+  # (admin 25, design 19, project 21, core 2). The spec was rewritten wholesale — the
   # noun became the folder and the verb the file — and rather than re-triage 116
   # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for
   # each later PR to draw from. Chapter 3 Round 1 drew the first nine: the ones
@@ -35,8 +35,8 @@ default:
   # the behaviour. `behat --tags @todo` is the rest of the queue; a scenario earns
   # its real status back on the PR that runs it.
   #
-  # THREE OF THE FOUR TAGS HAVE MEMBERS: 9 @blocked (no browser, no app removal, no
-  # way to author a design's content) and 7 @unbuilt (places the app disagrees with
+  # THREE OF THE FOUR TAGS HAVE MEMBERS: 11 @blocked (no browser, no app removal, no
+  # way to author a design's content) and 11 @unbuilt (places the app disagrees with
   # the spec, each naming what the code owes). @decision is empty.
   #
   # THE PROJECT LEG NEARLY DOUBLED THIS ROUND (7 → 13), and not by writing tests:
@@ -54,6 +54,15 @@ default:
   # deleted a project at all: no folder branch, no `delete-project`. A tag nobody
   # had checked, which is the failure mode this vocabulary exists to prevent and
   # the reason `behat --tags @todo` is a queue rather than an inventory.
+  #
+  # THE DESIGN LEG THEN NEARLY DOUBLED (10 → 19) on two headers, and only ONE of
+  # them was a missing test. `Move a design between projects` was held off the run
+  # by a defect in the SPEC: its shared Then demanded an archive of both Examples
+  # blocks, and the second moves a link, which holds zero bytes on purpose.
+  #
+  # SIX MORE IN THAT FILE WERE MISTAGGED, which is the round's real yield — four
+  # @unbuilt and two @blocked, none of them a test anyone could have written. The
+  # @todo queue is 8 shorter and not one line of it became a passing scenario.
   #
   # THE FILTER STILL NAMES ALL FOUR, so re-triage is a tag edit and never a config
   # change. Do not "tidy" the empty two out — the collapse is the anomaly here,

@@ -53,7 +53,7 @@ Feature: Syncing every mapping
       | /Pointers/Pinned                    | penpot |
       | /Pointers/Pinned/Fixed.penpot       |        |
     And "Penpot" holds:
-      | penpot_team_id | the team's id |
+      | penpot_team_id | the mapping's team |
 
     Examples: both ways an instance-wide sync starts
       | actor        |

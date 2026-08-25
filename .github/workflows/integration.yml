@@ -7,15 +7,17 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: 24 OF 114 SCENARIO HEADERS, on all four legs — 58 executed
-# scenarios (`admin` 25, `design` 10, `project` 21, `core` 2). The connection, the
+# SCOPE RIGHT NOW: 26 OF 114 SCENARIO HEADERS, on all four legs — 67 executed
+# scenarios (`admin` 25, `design` 19, `project` 21, `core` 2). The connection, the
 # app lifecycle and the mapping came back first (they had been green before the
 # spec rewrite collapsed everything to @todo); the design and project verbs
 # followed once the arrange spine in tests/integration/bootstrap/Steps/ArrangeSteps.php
 # was built, which is what the rewritten Background needs. The project leg then
 # nearly doubled when §C6.38 reversed the rule that pinned a project folder inside
-# its team folder — those scenarios were @unbuilt, and became code. `behat --tags
-# @todo` is the remaining queue of 74. See behat.dist.yml for what the other three
+# its team folder — those scenarios were @unbuilt, and became code. The design leg
+# then nearly doubled too, on two headers: one was a missing test, and the other
+# was held off the run by a defect in the SPEC rather than the app. `behat --tags
+# @todo` is the remaining queue of 66. See behat.dist.yml for what the other three
 # status tags mean, and the saga's Chapter 3 for the order the queue is worked in.
 #
 # A ZERO-SCENARIO LEG IS STILL A REPORTING LEG, which is what keeps the guards

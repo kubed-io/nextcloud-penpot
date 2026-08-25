@@ -39,19 +39,27 @@ use Behat\Gherkin\Node\TableNode;
  *
  * A table that can say anything stops being readable, so a value is one of:
  *
- *   the design's id   resolved from Penpot by the file's own name. Presence is
- *                     too weak for an id — one that is merely non-empty could be
- *                     any design's, and naming THIS one is the whole point.
- *   the team's id     the mapped team's, likewise resolved.
- *   set               present and non-empty. For genuinely opaque bookkeeping —
- *                     the revision is `revn` and `modified-at` joined (§5.5), and
- *                     pinning a literal would assert the engine's internals.
- *   absent            not stored at all. An assertion in its own right: a file
- *                     deliberately carries no copy of its project (§C6.7).
- *   an archive        real ZIP bytes on disk.
- *   empty             zero bytes. A `link` holds nothing (§C6.6).
- *   the design's      for a clock: it came from Penpot, not from the sync run.
- *   "<literal>"       an exact value, quoted.
+ *   the design's id     resolved from Penpot by the file's own name. Presence is
+ *                       too weak for an id — one that is merely non-empty could be
+ *                       any design's, and naming THIS one is the whole point.
+ *   set                 present and non-empty. For genuinely opaque bookkeeping —
+ *                       the revision is `revn` and `modified-at` joined (§5.5), and
+ *                       pinning a literal would assert the engine's internals.
+ *   absent              not stored at all. An assertion in its own right: a file
+ *                       deliberately carries no copy of its project (§C6.7).
+ *   an archive          real ZIP bytes on disk.
+ *   empty               zero bytes. A `link` holds nothing (§C6.6).
+ *   the design's        for a clock: it came from Penpot, not from the sync run.
+ *   "<literal>"         an exact value, quoted.
+ *
+ * …and three that name no value on purpose, because the point of the row is that
+ * the mapping decided it. An outline runs the same gesture into a `sync` mapping,
+ * a Team Folder and a `link` one; spelling `sync` here would split one claim into
+ * three scenarios.
+ *
+ *   the mapping's team  the mapped team's id, resolved from the path.
+ *   the mapping's mode  `sync`, or the `reference` a `link` stores as.
+ *   the mapping's body  an archive under `sync`, zero bytes under `link`.
  *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}; reads
  * the metadata over DAV and the content through `occ penpot_sync:status`, so it
@@ -196,12 +204,37 @@ trait MetadataSteps {
 				return $actual === $want
 					? null : "expected the id of the design '{$this->designNameOf($path)}' ({$want}), found '{$actual}'";
 
-			case "the team's id":
+			case "the mapping's team":
 				// The team of the mapping this path sits under — not whichever team
 				// the mappings table happened to name last.
+				//
+				// SPELT TO MATCH `the mapping's mode`, and that is not cosmetic. This
+				// claim was written both ways — `the team's id` in four files and
+				// `the mapping's team` in nine, with `connection/sync-now.feature`
+				// using BOTH, twenty-six lines apart. Only the first spelling had a
+				// case here, so every scenario reaching for the second one died in
+				// `default` on "not a value this vocabulary knows" — a fixture
+				// failure wearing the shape of an app failure.
+				//
+				// One claim, one spelling. The pair a mapping fixes about a file is
+				// its team and its mode, and they now read as a pair.
 				$want = $this->teamIdForPath($path) ?: $this->theNamedTeam();
 				return $actual === $want
 					? null : "expected the mapped team's id ({$want}), found '{$actual}'";
+
+			case "the mapping's body":
+				// WHAT THE MODE IMPLIES, which is the only way one outline can assert
+				// "nothing was blanked" across both kinds of mapping. A `sync` mirror
+				// holds the archive; a `link` is a pointer and holds zero bytes
+				// (§C6.6), so demanding `an archive` of both asks a link file to be
+				// something the spec says it must never be.
+				//
+				// That mismatch is exactly what kept `Move a design between projects`
+				// off the run: its second Examples block moves a link within its own
+				// project, and the shared `Then` wanted an archive from it.
+				$want = $this->modeOfMappingFor($path) === 'link' ? 'empty' : 'archive';
+				return $actual === $want
+					? null : "expected the body its mapping implies ('{$want}'), the file is '{$actual}'";
 
 			case 'set':
 				return ($actual ?? '') !== ''
