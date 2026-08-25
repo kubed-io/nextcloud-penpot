@@ -601,8 +601,8 @@ Penpot link" are promises this app makes; as prose they are comments nobody
 executes, and as rows they are assertions.
 
 The vocabulary is deliberately small — a table that can say anything stops being
-readable: `the design's id`, `set`, `absent`, `an archive`, `empty`, `the
-design's` (for a clock), or a quoted literal.
+readable: `the design's id`, `set`, `absent`, `an archive`, `empty`,
+`the design's` (for a clock), or a quoted literal.
 
 Three more name no value on purpose, because the point of the row is that the
 *mapping* decided it — an outline sends one gesture into a `sync` mapping, a Team
