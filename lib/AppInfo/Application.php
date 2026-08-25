@@ -23,6 +23,7 @@ use OCA\PenpotSync\Listener\ProjectTagListener;
 use OCA\PenpotSync\Listener\RegisterDavPluginsListener;
 use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Listener\TrashPurgeHook;
+use OCA\PenpotSync\Notification\Notifier;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
@@ -82,9 +83,13 @@ use OCP\SystemTag\TagAssignedEvent;
  * thing the browser cannot read off the file listing.
  *
  * Still to land: restoring a design from its local archive when Penpot's own
- * trash no longer holds it (`restore.feature`, the lossy layer), the purge of
- * this app's files, notifications, and personal projects. Don't scaffold those
- * here ahead of the code that uses them.
+ * trash no longer holds it (`restore.feature`, the lossy layer), and personal
+ * projects. Don't scaffold those here ahead of the code that uses them.
+ *
+ * The admin purge is NOT on that list any more — it was retired rather than
+ * deferred (features/AGENTS.md#retired--the-admin-purge), and its disabled button
+ * went with it. Notifications came off the list the other way: they are the
+ * channel two `designs/move.feature` scenarios were waiting on.
  */
 final class Application extends App implements IBootstrap {
 	public const APP_ID = 'penpot_sync';
@@ -113,6 +118,14 @@ final class Application extends App implements IBootstrap {
 		// core stores it per-uid because the form declares a PERSONAL section
 		// type — see PersonalSettings.
 		$context->registerDeclarativeSettings(PersonalSettings::class);
+
+		// THE CHANNEL A FAILURE TRAVELS ON. Until this existed every failure in
+		// this app ended in the log, which reaches an admin reading nextcloud.log
+		// and nobody else — while the person who can actually act on it is the one
+		// who dragged the file. `designs/move.feature` asks twice for "the failure
+		// is reported to the user" and both asks were @unbuilt for want of this
+		// one line. Both siblings register the same pair the same way.
+		$context->registerNotifierService(Notifier::class);
 
 		// The write paths (saga Ch2 Course 4). NodeRenamedEvent fires for both a
 		// rename and a move, and the listener routes each: a rename of a managed

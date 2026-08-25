@@ -3060,27 +3060,31 @@ this is where it belongs.
 
 ### There is nowhere for a failure to be reported to
 
-**This app has no notifier, and every "the failure is reported to the user" in the
-spec is waiting on that one missing class.** Both siblings ship a
-`lib/Notification/Notifier.php` and a `Service/SyncNotifier.php`; penpot has
-neither, and `lib/Listener/NodeRenamedListener.php` already says so in a comment —
-*"There is no notifier yet."*
+**BUILT — and the wall moved rather than disappeared.** This section used to open
+*"this app has no notifier, and every 'the failure is reported to the user' in the
+spec is waiting on that one missing class."* That is now `lib/Notification/Notifier.php`
+plus `lib/Service/SyncNotifier.php`, the same pair both siblings ship, registered
+in `Application::register()` and raised from two places: `ImportService` when Penpot
+refuses an archive, and `NodeRenamedListener` when a move cannot be pushed.
 
-It is worth separating from the walls around it, because it is a different KIND of
-wall and it gets mistaken for two others:
+So the scenarios moved `@unbuilt` → `@todo`, not `@unbuilt` → live, and the reason
+is worth being exact about because it is a different wall:
 
-- **Not a harness limit.** The faults these scenarios need are all arrangeable from
-  `occ` — point the instance URL at a dead host, hand Penpot an archive it rejects.
-  Nothing here is `@blocked`; the fault is reachable and the report is not.
-- **Not the same gap as the behaviour under it.** `Move a ".penpot" file Penpot
-  will not accept` owes an import AND a report; `Move a design while Penpot is
-  unreachable` owes only the report, and its other three lines would pass today.
-  So building the notifier alone moves scenarios, which is what makes it a good
-  standalone round rather than a prerequisite to fold into a bigger one.
+- **The behaviour exists.** The fault is arrangeable from `occ` (point the instance
+  URL at a dead host, hand Penpot an archive it rejects), the report is raised, and
+  the user gets a bell entry naming what Penpot said.
+- **The suite cannot read a bell entry.** Notifications are stored by the
+  `notifications` APP, which is not part of the `nextcloud/server` checkout CI
+  installs from — and reading them means the OCS API rather than `occ`, which this
+  suite has no transport for. Installing an extra app to observe a courtesy channel
+  is a bigger change to the harness than the assertion is worth.
+- **AND NEITHER SIBLING TESTS THIS EITHER.** Checked before deciding: n8n and
+  grafana both ship the notifier pair and have **zero** Gherkin scenarios and zero
+  integration steps that observe a notification. `@todo` here is exactly at parity
+  — the code is real and the assertion is owed.
 
-The scenarios waiting on it are not confined to this file — `projects/create.feature`
-ends on *"the user is notified that the project could not be placed"* — so the count
-this unblocks is larger than any one feature's `@unbuilt` list suggests.
+`projects/create.feature`'s *"the user is notified that the project could not be
+placed"* is now unblocked in the same sense: the channel exists for it to use.
 
 ### Penpot's destroy leaves the row behind
 

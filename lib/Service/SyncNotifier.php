@@ -1,0 +1,162 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 kubed-io
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+declare(strict_types=1);
+
+namespace OCA\PenpotSync\Service;
+
+use OCA\PenpotSync\AppInfo\Application;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Notification\IManager;
+use Psr\Log\LoggerInterface;
+
+/**
+ * The channel a failure travels on, which this app did not have.
+ *
+ * ## WHY TWO SCENARIOS WERE `@unbuilt` FOR WANT OF THIS CLASS
+ *
+ * `designs/move.feature` asks twice for *"the failure is reported to the user"* —
+ * once for an archive Penpot will not accept, once for a move made while Penpot is
+ * unreachable — and `features/AGENTS.md` recorded the reason neither could run as
+ * *"there is nowhere for a failure to be reported to"*. That was true: every
+ * failure in this app ends in `$this->logger->warning()`, which reaches an admin
+ * reading `nextcloud.log` and nobody else.
+ *
+ * The user who dragged the file is the person who can do something about it, and
+ * they never heard. Both siblings solved this the same way and it is the native
+ * channel for exactly this shape of problem — work that happens after the gesture
+ * has already committed.
+ *
+ * ## THE GESTURE IS NEVER UNDONE TO REPORT ON IT (§6.18 rule 3)
+ *
+ * The Nextcloud move has already happened by the time any of this runs. The file
+ * is where the user put it, and it stays there; the notification says what did not
+ * happen on Penpot's side. Aborting the move to "stay consistent" would take work
+ * away from someone to tell them about a remote failure they did not cause.
+ *
+ * ## A NOTIFICATION MUST NEVER BE THE THING THAT BREAKS
+ *
+ * Every method here swallows its own failures into the log. A bell entry is a
+ * courtesy on top of an operation that has already decided its outcome — if
+ * raising it throws, the outcome must not change.
+ *
+ * Keyed on the FILE ID so repeated failures on one file collapse onto a single
+ * entry rather than filling the bell, and so {@see cleared()} can retract one when
+ * a later attempt succeeds.
+ */
+final class SyncNotifier {
+	/** The notification object type — one per file, whatever went wrong with it. */
+	private const OBJECT_TYPE = 'design';
+
+	/** Penpot's own complaint, capped: notification storage is not a log. */
+	private const MAX_REASON = 320;
+
+	public function __construct(
+		private readonly IManager $manager,
+		private readonly ITimeFactory $timeFactory,
+		private readonly LoggerInterface $logger,
+	) {
+	}
+
+	/**
+	 * A design could not be created in Penpot from the file that arrived —
+	 * the archive was refused, or the create failed.
+	 *
+	 * NAMES WHAT PENPOT SAID, which is the whole value of telling the user at all:
+	 * "it didn't work" is something they can already see. The file stays exactly
+	 * where they put it, holding exactly what it held.
+	 */
+	public function importFailed(string $userId, int $fileId, string $fileName, string $reason): void {
+		$this->raise(
+			$userId,
+			$fileId,
+			'import_failed',
+			['file' => $fileName],
+			['reason' => mb_substr($reason, 0, self::MAX_REASON)],
+			'penpot_sync: could not raise an import-failure notification',
+		);
+	}
+
+	/**
+	 * A move was made in Nextcloud that Penpot never heard about, because Penpot
+	 * could not be reached.
+	 *
+	 * DELIBERATELY NOT THE SAME SUBJECT as an import failure: nothing is wrong with
+	 * the file here and there is nothing for the user to fix. The design is still
+	 * in its old project and the next pull reconciles it — so the message says that
+	 * rather than implying lost work.
+	 */
+	public function moveNotPushed(string $userId, int $fileId, string $fileName, string $reason): void {
+		$this->raise(
+			$userId,
+			$fileId,
+			'move_not_pushed',
+			['file' => $fileName],
+			['reason' => mb_substr($reason, 0, self::MAX_REASON)],
+			'penpot_sync: could not raise a move-failure notification',
+		);
+	}
+
+	/**
+	 * Retract any pending failure for this file — called when a later attempt
+	 * succeeds, so a fixed file does not keep a stale error in the bell.
+	 */
+	public function cleared(int $fileId): void {
+		try {
+			$notification = $this->manager->createNotification();
+			$notification->setApp(Application::APP_ID)
+				->setObject(self::OBJECT_TYPE, (string)$fileId);
+			$this->manager->markProcessed($notification);
+		} catch (\Throwable $e) {
+			$this->logger->debug('penpot_sync: could not clear a failure notification', [
+				'app' => Application::APP_ID,
+				'exception' => $e,
+			]);
+		}
+	}
+
+	/**
+	 * Build, address and send one notification.
+	 *
+	 * No-ops on an empty user id: with nobody to address there is nothing to raise,
+	 * and that is an ordinary state — a pull running on the schedule has no acting
+	 * user at all.
+	 *
+	 * @param array<string, string> $subjectParams
+	 * @param array<string, string>|null $messageParams
+	 */
+	private function raise(
+		string $userId,
+		int $fileId,
+		string $subject,
+		array $subjectParams,
+		?array $messageParams,
+		string $failureLog,
+	): void {
+		if ($userId === '') {
+			return;
+		}
+
+		try {
+			$notification = $this->manager->createNotification();
+			$notification->setApp(Application::APP_ID)
+				->setUser($userId)
+				->setDateTime($this->timeFactory->getDateTime())
+				->setObject(self::OBJECT_TYPE, (string)$fileId)
+				->setSubject($subject, $subjectParams);
+			if ($messageParams !== null) {
+				$notification->setMessage($subject, $messageParams);
+			}
+			$this->manager->notify($notification);
+		} catch (\Throwable $e) {
+			$this->logger->warning($failureLog, [
+				'app' => Application::APP_ID,
+				'exception' => $e,
+			]);
+		}
+	}
+}

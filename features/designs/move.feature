@@ -49,7 +49,7 @@ Feature: Moving a design
       | Pointers/Confined | Pointers/Confined/wip | Confined  |
 
   # notes: ../AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Move a design between Penpot projects
     Given a design file named "Relocated.penpot" in "Penpot/Upstream From"
     When someone moves the design into the "<project>" Penpot project
@@ -88,9 +88,7 @@ Feature: Moving a design
     # ── RULE: leaving every mapping trashes the design, and coming back revives it ──
     # notes: ../AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
-  # @unbuilt — `MotionService::onMove()` leaves a design that landed outside every
-  # mapping exactly as it was, so nothing below is true today.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Move a design out of every mapping
     Given a design file named "Going Loose.penpot" in "<source>"
     When I move the file into "Scratch"
@@ -110,8 +108,7 @@ Feature: Moving a design
     # rather than an import, and the trash is what keeps that id worth naming.
 
   # notes: ../AGENTS.md#coming-back-revives-whatever-penpot-still-has
-  # @unbuilt — nothing untrashes a design today; an arrival is a plain re-stamp.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Move a design file into a project when Penpot still has its design
     Given an unmapped design file at "Scratch/Going Loose.penpot" carrying its Penpot id
     And its design is <where> in Penpot
@@ -129,8 +126,7 @@ Feature: Moving a design
       | live    |
 
   # notes: ../AGENTS.md#an-arrival-penpot-cannot-match-becomes-a-new-design
-  # @unbuilt — a stale id is pushed as-is today, so only the second row passes.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Move a design file into a project when Penpot has no design for it
     Given a design file at "Scratch/Uploaded.penpot" carrying <what>
     When I move the file into "Penpot/Adopt Me"
@@ -150,8 +146,8 @@ Feature: Moving a design
     # the archive is imported (§6.33) and the design starts a fresh history.
 
   # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
-  # @unbuilt — the import exists now; the report still has nothing to travel on.
-  @in-nextcloud @gesture @unbuilt
+  # @todo — the report travels now; nothing in this suite can read a bell entry.
+  @in-nextcloud @gesture @todo
   Scenario: Move a ".penpot" file Penpot will not accept into a project
     Given an untracked design file at "Scratch/Broken.penpot" whose archive Penpot rejects
     When I move the file into "Penpot/Adopt Me"
@@ -162,9 +158,7 @@ Feature: Moving a design
     # untracked is one Penpot itself would not take.
 
   # notes: ../AGENTS.md#a-design-moved-to-another-team-in-penpot-leaves-this-mapping
-  # @unbuilt — the pull trashes every mirror it stops seeing, and cannot yet tell a
-  # design that was moved from one that was deleted.
-  @in-penpot @gesture @unbuilt
+  @in-penpot @gesture
   Scenario Outline: Someone moves a design into an unmapped team in Penpot
     Given a design file named "Departing.penpot" in "<source>"
     When someone moves the design into the "Archive Team" Penpot team
@@ -253,8 +247,8 @@ Feature: Moving a design
     # ── RULE: a move that cannot finish leaves the file as it was ─────────────
 
   # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
-  # @unbuilt — the fault is arrangeable; the report has nothing to travel on.
-  @in-nextcloud @gesture @unbuilt
+  # @todo — the report travels now; nothing in this suite can read a bell entry.
+  @in-nextcloud @gesture @todo
   Scenario: Move a design while Penpot is unreachable
     Given a design file named "Travelling.penpot" in "Penpot/Move From"
     And Penpot is unreachable
