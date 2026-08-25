@@ -186,19 +186,6 @@ trait ArrangeSteps {
 		$this->givenTheAppIsEnabled();
 		$this->thePenpotBaseUrlPointsAtTheTestInstance();
 		$this->theAdminHasConfiguredTheServiceAccountToken();
-
-		// AND NO PERSONAL TOKEN, WHICH IS A STATEMENT ABOUT THE WORLD AND NOT
-		// HOUSEKEEPING. A personal token makes the user's whole home a mapping
-		// (§6.45), so one left behind by an earlier scenario changes what a later
-		// one MEANS: `Create a design outside every mapping` puts its file in
-		// "Scratch", and for a user with a token Scratch is not outside every
-		// mapping at all — it is a folder in their own team, and the app would
-		// quite correctly allow the create the scenario expects it to refuse.
-		//
-		// So this is the ordinary state most users are in, restored before every
-		// scenario. In the arrange rather than an @AfterScenario because a
-		// scenario that fails half way must not be able to skip it.
-		$this->clearPersonalToken();
 	}
 
 	/**

@@ -73,7 +73,9 @@ Feature: Creating a design
     # one thing about an arriving design that Nextcloud decides rather than Penpot.
 
   # notes: ../AGENTS.md#a-design-created-in-the-users-own-home-lands-in-their-personal-drafts
-  @in-nextcloud @gesture
+  # notes: ../AGENTS.md#the-personal-mapping-is-held-until-the-siblings-have-one
+  # @todo — held deliberately; the personal mapping is ahead of both siblings.
+  @in-nextcloud @gesture @todo
   Scenario Outline: Create a design in the user's own home
     Given the user has a personal Penpot token
     And a folder at "Sketchbook" in the user's home that is not a project

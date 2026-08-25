@@ -204,13 +204,8 @@ final class PenpotClient {
 	 *
 	 * @throws PenpotApiException
 	 */
-	public function getTeams(?string $actorToken = null): array {
-		// AS THAT USER, WHEN ONE IS NAMED, and this one is not about attribution
-		// like the other actor-token calls — it changes the ANSWER. `get-teams`
-		// computes `is-default` as `(t.id = profile.default_team_id)` for the
-		// profile behind the token (backend `teams.clj`), so it is the only way to
-		// learn which team is a given person's own. See {@see PersonalTeamService}.
-		return $this->records($this->call('get-teams', [], $actorToken));
+	public function getTeams(): array {
+		return $this->records($this->call('get-teams'));
 	}
 
 	/**

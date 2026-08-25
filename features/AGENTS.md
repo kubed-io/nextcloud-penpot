@@ -905,37 +905,44 @@ mapping"* has to be load-bearing rather than decorative. If the home root is a
 mapping root, promotion works there the way it works everywhere, and an exception
 for personal would be the special case needing an argument.
 
-**HOW IT IS BUILT (§6.45), and the one thing that is genuinely different.** Every
-admin mapping's root carries a `penpot_team_id` marker, written by the pull. A
-home root carries nothing — there is no `add-mapping` that created it and no pull
-that stamped it, because the mapping is not a stored decision at all. It has no
-folder to choose (it *is* the home root), no mode to choose (`sync`; a `link`
-mapping is filled from Penpot and a person's own home is theirs to write), no
-groups, and no lifetime of its own: it exists exactly as long as the token does.
+### The personal mapping is held until the siblings have one
 
-So `MembershipResolver` treats one extra rung as marked — the rung whose id is the
-acting user's home folder, when that user has a personal team. That is the entire
-change, and everything downstream is untouched: Drafts at the root because it is a
-team with no project, promotion by path below the root, and the same move, rename
-and delete paths. `PersonalTeamService` resolves the team by asking `get-teams`
-with the user's own token, where Penpot computes `is-default` as
-`(t.id = profile.default_team_id)` — read out of the backend's `teams.clj`, not
-inferred. That makes the token the single source of truth: replace it with another
-account's and the home follows, with nothing to migrate.
+**Every `@todo` in this app is a promise except these, and they are a DECISION —
+one taken on where this app sits next to its siblings rather than on what the rule
+should be.** `nextcloud-grafana` and `nextcloud-n8n` have no per-user connection at
+all: one instance token, one set of admin mappings, and nothing that belongs to a
+single person. The personal mapping would put penpot ahead of both on an axis
+neither has started, and parity is the goal until it is not.
 
-Two consequences worth having written down.
+So the rule stated above stands as the spec, and the scenarios resting on it wait:
+`designs/create.feature`'s `Create a design in the user's own home`,
+`designs/move.feature`'s `Move a design into another team`, and all three of
+`connection/personal.feature`. They are `@todo` rather than `@unbuilt` because
+nothing about them is owed by the code *yet* — the queue is where they belong, and
+this note is why they will still be there after a round that clears the rest.
 
-`Membership::STATE_PERSONAL` — *a project id with no team above it* — was the
-anticipated shape of this and is now unreachable through a home, because the home
-root supplies a team. Nothing branches on it, so it is left as the record of a
-state the resolver can still describe rather than deleted.
+**What exists today, and what it is NOT.** `PersonalTokenService` is real and
+shipped, and it is attribution only — its own docblock says so. A user's token is
+passed as an actor token to RPC calls so Penpot records the change as theirs, and
+it is read nowhere else. It maps nothing.
 
-And **the token changes what other scenarios mean.** `Create a design outside every
-mapping` puts its file in `Scratch`; for a user holding a personal token that is
-not outside every mapping at all, it is a folder in their own team, and the app
-would rightly allow the create. That is the rule working, not a harness wrinkle —
-which is why the integration Background clears the token before every scenario
-rather than after, where a failing scenario could skip it.
+**What it would take**, recorded so the next round does not have to re-derive it.
+One extra rung on the `MembershipResolver` walk: the acting user's home folder,
+counted as marked when they have a personal team. Everything downstream is
+untouched — Drafts at the root, promotion by path below it, the same move, rename
+and delete code — because a home root then behaves exactly like a mapping root that
+happens to carry no marker. The team itself comes from `get-teams` asked with the
+USER's own token, where Penpot computes `is-default` as
+`(t.id = profile.default_team_id)`; that is read out of the backend's `teams.clj`,
+not inferred, and it makes the token the single source of truth.
+
+One consequence to carry into that round, because it reaches past the feature:
+**a personal token changes what other scenarios mean.** `Create a design outside
+every mapping` puts its file in `Scratch`, and for a token holder that is not
+outside every mapping at all — it is a folder in their own team, and the app would
+rightly allow the create the scenario expects it to refuse. Any harness that
+arranges a token has to clear it before every scenario, in the arrange rather than
+after, where a failing scenario could skip it.
 
 ### A design crossing between a home and a shared team is a move, not a create
 
