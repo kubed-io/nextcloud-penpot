@@ -301,7 +301,7 @@ trait GestureSteps {
 		$this->until(
 			fn (): bool => in_array($this->currentFileId, $this->penpotLiveDesignIds(), true),
 			fn (): string => sprintf(
-				"the design %s is gone from Penpot; the teams on stage now hold: %s",
+				'the design %s is gone from Penpot; the teams on stage now hold: %s',
 				$this->currentFileId,
 				implode(', ', $this->penpotLiveDesignIds()) ?: '(none)',
 			),
