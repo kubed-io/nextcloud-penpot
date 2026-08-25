@@ -2144,72 +2144,75 @@ parked.
 
 ### Coming back revives whatever Penpot still has
 
-The return is one gesture over three possible far-side states, which is exactly the
-shape `designs/restore.feature` already uses for the trash (*"the three layers a
-restore can land in"*). Two of those layers behave identically here and so share one
-scenario's Examples: whether the design is sitting in Penpot's trash or was restored
-there by someone in the meantime, the `penpot_id` on the file names a design that
-exists, so the app untrashes it if it needs to, files it into the destination project,
-and re-stamps the file. **The id, the revision and the history all survive**, which is
-the entire reason leaving was a trashing rather than a delete.
+The `penpot_id` on the file names a design that EXISTS — parked in Penpot's trash, or
+never gone at all. Both rows behave identically: the app untrashes it if it needs to,
+files it into the destination project, and re-stamps the file. **The id, the revision
+and the history all survive**, which is the entire reason leaving a mapping was a
+trashing rather than a delete.
 
-WHY THE TWO ROWS ARE ONE SCENARIO AND NOT TWO. The outcome is identical and the code
-path is identical — "make sure the design exists and is in this project" absorbs both.
-Splitting them would state the same claim twice and imply a difference that is not
-there. Contrast the third layer below, which genuinely cannot reach the same outcome.
+WHY THE TWO ROWS ARE ONE SCENARIO. The outcome is identical and so is the code path —
+"make sure the design exists and is in this project" absorbs both, and the difference
+between them is only whether one of its steps had anything to do. Splitting them would
+state one claim twice and imply a distinction that is not there.
 
-### A return Penpot cannot honour imports the bytes instead
+### An arrival Penpot cannot match becomes a new design
 
-The third layer: the design is gone for good — past Penpot's grace window, or purged
-by hand. There is nothing to untrash and no way to resurrect an id (§6.20), so the
-file's `penpot_id` is now a claim on nothing.
+The other half of the same question, and the two rows that were nearly three scenarios.
+Penpot has no design for this file. That is TWO stored states — the file carries an id
+nothing answers to, or it carries no id at all — and exactly one outcome: the archive
+is imported (§6.33), a fresh id is minted, and the stale one (if there was one) is
+overwritten.
 
 **Nothing is lost, and that is the point.** A `sync` file IS the design — a complete,
-valid `.penpot` archive that has been sitting in Nextcloud the whole time — so the
-return imports it (§6.33) and the user gets their design back. What they do not get
-back is the id and the version history, which is why this is a separate scenario
-rather than another row above: the file comes home with `penpot_id | its own, not the
-one it arrived with`, and a reader has to be able to see that.
+valid `.penpot` archive that has been sitting in Nextcloud the whole time. What the
+user does not get back is the id and the version history, which is why this cannot be
+another row on the scenario above: `penpot_id | a new one, never the one it arrived
+with` is the opposite claim to `the original id`, and no Examples table can hold both.
 
 This is n8n's `Restoring when the n8n workflow was hard-deleted falls back to create`,
-in Penpot's terms. Same fallback, same reason, one file's worth of bytes doing the
-work instead of a JSON body.
+in Penpot's terms — except that n8n needs a second scenario for the never-tracked case
+and this does not, because an import does not care whether the id it is replacing was
+stale or absent.
 
-### The three arrivals are told apart by the id, not by their history
+### An arrival is told apart by what the file carries, never by its history
 
-THREE ARRIVALS THAT LOOKED ALIKE AND ARE NOT. They were called *"Move an unmapped
+TWO ARRIVALS, AND IT TOOK THREE GOES TO SEE THAT. They started as *"Move an unmapped
 design back into a project"* and *"Move an untracked design file into a project"* —
 two spellings of "it was outside, now it is inside", giving a reader nothing to tell
 them apart by.
 
-The first repair was worse in a way worth recording, because it is a mistake that
-reads as a fix: retitling one of them *"Move a design that **left a mapping** back
-into a project"*. That names how the file GOT into its state, and a scenario cannot
-assert its own backstory — the `Given` places a file with an id at a path, and nothing
-about it establishes that the file was ever mapped, or that it came back rather than
-arriving for the first time. Worse, the implication is not even reliable: **unmapped
-does not imply an id**. A file can be sitting outside every mapping with no `penpot_id`
-on it at all, which is precisely the untracked case two scenarios down.
+**Two failed repairs first, both of the same kind, because the kind is easy to miss.**
+Retitling one *"Move a design that **left a mapping** back into a project"*, and giving
+another the step `And its design has been permanently deleted in Penpot`. Each of those
+names how the file GOT into its state — and a scenario cannot assert its own backstory.
+The `Given` places a file with an id at a path; nothing about it establishes that the
+file was ever mapped, that it came back rather than arriving for the first time, or
+that anybody deleted anything. The same state arrives by ordinary routes that make the
+story false: **copy an unmapped file and move the copy in**, and you have a file whose
+id names a design somebody else's file is still using, or no id at all.
 
-So the discriminator is not the history and not the folder. It is **what the file
-carries**, and all three titles now say so:
+They are also not reliable as implications. **Unmapped does not imply an id** — a file
+can sit outside every mapping carrying no `penpot_id` whatsoever. And *"permanently
+deleted"* is only one of several ways an id ends up naming nothing.
+
+So the discriminator is not the history, not the folder, and not the gesture. It is
+**what the file carries when it lands**, and there are only two answers that matter:
 
 | the file carries | what the arrival does | scenario |
 | --- | --- | --- |
-| an id naming a live or trashed design | REATTACHES — untrash if needed, re-file, re-stamp | `…that still carries its Penpot id` |
-| an id naming nothing (past the grace window) | IMPORTS, and the stale id is replaced | `…whose Penpot id names nothing` |
-| no id at all | IMPORTS, and an id is minted | `…carrying no Penpot id` |
+| an id a design still answers to — trashed or live | REATTACHES: untrash if needed, re-file, re-stamp, id kept | `…when Penpot still has its design` |
+| an id nothing answers to, or no id at all | IMPORTS (§6.33): a new id is minted and any stale one overwritten | `…when Penpot has no design for it` |
 
-One axis, three values, three outcomes — which is what makes them three scenarios and
-not one outline (the middle and bottom rows cannot assert `penpot_id | the original
-id`, so no Examples table can hold them together).
+Two scenarios, two rows each, and the split between them is forced rather than
+stylistic: one asserts `penpot_id | the original id` and the other `a new one, never
+the one it arrived with`, so no Examples table could hold all four rows.
 
-The words `unmapped` and `untracked` stay in the `Given`s, where they are precise and
-already load-bearing elsewhere — `designs/delete.feature` has a `Trash an untracked
-design file` scenario and the rule *"a file the app never mirrored is Nextcloud's
-alone"*. The first outline's `Given` now says `carrying its Penpot id` out loud rather
-than leaning on `unmapped` to imply it, the same way the duplicate scenarios further
-down have always spelled out `carrying "<its id>"`.
+The words `unmapped` and `untracked` stay in the `Given`s where they are precise and
+already load-bearing — `designs/delete.feature` has a `Trash an untracked design file`
+scenario and the rule *"a file the app never mirrored is Nextcloud's alone"*. What
+changed is that the first outline's `Given` says `carrying its Penpot id` out loud
+rather than leaning on `unmapped` to imply it, the same way the duplicate scenarios
+further down have always spelled out `carrying "<its id>"`.
 
 ### The two Penpot-side departures are not the Nextcloud drag, or each other
 

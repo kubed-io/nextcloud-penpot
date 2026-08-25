@@ -9,10 +9,12 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MotionService;
@@ -76,11 +78,15 @@ final class MotionServiceTest extends TestCase {
 	private DestinationResolver $destinations;
 	private PersonalTokenService $personalTokens;
 	private ProjectTags $tags;
+	private ArchiveService $archives;
+	private MappingService $mappings;
 	private MotionService $motion;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->projects = $this->createMock(ProjectFolderService::class);
+		$this->archives = $this->createMock(ArchiveService::class);
+		$this->mappings = $this->createMock(MappingService::class);
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
@@ -99,6 +105,8 @@ final class MotionServiceTest extends TestCase {
 			$this->tags,
 			new SyncGuard(),
 			$this->createMock(ImportService::class),
+			$this->archives,
+			$this->mappings,
 			new NullLogger(),
 		);
 	}

@@ -106,6 +106,7 @@ final class PullService {
 		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
 		private readonly MirrorTimes $times,
+		private readonly TrashControl $trash,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -213,7 +214,7 @@ final class PullService {
 				// has already left this closure entirely, which is the same protection
 				// stated as control flow rather than as a flag.
 				if ($complete) {
-					$this->prune($root, $seen, $pruned, $rescued, $lost);
+					$this->prune($root, $mapping, $seen, $pruned, $rescued, $lost);
 				}
 
 				return $this->tally([
@@ -553,21 +554,41 @@ final class PullService {
 	 * @param int $rescued mutated in place
 	 * @param int $lost mutated in place
 	 */
-	private function prune(Folder $root, array $seen, int &$pruned, int &$rescued, int &$lost): void {
+	private function prune(Folder $root, Mapping $mapping, array $seen, int &$pruned, int &$rescued, int &$lost): void {
 		foreach ($this->collectMirrors($root) as $penpotId => $node) {
 			if (isset($seen[$penpotId])) {
 				continue;
 			}
 
-			// THE LAST SNAPSHOT, taken before the file moves. A `sync` file that
-			// already holds its archive needs nothing; an empty `link` gets one attempt
-			// at becoming a real backup while Penpot's own trash still has the design.
+			// A LINK LEAVES WITHOUT A TRACE, and never becomes anything else.
+			//
+			// It holds no bytes, so there is nothing to snapshot and nothing a
+			// restore could reconnect to. This branch used to fall through to the
+			// rescue below, which — because a link is exactly the file that holds no
+			// archive — meant every departing link was exported and RE-STAMPED
+			// `sync`. That was the last surviving link→sync promotion in the app,
+			// and per-file mode changes were retired courses ago (`sync-mode.feature`
+			// no longer exists). A link is a link for as long as it exists.
+			if ($this->isLink($node)) {
+				$pruned += $this->discard($node, $penpotId, 'a link whose design left the mapping') ? 1 : 0;
+				continue;
+			}
+
+			// A DESIGN THAT MOVED IS NOT A DESIGN THAT DIED, and only Penpot can say
+			// which happened. `null` means the probe could not tell, and is treated
+			// as "still there" — see PenpotClient::fileExists() on why the two wrong
+			// answers are not equally cheap.
+			if ($this->client->fileExists($penpotId) !== false && !$this->isInPenpotTrash($mapping->teamId, $penpotId)) {
+				$pruned += $this->discard($node, $penpotId, 'a design moved out of this mapping in Penpot') ? 1 : 0;
+				continue;
+			}
+
+			// WHAT IS LEFT IS A DELETE — trashed in Penpot, or purged there. Either
+			// way this file may be the last copy of that design in existence, so it
+			// goes somewhere recoverable and gets one last chance at real bytes.
 			$rescue = null;
 			if (!$this->archives->holdsArchive($node)) {
 				$rescue = $this->snapshot($node, $penpotId);
-				if ($rescue) {
-					$this->metadata->writeFile($node->getId(), [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
-				}
 			}
 
 			try {
@@ -619,6 +640,87 @@ final class PullService {
 				'ids_listed' => count($seen),
 			]);
 		}
+	}
+
+	/** Is this mirror a pointer rather than a copy? */
+	private function isLink(File $node): bool {
+		return $this->metadata->readFile($node->getId())?->isLink() ?? false;
+	}
+
+	/**
+	 * Is the design sitting in the Penpot trash of the team this mapping mirrors?
+	 *
+	 * ASKED ONLY WHEN {@see PenpotClient::fileExists()} SAID YES, and that pairing is
+	 * the whole subtlety: a design in Penpot's trash still EXISTS — `get-file-summary`
+	 * answers for it happily — so existence alone would read a delete as a move and
+	 * destroy the mirror. The trash listing is what separates them.
+	 *
+	 * The team comes from the MAPPING rather than the file's stamp: the mapping is
+	 * what this root mirrors, it cannot be stale, and it needs no resolver walk.
+	 *
+	 * A listing we cannot read is an unanswerable question, and it takes the cautious
+	 * branch — treat it as trashed, so the mirror is kept.
+	 */
+	private function isInPenpotTrash(string $teamId, string $penpotId): bool {
+		if ($teamId === '') {
+			return true;
+		}
+
+		try {
+			foreach ($this->client->deletedFiles($teamId) as $file) {
+				if (($file['id'] ?? null) === $penpotId) {
+					return true;
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not read Penpot\'s trash; keeping the mirror', [
+				'app' => Application::APP_ID,
+				'penpot_id' => $penpotId,
+				'exception' => $e,
+			]);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Remove a mirror without leaving a Nextcloud trash entry.
+	 *
+	 * Reached only when the design is demonstrably fine on Penpot's side, so there is
+	 * nothing to recover and a trashed file would misreport what happened. A delete
+	 * that fails is logged and skipped, exactly like the trashing path — the mirror
+	 * stays, and the next pull tries again.
+	 *
+	 * @return bool true when the mirror is actually gone, so the caller only counts
+	 *              a prune that happened (the CLI's totals have to reconcile)
+	 */
+	private function discard(File $node, string $penpotId, string $because): bool {
+		$path = $node->getPath();
+
+		try {
+			$this->trash->withoutTrash(static function () use ($node): void {
+				$node->delete();
+			});
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not remove a mirror Penpot no longer lists', [
+				'app' => Application::APP_ID,
+				'file' => $path,
+				'penpot_id' => $penpotId,
+				'exception' => $e,
+			]);
+
+			return false;
+		}
+
+		$this->logger->info('penpot_sync pull: removed a mirror with no trash entry — ' . $because, [
+			'app' => Application::APP_ID,
+			'file' => $path,
+			'penpot_id' => $penpotId,
+		]);
+
+		return true;
 	}
 
 	/**

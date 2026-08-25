@@ -22,7 +22,7 @@ Feature: Moving a design
     # notes: ../AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
   @in-nextcloud @gesture
-  Scenario Outline: Move a design between projects
+  Scenario Outline: Move a design between project folders within nextcloud 
     Given a design file named "Travelling.penpot" in "<source>"
     When I move the file into "<destination>"
     Then the design is in the "<lands in>" Penpot project
@@ -50,7 +50,7 @@ Feature: Moving a design
 
   # notes: ../AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
   @in-penpot @gesture @todo
-  Scenario Outline: Move a design in Penpot
+  Scenario Outline: Move a design between Penpot projects
     Given a design file named "Relocated.penpot" in "Penpot/Upstream From"
     When someone moves the design into the "<project>" Penpot project
     Then the file is gone from "Penpot/Upstream From"
@@ -110,9 +110,9 @@ Feature: Moving a design
     # rather than an import, and the trash is what keeps that id worth naming.
 
   # notes: ../AGENTS.md#coming-back-revives-whatever-penpot-still-has
-  # @unbuilt — nothing untrashes a design today; a return is a plain re-stamp.
+  # @unbuilt — nothing untrashes a design today; an arrival is a plain re-stamp.
   @in-nextcloud @gesture @unbuilt
-  Scenario Outline: Move a design file that still carries its Penpot id into a project
+  Scenario Outline: Move a design file into a project when Penpot still has its design
     Given an unmapped design file at "Scratch/Going Loose.penpot" carrying its Penpot id
     And its design is <where> in Penpot
     When I move the file into "Penpot/Welcome Back"
@@ -123,44 +123,31 @@ Feature: Moving a design
       | penpot_team_id | the mapping's team |
       | penpot_mode    | the mapping's mode |
 
-    Examples: whichever layer it is on, the id in the file still names it
+    Examples: parked or never gone, the id in the file names it either way
       | where   |
       | trashed |
       | live    |
 
-    # A third layer — the id naming nothing, once Penpot's grace window passes — is
-    # the scenario below, not a row: an id that cannot be revived is replaced.
-
-  # notes: ../AGENTS.md#a-return-penpot-cannot-honour-imports-the-bytes-instead
-  # @unbuilt — the fallback needs the return above to exist before it is a fallback.
+  # notes: ../AGENTS.md#an-arrival-penpot-cannot-match-becomes-a-new-design
+  # @unbuilt — a stale id is pushed as-is today, so only the second row passes.
   @in-nextcloud @gesture @unbuilt
-  Scenario: Move a design file whose Penpot id names nothing into a project
-    Given an unmapped design file at "Scratch/Going Loose.penpot" carrying its Penpot id
-    And its design has been permanently deleted in Penpot
-    When I move the file into "Penpot/Welcome Back"
-    Then the design is in the "Welcome Back" Penpot project
-    And the file holds:
-      | penpot_id      | its own, not the one it arrived with |
-      | penpot_team_id | the mapping's team                   |
-      | penpot_mode    | the mapping's mode                   |
-
-    # Nothing is lost, because the bytes never left Nextcloud: the archive is imported
-    # as a new design (§6.33). Only the id and the history start again.
-
-  # notes: ../AGENTS.md#a-design-file-arriving-in-a-project-becomes-a-design
-  @in-nextcloud @gesture
-  Scenario: Move a design file carrying no Penpot id into a project
-    Given an untracked design file at "Scratch/Uploaded.penpot"
+  Scenario Outline: Move a design file into a project when Penpot has no design for it
+    Given a design file at "Scratch/Uploaded.penpot" carrying <what>
     When I move the file into "Penpot/Adopt Me"
     Then the design is in the "Adopt Me" Penpot project
     And the file holds:
-      | penpot_id      | set                |
-      | penpot_team_id | the mapping's team |
-      | penpot_mode    | the mapping's mode |
-      | content        | an archive         |
+      | penpot_id      | a new one, never the one it arrived with |
+      | penpot_team_id | the mapping's team                       |
+      | penpot_mode    | the mapping's mode                       |
+      | content        | an archive                               |
 
-    # The two above carry an id and this one does not, which is the whole difference:
-    # with nothing to reattach to, the archive is imported (§6.33) and an id is minted.
+    Examples: an id nothing answers to and no id at all are the same question
+      | what                       |
+      | an id no design answers to |
+      | no Penpot id at all        |
+
+    # Nothing is lost either way, because the bytes were never anywhere but Nextcloud:
+    # the archive is imported (§6.33) and the design starts a fresh history.
 
   # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
   # @unbuilt — the import exists now; the report still has nothing to travel on.
@@ -175,27 +162,22 @@ Feature: Moving a design
     # untracked is one Penpot itself would not take.
 
   # notes: ../AGENTS.md#a-design-moved-to-another-team-in-penpot-leaves-this-mapping
-  @in-penpot @gesture @todo
-  Scenario: Someone moves a design into an unmapped team in Penpot
-    Given a design file named "Departing.penpot" in "Penpot/Upstream"
+  # @unbuilt — the pull trashes every mirror it stops seeing, and cannot yet tell a
+  # design that was moved from one that was deleted.
+  @in-penpot @gesture @unbuilt
+  Scenario Outline: Someone moves a design into an unmapped team in Penpot
+    Given a design file named "Departing.penpot" in "<source>"
     When someone moves the design into the "Archive Team" Penpot team
-    Then the file is gone from "Penpot/Upstream"
-    And the file is recoverable from the Nextcloud trash
+    Then the file is gone from "<source>", leaving no trash entry
     And the design still exists in Penpot
 
-    # NOT the drag above: the design left, the file did not. Penpot is reversible
-    # here, so the local half is a trashing rather than an unmapping.
+    Examples: a mirror and a pointer leave the same way
+      | source            |
+      | Penpot/Upstream   |
+      | Pointers/Upstream |
 
-  # notes: ../AGENTS.md#a-design-moved-to-another-team-in-penpot-leaves-this-mapping
-  @in-penpot @gesture @todo
-  Scenario: Someone moves a linked design into an unmapped team in Penpot
-    Given a design file named "Departing.penpot" in "Pointers/Upstream"
-    When someone moves the design into the "Archive Team" Penpot team
-    Then the file is gone from "Pointers/Upstream", leaving no trash entry
-    And the design still exists in Penpot
-
-    # NOT the refusal below: nothing here happened in Nextcloud. The guard stops a
-    # person dragging a link; it has no say over a design moved in Penpot's own UI.
+    # A move is not a delete, and a trashed mirror would read as one. Nobody deleted
+    # anything: Penpot still holds the design, in the team it was moved to.
 
     # ── RULE: a duplicate arriving in a project keeps the id already there ────
     # The person answers what the CONTENT should be; the identity is never theirs to pick.

@@ -138,6 +138,12 @@ final class PenpotClient {
 		// them. Closes open question #27.
 		'create-file' => ['project' => 'project-id', 'name' => 'name'],
 		'delete-file' => ['file' => 'id'],
+		// A BARE `id`, like `delete-file` and unlike `duplicate-file`'s `file-id`.
+		// Read off Penpot's own frontend source map rather than guessed — the two
+		// spellings are one line apart in this very table, so a coin-flip here
+		// would have produced a 400 that {@see fileExists()} reads as "unknown",
+		// and the prune would have quietly taken the cautious branch forever.
+		'get-file-summary' => ['file' => 'id'],
 		// A BARE `id`, like `rename-project` and unlike `move-project`. Read off
 		// `schema:delete-project`; recorded in Ch3 §C6.38 when the same read
 		// established that this command exists at all.
@@ -323,6 +329,57 @@ final class PenpotClient {
 	 */
 	public function deleteFile(string $fileId, ?string $actorToken = null): void {
 		$this->call('delete-file', ['file' => $fileId], $actorToken);
+	}
+
+	/**
+	 * Does a design with this id still exist anywhere in Penpot?
+	 *
+	 * ## WHY THE ANSWER HAS THREE VALUES AND NOT TWO
+	 *
+	 * The only caller is {@see \OCA\PenpotSync\Service\PullService}'s prune, which
+	 * uses it to tell a design that was MOVED out of a mapped team (alive, just
+	 * somewhere we no longer mirror — the local mirror goes with no trash entry)
+	 * from one that was DELETED or PURGED (the local file may be the last copy in
+	 * existence — it must land in the Nextcloud trash).
+	 *
+	 * Those two branches are not equally safe. Getting "moved" wrong costs a
+	 * recoverable file sitting in the trash; getting "purged" wrong DESTROYS the
+	 * only remaining copy of somebody's design. So a probe that cannot answer must
+	 * not be allowed to look like a "no" — hence `null`, which the caller treats
+	 * exactly as it treats "still exists": keep the file.
+	 *
+	 * `get-file-summary` rather than `get-file`: both exist (confirmed live — an
+	 * unknown command answers 404, these answer 401), and the summary returns
+	 * counts instead of the whole design, which for a real `.penpot` is megabytes.
+	 * A prune already only runs for mirrors Penpot stopped naming, but there is no
+	 * reason to download a file we are about to stop tracking.
+	 *
+	 * @return bool|null true when Penpot still has it, false ONLY on a definite
+	 *                   not-found, and null when the probe could not tell —
+	 *                   unreachable, unauthorised, or a schema we read wrong
+	 */
+	public function fileExists(string $fileId): ?bool {
+		try {
+			$this->call('get-file-summary', ['file' => $fileId]);
+
+			return true;
+		} catch (PenpotApiException $e) {
+			if ($e->getKind() === PenpotApiException::KIND_NOT_FOUND) {
+				return false;
+			}
+
+			// EVERY OTHER FAILURE IS "I DO NOT KNOW", deliberately — including a
+			// 400, which would mean this table's param spelling is wrong. That is a
+			// bug to fix, not a licence to delete a file permanently.
+			$this->logger->info('penpot_sync: could not determine whether a design still exists', [
+				'app' => Application::APP_ID,
+				'penpot_id' => $fileId,
+				'kind' => $e->getKind(),
+				'exception' => $e,
+			]);
+
+			return null;
+		}
 	}
 
 	/**
