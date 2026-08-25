@@ -318,6 +318,8 @@ trait CopySteps {
 
 	/** `duplicate-file` on the cursor's design, then the pull that mirrors it. */
 	private function duplicateInPenpot(string $name): void {
+		$this->leaveOnlyTheCursorInItsProject();
+
 		// KEBAB `file-id`, which corrects §6.28's record of a camelCase `fileId` —
 		// see PenpotClient::PARAMS, where the same row carries the same warning.
 		$this->penpotRpc('duplicate-file', ['file-id' => $this->cursorDesignId(), 'name' => $name]);
@@ -508,5 +510,39 @@ trait CopySteps {
 		}
 
 		return null;
+	}
+	/**
+	 * Clear every design in the cursor's project except the cursor's own.
+	 *
+	 * ## WHY A DUPLICATE SCENARIO NEEDS THIS AND THE OTHERS DO NOT
+	 *
+	 * `Three designs in Penpot wearing one name` asserts the exact filenames core
+	 * chose — `Original.penpot`, `Original (1)`, `Original (2)` — and those suffixes
+	 * are a function of WHAT WAS ALREADY IN THE FOLDER. One stray mirror and the
+	 * numbering shifts, which is how that scenario reported holding `(2)` and `(3)`:
+	 * a true statement about a fixture the Given did not describe.
+	 *
+	 * `Given a design file named "Original.penpot" in "Penpot/Crowded"` says the
+	 * project holds that design. Penpot state accumulates across a leg — teams are
+	 * find-or-create and the Background's clean-up runs while UNMAPPED so it never
+	 * reaches Penpot — so making the sentence true means saying it to Penpot too.
+	 *
+	 * Idempotent, so the second duplicate call is free.
+	 */
+	private function leaveOnlyTheCursorInItsProject(): void {
+		$keep = $this->cursorDesignId();
+		$folder = dirname($this->currentFilePath);
+		$root = $this->mappingRootOf($folder);
+		$team = $this->mappingTeamNames[$root] ?? '';
+		$project = trim(substr($folder, strlen($root)), '/');
+		if ($team === '' || $project === '') {
+			return;
+		}
+
+		foreach ($this->penpotFileIdsIn($project, $team) as $id) {
+			if ($id !== $keep) {
+				$this->penpotRpc('delete-file', ['id' => $id]);
+			}
+		}
 	}
 }

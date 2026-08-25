@@ -179,6 +179,20 @@ trait MetadataSteps {
 					? null : "expected the renamed design ({$this->idOfRenamedDesign}), found '{$actual}'";
 
 			case 'the original id':
+				// THE PATH'S OWN ID FIRST, and the cursor only as a fallback.
+				//
+				// `Rename a design in Penpot to a name another one already has` puts
+				// TWO designs on stage and asserts both — so the cursor is whichever
+				// was declared last (Beta), and reading it made
+				// `"…/Alpha.penpot" holds | penpot_id | the original id |` compare
+				// Alpha's file against BETA's id. The arrange already keys declared
+				// designs by filename for exactly this, and
+				// {@see ArrangeSteps::checkIdentity()} already resolves it that way.
+				$declared = $this->declaredDesignIds[basename($path)] ?? '';
+				if ($declared !== '') {
+					return $actual === $declared
+						? null : "expected the id it already had ({$declared}), found '{$actual}'";
+				}
 				// THE CURSOR'S ID, captured when the scenario put the file on stage.
 				// Stronger than `the design's id`, which resolves whatever design now
 				// wears that name and so cannot tell a rename from a

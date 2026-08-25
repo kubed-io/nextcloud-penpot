@@ -94,13 +94,20 @@ trait PruneSteps {
 		// a real trash listing (§C6.11), and this suite holds itself to the same
 		// rule it holds the app to.
 		$this->penpotRpc('delete-file', ['id' => $fileId]);
-		$team = $this->currentFilePath !== ''
-			? ($this->teamIdForPath($this->currentFilePath) ?: $this->firstVisibleTeamId())
-			: $this->firstVisibleTeamId();
-		$this->penpotRpc('permanently-delete-team-files', [
-			'team-id' => $team,
-			'ids' => [$fileId],
-		]);
+
+		// EVERY MAPPED TEAM, NOT ONE GUESSED FROM A PATH. `permanently-delete-team-files`
+		// takes a team AND ids, and it is a silent no-op when the two do not match —
+		// which looks exactly like success and then fails three lines later on
+		// "still listed". Guessing from `currentFilePath` was right for the design
+		// under test and wrong whenever the cursor sat under a different mapping.
+		// Firing it at each mapped team costs a few requests and cannot miss.
+		$teams = array_values($this->mappingTeamIds) ?: [$this->firstVisibleTeamId()];
+		foreach (array_unique($teams) as $team) {
+			$this->penpotRpc('permanently-delete-team-files', [
+				'team-id' => $team,
+				'ids' => [$fileId],
+			]);
+		}
 	}
 
 	/**
