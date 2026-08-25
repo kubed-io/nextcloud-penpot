@@ -119,6 +119,7 @@ final class MotionService {
 		private readonly PersonalTokenService $personalTokens,
 		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
+		private readonly ImportService $imports,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -148,9 +149,16 @@ final class MotionService {
 
 		$meta = $this->metadata->readFile($target->getId());
 		if ($meta === null || !$meta->isManaged()) {
-			// A `.penpot` we do not track. Creating it in Penpot on the way in is
-			// the §6.33 carve-out, a later course — never a side effect of a drag.
-			return false;
+			// A `.penpot` WE DO NOT TRACK, dragged somewhere. If it landed inside a
+			// mapping and holds an archive, that is the §6.33 import — the same act
+			// as an upload arriving there, because a mapping that ignores a design
+			// sitting inside it is not a mapping. This used to return here, and the
+			// spec has said otherwise in two files since.
+			$landing = $this->resolver->resolve($target);
+			$into = $this->destinations->projectForContentIn($target, $landing);
+
+			return $into !== null
+				&& $this->imports->adopt($target, $into, $landing->teamId) !== null;
 		}
 		if ($meta->isLink()) {
 			// A `link` file is confined to its project (§6.43), so MoveGuardListener

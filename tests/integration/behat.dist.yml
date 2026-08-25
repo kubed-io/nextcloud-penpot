@@ -26,8 +26,9 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 26 OF 114 SCENARIO HEADERS RUN — 67 executed, on all four legs
-  # (admin 25, design 19, project 21, core 2). The spec was rewritten wholesale — the
+  # 42 OF 113 SCENARIO HEADERS RUN — 102 executed, across eleven legs (admin 25,
+  # copying 17, authoring 10, motion 10, naming 10, project-motion 8, projects 5,
+  # trash 5, core 4, project-copy 4, project-trash 4). The spec was rewritten — the
   # noun became the folder and the verb the file — and rather than re-triage 116
   # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for
   # each later PR to draw from. Chapter 3 Round 1 drew the first nine: the ones
@@ -99,6 +100,27 @@ default:
   #   project  the same six verbs, as they apply to a project (a folder).
   #   core     everything that is not a verb on one of those two nouns: the pull
   #            itself, identity/membership, modes, and the app lifecycle.
+  # ── THE SUITE AXIS IS THE VERB, AND IT IS A PARTITION ────────────────────
+  #
+  # Eleven legs each run a slice of features/, in parallel, and every feature file
+  # belongs to exactly ONE. `bin/check-suites.sh` enforces that mechanically,
+  # because both ways of breaking it are SILENT: a file in no suite never runs and
+  # every leg still reports green; a file in two runs twice against two stacks.
+  #
+  # THE AXIS IS THE FILENAME, NOT A TAG. Tags looked like the obvious split and are
+  # the wrong tool: measured over the live scenarios, many carry no channel tag and
+  # more carry no origin tag, so a tag partition leaks — those scenarios would
+  # match no leg and quietly stop running. A path partition cannot, because
+  # `ls features/**/*.feature` minus the union must be empty and that is one line
+  # to check.
+  #
+  # WHY ELEVEN AND NOT FOUR. It was four — admin / design / project / core — and
+  # the `design` leg grew to ELEVEN MINUTES as its scenarios were promoted, which
+  # is the whole wall-clock of a run: the legs are parallel, so the slowest one is
+  # the answer. Every leg pays the same fixed cost (a Nextcloud, a Penpot backend,
+  # a frontend, Postgres, Valkey), so splitting trades runner minutes for latency —
+  # deliberately, and the same trade both siblings already made. Grafana runs
+  # thirteen suites on this exact shape; this is its verb axis with penpot's nouns.
   suites:
     admin:
       paths:
@@ -115,34 +137,62 @@ default:
       contexts: &contexts
       - OCA\PenpotSync\Tests\Integration\FeatureContext
 
-    design:
+    authoring:
       paths:
       - '%paths.base%/../../features/designs/create.feature'
-      - '%paths.base%/../../features/designs/view.feature'
-      - '%paths.base%/../../features/designs/copy.feature'
-      - '%paths.base%/../../features/designs/delete.feature'
       - '%paths.base%/../../features/designs/edit.feature'
-      - '%paths.base%/../../features/designs/move.feature'
-      - '%paths.base%/../../features/designs/open-with.feature'
-      - '%paths.base%/../../features/designs/purge.feature'
-      - '%paths.base%/../../features/designs/rename.feature'
-      - '%paths.base%/../../features/designs/restore.feature'
       contexts: *contexts
 
-    project:
+    copying:
       paths:
-      - '%paths.base%/../../features/projects/create.feature'
-      - '%paths.base%/../../features/projects/copy.feature'
-      - '%paths.base%/../../features/projects/delete.feature'
-      - '%paths.base%/../../features/projects/move.feature'
-      - '%paths.base%/../../features/projects/purge.feature'
-      - '%paths.base%/../../features/projects/rename.feature'
-      - '%paths.base%/../../features/projects/restore.feature'
+      - '%paths.base%/../../features/designs/copy.feature'
+      contexts: *contexts
+
+    naming:
+      paths:
+      - '%paths.base%/../../features/designs/rename.feature'
+      contexts: *contexts
+
+    trash:
+      paths:
+      - '%paths.base%/../../features/designs/delete.feature'
+      - '%paths.base%/../../features/designs/restore.feature'
+      - '%paths.base%/../../features/designs/purge.feature'
+      contexts: *contexts
+
+    motion:
+      paths:
+      - '%paths.base%/../../features/designs/move.feature'
       contexts: *contexts
 
     core:
       paths:
+      - '%paths.base%/../../features/designs/view.feature'
+      - '%paths.base%/../../features/designs/open-with.feature'
       - '%paths.base%/../../features/lifecycle.feature'
+      contexts: *contexts
+
+    projects:
+      paths:
+      - '%paths.base%/../../features/projects/create.feature'
+      contexts: *contexts
+
+    project-trash:
+      paths:
+      - '%paths.base%/../../features/projects/delete.feature'
+      - '%paths.base%/../../features/projects/restore.feature'
+      - '%paths.base%/../../features/projects/purge.feature'
+      contexts: *contexts
+
+    project-motion:
+      paths:
+      - '%paths.base%/../../features/projects/move.feature'
+      contexts: *contexts
+
+    project-copy:
+      paths:
+      - '%paths.base%/../../features/projects/copy.feature'
+      - '%paths.base%/../../features/projects/rename.feature'
       contexts: *contexts
 
   formatters:

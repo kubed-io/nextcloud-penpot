@@ -92,6 +92,39 @@ if dupes:
         print(f'    /^{p}$/  ({", ".join(files)})')
     print('  One function may carry several phrasings; never the same phrasing twice.')
 
+# ── the collision Behat never gets to report ──────────────────────────────────
+#
+# The check above is about STEP TEXT. This one is about PHP, and it is a harder
+# failure: every *Steps trait is composed into the one FeatureContext, and two
+# traits cannot contribute the same METHOD NAME to a class. PHP fatals on the
+# collision while loading the context — before Behat resolves a single step — so
+# all four legs die at once with no JUnit written and the run reports as "matched
+# no scenarios" rather than as a conflict.
+#
+# It cost a full CI cycle to find, on a cursor-form step named for its sentence
+# (`someone deletes the design in Penpot`) whose obvious method name was already
+# taken by the path form one trait over. The text check could not see it: the two
+# phrasings are genuinely different, which is the whole point of having both.
+method_re = re.compile(r'^\s*(?:public|private|protected)\s+function\s+(\w+)\s*\(')
+methods = {}
+for php in sorted(bootstrap.rglob('*.php')):
+    if php.name == 'FeatureContext.php':
+        continue
+    for line in php.read_text(encoding='utf-8').splitlines():
+        m = method_re.match(line)
+        if m:
+            methods.setdefault(m.group(1), []).append(php.name)
+
+clashes = {n: sorted(set(f)) for n, f in methods.items() if len(set(f)) > 1}
+if clashes:
+    fail = True
+    print('✘ DUPLICATE METHOD NAME across two traits — PHP fatals when FeatureContext')
+    print('  composes them, before Behat runs anything, and EVERY suite dies at once:')
+    for n, files in sorted(clashes.items()):
+        print(f'    {n}()  ({", ".join(files)})')
+    print('  Rename one. A cursor-form step is usually the one to rename — name it')
+    print('  for the cursor (…TheCursoredDesign…) rather than for its sentence.')
+
 compiled = [re.compile('^' + p + '$') for p in patterns]
 
 # ── the steps the suite actually runs ──────────────────────────────────────────

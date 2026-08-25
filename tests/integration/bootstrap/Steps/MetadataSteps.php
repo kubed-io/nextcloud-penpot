@@ -99,6 +99,25 @@ trait MetadataSteps {
 	 * @Then /^"([^"]*)" holds:$/
 	 */
 	public function holds(string $path, TableNode $table): void {
+		// A MISSING PATH IS A DIAGNOSTIC, NOT A 404. Without this the failure is
+		// Sabre's "File with name … could not be located", which says nothing about
+		// WHY — and the answer is almost always "it is there under the name core
+		// actually chose". Listing the folder turns three CI cycles into one.
+		if (!$this->davExists($path)) {
+			$folder = dirname($path);
+			$held = [];
+			foreach ($this->davChildren($folder) as $child) {
+				$held[] = basename($child) . ' (' . (($this->davReadMetadata($child, 'penpot_id') ?? '') ?: 'untracked') . ')';
+			}
+
+			throw new \RuntimeException(sprintf(
+				"the scenario expects '%s', and it is not there. '%s' holds: %s",
+				$path,
+				$folder,
+				implode(', ', $held) ?: '(nothing)',
+			));
+		}
+
 		// READ ONLY WHAT THE TABLE ASKS FOR. Reading the whole set eagerly meant
 		// every table paid for `content`, which is resolved from `occ status` and
 		// exists only for FILES — so `"Penpot/Notes" holds: | penpot_project_id |`
@@ -161,7 +180,38 @@ trait MetadataSteps {
 				return $actual === $this->idBeforeGesture
 					? null : "expected the id it already had ({$this->idBeforeGesture}), found '{$actual}'";
 
+			case 'the id of the renamed design':
+				// THE DESIGN THE SCENARIO JUST RENAMED IN PENPOT, captured by
+				// {@see RenameSteps::someoneRenamesTheNamedDesignToInPenpot()} before the
+				// pull moved the name out from under it.
+				//
+				// Needed because the arrival is the file that DID NOT keep the name:
+				// two designs are called "Alpha" in Penpot, one file is
+				// `Alpha.penpot` and the other `Alpha (1).penpot`, and the whole
+				// claim is which id sits at which path. A by-name lookup cannot
+				// answer that — both designs answer to "Alpha" — so the id has to
+				// come from the gesture rather than from a listing.
+				if ($this->idOfRenamedDesign === '') {
+					return 'no design was renamed in Penpot for this to refer to';
+				}
+				return $actual === $this->idOfRenamedDesign
+					? null : "expected the renamed design ({$this->idOfRenamedDesign}), found '{$actual}'";
+
 			case 'the original id':
+				// THE PATH'S OWN ID FIRST, and the cursor only as a fallback.
+				//
+				// `Rename a design in Penpot to a name another one already has` puts
+				// TWO designs on stage and asserts both — so the cursor is whichever
+				// was declared last (Beta), and reading it made
+				// `"…/Alpha.penpot" holds | penpot_id | the original id |` compare
+				// Alpha's file against BETA's id. The arrange already keys declared
+				// designs by filename for exactly this, and
+				// {@see ArrangeSteps::checkIdentity()} already resolves it that way.
+				$declared = $this->declaredDesignIds[basename($path)] ?? '';
+				if ($declared !== '') {
+					return $actual === $declared
+						? null : "expected the id it already had ({$declared}), found '{$actual}'";
+				}
 				// THE CURSOR'S ID, captured when the scenario put the file on stage.
 				// Stronger than `the design's id`, which resolves whatever design now
 				// wears that name and so cannot tell a rename from a

@@ -119,6 +119,58 @@ final class LinkWriteGuardPlugin extends ServerPlugin {
 		// Two scenarios in `designs/create.feature` were @todo against this hole and
 		// one of them was tagged as though the code existed.
 		$server->on('beforeCreateFile', [$this, 'beforeCreateFile'], 10);
+
+		// AND COPY, WHICH REACHES NEITHER OF THE ABOVE. Sabre's COPY builds the
+		// destination through `Server::copyNode()` → `$parent->createFile()`, which
+		// does not emit `beforeCreateFile` (that is `httpPut`'s) and does not emit
+		// `beforeWriteContent` for a target that does not exist yet. So a `.penpot`
+		// could be copied straight into a link mapping and answered 201 — measured,
+		// not assumed: `designs/copy.feature`'s refusal row said so in CI.
+		$server->on('method:COPY', [$this, 'onCopy'], 10);
+	}
+
+	/**
+	 * Refuse a COPY the rules refuse, in words the person can read.
+	 *
+	 * The same shape as {@see onMove()} and a DIFFERENT rule — a copy is refused
+	 * where a move is allowed (a link may move within its own project; copying one
+	 * anywhere makes a second file that is an empty husk). See
+	 * {@see MoveRules::refusalForCopying}.
+	 *
+	 * @param ResponseInterface $response unused; part of Sabre's `method:*` signature
+	 * @return bool always true — this handler either throws or hands the request on
+	 */
+	public function onCopy(RequestInterface $request, ResponseInterface $response): bool {
+		$destination = $request->getHeader('Destination');
+		if ($destination === null || $destination === '' || $this->server === null) {
+			return true;
+		}
+		$uid = $this->userSession->getUser()?->getUID() ?? '';
+		if ($uid === '') {
+			return true;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($uid);
+			$source = $userFolder->get($this->relativeTo($request->getPath()));
+			$targetRelative = $this->relativeTo($this->server->calculateUri($destination));
+			$parentPath = dirname($targetRelative);
+			$targetParent = $parentPath === '.' || $parentPath === '' ? $userFolder : $userFolder->get($parentPath);
+		} catch (\Throwable) {
+			return true;
+		}
+
+		$refusal = $this->rules->refusalForCopying($source, $targetParent, basename($targetRelative));
+		if ($refusal === null) {
+			return true;
+		}
+
+		$this->logger->warning('penpot_sync: refused a WebDAV copy', [
+			'app' => Application::APP_ID,
+			'from' => $request->getPath(),
+		]);
+
+		throw new Forbidden($refusal);
 	}
 
 	/**

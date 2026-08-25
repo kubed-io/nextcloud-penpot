@@ -495,4 +495,121 @@ final class LinkWriteGuardPluginTest extends TestCase {
 
 		return $l;
 	}
+	// ── method:COPY — the verb neither hook reaches (§6.43) ──────────────────
+
+	/**
+	 * A LINK CANNOT BE COPIED ANYWHERE, and this is where a copy's rule parts
+	 * company with a move's.
+	 *
+	 * A link may MOVE within its own project: Penpot cannot see a subfolder, the
+	 * file stays the pointer it was, and nothing is lost. A copy makes a SECOND
+	 * file, and the second one is a zero-byte husk that looks like a design and can
+	 * never become one — no pull will fill it, because Penpot has no second design
+	 * for it to mirror.
+	 */
+	public function testRefusesCopyingALinkFile(): void {
+		$refusal = $this->copyFrom(link: true, toTeam: 'team-sync', linkTeam: 'team-link');
+
+		self::assertInstanceOf(Forbidden::class, $refusal);
+		self::assertStringContainsString('Pointer.penpot', $refusal->getMessage());
+	}
+
+	/** Its own project included: there is nowhere a copy of a pointer is useful. */
+	public function testRefusesCopyingALinkWithinItsOwnMapping(): void {
+		self::assertInstanceOf(
+			Forbidden::class,
+			$this->copyFrom(link: true, toTeam: 'team-link', linkTeam: 'team-link'),
+		);
+	}
+
+	/** And a link mapping takes nothing from this side, whatever is arriving. */
+	public function testRefusesCopyingIntoALinkMapping(): void {
+		self::assertInstanceOf(
+			Forbidden::class,
+			$this->copyFrom(link: false, toTeam: 'team-link', linkTeam: 'team-link'),
+		);
+	}
+
+	/** The ordinary case stays free: a sync design copied into a sync mapping. */
+	public function testAllowsCopyingASyncDesignIntoASyncMapping(): void {
+		self::assertNull($this->copyFrom(link: false, toTeam: 'team-sync', linkTeam: 'team-link'));
+	}
+
+	/** FAIL OPEN, as everywhere in this plugin. */
+	public function testACopyFailsOpenWithNoUserInSession(): void {
+		self::assertNull($this->copyFrom(link: true, toTeam: 'team-link', linkTeam: 'team-link', withUser: false));
+	}
+
+	/**
+	 * Run one COPY through the plugin; returns the Forbidden it threw, or null.
+	 *
+	 * $link is whether the SOURCE file is a link; $toTeam is what the destination
+	 * folder resolves to; $linkTeam is the one mapped in `link` mode.
+	 */
+	private function copyFrom(bool $link, string $toTeam, string $linkTeam, bool $withUser = true): ?Forbidden {
+		$source = $this->createStub(File::class);
+		$source->method('getName')->willReturn('Pointer.penpot');
+		$source->method('getId')->willReturn(7);
+
+		$parent = $this->createStub(Folder::class);
+		$parent->method('getName')->willReturn('Elsewhere');
+		$parent->method('getId')->willReturn(8);
+
+		$userFolder = $this->createStub(Folder::class);
+		$userFolder->method('get')->willReturnCallback(
+			static fn (string $path): Node => str_ends_with($path, '.penpot') ? $source : $parent,
+		);
+		$root = $this->createStub(IRootFolder::class);
+		$root->method('getUserFolder')->willReturn($userFolder);
+
+		$session = $this->createStub(IUserSession::class);
+		if ($withUser) {
+			$user = $this->createStub(IUser::class);
+			$user->method('getUID')->willReturn('alice');
+			$session->method('getUser')->willReturn($user);
+		}
+
+		$metadata = $this->createMock(PenpotMetadata::class);
+		$metadata->method('readFile')->willReturn(
+			// `Mapping::MODE_LINK`, NOT the stored `reference`. PenpotMetadata
+			// translates the wire value back on read (the literal `link` is
+			// is_callable() and crashes core's PROPFIND), so every consumer of
+			// PenpotFileMetadata sees `link` — including isLink(), which this test
+			// was silently failing to trigger.
+			new PenpotFileMetadata('penpot-1', '', $link ? Mapping::MODE_LINK : Mapping::MODE_SYNC, ''),
+		);
+
+		$resolver = $this->createStub(MembershipResolver::class);
+		$resolver->method('resolve')->willReturn(new Membership(null, $toTeam));
+
+		$mappings = $this->createStub(MappingService::class);
+		$mappings->method('getByTeamId')->willReturnCallback(
+			static fn (string $id): Mapping => new Mapping(
+				'm1',
+				$id,
+				'A Team',
+				'Folder',
+				false,
+				$id === $linkTeam ? Mapping::MODE_LINK : Mapping::MODE_SYNC,
+			),
+		);
+
+		$rules = new MoveRules($metadata, $resolver, $mappings, $this->identityTranslator());
+		$plugin = new LinkWriteGuardPlugin($metadata, $rules, $root, $session, new NullLogger());
+		$plugin->initialize(new Server());
+
+		$request = $this->createStub(RequestInterface::class);
+		$request->method('getPath')->willReturn('files/alice/Pointers/Confined/Pointer.penpot');
+		$request->method('getHeader')->willReturn(
+			'http://localhost/remote.php/dav/files/alice/Elsewhere/Pointer.penpot',
+		);
+
+		try {
+			$plugin->onCopy($request, $this->createStub(ResponseInterface::class));
+		} catch (Forbidden $e) {
+			return $e;
+		}
+
+		return null;
+	}
 }

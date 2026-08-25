@@ -68,6 +68,7 @@ final class CopyService {
 		private readonly DestinationResolver $destinations,
 		private readonly PersonalTokenService $personalTokens,
 		private readonly LoggerInterface $logger,
+		private readonly ImportService $imports,
 	) {
 	}
 
@@ -83,9 +84,19 @@ final class CopyService {
 		// stays nullable all the way down to the write.
 		$stamped = $this->metadata->readFile($source->getId());
 		if ($stamped === null || $stamped->penpotId === '') {
-			// Copying an untracked `.penpot` is copying a file. Penpot is never
-			// contacted, and the copy inherits nothing because there was nothing.
+			// COPYING AN UNTRACKED `.penpot` INHERITS NOTHING — there was nothing to
+			// inherit — so the copy starts clean whatever happens next.
 			$this->metadata->clear($target->getId());
+
+			// …but if it LANDED in a mapping and holds an archive, it is a design
+			// arriving there, and §6.33 says a mapping does not ignore one. Nothing
+			// is duplicated: there is no source design to duplicate FROM, which is
+			// exactly why this is an import rather than a copy in Penpot's terms.
+			$landing = $this->resolver->resolve($target);
+			$into = $this->destinations->projectForContentIn($target, $landing);
+			if ($into !== null) {
+				$this->imports->adopt($target, $into, $landing->teamId);
+			}
 
 			return;
 		}

@@ -47,14 +47,29 @@ trait RenameSteps {
 	 * A rename is a MOVE to a sibling path — same DAV verb, same Nextcloud event.
 	 * Telling a rename from a move is the listener's job, not the transport's.
 	 *
+	 * IT SNAPSHOTS PENPOT'S DESIGN NAMES FIRST, so the untracked-file scenarios can
+	 * say "no design is renamed in Penpot" without the spec growing a sentence that
+	 * exists only for the harness. Cheap — one probe — and taken on every rename
+	 * rather than only where it is read, because a `When` that behaves differently
+	 * depending on the `Then` after it is the harder thing to reason about.
+	 *
 	 * @When /^I rename the file to "([^"]*)"$/
 	 */
 	public function iRenameTheFileTo(string $filename): void {
+		$this->designNamesBeforeRename = $this->penpotDesignNames();
 		$from = $this->currentFile();
 		$to = $this->currentFolder . '/' . $filename;
 		$this->davMove($from, $to);
 		$this->currentFilePath = $to;
 	}
+
+	/**
+	 * Penpot's design names before a rename, so one that should not have travelled
+	 * can be shown not to have.
+	 *
+	 * @var list<string>
+	 */
+	private array $designNamesBeforeRename = [];
 
 	/**
 	 * The same gesture, expected to be REFUSED.
@@ -176,8 +191,32 @@ trait RenameSteps {
 		if ($id === '') {
 			throw new \RuntimeException("no design named '{$which}' is on stage");
 		}
+		// REMEMBERED BEFORE THE PULL, because afterwards this design's name is one
+		// two files answer to and its id cannot be looked up by name any more. See
+		// `the id of the renamed design` in MetadataSteps.
+		$this->idOfRenamedDesign = $id;
 		$this->penpotRpc('rename-file', ['id' => $id, 'name' => $name]);
 		$this->theAdminRunsAPull();
+	}
+
+	/** The design {@see someoneRenamesTheNamedDesignToInPenpot()} last renamed. */
+	private string $idOfRenamedDesign = '';
+
+	/**
+	 * Both of the above are SCENARIO state and are cleared between scenarios.
+	 *
+	 * Without this a stale id survives into the next scenario, where
+	 * `the id of the renamed design` would compare against a design nobody on stage
+	 * has touched — and its guard ("no design was renamed") could never fire,
+	 * because the field is only empty on the very first scenario of a leg.
+	 *
+	 * @BeforeScenario
+	 */
+	public function armRename(): void {
+		$this->idOfRenamedDesign = '';
+		$this->designNamesBeforeRename = [];
+		$this->lastRenameStatus = 0;
+		$this->lastRenameBody = '';
 	}
 
 	/**
@@ -300,5 +339,147 @@ trait RenameSteps {
 		}
 		$this->penpotRpc('rename-project', ['id' => $id, 'name' => $name]);
 		$this->theAdminRunsAPull();
+	}
+	/**
+	 * A rename this app was never entitled to propagate.
+	 *
+	 * ASSERTED ACROSS THE WHOLE INSTANCE rather than in one project, because an
+	 * untracked file names no project — that is the whole point of it. The names
+	 * before the gesture are snapshotted by the rename step itself for the same
+	 * reason `no design is created in Penpot` snapshots ids: there is no sentence
+	 * in the spec where a "before" would belong.
+	 *
+	 * @Then /^no design is renamed in Penpot$/
+	 */
+	public function noDesignIsRenamedInPenpot(): void {
+		$now = $this->penpotDesignNames();
+		$added = array_values(array_diff($now, $this->designNamesBeforeRename));
+		$gone = array_values(array_diff($this->designNamesBeforeRename, $now));
+		if ($added !== [] || $gone !== []) {
+			throw new \RuntimeException(sprintf(
+				"Penpot's design names changed across a rename it should not have seen — gained [%s], lost [%s]",
+				implode(', ', $added),
+				implode(', ', $gone),
+			));
+		}
+	}
+
+	/**
+	 * Nothing this app stores is on the file — not a stale id, not a mode.
+	 *
+	 * STRONGER THAN "no penpot_id". A file the app declined to track must carry
+	 * NONE of its keys: a lone `penpot_mode` left behind would make the file read
+	 * as managed-but-broken to every later walk, which is the shape of bug this
+	 * assertion exists to catch.
+	 *
+	 * @Then /^the file holds no Penpot metadata at all$/
+	 * @Then /^it still holds no Penpot metadata$/
+	 */
+	public function theFileHoldsNoPenpotMetadataAtAll(): void {
+		// A TRASHED FILE IS NOT READABLE AT ITS OLD PATH, and the trashbin lives
+		// under a different DAV root that does not carry these properties. So a
+		// scenario that trashed the file asserts on what
+		// {@see GestureSteps::iMoveItToTheTrash()} read the instant before — which
+		// is the same claim, since what is being denied is that the app stamped
+		// anything on the way out.
+		$path = $this->currentFilePath;
+		$found = $this->davExists($path) ? $this->penpotKeysOn($path) : $this->penpotKeysAtTrashTime;
+
+		if ($found !== []) {
+			throw new \RuntimeException(
+				"'{$path}' was supposed to carry nothing of this app's, and holds: " . implode(', ', $found),
+			);
+		}
+	}
+
+	/**
+	 * Every key of this app's that a path carries, as `key=value` strings.
+	 *
+	 * STRONGER THAN "no penpot_id". A file the app declined to track must carry
+	 * NONE of its keys: a lone `penpot_mode` left behind would make the file read
+	 * as managed-but-broken to every later walk.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotKeysOn(string $path): array {
+		$found = [];
+		foreach (['penpot_id', 'penpot_mode', 'penpot_team_id', 'penpot_revision', 'penpot_project_id'] as $key) {
+			$value = $this->davReadMetadata($path, $key) ?? '';
+			if ($value !== '') {
+				$found[] = "{$key}={$value}";
+			}
+		}
+
+		return $found;
+	}
+
+	/**
+	 * Every design name Penpot can see, across every team the probe lists.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotDesignNames(): array {
+		$res = $this->occ('penpot_sync:probe --files');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("probe failed while listing Penpot's designs:\n{$res['output']}");
+		}
+
+		$names = [];
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^\s+(.*?)\s+revn=\S+\s+[0-9a-f-]{36}\s*$/', $line, $m) === 1) {
+				$names[] = trim($m[1]);
+			}
+		}
+
+		return $names;
+	}
+	/**
+	 * Penpot is perfectly happy with two designs wearing one name.
+	 *
+	 * THE OTHER HALF OF "THE SUFFIX IS NEXTCLOUD'S ALONE". The files are
+	 * `Alpha.penpot` and `Alpha (1).penpot` because a folder cannot hold two files
+	 * of one name; the designs behind them are both `Alpha`, and a suffix that
+	 * leaked upstream would be this app inventing a rename nobody asked for.
+	 *
+	 * Asserted BY ID off the two files on stage, so it cannot pass by finding some
+	 * other `Alpha` an earlier scenario left in the team.
+	 *
+	 * @Then /^both designs are named "([^"]*)" in Penpot$/
+	 */
+	public function bothDesignsAreNamedInPenpot(string $name): void {
+		$ids = [];
+		foreach ($this->davChildren($this->currentFolder) as $child) {
+			if (!str_ends_with($child, '.penpot')) {
+				continue;
+			}
+			$id = $this->davReadMetadata($child, 'penpot_id') ?? '';
+			if ($id !== '') {
+				$ids[$child] = $id;
+			}
+		}
+
+		if (count($ids) !== 2) {
+			throw new \RuntimeException(sprintf(
+				"expected two tracked designs in '%s', found %d: %s",
+				$this->currentFolder,
+				count($ids),
+				implode(', ', array_keys($ids)) ?: '(none)',
+			));
+		}
+
+		$wrong = [];
+		foreach ($ids as $path => $id) {
+			$named = $this->penpotDesignNameById($id);
+			if ($named !== $name) {
+				$wrong[] = "{$path} -> '" . ($named ?? '(gone)') . "'";
+			}
+		}
+
+		if ($wrong !== []) {
+			throw new \RuntimeException(
+				"both designs should still be '{$name}' in Penpot; Nextcloud's suffix reached it: "
+				. implode(', ', $wrong),
+			);
+		}
 	}
 }

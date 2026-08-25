@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\FolderMarkers;
+use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
@@ -97,6 +98,7 @@ final class MotionServiceTest extends TestCase {
 			$this->personalTokens,
 			$this->tags,
 			new SyncGuard(),
+			$this->createMock(ImportService::class),
 			new NullLogger(),
 		);
 	}
@@ -178,6 +180,12 @@ final class MotionServiceTest extends TestCase {
 	}
 
 	public function testAnUnmanagedPenpotFileIsNotOursToMove(): void {
+		// SINCE §6.33 AN UNTRACKED `.penpot` IS NOT AUTOMATICALLY NOBODY'S: if it
+		// holds an archive and landed inside a mapping it is imported. So this
+		// path now RESOLVES the destination, and the resolver has to answer with
+		// a real Membership — a stub's readonly properties are uninitialised, and
+		// reading one is a fatal rather than a null.
+		$this->resolver->method('resolve')->willReturn(Membership::none());
 		// Creating it in Penpot on the way in is the §6.33 carve-out, a later
 		// course — never a side effect of a drag.
 		$this->metadata->method('readFile')->willReturn(null);

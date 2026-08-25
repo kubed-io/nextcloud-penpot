@@ -82,6 +82,14 @@ trait GestureSteps {
 	private array $designIdsBeforeRefusal = [];
 
 	/**
+	 * The app's keys on the cursor's file the instant before it was trashed, since
+	 * a trashed file's properties are no longer readable at its old path.
+	 *
+	 * @var list<string>
+	 */
+	private array $penpotKeysAtTrashTime = [];
+
+	/**
 	 * Read the design's id BEFORE a gesture, which is the last moment the old path
 	 * resolves. Every claim of the form "the id it had before …" rests on this, so
 	 * every gesture those specs cover has to record it: a rename, a move, and a
@@ -274,13 +282,21 @@ trait GestureSteps {
 			);
 		}
 
-		$want = $this->modeOfMappingFor($path) === 'link' ? 'empty' : 'archive';
-		$body = $this->contentKind($path);
-		if ($body !== $want) {
-			throw new \RuntimeException(
-				"'{$path}' survived the refusal but its content did not: expected '{$want}' "
-				. "(what its mapping implies), found '{$body}'.",
-			);
+		// OUTSIDE EVERY MAPPING THERE IS NO IMPLIED BODY, and asserting one is how
+		// this step failed a scenario it should have passed. `modeOfMappingFor()`
+		// answers `link` for an unmapped path — a safe default where a MODE is
+		// wanted, and a wrong one here, because it made an untracked archive in
+		// "Scratch" read as "should be empty". A file the app does not manage holds
+		// whatever its owner put in it.
+		if (isset($this->mappingModes[$this->mappingRootOf($path)])) {
+			$want = $this->modeOfMappingFor($path) === 'link' ? 'empty' : 'archive';
+			$body = $this->contentKind($path);
+			if ($body !== $want) {
+				throw new \RuntimeException(
+					"'{$path}' survived the refusal but its content did not: expected '{$want}' "
+					. "(what its mapping implies), found '{$body}'.",
+				);
+			}
 		}
 
 		if ($this->currentFileId === '') {
@@ -430,7 +446,14 @@ trait GestureSteps {
 		$this->makeAncestors($path);
 		// Real ZIP magic — enough for holdsArchive() to recognise it, which is the
 		// only thing the upload-vs-create guard looks at.
-		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+		$this->davPut($path, $this->aRealPenpotArchive());
+		// AND IT IS ON STAGE NOW. An arrange that puts a file in the world seats the
+		// cursor, exactly as `a design file named … in …` does — otherwise the very
+		// next line, `When I move it to the trash`, has nothing to act on. Every
+		// untracked scenario in delete.feature and rename.feature failed on that.
+		$this->currentFilePath = $path;
+		$this->currentFolder = dirname($path);
+		$this->currentFileId = '';
 		$this->gestureTarget = $path;
 	}
 
@@ -1075,4 +1098,215 @@ trait GestureSteps {
 		$this->lastGestureBody = (string)$res->getBody();
 		$this->gestureTarget = $path;
 	}
+	// ── the trash, said about the file the scenario has on stage ─────────────
+
+	/**
+	 * Trash THE file — the cursor's.
+	 *
+	 * The cursor twin of {@see iMoveToTheTrash()}, and it snapshots Penpot's design
+	 * ids for the same reason the create refusal does: the untracked scenarios go on
+	 * to say "no design is deleted in Penpot", and there is no sentence in the spec
+	 * where a "before" would belong.
+	 *
+	 * @When /^I move it to the trash$/
+	 */
+	public function iMoveItToTheTrash(): void {
+		$path = $this->currentFile();
+		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
+		// READ BEFORE THE DELETE, because afterwards the path resolves to nothing
+		// and the trashbin endpoint is a different DAV root that does not carry
+		// these properties. `it still holds no Penpot metadata` is a claim about
+		// what the app stamped on the way out, and this is the last moment it can
+		// be read.
+		$this->penpotKeysAtTrashTime = $this->penpotKeysOn($path);
+		$this->captureIdBeforeGesture($path);
+		$this->davDelete($path);
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The same gesture, expected to be REFUSED.
+	 *
+	 * @When /^I try to move it to the trash$/
+	 */
+	public function iTryToMoveItToTheTrash(): void {
+		$path = $this->currentFile();
+		$result = $this->davDeleteResult($path);
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The cursor's file survived, in the Nextcloud trash.
+	 *
+	 * MATCHED THROUGH `nc:trashbin-filename`, like its path-form twin, because core
+	 * appends a `.dNNNNN` deletion stamp to the entry.
+	 *
+	 * @Then /^the file is recoverable from the Nextcloud trash$/
+	 */
+	public function theFileIsRecoverableFromTheNextcloudTrash(): void {
+		$path = $this->currentFilePath;
+		if ($this->trashbinPathFor($path) === null) {
+			throw new \RuntimeException("nothing in the Nextcloud trash came from '{$path}'");
+		}
+	}
+
+	/**
+	 * The delete reached nothing on the far side.
+	 *
+	 * COUNTED ACROSS THE WHOLE INSTANCE and BY ID: an untracked file names no
+	 * project, so there is nowhere narrower to look, and Penpot state accumulates
+	 * across a leg so a name check would answer about the wrong design.
+	 *
+	 * @Then /^no design is deleted in Penpot$/
+	 */
+	public function noDesignIsDeletedInPenpot(): void {
+		$gone = array_values(array_diff($this->designIdsBeforeRefusal, $this->penpotLiveDesignIds()));
+		if ($gone !== []) {
+			throw new \RuntimeException(sprintf(
+				'the trash was supposed to reach no design, and Penpot lost %d: %s',
+				count($gone),
+				implode(', ', $gone),
+			));
+		}
+	}
+
+	/**
+	 * A project holds no design by this name — said the way `designs/delete.feature`
+	 * says it, with the project first.
+	 *
+	 * A SECOND SPELLING OF ONE CLAIM, and deliberately not deduplicated into
+	 * `Penpot project "X" holds no design named "Y"`. The two read differently in
+	 * their own scenarios ("the `Bin Me` Penpot project" is a noun phrase mid
+	 * sentence; the other opens one) and Behat matches on text, so collapsing them
+	 * would mean rewriting a Gherkin line to suit a regex. That is the wrong way
+	 * round — see features/README.md on the vocabulary.
+	 *
+	 * @Then /^the "([^"]*)" Penpot project holds no design named "([^"]*)"$/
+	 */
+	public function theNamedPenpotProjectHoldsNoDesignNamed(string $project, string $design): void {
+		$this->until(
+			fn (): bool => !in_array($design, $this->penpotFileNamesIn($project), true),
+			fn (): string => sprintf(
+				"the Penpot project '%s' still holds a design named '%s'; it holds: %s",
+				$project,
+				$design,
+				implode(', ', $this->penpotFileNamesIn($project)) ?: '(nothing)',
+			),
+		);
+	}
+
+	/**
+	 * The design behind the cursor is erased in Penpot, past its trash.
+	 *
+	 * @Given /^its design is permanently deleted in Penpot$/
+	 */
+	public function itsDesignIsPermanentlyDeletedInPenpot(): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException('no design is on stage to delete in Penpot');
+		}
+		$this->permanentlyDeleteDesignById($this->currentFileId);
+	}
+
+	/**
+	 * Someone deletes the cursor's design in Penpot, and the sync carries the news.
+	 *
+	 * NAMED FOR THE CURSOR, not for the sentence. {@see PruneSteps} already has a
+	 * `someoneDeletesTheDesignInPenpot()` for the path form, and two traits cannot
+	 * contribute one method name to the same class — PHP fatals on the collision
+	 * before Behat sees a single scenario, which is how this took out all four legs
+	 * at once rather than failing one test.
+	 *
+	 * @When /^someone deletes the design in Penpot$/
+	 */
+	public function someoneDeletesTheCursoredDesignInPenpot(): void {
+		if ($this->currentFileId === '') {
+			throw new \RuntimeException('no design is on stage to delete in Penpot');
+		}
+		$this->penpotRpc('delete-file', ['id' => $this->currentFileId]);
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * The file is no longer at that path.
+	 *
+	 * @Then /^the file is gone from "([^"]*)"$/
+	 */
+	public function theFileIsGoneFrom(string $folder): void {
+		$folder = trim($folder, '/');
+		$name = basename($this->currentFilePath);
+		$this->until(
+			fn (): bool => !$this->davExists($folder . '/' . $name),
+			fn (): string => sprintf("'%s/%s' is still there", $folder, $name),
+		);
+	}
+
+	/**
+	 * The file still carries what this app stored on it.
+	 *
+	 * The mirror image of `the file holds no Penpot metadata at all`: after a
+	 * gesture the app could not complete, the identity must survive intact, because
+	 * an id lost here is a design nothing points at any more.
+	 *
+	 * @Then /^the file keeps its Penpot metadata$/
+	 */
+	public function theFileKeepsItsPenpotMetadata(): void {
+		$path = $this->currentFile();
+		$id = $this->davReadMetadata($path, 'penpot_id') ?? '';
+		if ($id === '') {
+			throw new \RuntimeException("'{$path}' survived the gesture but lost its Penpot id");
+		}
+		if ($this->currentFileId !== '' && $id !== $this->currentFileId) {
+			throw new \RuntimeException(
+				"'{$path}' carries {$id}, but the scenario put {$this->currentFileId} on stage",
+			);
+		}
+	}
+	/**
+	 * Bytes that are genuinely a `.penpot` export, not a ZIP header and padding.
+	 *
+	 * ## WHY THE FAKE STOPPED BEING GOOD ENOUGH
+	 *
+	 * `PK\x03\x04` plus nulls satisfies {@see ArchiveService::holdsArchive()},
+	 * which reads four magic bytes — and that was all any scenario needed while an
+	 * archive arriving in a mapping was ignored. §6.33 changed what those bytes
+	 * MEAN: they are now imported, and Penpot refuses anything that is not a real
+	 * export. A fixture that cannot be imported would make every import scenario
+	 * fail for the fixture's reason rather than the app's.
+	 *
+	 * So a real one is produced the only way this suite can produce one: a design
+	 * is made in Penpot, the pull mirrors it as a `sync` file, and those bytes are
+	 * read back off disk. The mirror is left where it is — it belongs to a project
+	 * no scenario asserts on, and removing it would delete the design in Penpot.
+	 *
+	 * Cached for the scenario, because it costs a create, a pull and an export.
+	 */
+	private function aRealPenpotArchive(): string {
+		if ($this->realArchive !== '') {
+			return $this->realArchive;
+		}
+
+		$root = 'Penpot';
+		$folder = $root . '/Archive Source';
+		$path = $folder . '/Source.penpot';
+		if (!$this->davExists($path)) {
+			$this->makeAncestors($path);
+			$this->davPut($path, '');
+			$this->theAdminRunsAPull();
+		}
+
+		$bytes = $this->davGet($path);
+		if (!str_starts_with($bytes, "PK\x03\x04")) {
+			throw new \RuntimeException(
+				"the harness could not produce a real .penpot archive: '{$path}' holds "
+				. strlen($bytes) . ' bytes that are not a ZIP. Every import fixture depends on this.',
+			);
+		}
+
+		return $this->realArchive = $bytes;
+	}
+
+	/** The archive {@see aRealPenpotArchive()} produced, for this scenario. */
+	private string $realArchive = '';
 }

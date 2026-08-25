@@ -311,10 +311,10 @@ them the only sane place to break ground. Where the suite stands now:
 
 | status | scenarios | |
 |---|---|---|
-| *(none)* — runs in CI | 26 | 67 executed: `admin` 25, `design` 19, `project` 21, `core` 2 |
-| `@todo` | 66 | the queue |
-| `@blocked` | 11 | no browser, no app removal, no way to author a design |
-| `@unbuilt` | 11 | the app disagrees with the spec; see below |
+| *(none)* — runs in CI | 42 | 102 executed, spread over eleven suite legs |
+| `@todo` | 47 | the queue |
+| `@blocked` | 12 | no browser, no app removal, no way to author a design |
+| `@unbuilt` | 12 | the app disagrees with the spec; see below |
 | `@decision` | 0 | |
 
 **The `project` leg nearly doubled without a single test being written for it.**
@@ -343,7 +343,7 @@ test is missing*, and six of these were something else — four places the app
 contradicts the spec, and two the harness cannot reach without a browser. A queue
 that cannot be read at face value costs more than a short one.
 
-**All four legs report tests now**, so the empty-suite exemption in the workflow
+**Every leg reports tests now**, so the empty-suite exemption in the workflow
 no longer carries any of them. It stays, because it is self-healing in both
 directions and the next spec-first feature file will empty a leg again.
 

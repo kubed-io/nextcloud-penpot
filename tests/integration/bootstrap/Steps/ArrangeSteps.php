@@ -405,13 +405,15 @@ trait ArrangeSteps {
 			// happens to end in `.penpot`, and demanding an id below would fail the
 			// arrange for doing exactly what the sentence said.
 			//
-			// WITH BYTES, NOT EMPTY, since `designs/create.feature` started running.
-			// An empty `.penpot` outside every mapping is the "+ New" gesture and the
-			// app now refuses it (§6.44: there is no rootless design); an archive
-			// someone put there is a file like any other and is allowed. This arrange
-			// means the second thing — a design that EXISTS, sitting outside — so it
-			// has to say so in the only way the app can read, which is the body.
-			$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+			// WITH REAL ARCHIVE BYTES. Two rules landed on this one line. An empty
+			// `.penpot` outside every mapping is the "+ New" gesture and is refused
+			// (§6.44: there is no rootless design), so it cannot be empty. And since
+			// §6.33 these bytes get IMPORTED the moment the file is dragged into a
+			// mapping — Penpot refuses anything that is not a genuine export, so a
+			// ZIP header and padding would fail the import and the scenario would
+			// read as an app bug. This arrange means "a design that exists, sitting
+			// outside a mapping", and only a real archive says that.
+			$this->davPut($path, $this->aRealPenpotArchive());
 			$this->currentFilePath = $path;
 			$this->currentFolder = $folder;
 			$this->currentFileId = '';
@@ -480,9 +482,6 @@ trait ArrangeSteps {
 	private function seedDesignViaPull(string $path, string $name): void {
 		$root = $this->mappingRootOf($path);
 		$project = trim(substr(dirname($path), strlen($root)), '/');
-		if ($project === '') {
-			throw new \RuntimeException("a link mirror needs a project folder, got '{$path}'");
-		}
 
 		// Point "that team" at the mapping being seeded, rather than relying on
 		// whichever row the mappings table named last.
@@ -493,8 +492,15 @@ trait ArrangeSteps {
 		$this->namedTeamId = $team;
 		$this->pulledTeamId = $team;
 
+		// AT THE MAPPING ROOT THERE IS NO PROJECT FOLDER, AND THAT IS NOT AN ERROR.
+		// The root IS the team's Drafts (§6.35), which is a real Penpot project —
+		// the `is-default` one. This used to throw "a link mirror needs a project
+		// folder", which made `a design file named "…" in "Pointers"` unarrangeable
+		// and took out every link row of `designs/copy.feature`'s refusal outline.
 		$this->penpotRpc('create-file', [
-			'project-id' => $this->penpotProjectIn($root, $project),
+			'project-id' => $project === ''
+				? $this->penpotDraftsProjectIn($root)
+				: $this->penpotProjectIn($root, $project),
 			'name' => $name,
 		]);
 		$this->theAdminRunsAPull();
@@ -920,5 +926,41 @@ trait ArrangeSteps {
 		}
 
 		return null;
+	}
+	/**
+	 * A mapped team's Drafts — the project Penpot flags `is-default`.
+	 *
+	 * NOT resolved by the name "Drafts": that is the label a person sees, it is
+	 * localised, and §6.35 is explicit that the flag is the only reliable handle.
+	 * The same read {@see \OCA\PenpotSync\Service\DestinationResolver} does.
+	 */
+	private function penpotDraftsProjectIn(string $mappedFolder): string {
+		$team = $this->mappingTeamIds[$mappedFolder] ?? '';
+		if ($team === '') {
+			throw new \RuntimeException("no mapping is declared for the folder '{$mappedFolder}'");
+		}
+
+		// `get-all-projects`, NOT `get-projects`. Only the former carries
+		// `is-default` — the same read {@see \OCA\PenpotSync\Service\DestinationResolver}
+		// does, and the reason the first cut of this reported "no default (Drafts)
+		// project" for a team that plainly has one.
+		// CAMELCASE, NOT KEBAB, and that is the whole reason the first cut of this
+		// found nothing. `penpotRpcRead()` sends `Accept: application/json`, which
+		// makes Penpot answer plain JSON with camelCase keys instead of Transit —
+		// the content negotiation PenpotClient's docblock warns about, seen from the
+		// other side. `lib/` reads `team-id` because it never sends that header.
+		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			if (($project['teamId'] ?? $project['team-id'] ?? null) !== $team) {
+				continue;
+			}
+			if (filter_var($project['isDefault'] ?? $project['is-default'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+				$id = $project['id'] ?? '';
+				if (is_string($id) && $id !== '') {
+					return $id;
+				}
+			}
+		}
+
+		throw new \RuntimeException("the team behind '{$mappedFolder}' reports no default (Drafts) project");
 	}
 }

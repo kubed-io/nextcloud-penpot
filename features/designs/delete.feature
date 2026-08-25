@@ -19,7 +19,7 @@ Feature: Trashing a design
     # ── RULE: a delete is soft on both sides ──────────────────────────────────
     # notes: ../AGENTS.md#deleting-a-mirror-moves-the-design-into-penpots-trash
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Trash a design
     Given a design file named "Doomed.penpot" in "<source>"
     When I move it to the trash
@@ -38,7 +38,10 @@ Feature: Trashing a design
     # Penpot needs no recycle-bin setting: it HAS a trash, so a delete is already
     # reversible there. The siblings bolt one on because their services have none.
 
-  @in-nextcloud @gesture @todo
+  # notes: ../AGENTS.md#penpots-destroy-leaves-the-row-behind
+  # @blocked — Penpot's own delete re-marks the destroyed row, so the state this
+  # scenario needs cannot be held still long enough to observe.
+  @in-nextcloud @gesture @blocked
   Scenario: Trash a design that is already gone from Penpot
     Given a design file named "Twice Dead.penpot" in "Penpot/Left Alone"
     And its design is permanently deleted in Penpot
@@ -52,7 +55,7 @@ Feature: Trashing a design
     # ── RULE: a link is read-only, so it is not deleted from this side ────────
     # notes: ../AGENTS.md#a-link-is-never-deleted-from-nextcloud
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Trash a link
     Given a design file named "Pointer.penpot" in "Pointers/Confined"
     When I try to move it to the trash
@@ -60,13 +63,13 @@ Feature: Trashing a design
     And the file stays in "Pointers/Confined"
     And the design still exists in Penpot
 
-    # @unbuilt — THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: it trashes
-    # the file and calls it "hidden". A link is Penpot's copy to remove.
+    # A link is Penpot's copy to remove, so the guard refuses the delete outright
+    # rather than hiding the file — #38 built that, and this proves it.
 
     # ── RULE: a file the app never mirrored is Nextcloud's alone ──────────────
     # notes: ../AGENTS.md#deleting-an-untracked-penpot-file-leaves-penpot-alone
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Trash an untracked design file
     Given an untracked design file at "<path>"
     When I move it to the trash
@@ -74,15 +77,14 @@ Feature: Trashing a design
     And the file is recoverable from the Nextcloud trash
     And it still holds no Penpot metadata
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                             |
-      | Penpot/Untouched/Not Ours.penpot |
-      | Scratch/Not Ours.penpot          |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                    |
+      | Scratch/Not Ours.penpot |
 
     # ── RULE: a design deleted in Penpot takes its mirror to the trash ────────
     # notes: ../AGENTS.md#a-design-deleted-in-penpot-is-snapshotted-then-moved-to-the-trash
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Delete a design in Penpot
     Given a design file named "Farewell.penpot" in "Penpot/Doomed"
     When someone deletes the design in Penpot
@@ -95,7 +97,9 @@ Feature: Trashing a design
 
     # ── RULE: a trash that cannot finish leaves the file where it was ─────────
 
-  @in-nextcloud @gesture @todo
+  # notes: ../AGENTS.md#a-trash-penpot-cannot-take-is-not-aborted-today
+  # @unbuilt — the local delete stands and the failure is logged, never aborted.
+  @in-nextcloud @gesture @unbuilt
   Scenario: Trash a design while Penpot is unreachable
     Given a design file named "Doomed.penpot" in "Penpot/Offline"
     And Penpot is unreachable
