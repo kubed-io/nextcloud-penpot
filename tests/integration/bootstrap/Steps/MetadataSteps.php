@@ -304,7 +304,6 @@ trait MetadataSteps {
 					return "expected a NEW id; the file still carries the one it arrived with ({$actual})";
 				}
 				return null;
-
 			case 'set':
 				return ($actual ?? '') !== ''
 					? null : 'expected a value, found nothing';

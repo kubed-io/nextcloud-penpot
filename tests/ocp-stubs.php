@@ -56,6 +56,15 @@ namespace OCP {
 			public function getValueString(string $app, string $key, string $default = '', bool $lazy = false, bool $sensitive = false): string;
 
 			public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): bool;
+
+			// THE TYPED PAIR, which the schedule toggle round-trips through. Real
+			// Nextcloud's getValueBool() THROWS AppConfigTypeConflict on a key that
+			// was stored as a string rather than coercing it, and that behaviour is
+			// the entire reason AppConfigReader exists — so a stub missing these
+			// methods is not a smaller stub, it is one that cannot express the bug.
+			public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool;
+
+			public function setValueBool(string $app, string $key, bool $value, bool $lazy = false): bool;
 		}
 	}
 	// PersonalTokenService stores per-USER values, which is a different config

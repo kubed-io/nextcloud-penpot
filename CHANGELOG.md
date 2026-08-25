@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The scheduled-sync toggle is a real checkbox again, and it saves.** It had been a pair of radio buttons ("Off — mirror only when run manually" / "On — pull from Penpot automatically") to work around a Nextcloud bug that silently discarded a checkbox's value. The bug is stepped past rather than worked around now, and an instance that was already switched on stays switched on.
+
+- **Dragging a design out of every mapped folder no longer leaves it adrift in Penpot.** The design used to stay sitting in its project, still shared with the team and indistinguishable from live work, while nothing mirrored it any more. It now goes to Penpot's trash, and the file keeps the design's identity — so dragging it back into a mapped folder brings the same design back, with its full history. If it is past Penpot's grace period, the file's own copy becomes a new design instead, so nothing is ever lost.
+
+- **A design MOVED in Penpot no longer looks like a design somebody deleted.** Moving one into a team this app does not mirror used to leave its Nextcloud file in your trash, reading as a deletion that never happened. The file is now simply removed — the design is safe in Penpot. A design that really was deleted or purged still goes to your trash, because in that case your file may be the last copy.
+
+- **A linked design is never quietly turned into a synced one.** When a link lost its design, the app used to download a copy and re-label the file — changing what the file meant without being asked.
+
 - **A folder becomes a Penpot project when you create a design in it.** Previously a folder only became a project if you tagged it `penpot`, so a design made in a new folder landed loose in the team's Drafts and the folder meant nothing on the Penpot side. Dragging an already-mirrored design into a new folder promotes it too, as long as both are in the same mapped folder. An empty folder is still just a folder, and the tag still works.
 
 - **Deleting a project folder now deletes the project in Penpot.** It used to be a purely local delete — the folder went to your trash and the project sat in Penpot untouched. Both trashes are soft, so the whole gesture is reversible on both sides, and trashing a folder that several projects sit under takes all of them.
@@ -35,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The "Purge Nextcloud files" button is gone from Sync Actions.** It had never worked — it was rendered greyed out with a tooltip promising it was coming — and the feature behind it was cancelled. Emptying the Nextcloud trash is unaffected.
+
 - **A project folder can now be dragged out of a mapped folder**, which used to be refused outright. Nothing is deleted in Penpot — the project and its designs stay exactly as they are, and the folder simply becomes an ordinary Nextcloud folder. Dragging one into a *different team's* folder works too, unless that folder is a Team Folder; Nextcloud handles those moves in a way the app cannot yet see.
 
 - **Moving a folder now renames every project below it**, not just the one you dragged — a project's name is the path it sits at, so grouping three projects under a new folder renames all three.
@@ -46,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and the integration harness is being re-taught one behaviour at a time. The connection, app-lifecycle, mapping, design and project verbs run again; the rest stay `@todo` until their PR.
 
 ### Added
+
+- **Nextcloud now tells you when Penpot did not get the message.** If a design file cannot be added to Penpot, or a move could not be passed on, you get a notification saying what Penpot said — instead of the failure only appearing in the server log.
 
 - **A design's file now carries the design's own dates.** "Modified" shows when the design last changed in Penpot and "Created" when it was created there, instead of both showing when a sync happened to run — and a project folder carries its project's creation date. Sorting a mapped folder by date finally sorts by the designs.
 - **Turn any folder into a Penpot project by tagging it `penpot`** — and it takes the designs already inside it with it. Everything else in a mapped folder stays an ordinary folder.

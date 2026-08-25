@@ -186,6 +186,32 @@ final class MotionService {
 		// seen makes that folder a project.
 		$to = $this->destinations->projectForContentIn($target, $membership);
 		if ($to === null) {
+			// TWO VERY DIFFERENT STATES REACH THIS LINE, and only one of them is a
+			// departure:
+			//
+			//   - NO TEAM — the file left every mapped folder. That is the gesture
+			//     park() exists for.
+			//   - A TEAM BUT NO PROJECT — the file is still inside a mapping and we
+			//     merely could not resolve its Drafts project (an unreadable
+			//     listing, a team whose default project we cannot see).
+			//
+			// Parking the second would soft-delete a design because a LOOKUP failed,
+			// on a file that never left the mapping — destructive, and caused by our
+			// own blind spot rather than by anything the user did. Better an
+			// un-pushed move than a design in the trash on a guess; the next pull
+			// reconciles it. The unit suite caught this conflation, which is why the
+			// distinction is spelt out here rather than implied by a null check.
+			if ($membership->teamId !== null && $membership->teamId !== '') {
+				$this->logger->info('penpot_sync writeback: move landed in a team whose project could not be resolved; leaving Penpot untouched', [
+					'app' => Application::APP_ID,
+					'fileId' => $target->getId(),
+					'path' => $target->getPath(),
+					'teamId' => $membership->teamId,
+				]);
+
+				return false;
+			}
+
 			// LEFT EVERY MAPPING. Park the design in Penpot's own trash and let the
 			// file keep its id — see park() for why that is not a delete.
 			return $this->park($target, $meta);

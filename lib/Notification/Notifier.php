@@ -75,7 +75,6 @@ final class Notifier implements INotifier {
 				);
 
 				return $notification;
-
 			case 'move_not_pushed':
 				$notification->setRichSubject(
 					$l->t('Penpot didn’t hear about the move of {file}'),
@@ -89,7 +88,6 @@ final class Notifier implements INotifier {
 				);
 
 				return $notification;
-
 			default:
 				throw new UnknownNotificationException();
 		}

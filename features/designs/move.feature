@@ -67,20 +67,19 @@ Feature: Moving a design
     # ── RULE: a design carries its team as well as its project ────────────────
     # notes: ../AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Move a design into another team
-    Given the user has a personal Penpot token
-    And a design file named "Crossing.penpot" in "Penpot/Move From"
+    Given a design file named "Crossing.penpot" in "<source>"
     When I move the file into "<destination>"
     Then the design is in the "<lands in>" Penpot project
     And the file holds:
-      | penpot_id      | the original id       |
-      | penpot_team_id | the team it landed in |
+      | penpot_id      | the original id    |
+      | penpot_team_id | the mapping's team |
 
-    Examples: a Team Folder and a personal team are both just teams
-      | destination            | lands in    |
-      | Shared/Client Work     | Client Work |
-      | Sketchbook/Sketches    | Sketches    |
+    Examples: between the two storage kinds, in both directions
+      | source            | destination        | lands in    |
+      | Penpot/Move From  | Shared/Client Work | Client Work |
+      | Shared/Move From  | Penpot/Client Work | Client Work |
 
     # One move changing team and project together, keeping the id, the revision and
     # the history. A design is never re-created to cross a team boundary.
