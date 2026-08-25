@@ -870,27 +870,44 @@ ever turn into an archive, sitting in a folder whose every other design holds on
 It is an outline over both modes because the mode is now the only variable —
 there is no per-file override left for a second scenario to describe.
 
-**THE ARCHIVE IS STORED AT ONCE, and this note used to say the opposite.** It read
-*"no archive is stored YET, in either mode, and the 'yet' is doing real work"* —
-the design is created empty, so there is nothing worth exporting at that instant,
-and leaving the revision unstamped is what makes the next pull's drift check fill
-the body in on its self-healing path.
+NO ARCHIVE IS STORED **YET**, in either mode, and the "yet" is doing real work.
+The design is created empty, so there is nothing worth exporting at that instant;
+no revision is stamped either, which is what makes the next pull's drift check run
+and fill a `sync` file's body in on the same self-healing path it uses for an
+archive that went missing.
 
-Every clause of that is true and the conclusion was still wrong, which is why it is
-worth keeping rather than quietly replacing. It left a state nothing else in the
-app produces on purpose: a file stamped `sync` holding zero bytes and carrying no
-revision — which is exactly what `occ penpot_sync:status` prints as `sync` /
-`pointer` and its own comment calls *"precisely the drift"*. The app was
-manufacturing, on every creation, the condition it has a self-healing path to
-repair.
+### Why a create cannot write the bytes itself, and why the spec does not mention it
 
-The scenario asserts an archive and a revision on the line after the gesture, and
-it is right to. "The design is created" and "the file is its mirror" should not be
-minutes apart with the gap visible to anyone who opens the folder. An empty design
-exports to a perfectly valid `.penpot`, so there is no such thing as too early; the
-cost is one export per creation, and a creation is a human gesture rather than a
-bulk path. A failed export is still not a failed creation (§6.18 rule 3) — the
-revision simply stays unstamped and the old path runs after all.
+**A code note, not a spec one.** The scenario says the file holds an archive after
+the gesture, and it is right to: that is the state the user ends up in. How long
+the app takes to get there is an implementation detail, and a scheduled sync the
+person never sees is not something Gherkin describes.
+
+Worth writing down because the obvious fix is a wall. Exporting during the create
+looks like it would remove a self-inflicted transient — a file stamped `sync`
+holding zero bytes is what `occ penpot_sync:status` prints as `sync` / `pointer`
+and calls *"precisely the drift"*. It cannot be done from there, and the reason is
+Nextcloud's locking rather than anything about Penpot. `CreateListener` runs on
+`NodeWrittenEvent`, which `OCA\DAV\Connector\Sabre\File::finalizeUpload()` emits
+*after* downgrading the file to a **shared** lock — its own comment says so:
+*"Downgrade to shared lock before post hooks so legacy hook consumers can still
+access the file."* `Node::putContent()` goes through `View::file_put_contents()`,
+which takes a shared lock and then `changeLock(…LOCK_EXCLUSIVE)`, and that upgrade
+cannot succeed while the DAV request still holds its own shared lock.
+
+nextcloud-n8n's `CreateService` carries the same finding, from the round that paid
+for it: *"this runs INSIDE the handler for the very write that created the file, so
+`putContent()` on the same node hits Nextcloud's lock and the whole create fails.
+Tried; it took out every arrange in the suite that lands a file in a mapped
+folder."*
+
+So the body arrives on the next sync, down `ArchiveService`'s self-healing path.
+**The harness collapses that wait rather than the spec describing it** — the
+`Then a matching design is created in Penpot` step runs the sync itself, the same
+way the arrange spine already does after seeding a design. A scenario must never
+grow a `When the admin syncs every mapping` to reach a later state: it is a `When`
+after a `Then`, and it puts an admin's button into a story about a user making a
+file.
 
 ### A link carries a revision too, because it is the pull's stamp
 

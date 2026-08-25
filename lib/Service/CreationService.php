@@ -57,7 +57,6 @@ final class CreationService {
 		private readonly DestinationResolver $destinations,
 		private readonly ArchiveService $archives,
 		private readonly MappingService $mappings,
-		private readonly SyncGuard $guard,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -130,13 +129,14 @@ final class CreationService {
 		// holds one. The mapping decides the mode; a file created inside it is no
 		// exception.
 		//
-		// THE STAMP FIRST, THE BYTES SECOND, and the order is load-bearing: the
-		// export below writes through the Node API and would re-enter this method,
-		// where an id already on the file is what says "not a creation".
-		$mode = $this->modeFor($membership);
+		// NO ARCHIVE IS EXPORTED HERE, and none is needed. The design was created
+		// empty a few lines above, so there is nothing yet worth storing, and no
+		// revision is stamped — which means the next pull's drift check runs and
+		// {@see ArchiveService} fills the body in on the same self-healing path it
+		// uses for a `sync` file whose archive went missing.
 		$this->metadata->writeFile($node->getId(), [
 			PenpotMetadata::KEY_ID => $newId,
-			PenpotMetadata::KEY_MODE => $mode,
+			PenpotMetadata::KEY_MODE => $this->modeFor($membership),
 			PenpotMetadata::KEY_TEAM_ID => $membership->teamId ?? '',
 		]);
 
@@ -145,75 +145,6 @@ final class CreationService {
 			'penpot_id' => $newId,
 			'project' => $project,
 			'name' => $name,
-		]);
-
-		if ($mode === Mapping::MODE_SYNC) {
-			$this->storeFirstArchive($node, $newId, $created);
-		}
-	}
-
-	/**
-	 * Export the design that was just created, so the file is a mirror at once.
-	 *
-	 * ## WHY THE CREATE PAYS FOR AN EXPORT IT USED TO SKIP
-	 *
-	 * This used to end at the metadata write, reasoning that a design created
-	 * empty has nothing worth storing and that the next pull's drift check would
-	 * fill the body in on {@see ArchiveService}'s self-healing path. True, and it
-	 * left a state nothing else in the app produces on purpose: a file stamped
-	 * `sync` holding zero bytes and carrying no revision — which
-	 * {@see \OCA\PenpotSync\Command\Status} reports as `sync` / `pointer` and calls
-	 * drift in as many words. `designs/create.feature` asserts an archive and a
-	 * revision on the line after the gesture, and it is right to: "the design is
-	 * created" and "the file is its mirror" should not be minutes apart, with the
-	 * gap visible to anyone who opens the folder.
-	 *
-	 * An empty design exports to a perfectly valid `.penpot`; there is no such
-	 * thing as too early here. The cost is one export per creation, which is a
-	 * human gesture and not a bulk path.
-	 *
-	 * ## FENCED, BECAUSE THIS IS THE APP WRITING TO ITS OWN MIRROR
-	 *
-	 * {@see \OCA\PenpotSync\Listener\CreateListener} is what turns a write into a
-	 * creation, and the guard is what tells the app's own writes from a person's.
-	 * The id stamped a moment ago would already make the re-entry a no-op, so this
-	 * is belt and braces — but it is the same belt every other internal write
-	 * wears, and the alternative is relying on ordering that a later edit could
-	 * quietly reverse.
-	 *
-	 * ## A FAILED EXPORT IS NOT A FAILED CREATION (§6.18 rule 3)
-	 *
-	 * The design exists in Penpot and the file names it. Leaving the revision
-	 * unstamped is exactly the signal the pull's drift check reads, so the body
-	 * arrives on the next sync down the path this method just stopped relying on.
-	 *
-	 * @param array<string, mixed> $created the `create-file` response — a full file
-	 *                                      record, so it carries the `revn` and
-	 *                                      `modified-at` the drift signal is built
-	 *                                      from (backend `files_create.clj` returns
-	 *                                      `bfc/get-file`)
-	 */
-	private function storeFirstArchive(File $node, string $penpotId, array $created): void {
-		try {
-			$this->guard->run(function () use ($node, $penpotId): void {
-				$this->archives->storeArchive($node, $penpotId);
-			});
-		} catch (\Throwable $e) {
-			$this->logger->warning('penpot_sync create: the design was made but its archive did not arrive; the next pull will fetch it', [
-				'app' => Application::APP_ID,
-				'penpot_id' => $penpotId,
-				'file' => $node->getName(),
-				'exception' => $e,
-			]);
-
-			return;
-		}
-
-		$this->metadata->writeFile($node->getId(), [
-			PenpotMetadata::KEY_REVISION => ArchiveService::signal(
-				(string)($created['revn'] ?? ''),
-				is_string($created['modified-at'] ?? null) ? $created['modified-at'] : '',
-			),
 		]);
 	}
 

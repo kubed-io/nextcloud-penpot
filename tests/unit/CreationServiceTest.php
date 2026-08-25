@@ -14,7 +14,6 @@ use OCA\PenpotSync\Service\CreationService;
 use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
-use OCA\PenpotSync\Service\SyncGuard;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\PenpotClient;
@@ -71,10 +70,6 @@ final class CreationServiceTest extends TestCase {
 			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$this->archives,
 			$this->mappings,
-			// The REAL guard: it has no collaborators, and a mock would have to be
-			// told to invoke the callback it is handed — which is the one behaviour
-			// the export path depends on.
-			new SyncGuard(),
 			new NullLogger(),
 		);
 	}
@@ -112,16 +107,13 @@ final class CreationServiceTest extends TestCase {
 	 * a `sync` mapping that would have left a pointer nothing could ever turn into
 	 * an archive, sitting in a folder whose every other design holds one.
 	 *
-	 * The archive follows immediately, in TWO writes and in this order: the id
-	 * first, because the export goes through the Node API and would re-enter
-	 * `onWritten()`, where an id already on the file is what says "not a creation".
+	 * No archive is exported here — the design was just created empty. Stamping no
+	 * revision is what makes the next pull's drift check fill the body in.
 	 */
 	public function testADesignCreatedUnderASyncMappingIsBornSync(): void {
 		$this->givenUntrackedEmptyFile();
 		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
-		$this->client->method('createFile')->willReturn([
-			'id' => self::NEW_ID, 'revn' => '0', 'modified-at' => '2026-08-25T00:00:00Z',
-		]);
+		$this->client->method('createFile')->willReturn(['id' => self::NEW_ID]);
 
 		$mappings = $this->createMock(MappingService::class);
 		$mappings->method('getByTeamId')->willReturn($this->mapping(Mapping::MODE_SYNC));
@@ -132,81 +124,19 @@ final class CreationServiceTest extends TestCase {
 			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$this->archives,
 			$mappings,
-			new SyncGuard(),
 			new NullLogger(),
 		);
 
-		$this->archives->expects($this->once())->method('storeArchive')
-			->with(self::anything(), self::NEW_ID);
-
-		$writes = [];
-		$this->metadata->method('writeFile')->willReturnCallback(
-			function (int $id, array $values) use (&$writes): void {
-				$writes[] = $values;
-			},
+		$this->metadata->expects($this->once())->method('writeFile')->with(
+			30,
+			[
+				PenpotMetadata::KEY_ID => self::NEW_ID,
+				PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC,
+				PenpotMetadata::KEY_TEAM_ID => self::TEAM,
+			],
 		);
 
 		$creations->onWritten($this->file());
-
-		self::assertSame([
-			PenpotMetadata::KEY_ID => self::NEW_ID,
-			PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC,
-			PenpotMetadata::KEY_TEAM_ID => self::TEAM,
-		], $writes[0] ?? [], 'the identity is stamped before the export re-enters');
-		self::assertArrayHasKey(
-			PenpotMetadata::KEY_REVISION,
-			$writes[1] ?? [],
-			'the revision is stamped only once the bytes are actually on disk',
-		);
-	}
-
-	/**
-	 * A FAILED EXPORT IS NOT A FAILED CREATION (§6.18 rule 3). The design exists and
-	 * the file names it; leaving the revision unstamped is precisely the signal the
-	 * pull's drift check reads, so the body arrives on the next sync.
-	 */
-	public function testAnExportThatFailsLeavesTheDesignCreatedAndUnstamped(): void {
-		$this->givenUntrackedEmptyFile();
-		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
-		$this->client->method('createFile')->willReturn(['id' => self::NEW_ID]);
-
-		$mappings = $this->createMock(MappingService::class);
-		$mappings->method('getByTeamId')->willReturn($this->mapping(Mapping::MODE_SYNC));
-		$this->archives->method('storeArchive')->willThrowException(new \RuntimeException('penpot said no'));
-
-		$creations = new CreationService(
-			$this->client,
-			$this->metadata,
-			$this->resolver,
-			new DestinationResolver($this->client, $this->projects, new NullLogger()),
-			$this->archives,
-			$mappings,
-			new SyncGuard(),
-			new NullLogger(),
-		);
-
-		$writes = [];
-		$this->metadata->method('writeFile')->willReturnCallback(
-			function (int $id, array $values) use (&$writes): void {
-				$writes[] = $values;
-			},
-		);
-
-		$creations->onWritten($this->file());
-
-		self::assertCount(1, $writes, 'the identity is stamped; the revision is not');
-		self::assertSame(self::NEW_ID, $writes[0][PenpotMetadata::KEY_ID] ?? null);
-	}
-
-	/** A `link` is a pointer, so nothing is exported for one. */
-	public function testALinkIsBornWithNoArchive(): void {
-		$this->givenUntrackedEmptyFile();
-		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
-		$this->client->method('createFile')->willReturn(['id' => self::NEW_ID]);
-
-		$this->archives->expects($this->never())->method('storeArchive');
-
-		$this->creations->onWritten($this->file());
 	}
 
 	/** No mapping to read a mode from: `link`, because it promises nothing. */
@@ -224,7 +154,6 @@ final class CreationServiceTest extends TestCase {
 			new DestinationResolver($this->client, $this->projects, new NullLogger()),
 			$this->archives,
 			$mappings,
-			new SyncGuard(),
 			new NullLogger(),
 		);
 

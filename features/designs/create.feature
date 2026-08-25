@@ -23,6 +23,7 @@ Feature: Creating a design
 
     # ── RULE: a new design belongs to the nearest project, or to Drafts ───────
     # notes: ../AGENTS.md#a-design-created-under-the-team-but-not-under-a-project-is-a-draft
+    # the archive is empty on create because a scheduled sync will eventually fill it in
 
   @in-nextcloud @gesture
   Scenario Outline: Create a design in a mapped folder

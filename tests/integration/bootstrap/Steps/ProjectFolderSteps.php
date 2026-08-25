@@ -315,9 +315,30 @@ trait ProjectFolderSteps {
 	 * called `create-file`" and "it created the design in the wrong project" are
 	 * different bugs, and a single combined step would report them identically.
 	 *
+	 * ## IT RUNS THE SYNC, AND THAT IS THE HARNESS'S JOB RATHER THAN THE SPEC'S
+	 *
+	 * A create cannot write the design's bytes itself — `CreateListener` runs
+	 * inside the DAV write handler, where the file is under a shared lock and
+	 * `putContent()` cannot take the exclusive one it needs (see
+	 * `features/AGENTS.md`, and nextcloud-n8n's `CreateService`, which measured the
+	 * same wall). The archive therefore lands on the next scheduled sync, down
+	 * {@see \OCA\PenpotSync\Service\ArchiveService}'s self-healing path.
+	 *
+	 * None of that belongs in the Gherkin. The scenario describes what the person
+	 * ends up with; how long the app takes to get there is an implementation
+	 * detail, and a scheduled job they never see is not a step they perform. So the
+	 * wait is collapsed HERE — exactly as {@see ArrangeSteps::declareDesign()}
+	 * already does after seeding a design, and for the same reason.
+	 *
+	 * The alternative is a `When the admin syncs every mapping` wedged between two
+	 * `Then`s, which is invalid Gherkin twice over: a `When` after a `Then`, and an
+	 * admin's button in a story about a user making a file.
+	 *
 	 * @Then /^a matching design is created in Penpot$/
 	 */
 	public function aMatchingDesignIsCreatedInPenpot(): void {
+		$this->theAdminRunsAPull();
+
 		$path = $this->currentFilePath;
 		$id = $this->davReadMetadata($path, 'penpot_id') ?? '';
 		if ($id === '') {
