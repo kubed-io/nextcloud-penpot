@@ -575,10 +575,20 @@ final class PullService {
 			}
 
 			// A DESIGN THAT MOVED IS NOT A DESIGN THAT DIED, and only Penpot can say
-			// which happened. `null` means the probe could not tell, and is treated
-			// as "still there" — see PenpotClient::fileExists() on why the two wrong
-			// answers are not equally cheap.
-			if ($this->client->fileExists($penpotId) !== false && !$this->isInPenpotTrash($mapping->teamId, $penpotId)) {
+			// which happened.
+			//
+			// `=== true`, NOT `!== false`, and the difference is the whole safety
+			// property. `fileExists()` has three answers and the third is "I could
+			// not tell" — unreachable, unauthorised, a schema read wrong. Written as
+			// `!== false`, an unknown counted as a YES, and an unknown paired with an
+			// unreadable trash listing took the PERMANENT discard below. That is
+			// precisely the data loss the three-valued return exists to prevent, and
+			// it survived a unit test (`exists: null, trashed: true`) that only ever
+			// exercised the other branch. Caught in review on #44.
+			//
+			// Only a design Penpot positively confirms is alive may be discarded.
+			// Everything else keeps the recoverable path.
+			if ($this->client->fileExists($penpotId) === true && !$this->isInPenpotTrash($mapping->teamId, $penpotId)) {
 				$pruned += $this->discard($node, $penpotId, 'a design moved out of this mapping in Penpot') ? 1 : 0;
 				continue;
 			}
@@ -704,7 +714,10 @@ final class PullService {
 				$node->delete();
 			});
 		} catch (\Throwable $e) {
-			$this->logger->warning('penpot_sync pull: could not remove a mirror Penpot no longer lists', [
+			// NOT "a mirror Penpot no longer lists" — every caller of this method has
+			// established the opposite. The design is alive and well; it is this
+			// mapping that stopped being the place it lives.
+			$this->logger->warning('penpot_sync pull: could not remove a mirror whose design left this mapping', [
 				'app' => Application::APP_ID,
 				'file' => $path,
 				'penpot_id' => $penpotId,

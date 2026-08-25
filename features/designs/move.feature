@@ -22,7 +22,7 @@ Feature: Moving a design
     # notes: ../AGENTS.md#dragging-a-sync-design-into-another-project-re-files-it-in-penpot
 
   @in-nextcloud @gesture
-  Scenario Outline: Move a design between project folders within nextcloud 
+  Scenario Outline: Move a design between project folders within Nextcloud
     Given a design file named "Travelling.penpot" in "<source>"
     When I move the file into "<destination>"
     Then the design is in the "<lands in>" Penpot project
@@ -67,7 +67,10 @@ Feature: Moving a design
     # ── RULE: a design carries its team as well as its project ────────────────
     # notes: ../AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project
 
-  @in-nextcloud @gesture
+  # notes: ../AGENTS.md#a-cross-team-move-always-crosses-a-storage-boundary
+  # @blocked — the only two teams this suite can map sit on different storages,
+  # and a file's metadata does not survive the crossing.
+  @in-nextcloud @gesture @blocked
   Scenario Outline: Move a design into another team
     Given a design file named "Crossing.penpot" in "<source>"
     When I move the file into "<destination>"
@@ -87,9 +90,10 @@ Feature: Moving a design
     # ── RULE: leaving every mapping trashes the design, and coming back revives it ──
     # notes: ../AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
+  # notes: ../AGENTS.md#a-cross-team-move-always-crosses-a-storage-boundary
   @in-nextcloud @gesture
-  Scenario Outline: Move a design out of every mapping
-    Given a design file named "Going Loose.penpot" in "<source>"
+  Scenario: Move a design out of every mapping
+    Given a design file named "Going Loose.penpot" in "Penpot/Let Go"
     When I move the file into "Scratch"
     Then the design "Going Loose" is in Penpot's trash
     And the file holds:
@@ -97,11 +101,6 @@ Feature: Moving a design
       | penpot_team_id | absent          |
       | penpot_mode    | "unmapped"      |
       | content        | an archive      |
-
-    Examples: from either storage kind, because leaving is leaving
-      | source          |
-      | Penpot/Let Go   |
-      | Shared/Let Go   |
 
     # The id stays on the file because it is what makes the return below a reattach
     # rather than an import, and the trash is what keeps that id worth naming.

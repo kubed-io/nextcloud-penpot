@@ -391,6 +391,40 @@ final class PullServiceTest extends TestCase {
 	}
 
 	/**
+	 * THE ROW ABOVE PASSED WHILE THE BUG WAS LIVE, which is the point of this one.
+	 *
+	 * With `trashed: true` the trash listing keeps the mirror on its own, so the
+	 * probe's answer never decides anything and a guard written `!== false` — which
+	 * counts "could not tell" as a YES — looks perfectly fine. It is only when the
+	 * probe is unsure AND the trash listing is empty that the two spellings diverge,
+	 * and there `!== false` takes the PERMANENT discard on a file whose design may
+	 * be gone for good.
+	 *
+	 * So this is the same claim as above with the one input changed that makes it
+	 * load-bearing. Found by review on #44, not by the suite.
+	 */
+	public function testAnUnanswerableProbeWithAnEmptyTrashStillKeepsTheMirror(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: null, trashed: false);
+
+		// THE RESCUE IS THE DISCRIMINATOR, and picking it took a second attempt.
+		// `delete()` cannot tell these paths apart here: `TrashControl` finds no
+		// trash app to pause in the unit environment, so a discard and a trashing
+		// are the same call, and asserting on it gives a test that passes whichever
+		// branch runs. The last-gasp export is the difference — the discard path
+		// skips it (the design is fine, there is nothing to rescue) and the
+		// recoverable path takes it, and `rescued` counts it.
+		$this->archives->method('holdsArchive')->willReturn(false);
+		$this->archives->expects($this->once())->method('storeArchive')->willReturn(4096);
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertSame(1, $result['rescued'], 'an unsure probe must take the recoverable path, not the discard');
+	}
+
+	/**
 	 * A TRASH LISTING WE CANNOT READ IS ALSO NOT A "NO" — same rule, other probe.
 	 * Without this, a Penpot that went down between the two calls would turn every
 	 * pruned mirror into a permanent delete.

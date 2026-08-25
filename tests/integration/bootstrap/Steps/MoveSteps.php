@@ -47,6 +47,17 @@ use Behat\Gherkin\Node\TableNode;
  * what the parking put in the trash.
  */
 trait MoveSteps {
+	/**
+	 * A well-formed uuid that names no design anywhere.
+	 *
+	 * A LITERAL, not a random value: a fixed id makes a failing run reproducible
+	 * and makes this exact string greppable in the app's log, which is how the
+	 * import fallback was traced the first time. Version-4 shaped so Penpot's own
+	 * schema validation accepts it and answers "not found" rather than "malformed"
+	 * — the whole point is to exercise the not-found branch.
+	 */
+	private const A_DEAD_UUID = '00000000-dead-4000-8000-000000000001';
+
 	/** The id the file on stage arrived carrying, before the app replaced it. */
 	private string $idArrivedWith = '';
 
@@ -75,7 +86,24 @@ trait MoveSteps {
 		$this->idArrivedWith = $this->currentFileId;
 
 		$this->makeAncestors($path);
+		$this->clearTheWay($path);
 		$this->iMoveTheFileInto($folder);
+	}
+
+	/**
+	 * Remove anything already sitting at the path this arrange is about to fill.
+	 *
+	 * UNMAPPED SPACE IS NOT CLEANED BETWEEN SCENARIOS. Every mapped root is rebuilt
+	 * by the mapping reset, but `Scratch` is by definition mapped to nothing, so a
+	 * file left there by one Examples row is still there for the next — and a DAV
+	 * MOVE onto an existing path is a 412, which fails the ARRANGE and reports as
+	 * though the behaviour were broken. Measured: the second row of two identical
+	 * arrangements died this way while the first row's real failure scrolled past.
+	 */
+	private function clearTheWay(string $path): void {
+		if ($this->davExists($path)) {
+			$this->davDelete($path);
+		}
 	}
 
 	/**
@@ -120,10 +148,14 @@ trait MoveSteps {
 			return;
 		}
 
-		// Park it first — that is what puts the design somewhere a purge can reach
-		// it, and what leaves the id on the file.
-		$this->anUnmappedDesignFileCarryingItsPenpotId($path);
-		$this->theDesignIsPurgedFromPenpotsTrash(basename($path, '.penpot'));
+		// AN ORDINARY UPLOAD, THEN A CLAIM ON NOTHING. See
+		// {@see WebDavTrait::davWriteMetadata()} for why this one state is stamped
+		// rather than gestured: purging the design is the obvious route and Penpot's
+		// permanent delete leaves the row behind, so it produces "trashed" while
+		// claiming "gone".
+		$this->iUploadAnArchiveAt($path);
+		$this->idArrivedWith = self::A_DEAD_UUID;
+		$this->davWriteMetadata($path, 'penpot_id', self::A_DEAD_UUID);
 	}
 
 	/**
@@ -181,7 +213,7 @@ trait MoveSteps {
 		$teamId = $this->teamIdForPath($this->currentFilePath);
 		$target = $project === 'Drafts'
 			? $this->draftsProjectOf($teamId)
-			: $this->projectIdNamedOrNull($project) ?? $this->makeProjectIn($teamId, $project);
+			: $this->projectInTeam($teamId, $project) ?? $this->makeProjectIn($teamId, $project);
 
 		$this->penpotRpc('move-files', [
 			'project-id' => $target,
@@ -216,12 +248,32 @@ trait MoveSteps {
 	/** A project the scenario needs as a destination but never asked for by hand. */
 	private function makeProjectIn(string $teamId, string $name): string {
 		$this->penpotRpc('create-project', ['team-id' => $teamId, 'name' => $name]);
-		$id = $this->projectIdNamedOrNull($name);
+		$id = $this->projectInTeam($teamId, $name);
 		if ($id === null) {
-			throw new \RuntimeException("created the project '{$name}' and Penpot does not list it");
+			throw new \RuntimeException("created the project '{$name}' in {$teamId} and Penpot does not list it");
 		}
 
 		return $id;
+	}
+
+	/**
+	 * A project by name, IN A NAMED TEAM.
+	 *
+	 * Not {@see PullSteps::projectIdNamedOrNull()}, which looks in whichever team
+	 * was last PULLED. That is the right default for the pull steps and the wrong
+	 * one here: these scenarios name the team through the file's own mapping, and
+	 * asking the wrong team returned null for a project that had just been created
+	 * — reported as "Penpot does not list it", which sounds like a Penpot bug and
+	 * was a lookup in the wrong place.
+	 */
+	private function projectInTeam(string $teamId, string $name): ?string {
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+			if (($project['name'] ?? null) === $name && is_string($project['id'] ?? null)) {
+				return $project['id'];
+			}
+		}
+
+		return null;
 	}
 
 	/**

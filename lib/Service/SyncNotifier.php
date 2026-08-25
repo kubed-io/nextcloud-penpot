@@ -55,6 +55,19 @@ final class SyncNotifier {
 	/** Penpot's own complaint, capped: notification storage is not a log. */
 	private const MAX_REASON = 320;
 
+	/**
+	 * What a URL in a user-facing message is replaced with.
+	 *
+	 * THE REASON COMES FROM AN EXCEPTION MESSAGE, and this app's carry the instance
+	 * address by design — `PenpotClient` throws *"Could not reach Penpot at
+	 * https://penpot.internal:9001/api/rpc/…"*, which is precisely the detail an
+	 * admin wants in the log. A notification is not the log: it is shown to whoever
+	 * dragged the file, who may be an ordinary user on a shared instance, and an
+	 * in-cluster hostname is infrastructure they were never told about and cannot
+	 * act on. The full message is still logged at the call site.
+	 */
+	private const REDACTED_URL = '[Penpot]';
+
 	public function __construct(
 		private readonly IManager $manager,
 		private readonly ITimeFactory $timeFactory,
@@ -76,7 +89,7 @@ final class SyncNotifier {
 			$fileId,
 			'import_failed',
 			['file' => $fileName],
-			['reason' => mb_substr($reason, 0, self::MAX_REASON)],
+			['reason' => self::readable($reason)],
 			'penpot_sync: could not raise an import-failure notification',
 		);
 	}
@@ -96,7 +109,7 @@ final class SyncNotifier {
 			$fileId,
 			'move_not_pushed',
 			['file' => $fileName],
-			['reason' => mb_substr($reason, 0, self::MAX_REASON)],
+			['reason' => self::readable($reason)],
 			'penpot_sync: could not raise a move-failure notification',
 		);
 	}
@@ -117,6 +130,23 @@ final class SyncNotifier {
 				'exception' => $e,
 			]);
 		}
+	}
+
+	/**
+	 * One exception message, made fit to show a person.
+	 *
+	 * TWO EDITS, BOTH ABOUT AUDIENCE. URLs go because the instance address is
+	 * infrastructure the reader did not ask about and cannot act on (see
+	 * {@see REDACTED_URL}); the length cap is because notification storage is a
+	 * bell entry, not a log, and a stack-trace-length string in it helps nobody.
+	 *
+	 * The unedited message is written to `nextcloud.log` at every call site, so
+	 * nothing is lost to whoever is actually debugging.
+	 */
+	private static function readable(string $reason): string {
+		$clean = preg_replace('~\bhttps?://\S+~i', self::REDACTED_URL, $reason) ?? $reason;
+
+		return mb_substr(trim($clean), 0, self::MAX_REASON);
 	}
 
 	/**

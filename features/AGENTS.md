@@ -2142,6 +2142,43 @@ the history — and the `penpot_id` STAYS ON THE FILE, which is the whole trick.
 unmapped file is not a file that forgot; it is a file holding a claim on something
 parked.
 
+### A cross-team move always crosses a storage boundary
+
+**NAMED FROM A MEASURED RUN, not reasoned about.** Two scenarios wanted a design to
+change TEAM and keep its identity, and both were promoted to live on the reasoning
+that the personal-token precondition was the only thing stopping them. CI disagreed,
+and the mechanism is worth writing down because it is not the one the app's own
+docblocks predicted.
+
+This suite can map exactly two teams to two Nextcloud folders, and the Background
+pins their storage: `Penpot` is an admin folder (the user's home) and `Shared` is a
+Team Folder (a groupfolders mount). **There is no pair of mapped teams on the same
+storage**, so every cross-team drag is also a cross-storage one.
+
+What that costs is not what `MotionService`'s docblock says it costs. That warns
+that a cross-storage move fires `NodeDeletedEvent` + a create rather than
+`NodeRenamedEvent`, so the service never sees it. The log says otherwise — the event
+DOES arrive. What does not arrive is the file's METADATA: properties do not travel
+across a storage boundary, so the node that lands is a `.penpot` carrying no
+`penpot_id` at all. `onMove()` reads it as untracked and takes the §6.33 import
+branch, which is visible in the run as *"a design arrived, so the folder is a
+project"* followed by *"adopted an archive as a Penpot design"* — a NEW design with a
+new id, which is exactly what the scenario asserts must not happen.
+
+So the wall is real, it is Nextcloud's, and it has nothing to do with personal
+tokens:
+
+- `Move a design into another team` is `@blocked`. Both rows cross the boundary, and
+  there is no third mapping to write a same-storage pair with.
+- `Move a design out of every mapping` LOST its `Shared/Let Go` row and is a plain
+  Scenario now. The claim was *"from either storage kind, because leaving is
+  leaving"*, and leaving a Team Folder for unmapped space strips the stamp the
+  scenario exists to assert. One honest row beats two where one cannot pass.
+
+The behaviour itself is very probably right — nothing suggests the app mishandles a
+cross-team move it can actually see. It is unprovable here, which is a different
+thing, and the tag now says which.
+
 ### Coming back revives whatever Penpot still has
 
 The `penpot_id` on the file names a design that EXISTS — parked in Penpot's trash, or

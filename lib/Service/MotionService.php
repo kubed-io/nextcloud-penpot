@@ -176,10 +176,25 @@ final class MotionService {
 			return false;
 		}
 
-		// ONE resolver walk, used twice: the project decides whether to push, and
-		// the team decides whether the file's cached `penpot_team_id` still tells
-		// the truth (§C6.7).
-		$membership = $this->resolver->resolve($target);
+		// RESOLVED FROM THE DESTINATION FOLDER, NOT FROM THE FILE — and that
+		// distinction is load-bearing now in a way it never was before.
+		//
+		// {@see MembershipResolver::resolve()} starts its walk AT the node it is
+		// given, and a design file carries its own cached `penpot_team_id` (§C6.7,
+		// so the browser can build a workspace link without walking the tree). Hand
+		// it the file and the file answers about itself: a mirror dragged out to an
+		// unmapped folder still reports the team it used to belong to, because the
+		// stamp travelled with it.
+		//
+		// That was harmless while a null project merely meant "do nothing". It is
+		// not harmless now: it made a design that had left every mapping resolve to
+		// its old team, and therefore to that team's Drafts — so instead of being
+		// parked it was quietly re-filed into Drafts, which is a real project inside
+		// a mapping it is no longer in. Measured in CI, not reasoned about.
+		//
+		// A file's membership IS its folder's membership. Asking the parent is both
+		// the correct question and the one that cannot be answered by a stale stamp.
+		$membership = $this->resolver->resolve($this->destinationFolder($target));
 
 		// THE DESTINATION SIDE ADOPTS; the source side must never (see
 		// `sourceProject()` below). A design dragged into a folder Penpot has never
@@ -278,6 +293,23 @@ final class MotionService {
 		}
 
 		return true;
+	}
+
+	/**
+	 * The folder a moved file now sits in, for the membership walk.
+	 *
+	 * Falls back to the file itself when the parent cannot be read, which is the
+	 * pre-existing behaviour and the safe direction: a file that answers about
+	 * itself resolves to the team it is stamped with, so the move is PUSHED rather
+	 * than the design parked. Getting a push wrong costs a `move-files` Penpot
+	 * treats as a no-op; getting a park wrong soft-deletes somebody's design.
+	 */
+	private function destinationFolder(File $target): Node {
+		try {
+			return $target->getParent();
+		} catch (NotFoundException) {
+			return $target;
+		}
 	}
 
 	/**

@@ -54,6 +54,17 @@
 				<referencedClass name="OC" />
 				<referencedClass name="OC_Util" />
 				<referencedClass name="OC_User" />
+				<!--
+					`files_trashbin` is REMOVABLE, which is exactly why
+					{@see OCA\PenpotSync\Service\TrashControl} resolves its manager
+					lazily behind an `interface_exists()` check instead of taking it in
+					the constructor — a hard dependency would make this app fail to boot
+					on an instance without the trash app. Psalm cannot see the interface
+					for the same reason nothing else can, so this suppression is the
+					honest static counterpart of that runtime check rather than a
+					silenced bug. Same entry, same reasoning, as nextcloud-grafana.
+				-->
+				<referencedClass name="OCA\Files_Trashbin\Trash\ITrashManager" />
 			</errorLevel>
 		</UndefinedClass>
 		<!--
