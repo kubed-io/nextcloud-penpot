@@ -141,8 +141,20 @@ final class ImportService {
 		// mapping's mode. A `link` mapping never reaches here — nothing may be
 		// added to one from this side — so in practice this is `sync`, and the
 		// fallback is the safe direction: `link` promises no archive.
+		//
+		// AND THE REVISION IS CLEARED, because a new id makes the old one a lie.
+		// `writeFile()` leaves omitted keys alone, so a file that arrives carrying a
+		// revision — a mirror whose design was destroyed and is being re-imported, or
+		// one that left its mapping and came back — would otherwise keep a `revn@vern`
+		// belonging to a design that no longer exists, stamped beside an id that has
+		// never had that revision. Empty is the honest value: nothing has been
+		// exported for THIS design yet, which is what makes the next pull's
+		// {@see PullService::driftedOrMissing()} export and stamp the real one.
+		// Raised in review on #46 against the restore path, and fixed here because
+		// all five import callers have it.
 		$this->metadata->writeFile($node->getId(), [
 			PenpotMetadata::KEY_ID => $newId,
+			PenpotMetadata::KEY_REVISION => '',
 			PenpotMetadata::KEY_MODE => $this->modeFor($teamId),
 			PenpotMetadata::KEY_TEAM_ID => $teamId ?? '',
 		]);
