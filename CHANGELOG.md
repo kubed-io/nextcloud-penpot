@@ -56,10 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internal: the specification is now organised by behaviour rather than by mechanism — the folder is the noun, the file is the verb — and the integration harness is being re-taught one behaviour at a time. The connection, app-lifecycle, mapping, design and project verbs run again; the rest stay `@todo` until their PR.
 
 ### Added
-url 
-- **Restoring a design from the trash now brings its design back in Penpot too**, and if Penpot no longer has it, tells you your file is the only copy left instead of silently looking fine.
 
-- **Emptying the trash finishes the delete in Penpot**, and only for the file you emptied. A design somebody restored in Penpot in the meantime is left alone, and a purge that cannot reach Penpot destroys nothing.
+- **Restoring a design Penpot no longer has now tells you so.** The file comes back looking perfectly normal, and until now nothing said that the design behind it was gone for good and your copy is the only one left.
 
 - **Nextcloud now tells you when Penpot did not get the message.** If a design file cannot be added to Penpot, or a move could not be passed on, you get a notification saying what Penpot said — instead of the failure only appearing in the server log.
 

@@ -57,7 +57,7 @@ Feature: Emptying the trash
 
   @in-penpot @gesture
   Scenario Outline: Empty Penpot's trash in Penpot
-    Given a design file named "Gone For Good.penpot" in "<source>"
+    Given a design file named "Erased Upstream.penpot" in "<source>"
     And the file is in the Nextcloud trash
     And its design is in Penpot's trash
     When someone empties Penpot's trash
@@ -90,7 +90,7 @@ Feature: Emptying the trash
 
   @in-nextcloud @gesture
   Scenario: Empty the trash while Penpot is unreachable
-    Given a design file named "Gone For Good.penpot" in "Penpot/Purge Me"
+    Given a design file named "Out Of Reach.penpot" in "Penpot/Purge Me"
     And the file is in the Nextcloud trash
     And its design is in Penpot's trash
     And Penpot is unreachable

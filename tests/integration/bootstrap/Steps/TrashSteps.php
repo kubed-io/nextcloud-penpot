@@ -72,6 +72,18 @@ trait TrashSteps {
 	 * — and a leg whose remaining scenarios all fail for a reason the previous one
 	 * caused is the least diagnosable failure this suite can produce.
 	 *
+	 * ## AND IT IS CALLED AT THE END OF THE GESTURE, NOT ONLY AFTER THE SCENARIO
+	 *
+	 * `Penpot is unreachable` describes what the APP could reach while it acted.
+	 * Every assertion that follows has to reach Penpot itself to check that nothing
+	 * changed — and `no design is deleted in Penpot` asks through `occ
+	 * penpot_sync:probe`, which is the app, pointed at a closed port. It came back
+	 * with no designs at all, so the assertion read every design in the instance as
+	 * destroyed by a purge that had in fact done nothing.
+	 *
+	 * So the outage ends with the gesture it was arranged for. The `@AfterScenario`
+	 * stays as the seatbelt for a scenario that never reaches its `When`.
+	 *
 	 * @AfterScenario
 	 */
 	public function healThePenpotUrl(): void {
@@ -210,6 +222,8 @@ trait TrashSteps {
 		if ($purged === 0) {
 			throw new \RuntimeException("nothing in the Nextcloud trash came from '{$this->currentFilePath}'");
 		}
+
+		$this->healThePenpotUrl();
 	}
 
 	/**
@@ -219,6 +233,7 @@ trait TrashSteps {
 	 */
 	public function iRestoreItFromTheTrash(): void {
 		$this->iRestoreFromTheNextcloudTrash($this->currentFilePath);
+		$this->healThePenpotUrl();
 	}
 
 	/**

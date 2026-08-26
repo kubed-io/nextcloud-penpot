@@ -101,9 +101,12 @@ final class Notifier implements INotifier {
 					['file' => ['type' => 'highlight', 'id' => $file, 'name' => $file]],
 				);
 				$notification->setParsedSubject($l->t('“%s” is back, but its design is gone from Penpot', [$file]));
+				// ONE STRING LITERAL, NOT A CONCATENATION. Nextcloud's l10n extractor
+				// reads the argument to `t()` statically, so a message assembled with
+				// `.` is not picked up and ships untranslatable — silently, because it
+				// still renders perfectly in English.
 				$notification->setParsedMessage(
-					$l->t('Penpot no longer has that design and it cannot be brought back there. '
-						. 'Your file is complete and is now the only copy of it.'),
+					$l->t('Penpot no longer has that design and it cannot be brought back there. Your file is complete and is now the only copy of it.'),
 				);
 
 				return $notification;
