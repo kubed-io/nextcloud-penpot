@@ -215,16 +215,19 @@ trait TrashSteps {
 	 * @When /^I purge it from the trash$/
 	 */
 	public function iPurgeItFromTheTrash(): void {
-		// EVERY ENTRY FOR THIS NAME, not the first one.
+		// EVERY ENTRY FOR THIS PATH, not the first one.
 		//
-		// `trashbinPathFor()` matches on BASENAME, so a file another scenario trashed
-		// under the same name is an equally good match and there is no way to tell
-		// them apart from the outside. Purging one and asserting "gone from the
-		// Nextcloud trash" then failed against a leftover the purge was never given —
-		// the fixture's debris answering for the gesture, again.
+		// `trashbinPathFor()` narrows to the folder the file was deleted FROM, so a
+		// same-named file from anywhere else is already excluded. What it cannot
+		// separate is two deletions of the SAME path — an Outline row that trashes
+		// `Penpot/Purge Me/X.penpot`, and the next row trashing a fresh file at that
+		// identical path. Nextcloud keeps both, distinguished only by the `.dNNNNN`
+		// stamp it appends, and neither is more "the" entry than the other.
 		//
-		// Emptying the trash of every entry by that name is both what the scenario
-		// means and the only thing that can be asserted afterwards.
+		// Emptying every entry for the path is both what the scenario means and the
+		// only thing that can be asserted afterwards: leaving one behind made
+		// `the file is gone from the Nextcloud trash` fail against a leftover the
+		// purge was never given.
 		$purged = 0;
 		while ($this->trashbinPathFor($this->currentFilePath) !== null) {
 			$this->iPurgeFromTheNextcloudTrash($this->currentFilePath);
