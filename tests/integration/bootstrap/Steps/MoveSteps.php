@@ -89,6 +89,44 @@ trait MoveSteps {
 		$this->makeAncestors($path);
 		$this->clearTheWay($path);
 		$this->iMoveTheFileInto($folder);
+		$this->letThePenpotDeleteSettle();
+	}
+
+	/**
+	 * Wait for Penpot to finish deleting before the scenario asks for it back.
+	 *
+	 * ## THE RACE IS THE FIXTURE'S, NOT THE APP'S
+	 *
+	 * `delete-file` answers immediately, lists the design in the trash a moment
+	 * later, and then runs a DELAYED JOB that removes the file again — even if it
+	 * was restored in between. {@see \OCA\PenpotSync\Service\RestoreService}
+	 * measured that at ~3.8s against a live Penpot and the app waits it out, but the
+	 * delay is Penpot's and a slower CI box moves it.
+	 *
+	 * Which is why this belongs here rather than in a longer app timeout. A person
+	 * dragging a design out of every mapping and back again inside four seconds is
+	 * doing it on purpose; this arrange does it in about one, every single run, and
+	 * then the assertion blames the untrash for a re-delete that was already in
+	 * flight before the return began. The app confirmed the design out of the trash
+	 * and said so in the log; Penpot put it back afterwards.
+	 *
+	 * So the fixture stops manufacturing the race: park, let the delete land for
+	 * real, and only then let the scenario say `When I move the file into …`. What
+	 * is being specified is that a returning design comes back — not how fast
+	 * Penpot's worker queue happens to be.
+	 */
+	private function letThePenpotDeleteSettle(): void {
+		// Listed first — the delayed job cannot have run before the delete it
+		// belongs to has even shown up.
+		$this->until(
+			fn (): bool => $this->inTeamTrash($this->parkedTeamId, $this->idArrivedWith),
+			fn (): string => 'the parked design never reached Penpot\'s trash',
+		);
+
+		// Then out the far side of the undo window. Six seconds is what the app
+		// allows itself; eight gives the slower box room, and it is paid twice per
+		// scenario rather than on any real gesture.
+		usleep(8_000_000);
 	}
 
 	/**
