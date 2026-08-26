@@ -48,9 +48,20 @@ trait TrashSteps {
 	/** The instance URL, kept so an unreachable-Penpot scenario can put it back. */
 	private string $urlBeforeOutage = '';
 
+	/**
+	 * The team the cursor's design belonged to, read BEFORE its file was trashed.
+	 *
+	 * `teamId()` answers for the `Penpot` mapping and nothing else, which is wrong
+	 * the moment a scenario runs its Team Folder row — and `teamIdForPath()` cannot
+	 * help either, because by the time these steps ask, the file is in the trash and
+	 * has no path left to resolve. So it is captured on the way past.
+	 */
+	private string $teamBeforeTrashing = '';
+
 	/** @BeforeScenario */
 	public function armTrashSteps(): void {
 		$this->urlBeforeOutage = '';
+		$this->teamBeforeTrashing = '';
 	}
 
 	/**
@@ -80,7 +91,13 @@ trait TrashSteps {
 	 * @Given /^the file is in the Nextcloud trash$/
 	 */
 	public function theCursoredFileIsInTheNextcloudTrash(): void {
+		$this->teamBeforeTrashing = $this->teamIdForPath($this->currentFilePath);
 		$this->iMoveItToTheTrash();
+	}
+
+	/** The cursor design's team, resolved before the trashing took its path away. */
+	private function cursorTeamId(): string {
+		return $this->teamBeforeTrashing !== '' ? $this->teamBeforeTrashing : $this->teamId();
 	}
 
 	/**
@@ -95,7 +112,7 @@ trait TrashSteps {
 	public function itsDesignIsInPenpotsTrash(): void {
 		$id = $this->cursorDesignId();
 		$this->until(
-			fn (): bool => $this->inTeamTrash($this->teamId(), $id),
+			fn (): bool => $this->inTeamTrash($this->cursorTeamId(), $id),
 			fn (): string => "the design {$id} never reached Penpot's trash",
 		);
 	}
@@ -113,9 +130,9 @@ trait TrashSteps {
 	 */
 	public function itsDesignIsNotInPenpotsTrash(): void {
 		$id = $this->cursorDesignId();
-		$this->penpotRpc('restore-deleted-team-files', ['team-id' => $this->teamId(), 'ids' => [$id]]);
+		$this->penpotRpc('restore-deleted-team-files', ['team-id' => $this->cursorTeamId(), 'ids' => [$id]]);
 		$this->until(
-			fn (): bool => !$this->inTeamTrash($this->teamId(), $id),
+			fn (): bool => !$this->inTeamTrash($this->cursorTeamId(), $id),
 			fn (): string => "the design {$id} is still in Penpot's trash after a restore",
 		);
 	}
@@ -152,6 +169,12 @@ trait TrashSteps {
 	 * @Given /^Penpot is unreachable$/
 	 */
 	public function penpotIsUnreachable(): void {
+		// RE-SNAPSHOT WHAT PENPOT HOLDS, because "no design is deleted in Penpot"
+		// means "from HERE on". The arrange above has already trashed one on purpose,
+		// and the snapshot taken by the trash gesture predates it — so the assertion
+		// would report the arrange's own delete as damage done by the purge.
+		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
+
 		$current = $this->occ('penpot_sync:show-config');
 		if (preg_match('/Penpot base URL: (\S+)/', $current['output'], $m) === 1) {
 			$this->urlBeforeOutage = $m[1];
@@ -166,7 +189,27 @@ trait TrashSteps {
 	 * @When /^I purge it from the trash$/
 	 */
 	public function iPurgeItFromTheTrash(): void {
-		$this->iPurgeFromTheNextcloudTrash($this->currentFilePath);
+		// EVERY ENTRY FOR THIS NAME, not the first one.
+		//
+		// `trashbinPathFor()` matches on BASENAME, so a file another scenario trashed
+		// under the same name is an equally good match and there is no way to tell
+		// them apart from the outside. Purging one and asserting "gone from the
+		// Nextcloud trash" then failed against a leftover the purge was never given —
+		// the fixture's debris answering for the gesture, again.
+		//
+		// Emptying the trash of every entry by that name is both what the scenario
+		// means and the only thing that can be asserted afterwards.
+		$purged = 0;
+		while ($this->trashbinPathFor($this->currentFilePath) !== null) {
+			$this->iPurgeFromTheNextcloudTrash($this->currentFilePath);
+			if (++$purged > 10) {
+				throw new \RuntimeException("the trashbin keeps producing entries for '{$this->currentFilePath}'");
+			}
+		}
+
+		if ($purged === 0) {
+			throw new \RuntimeException("nothing in the Nextcloud trash came from '{$this->currentFilePath}'");
+		}
 	}
 
 	/**
@@ -188,7 +231,7 @@ trait TrashSteps {
 	 * @When /^someone empties Penpot's trash$/
 	 */
 	public function someoneEmptiesPenpotsTrash(): void {
-		$team = $this->teamId();
+		$team = $this->cursorTeamId();
 		$ids = $this->penpotTrashIds($team);
 		if ($ids !== []) {
 			$this->penpotRpc('permanently-delete-team-files', ['team-id' => $team, 'ids' => $ids]);
@@ -203,7 +246,7 @@ trait TrashSteps {
 	 */
 	public function someoneRestoresTheDesignInPenpot(): void {
 		$this->penpotRpc('restore-deleted-team-files', [
-			'team-id' => $this->teamId(),
+			'team-id' => $this->cursorTeamId(),
 			'ids' => [$this->cursorDesignId()],
 		]);
 		$this->theAdminRunsAPull();

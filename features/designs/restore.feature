@@ -83,10 +83,9 @@ Feature: Restoring a design from the trash
     And no design is restored in Penpot
     And the file holds no Penpot metadata at all
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                         |
-      | Penpot/Stay Put/Loose.penpot |
-      | Scratch/Loose.penpot         |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                 |
+      | Scratch/Loose.penpot |
 
     # ── RULE: a design coming back in Penpot brings its file with it ─────────
 

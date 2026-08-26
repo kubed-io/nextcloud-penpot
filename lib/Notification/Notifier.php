@@ -30,6 +30,11 @@ use OCP\Notification\UnknownNotificationException;
  *   - `move_not_pushed` — a move happened in Nextcloud that Penpot never heard
  *     about. Nothing is wrong with the file and there is nothing to fix; the
  *     message says so, so it does not read as lost work.
+ *   - `restored_without_design` — a mirror came back out of the Nextcloud trash
+ *     and its design did not, because Penpot's grace window had closed or someone
+ *     erased it (§6.20 — a purged id cannot be resurrected). NOT a failure: the
+ *     file is whole, and the point of telling anyone is that it is now the only
+ *     copy of a design the restore looked like it had brought back.
  */
 final class Notifier implements INotifier {
 	public function __construct(

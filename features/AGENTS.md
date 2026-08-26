@@ -3589,26 +3589,20 @@ business.
 
 ### Restoring a file that was never in Penpot leaves Penpot alone
 
-A restore only ever puts BACK something this app mirrored out. Inventing a
-design for a file that never had one is still an open fork, and
-it must not happen by accident on the way out of the trash.
+A file this app never mirrored is Nextcloud's alone, coming or going. Restoring it
+puts it back and Penpot never hears about it.
 
-THE OLD VERSION ASSUMED SOMETHING THE APP DOES NOT ALLOW. It staged a
-"mirrored design in the project Bystander", uploaded a second, untracked
-`.penpot` NEXT TO IT inside that same mapped project folder, and then
-asserted the bystander was still there — an uninvolved file being uninvolved,
-which is not a claim worth a scenario unless the two could collide, and they
-cannot.
+**THE IN-MAPPING ROW IS GONE, AND §6.33 IS WHY.** The Examples used to read *"inside
+a mapping and outside every mapping alike"*, crossing `Penpot/Stay Put/Loose.penpot`
+with `Scratch/Loose.penpot`. That was true when an untracked `.penpot` sitting in a
+mapped folder was simply ignored. It is not true now: an archive arriving inside a
+mapping is IMPORTED and becomes a real design, so the first row cannot get as far as
+the restore — the file is tracked before the scenario's `When` ever runs, and
+`the file holds no Penpot metadata at all` is false by the time it is asked.
 
-Worse, it implied a `.penpot` file can sit inside a mapped project folder
-WITHOUT being in Penpot. Nothing in this app produces that state: anything
-under a mapping is mirrored. An opt-out marker — a `penpot:ignore` tag, say —
-would create it, and that idea has never been designed, only implied by this
-scenario. It is written down in the saga as an open question rather than
-smuggled in as a fact the spec depends on.
-
-So the file lives OUTSIDE every mapping, which is the only way a `.penpot`
-file is genuinely untracked today, and the assertions are about it alone.
+`designs/delete.feature` had already made exactly this correction, and says so in
+its own Examples heading: *"outside every mapping, which is the only place one can
+still be."* Restore now matches. The rule is unchanged; the input space shrank.
 
 ### An untracked file is never restored, because it was never in Penpot
 
