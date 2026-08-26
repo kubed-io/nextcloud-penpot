@@ -3604,6 +3604,19 @@ the restore — the file is tracked before the scenario's `When` ever runs, and
 its own Examples heading: *"outside every mapping, which is the only place one can
 still be."* Restore now matches. The rule is unchanged; the input space shrank.
 
+**AND SO DOES PURGE, which was missed on the first pass and cost a round.** The
+same stale row sat in `designs/purge.feature`, and its failure was more alarming
+than restore's: the file was imported on arrival, so purging it DESTROYED A REAL
+DESIGN and `no design is deleted in Penpot` was simply true-and-failing. Reading
+the log made it obvious — `adopted an archive as a Penpot design`, then
+`permanently deleted a design in Penpot` — but the assertion's wording sent the
+first look at the wrong scenario entirely.
+
+THE RULE, since three files carried this row and two of them were fixed one at a
+time: **§6.33 removed "untracked, inside a mapping" from the input space
+everywhere at once.** Any Examples column crossing in-mapping with out-of-mapping
+for an untracked `.penpot` is stale by construction, in every feature file.
+
 ### An untracked file is never restored, because it was never in Penpot
 
 Creating brand-new Penpot files from Nextcloud is a separate, still-open

@@ -83,10 +83,9 @@ Feature: Emptying the trash
     Then no design is deleted in Penpot
     And the file is gone from the Nextcloud trash
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                          |
-      | Penpot/Purge Me/Loose.penpot  |
-      | Scratch/Loose.penpot          |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                 |
+      | Scratch/Loose.penpot |
 
     # ── RULE: a purge that cannot reach Penpot destroys nothing ───────────────
 
