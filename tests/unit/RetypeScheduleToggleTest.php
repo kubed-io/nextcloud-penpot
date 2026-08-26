@@ -44,7 +44,7 @@ final class RetypeScheduleToggleTest extends TestCase {
 		return $config;
 	}
 
-	private function run(IAppConfig $config): void {
+	private function repair(IAppConfig $config): void {
 		(new RetypeScheduleToggle($config, new AppConfigReader($config)))
 			->run($this->createStub(IOutput::class));
 	}
@@ -60,7 +60,7 @@ final class RetypeScheduleToggleTest extends TestCase {
 		$config->expects(self::once())->method('setValueBool')
 			->with(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, true);
 
-		$this->run($config);
+		$this->repair($config);
 	}
 
 	public function testAnOffValueStaysOff(): void {
@@ -69,7 +69,7 @@ final class RetypeScheduleToggleTest extends TestCase {
 		$config->expects(self::once())->method('setValueBool')
 			->with(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, false);
 
-		$this->run($config);
+		$this->repair($config);
 	}
 
 	/**
@@ -86,7 +86,7 @@ final class RetypeScheduleToggleTest extends TestCase {
 		$config->expects(self::never())->method('setValueBool');
 		$config->expects(self::never())->method('setValueString');
 
-		$this->run($config);
+		$this->repair($config);
 	}
 
 	/**
@@ -101,7 +101,7 @@ final class RetypeScheduleToggleTest extends TestCase {
 		$config->expects(self::never())->method('deleteKey');
 		$config->expects(self::never())->method('setValueBool');
 
-		$this->run($config);
+		$this->repair($config);
 	}
 
 	/**
@@ -119,7 +119,7 @@ final class RetypeScheduleToggleTest extends TestCase {
 		$config->expects(self::once())->method('setValueString')
 			->with(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, 'yes');
 
-		$this->run($config);
+		$this->repair($config);
 	}
 
 	/** And it says so, rather than reporting a repair that did not happen. */
