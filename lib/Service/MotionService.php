@@ -420,23 +420,66 @@ final class MotionService {
 	 *              there is nothing left to move
 	 */
 	private function revive(File $node, PenpotFileMetadata $meta, Membership $membership, string $project): bool {
-		$teamId = $membership->teamId;
+		$teamId = $membership->teamId ?? '';
+
+		// THE TRASH LISTING IS ASKED FIRST, and the order is not a preference.
+		//
+		// This began with `fileExists()` and fell through to the untrash — and both
+		// rows of the scenario failed identically, with the design still in the trash
+		// afterwards. `get-file-summary` answers NOT-FOUND for a soft-deleted design,
+		// so a parked design read as "the id names nothing" and was IMPORTED: the
+		// user got a new design with a new id, and the one holding all their history
+		// stayed in the trash where nobody would look for it.
+		//
+		// `get-team-deleted-files` is the authority on what is parked, and it is the
+		// one this app already trusts everywhere else. Existence is only consulted
+		// once the trash has said no.
+		if ($teamId !== '' && $this->isParked($teamId, $meta->penpotId)) {
+			$this->untrash($teamId, $meta->penpotId);
+
+			return true;
+		}
 
 		if ($this->client->fileExists($meta->penpotId) === false) {
-			// THE ID NAMES NOTHING. Not an error and not a data loss — the bytes have
-			// been in Nextcloud the whole time, so they become a design again (§6.33).
-			// A failed import leaves the file exactly as it arrived, which is the same
-			// honest outcome ImportService gives every other archive it cannot place.
-			$this->imports->adopt($node, $project, $teamId);
+			// THE ID NAMES NOTHING, and the trash agrees. Not an error and not a data
+			// loss — the bytes have been in Nextcloud the whole time, so they become a
+			// design again (§6.33). A failed import leaves the file exactly as it
+			// arrived, which is the honest outcome ImportService gives every archive it
+			// cannot place.
+			$this->imports->adopt($node, $project, $teamId !== '' ? $teamId : null);
 
 			return false;
 		}
 
-		if ($teamId !== null && $teamId !== '') {
-			$this->untrash($teamId, $meta->penpotId);
+		// Live all along. Nothing to revive; the caller files it.
+		return true;
+	}
+
+	/** Is this design sitting in that team's Penpot trash right now? */
+	private function isParked(string $teamId, string $penpotId): bool {
+		try {
+			foreach ($this->client->deletedFiles($teamId) as $file) {
+				if (($file['id'] ?? null) === $penpotId) {
+					return true;
+				}
+			}
+		} catch (\Throwable $e) {
+			// UNREADABLE ANSWERS YES, and that is the cheap direction rather than the
+			// timid one. Saying no drops the id into the existence probe, which is the
+			// only branch that can mint a SECOND design and leave the original holding
+			// the history somewhere nobody will look. Saying yes costs a restore call
+			// that is a no-op for a design which was never trashed — Penpot answers
+			// with an empty set and {@see untrash()} returns having done nothing.
+			$this->logger->warning('penpot_sync writeback: could not read Penpot\'s trash for a returning design; treating it as parked', [
+				'app' => Application::APP_ID,
+				'penpotId' => $penpotId,
+				'exception' => $e,
+			]);
+
+			return true;
 		}
 
-		return true;
+		return false;
 	}
 
 	/**

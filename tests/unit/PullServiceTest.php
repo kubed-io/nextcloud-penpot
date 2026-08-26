@@ -762,12 +762,30 @@ final class PullServiceTest extends TestCase {
 	 * that project, not this one. Same rule as MembershipResolver read downwards,
 	 * and the same one ProjectFolderService uses to collect designs on opt-in.
 	 * Without it, one project's pull would adopt another project's files.
+	 *
+	 * ## THE NESTED FILE NOW CARRIES A DIFFERENT ID, AND HAD TO
+	 *
+	 * It used to carry `file-acme` — the very id this project's listing reports —
+	 * which conflated two different claims: "a file in another project's folder" and
+	 * "another project's file". They were indistinguishable while a miss simply
+	 * created a new mirror.
+	 *
+	 * They are not indistinguishable any more. Penpot decides which project a design
+	 * is in, so a mirror stamped `file-acme` sitting under another project's folder
+	 * is not a bystander — it is THIS design's mirror, in the wrong place, and the
+	 * pull now moves it rather than writing a duplicate beside it
+	 * ({@see testAMirrorFollowsItsDesignIntoAnotherProject()}).
+	 *
+	 * So the fixture says what it always meant: another project's file is one with
+	 * another design's id. The index rule under test is unchanged — the descent
+	 * still stops at folder 22 — and this now proves it without also asserting the
+	 * duplication bug.
 	 */
 	public function testTheIndexStopsAtANestedProjectFolder(): void {
 		$mapping = $this->mapping(useTeamFolder: false);
 
 		$theirs = $this->emptyFile(50);
-		$this->stamps[50] = new PenpotFileMetadata('file-acme', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
+		$this->stamps[50] = new PenpotFileMetadata('file-theirs', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
 
 		$nested = $this->createMock(Folder::class);
 		$nested->method('getId')->willReturn(22);
@@ -798,6 +816,59 @@ final class PullServiceTest extends TestCase {
 		]);
 		$this->folderMarkersById[20] = new FolderMarkers('proj-acme', '');
 		$this->folderMarkersById[22] = new FolderMarkers('proj-other', '');
+
+		$this->pull->pullOne($mapping);
+	}
+
+	/**
+	 * A DESIGN THAT CHANGED PROJECT IN PENPOT TAKES ITS MIRROR WITH IT.
+	 *
+	 * The design is still in the team's listing, so the prune correctly leaves the
+	 * mirror alone — and the upsert indexes only the destination folder, so it did
+	 * not find it and wrote a SECOND file. Two files, one design, and nothing ever
+	 * reconciled them: the stale one stays in the seen-set forever.
+	 *
+	 * Asserting `newFile` is NEVER called is the whole point. "A file ends up in the
+	 * right folder" was true of the buggy behaviour too.
+	 */
+	public function testAMirrorFollowsItsDesignIntoAnotherProject(): void {
+		$mapping = $this->mapping(useTeamFolder: false);
+
+		// The mirror, sitting under the project the design used to be in.
+		$mirror = $this->emptyFile(50);
+		$mirror->method('getName')->willReturn('Login.penpot');
+		$this->stamps[50] = new PenpotFileMetadata('file-acme', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
+
+		$oldProject = $this->createMock(Folder::class);
+		$oldProject->method('getId')->willReturn(22);
+		$oldProject->method('getDirectoryListing')->willReturn([$mirror]);
+		$oldProject->method('nodeExists')->willReturn(false);
+
+		$newProject = $this->createMock(Folder::class);
+		$newProject->method('getId')->willReturn(20);
+		$newProject->method('getDirectoryListing')->willReturn([]);
+		$newProject->method('nodeExists')->willReturn(false);
+		$newProject->method('getPath')->willReturn('/admin/files/Penpot/Acme');
+		$newProject->expects($this->never())->method('newFile');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$newProject, $oldProject]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-acme', 'name' => 'Acme', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([
+			['id' => 'file-acme', 'name' => 'Login', 'revn' => 5],
+		]);
+		$this->folderMarkersById[20] = new FolderMarkers('proj-acme', '');
+		$this->folderMarkersById[22] = new FolderMarkers('proj-was', '');
+
+		// MOVED, not copied: the same node lands in the new project's folder.
+		$mirror->expects($this->once())->method('move')->with('/admin/files/Penpot/Acme/Login.penpot');
 
 		$this->pull->pullOne($mapping);
 	}
