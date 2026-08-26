@@ -150,6 +150,38 @@ namespace OCP\App {
 	}
 }
 
+namespace OCP\Migration {
+	// The repair-step pair, for {@see \OCA\PenpotSync\Migration\RetypeScheduleToggle}
+	// — the one migration this app unit-tests, because it DELETES a user's setting
+	// and a delete that half-lands is worse than the bug it repairs.
+	//
+	// Both are declaration-only and both match core's signatures exactly, untyped
+	// returns included: `RetypeScheduleToggle::run()` narrows to `: void`, which is
+	// legal against an untyped declaration and would NOT be against `: mixed`.
+	if (!interface_exists(IOutput::class, false)) {
+		interface IOutput {
+			public function debug(string $message): void;
+
+			public function info($message);
+
+			public function warning($message);
+
+			public function startProgress($max = 0);
+
+			public function advance($step = 1, $description = '');
+
+			public function finishProgress();
+		}
+	}
+	if (!interface_exists(IRepairStep::class, false)) {
+		interface IRepairStep {
+			public function getName();
+
+			public function run(IOutput $output);
+		}
+	}
+}
+
 namespace OCP\Security {
 	// PenpotClient stores the service-account token encrypted at rest, and
 	// SetToken writes it. Declaration-only: the unit suite mocks both directions
