@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Restoring a design Penpot no longer has now tells you so.** The file comes back looking perfectly normal, and until now nothing said that the design behind it was gone for good and your copy is the only one left.
+
 - **Nextcloud now tells you when Penpot did not get the message.** If a design file cannot be added to Penpot, or a move could not be passed on, you get a notification saying what Penpot said — instead of the failure only appearing in the server log.
 
 - **A design's file now carries the design's own dates.** "Modified" shows when the design last changed in Penpot and "Created" when it was created there, instead of both showing when a sync happened to run — and a project folder carries its project's creation date. Sorting a mapped folder by date finally sorts by the designs.

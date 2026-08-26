@@ -248,11 +248,16 @@ trait WebDavTrait {
 	 */
 	private function trashbinPathFor(string $originalPath): ?string {
 		$base = basename($originalPath);
+		// The FOLDER it was deleted from, which is what tells two same-named files
+		// apart. Empty when the caller passed a bare filename, and then this falls
+		// back to matching on the name alone.
+		$wantFrom = trim(str_contains($originalPath, '/') ? dirname($originalPath) : '', '/.');
+
 		$href = $this->ncBaseUrl . '/remote.php/dav/trashbin/' . rawurlencode($this->ncUser) . '/trash';
 		$res = $this->davClient()->request('PROPFIND', $href, [
 			'headers' => ['Depth' => '1', 'Content-Type' => 'application/xml'],
 			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns">'
-				. '<d:prop><nc:trashbin-filename/></d:prop></d:propfind>',
+				. '<d:prop><nc:trashbin-filename/><nc:trashbin-original-location/></d:prop></d:propfind>',
 		]);
 		$this->assertStatus($res, [207], 'trashbin PROPFIND');
 		$doc = new \SimpleXMLElement((string)$res->getBody());
@@ -262,10 +267,34 @@ trait WebDavTrait {
 			$resp->registerXPathNamespace('d', 'DAV:');
 			$resp->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
 			$origName = trim((string)(($resp->xpath('.//nc:trashbin-filename') ?: [])[0] ?? ''));
+			$origFrom = trim((string)(($resp->xpath('.//nc:trashbin-original-location') ?: [])[0] ?? ''), '/');
 			$rawHref = rawurldecode(trim((string)(($resp->xpath('d:href') ?: [])[0] ?? '')));
-			if ($origName === $base && $rawHref !== '') {
-				return basename(rtrim($rawHref, '/'));
+			if ($origName !== $base || $rawHref === '') {
+				continue;
 			}
+			// WHERE IT CAME FROM, when the caller said. Matching on the name alone
+			// made every same-named file in the trash an equally good answer, and a
+			// leg trashes plenty: two rows of one Outline, two scenarios sharing a
+			// fixture name, a teardown. The symptom was a purge that reported success
+			// and an assertion that then found "the" entry still there — a different
+			// file's, which the purge was never given.
+			//
+			// `nc:trashbin-original-location` IS THE FULL ORIGINAL PATH, filename and
+			// all, NOT the folder. The first cut appended the name to it before taking
+			// `dirname()`, which produced `…/File.penpot/File.penpot` and therefore
+			// equalled no folder ever — so this matched NOTHING, and every purge and
+			// restore step in the suite lost its entry. Fourteen scenarios in one leg,
+			// from one wrong assumption about a property name.
+			//
+			// CORE'S OWN USE IS THE PROOF, read out of the running pod rather than
+			// reasoned about: `files_trashbin/lib/Sabre/TrashbinPlugin.php` does
+			// `dirname($fileInfo->getOriginalLocation())` to recover the folder, which
+			// is this line exactly.
+			if ($wantFrom !== '' && trim(dirname($origFrom), '/.') !== $wantFrom) {
+				continue;
+			}
+
+			return basename(rtrim($rawHref, '/'));
 		}
 		return null;
 	}

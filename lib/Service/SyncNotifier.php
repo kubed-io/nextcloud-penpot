@@ -115,6 +115,30 @@ final class SyncNotifier {
 	}
 
 	/**
+	 * A mirror came back out of the Nextcloud trash, and its design did not.
+	 *
+	 * NOT A FAILURE, WHICH IS WHY IT IS ITS OWN SUBJECT. Nothing went wrong and
+	 * nothing can be retried: the design is past Penpot's grace window or was
+	 * erased, and §6.20 is clear that a purged id cannot be resurrected. The file
+	 * is whole and it is now the ONLY copy of that design in existence.
+	 *
+	 * That last part is the reason this is worth a notification at all. The restore
+	 * looks like a complete success from the Files app — the file is right back
+	 * where it was, holding a valid `.penpot` — and the one thing the user cannot
+	 * see is that opening it in Penpot will find nothing there.
+	 */
+	public function restoredWithoutItsDesign(string $userId, int $fileId, string $fileName): void {
+		$this->raise(
+			$userId,
+			$fileId,
+			'restored_without_design',
+			['file' => $fileName],
+			null,
+			'penpot_sync: could not raise a restored-without-design notification',
+		);
+	}
+
+	/**
 	 * Retract any pending failure for this file — called when a later attempt
 	 * succeeds, so a fixed file does not keep a stale error in the bell.
 	 */

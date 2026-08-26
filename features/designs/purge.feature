@@ -19,7 +19,7 @@ Feature: Emptying the trash
     # ── RULE: the purge finishes what the trashing started ────────────────────
     # notes: ../AGENTS.md#purging-a-mirror-from-the-nextcloud-trash-destroys-the-design
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Empty the trash
     Given a design file named "Gone For Good.penpot" in "<source>"
     And the file is in the Nextcloud trash
@@ -42,7 +42,7 @@ Feature: Emptying the trash
     # ── RULE: the purge destroys only what it can still see in Penpot's trash ─
     # notes: ../AGENTS.md#a-purge-only-destroys-what-is-still-in-penpots-trash
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Empty the trash when the design is not in Penpot's trash
     Given a design file named "Spared.penpot" in "Penpot/Purge Me"
     And the file is in the Nextcloud trash
@@ -55,9 +55,11 @@ Feature: Emptying the trash
 
     # ── RULE: emptying Penpot's trash finishes the delete from that side ──────
 
-  @in-penpot @gesture @todo
+  # @unbuilt — nothing in this app can reach a Nextcloud trash ENTRY. Reading that
+  # trash is a deferred slice (§6.37), noted in PullService's own docblock.
+  @in-penpot @gesture @unbuilt
   Scenario Outline: Empty Penpot's trash in Penpot
-    Given a design file named "Gone For Good.penpot" in "<source>"
+    Given a design file named "Erased Upstream.penpot" in "<source>"
     And the file is in the Nextcloud trash
     And its design is in Penpot's trash
     When someone empties Penpot's trash
@@ -73,7 +75,7 @@ Feature: Emptying the trash
 
     # ── RULE: a file the app never mirrored is Nextcloud's alone ──────────────
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Purge an untracked design file
     Given an untracked design file at "<path>"
     And the file is in the Nextcloud trash
@@ -81,16 +83,15 @@ Feature: Emptying the trash
     Then no design is deleted in Penpot
     And the file is gone from the Nextcloud trash
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                          |
-      | Penpot/Purge Me/Loose.penpot  |
-      | Scratch/Loose.penpot          |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                 |
+      | Scratch/Loose.penpot |
 
     # ── RULE: a purge that cannot reach Penpot destroys nothing ───────────────
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Empty the trash while Penpot is unreachable
-    Given a design file named "Gone For Good.penpot" in "Penpot/Purge Me"
+    Given a design file named "Out Of Reach.penpot" in "Penpot/Purge Me"
     And the file is in the Nextcloud trash
     And its design is in Penpot's trash
     And Penpot is unreachable

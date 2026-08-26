@@ -19,7 +19,7 @@ Feature: Restoring a design from the trash
     # ── RULE: a restore is the trashing, undone ──────────────────────────────
     # notes: ../AGENTS.md#restoring-a-design-brings-back-the-file-and-its-design-together
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Restore a design whose design is in Penpot's trash
     Given a design file named "Round Trip.penpot" in "<source>"
     And the file is in the Nextcloud trash
@@ -43,7 +43,7 @@ Feature: Restoring a design from the trash
     # ── RULE: what the far side still has decides what a restore has to do ───
     # notes: ../AGENTS.md#the-three-layers-a-restore-can-land-in
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario: Restore a design that is already back in Penpot
     Given a design file named "Rescued.penpot" in "Penpot/Stay Put"
     And the file is in the Nextcloud trash
@@ -55,6 +55,8 @@ Feature: Restoring a design from the trash
     # Nothing was lost remotely, so nothing is sent. A second restore would be a
     # second design.
 
+  # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
+  # @todo — the report travels now; nothing in this suite can read a bell entry.
   @in-nextcloud @gesture @todo
   Scenario: Restore a design that is gone from Penpot for good
     Given a design file named "Lost.penpot" in "Penpot/Stay Put"
@@ -72,7 +74,7 @@ Feature: Restoring a design from the trash
     # ── RULE: a file the app never mirrored is Nextcloud's alone ─────────────
     # notes: ../AGENTS.md#restoring-a-file-that-was-never-in-penpot-leaves-penpot-alone
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Restore an untracked design file
     Given an untracked design file at "<path>"
     And the file is in the Nextcloud trash
@@ -81,14 +83,13 @@ Feature: Restoring a design from the trash
     And no design is restored in Penpot
     And the file holds no Penpot metadata at all
 
-    Examples: inside a mapping and outside every mapping alike
-      | path                         |
-      | Penpot/Stay Put/Loose.penpot |
-      | Scratch/Loose.penpot         |
+    Examples: outside every mapping, which is the only place one can still be
+      | path                 |
+      | Scratch/Loose.penpot |
 
     # ── RULE: a design coming back in Penpot brings its file with it ─────────
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Restore a design in Penpot while its file is in the trash
     Given a design file named "Both Sides.penpot" in "Penpot/Stay Put"
     And the file is in the Nextcloud trash

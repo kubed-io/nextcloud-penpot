@@ -2221,6 +2221,25 @@ THE GENERAL RULE, since this cost two CI rounds: **a design name is a scenario's
 own.** Penpot's trash accumulates across a whole feature file and nothing empties
 it, so any assertion phrased by name is really an assertion about the entire run.
 
+**AND RENAMING WAS NOT ENOUGH, WHICH TOOK TWO MORE ROUNDS TO SEE.** Giving the
+return scenario its own name fixed the collision BETWEEN scenarios and left the one
+between the two ROWS of its own Outline — which no name can fix, because both rows
+run the same `Given`. The mechanism is the TEARDOWN: it deletes the mapped project
+folders after every scenario, and deleting a project trashes its designs. So by row
+two, row one's design is in Penpot's trash wearing the identical name.
+
+Every one of those rounds was read as the untrash failing, while the app's own log
+said in as many words that it had worked. Both were true, about different designs.
+The timestamps settled it — the return succeeded at `:09`, the teardown trashed the
+project at `:13`, and the row that failed was the NEXT one.
+
+So `the design "X" is not in Penpot's trash` now resolves the CURSOR's id whenever
+the scenario has that design on stage, falling back to the name only for callers
+naming a design they never staged. Purging the debris is not an alternative:
+`permanently-delete-team-files` leaves the record (§C6.11), so a destroyed design is
+still listed. There is no way to make a name unique in that listing — only to stop
+asking by name.
+
 ### An arrival Penpot cannot match becomes a new design
 
 The other half of the same question, and the two rows that were nearly three scenarios.
@@ -3589,26 +3608,33 @@ business.
 
 ### Restoring a file that was never in Penpot leaves Penpot alone
 
-A restore only ever puts BACK something this app mirrored out. Inventing a
-design for a file that never had one is still an open fork, and
-it must not happen by accident on the way out of the trash.
+A file this app never mirrored is Nextcloud's alone, coming or going. Restoring it
+puts it back and Penpot never hears about it.
 
-THE OLD VERSION ASSUMED SOMETHING THE APP DOES NOT ALLOW. It staged a
-"mirrored design in the project Bystander", uploaded a second, untracked
-`.penpot` NEXT TO IT inside that same mapped project folder, and then
-asserted the bystander was still there — an uninvolved file being uninvolved,
-which is not a claim worth a scenario unless the two could collide, and they
-cannot.
+**THE IN-MAPPING ROW IS GONE, AND §6.33 IS WHY.** The Examples used to read *"inside
+a mapping and outside every mapping alike"*, crossing `Penpot/Stay Put/Loose.penpot`
+with `Scratch/Loose.penpot`. That was true when an untracked `.penpot` sitting in a
+mapped folder was simply ignored. It is not true now: an archive arriving inside a
+mapping is IMPORTED and becomes a real design, so the first row cannot get as far as
+the restore — the file is tracked before the scenario's `When` ever runs, and
+`the file holds no Penpot metadata at all` is false by the time it is asked.
 
-Worse, it implied a `.penpot` file can sit inside a mapped project folder
-WITHOUT being in Penpot. Nothing in this app produces that state: anything
-under a mapping is mirrored. An opt-out marker — a `penpot:ignore` tag, say —
-would create it, and that idea has never been designed, only implied by this
-scenario. It is written down in the saga as an open question rather than
-smuggled in as a fact the spec depends on.
+`designs/delete.feature` had already made exactly this correction, and says so in
+its own Examples heading: *"outside every mapping, which is the only place one can
+still be."* Restore now matches. The rule is unchanged; the input space shrank.
 
-So the file lives OUTSIDE every mapping, which is the only way a `.penpot`
-file is genuinely untracked today, and the assertions are about it alone.
+**AND SO DOES PURGE, which was missed on the first pass and cost a round.** The
+same stale row sat in `designs/purge.feature`, and its failure was more alarming
+than restore's: the file was imported on arrival, so purging it DESTROYED A REAL
+DESIGN and `no design is deleted in Penpot` was simply true-and-failing. Reading
+the log made it obvious — `adopted an archive as a Penpot design`, then
+`permanently deleted a design in Penpot` — but the assertion's wording sent the
+first look at the wrong scenario entirely.
+
+THE RULE, since three files carried this row and two of them were fixed one at a
+time: **§6.33 removed "untracked, inside a mapping" from the input space
+everywhere at once.** Any Examples column crossing in-mapping with out-of-mapping
+for an untracked `.penpot` is stale by construction, in every feature file.
 
 ### An untracked file is never restored, because it was never in Penpot
 
@@ -3729,11 +3755,45 @@ a bystander claim, and the same one already retired from `designs/purge`. Purgin
 plain folder that was never a project asserts the pre-state: with no designs there was
 never anything to finish.
 
+### Why the not-in-the-trash fork has one row here and two in Grafana
+
+Grafana's twin is an Outline — *"two ways to get here, and the purge cannot tell
+them apart"* — crossing `back in the folder` with `gone from Grafana entirely`.
+Penpot carries only the first, and the reason is Penpot's, not an omission.
+
+`permanently-delete-team-files` STAMPS `deleted_at` AND LEAVES THE ROW (§C6.11).
+So a design that was erased is still returned by `get-team-deleted-files`, exactly
+like one that is merely trashed. "Gone from Penpot entirely" is therefore not a
+state this app can observe, let alone one a scenario can arrange and then assert
+`its design is not in Penpot's trash` about — the sentence would be false for the
+very case it was meant to describe.
+
+Which leaves one reachable way to be out of Penpot's trash: somebody restored the
+design over there. That is the row the scenario keeps.
+
+The same fact is why {@see thatFilesDesignIsPermanentlyDeletedFromPenpot} asks the
+PROJECT listing rather than the trash: absent from its project is what "erased"
+means here, and it is the same listing the pull reads.
+
 ### Emptying Penpot's trash reaches back into the Nextcloud trash
 
 Those designs were the only route the project had back — there is no `restore-project`
 call, measured — so once they are gone the trashed folder has nothing left to be
 restored to, and it goes too.
+
+**@unbuilt, AND THE WALL IS THIS APP'S REACH, NOT PENPOT'S.** Emptying Penpot's
+trash is arrangeable and the pull sees the result perfectly well. What no code here
+can do is remove an ENTRY FROM THE NEXTCLOUD TRASH. Nothing in `lib/` reads that
+trash at all: `TrashControl` only pauses it, and the listeners react to gestures
+someone else made. `PullService`'s own docblock has carried the deferral since it
+was written — *"adopting a mirror out of the Nextcloud trash (§6.37) … needs
+`files_trashbin` and is its own slice"* — and this scenario is the other half of
+exactly that slice.
+
+Worth separating from the walls it sits beside. It is not a harness limit: the
+suite can empty Penpot's trash and can read Nextcloud's. It is not a reporting
+gap either. The behaviour is simply absent, which is what `@unbuilt` means, and
+building it means giving this app a reason to open the trash for the first time.
 
 ### A Penpot purge may not destroy what was never Penpot's
 

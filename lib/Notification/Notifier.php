@@ -30,6 +30,11 @@ use OCP\Notification\UnknownNotificationException;
  *   - `move_not_pushed` — a move happened in Nextcloud that Penpot never heard
  *     about. Nothing is wrong with the file and there is nothing to fix; the
  *     message says so, so it does not read as lost work.
+ *   - `restored_without_design` — a mirror came back out of the Nextcloud trash
+ *     and its design did not, because Penpot's grace window had closed or someone
+ *     erased it (§6.20 — a purged id cannot be resurrected). NOT a failure: the
+ *     file is whole, and the point of telling anyone is that it is now the only
+ *     copy of a design the restore looked like it had brought back.
  */
 final class Notifier implements INotifier {
 	public function __construct(
@@ -85,6 +90,23 @@ final class Notifier implements INotifier {
 					$reason !== ''
 						? $l->t('Penpot said: %s. Your file has moved and the design is still in its old project — the next sync will catch up.', [$reason])
 						: $l->t('Your file has moved and the design is still in its old project — the next sync will catch up.'),
+				);
+
+				return $notification;
+			case 'restored_without_design':
+				// DELIBERATELY NOT PHRASED AS AN ERROR. Nothing failed, and there is
+				// nothing to retry — the file is whole and the design is gone.
+				$notification->setRichSubject(
+					$l->t('{file} is back, but its design is gone from Penpot'),
+					['file' => ['type' => 'highlight', 'id' => $file, 'name' => $file]],
+				);
+				$notification->setParsedSubject($l->t('“%s” is back, but its design is gone from Penpot', [$file]));
+				// ONE STRING LITERAL, NOT A CONCATENATION. Nextcloud's l10n extractor
+				// reads the argument to `t()` statically, so a message assembled with
+				// `.` is not picked up and ships untranslatable — silently, because it
+				// still renders perfectly in English.
+				$notification->setParsedMessage(
+					$l->t('Penpot no longer has that design and it cannot be brought back there. Your file is complete and is now the only copy of it.'),
 				);
 
 				return $notification;

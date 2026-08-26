@@ -24,6 +24,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\ProjectFolderSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PruneSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PullSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\RenameSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\TrashSteps;
 use OCA\PenpotSync\Tests\Integration\Support\OccTrait;
 use OCA\PenpotSync\Tests\Integration\Support\WebDavTrait;
 
@@ -76,6 +77,7 @@ final class FeatureContext implements Context {
 	use ProjectFolderSteps;
 	use CopySteps;
 	use MoveSteps;
+	use TrashSteps;
 	use MetadataSteps;
 
 	private const APP_ID = 'penpot_sync';

@@ -17,6 +17,7 @@ use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\RestoreService;
+use OCA\PenpotSync\Service\SyncNotifier;
 use OCP\Files\File;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -56,9 +57,15 @@ final class RestoreServiceTest extends TestCase {
 	private const PROJECT = 'df59d46b-a997-80d9-8008-6452575b0a69';
 	private const DRAFTS = '4eda2e11-843e-8045-8008-51824bdafd88';
 
+	/** The node {@see file()} hands back, and who the session says is acting. */
+	private const FILE_ID = 4242;
+	private const FILE_NAME = 'Login.penpot';
+	private const ACTOR = 'dana';
+
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
+	private SyncNotifier $notifier;
 	private RestoreService $restores;
 
 	protected function setUp(): void {
@@ -67,11 +74,13 @@ final class RestoreServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 
+		$this->notifier = $this->createMock(SyncNotifier::class);
 		$this->restores = new RestoreService(
 			$this->client,
 			$this->metadata,
 			$this->resolver,
 			$this->tokens(),
+			$this->notifier,
 			new NullLogger(),
 			// No settle: Penpot is a mock here, so there is no in-flight delete to
 			// wait on and the wait would only make the suite slower.
@@ -188,6 +197,7 @@ final class RestoreServiceTest extends TestCase {
 			$this->metadata,
 			$this->resolver,
 			$this->tokens(),
+			$this->createMock(SyncNotifier::class),
 			new NullLogger(),
 			// Long enough to poll several times at the 250ms interval, short enough
 			// to sit in a unit suite.
@@ -351,6 +361,35 @@ final class RestoreServiceTest extends TestCase {
 
 		$this->client->expects($this->never())->method('restoreDeletedFiles');
 
+		// AND THE USER IS TOLD. This is the one restore outcome that looks like a
+		// complete success from the Files app — the file is back, whole, holding a
+		// valid `.penpot` — while the design it mirrors no longer exists anywhere.
+		// A log line reaches an admin; the person who pressed restore needs to know
+		// their copy is now the only one. Asserted here because the integration
+		// suite cannot read a bell entry (features/AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to).
+		$this->notifier->expects($this->once())
+			->method('restoredWithoutItsDesign')
+			->with(self::ACTOR, self::FILE_ID, self::FILE_NAME);
+
+		$this->restores->onRestored($this->file());
+	}
+
+	/**
+	 * THE OTHER TWO LAYERS SAY NOTHING, and that is half the claim.
+	 *
+	 * A notification that fired whenever a restore happened would train people to
+	 * ignore it, and layers 1 and 2 are the ordinary cases — the design came back,
+	 * or was never gone. Only the lossy one is worth interrupting someone for.
+	 */
+	public function testALosslessRestoreTellsTheUserNothing(): void {
+		$this->givenStamped();
+		$this->givenInPenpotTrash();
+		$this->givenResolvesToProject();
+		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
+		$this->client->method('getProjectFiles')->willReturn([['id' => self::PENPOT_ID]]);
+
+		$this->notifier->expects($this->never())->method('restoredWithoutItsDesign');
+
 		$this->restores->onRestored($this->file());
 	}
 
@@ -389,6 +428,10 @@ final class RestoreServiceTest extends TestCase {
 	private function tokens(): PersonalTokenService {
 		$tokens = $this->createStub(PersonalTokenService::class);
 		$tokens->method('tokenForActor')->willReturn(null);
+		// Attribution is best-effort and unrelated to a token: the notification has
+		// to be addressed to someone even when that someone set no personal token,
+		// which is the ordinary case.
+		$tokens->method('actingUserId')->willReturn(self::ACTOR);
 
 		return $tokens;
 	}
@@ -416,8 +459,8 @@ final class RestoreServiceTest extends TestCase {
 
 	private function file(): File {
 		$node = $this->createMock(File::class);
-		$node->method('getId')->willReturn(4242);
-		$node->method('getName')->willReturn('Login.penpot');
+		$node->method('getId')->willReturn(self::FILE_ID);
+		$node->method('getName')->willReturn(self::FILE_NAME);
 
 		return $node;
 	}
