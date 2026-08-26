@@ -111,6 +111,22 @@ final class MotionService {
 	 */
 	private const MAX_DEPTH = 100;
 
+	/**
+	 * How long a restored design must stay out of the trash before it is believed.
+	 *
+	 * Penpot's `delete-file` schedules a delayed removal that lands about 3.8s
+	 * later and runs whether or not the design was restored in between — measured
+	 * against a live instance and written up in {@see RestoreService}, which pays
+	 * the same window for the same reason. Six seconds covers it with margin.
+	 *
+	 * Only a design that really was in the trash pays this, which in practice means
+	 * a file coming back into a mapping shortly after leaving one.
+	 */
+	private const SETTLE_MICROSECONDS = 6_000_000;
+
+	/** How often to look while waiting out that window. */
+	private const SETTLE_POLL_MICROSECONDS = 250_000;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
@@ -424,30 +440,52 @@ final class MotionService {
 	}
 
 	/**
-	 * Bring a parked design back out of Penpot's trash, if that is where it is.
+	 * Bring a parked design back out of Penpot's trash, and make it STAY out.
 	 *
-	 * BEST EFFORT, and deliberately not fatal. A design that is already live is the
-	 * common case and needs nothing; one the restore cannot reach leaves the caller's
-	 * `move-files` to fail loudly on its own terms, which is a better error than one
-	 * invented here.
+	 * ## `delete-file` FIRES A DELAYED JOB, AND IT DOES NOT CARE THAT YOU RESTORED
 	 *
-	 * `restore-deleted-team-files` answers 200 with an EMPTY set for an id it did not
-	 * restore (§C6.11), so the return value is the only honest signal — and it is
-	 * logged rather than thrown for the reason above. {@see RestoreService} carries
-	 * the full account, including the delayed job that can undo a restore ~3.8s later;
-	 * that settle is not repeated here because a move is followed immediately by
-	 * `move-files`, which re-lists the design and would fail visibly if it had gone.
+	 * The first cut of this restored once and returned, reasoning that the
+	 * `move-files` immediately after would fail visibly if the design had gone. It
+	 * does not fail — it succeeds, and then the design disappears anyway. CI caught
+	 * it on the `trashed` row: the design came back, the move landed, and the design
+	 * was in the trash again by the time the scenario looked.
+	 *
+	 * {@see RestoreService} had already measured exactly this and written it down:
+	 * `delete-file` answers immediately, lists the design in the trash within
+	 * ~0.1–0.3s, and then **about 3.8 seconds later** runs a delayed job that removes
+	 * the file AGAIN, even if it was restored in the meantime. A park followed by a
+	 * prompt return sits squarely inside that window.
+	 *
+	 * So the restore is confirmed rather than assumed, and re-issued once if the
+	 * delayed job takes it back — the same remedy §6.49 arrived at, for the same
+	 * reason. Only a design that was actually trashed pays the wait.
+	 *
+	 * BEST EFFORT THROUGHOUT. A design that is already live is the common case and
+	 * needs nothing; one that cannot be restored leaves the caller's `move-files` to
+	 * fail on its own terms, which is a better error than one invented here.
 	 */
 	private function untrash(string $teamId, string $penpotId): void {
 		try {
-			$restored = $this->client->restoreDeletedFiles($teamId, [$penpotId], $this->personalTokens->tokenForActor());
-			if (!in_array($penpotId, $restored, true)) {
-				// Either it was never in the trash — the ordinary "still live" case —
-				// or the restore silently declined. The next call tells us which.
+			if (!$this->restoreOnce($teamId, $penpotId)) {
+				// Never in the trash to begin with — the ordinary "still live" case.
 				return;
 			}
 
-			$this->logger->info('penpot_sync writeback: brought a parked design back out of Penpot\'s trash', [
+			if ($this->staysOutOfTheTrash($teamId, $penpotId)) {
+				$this->logger->info('penpot_sync writeback: brought a parked design back out of Penpot\'s trash', [
+					'app' => Application::APP_ID,
+					'penpotId' => $penpotId,
+					'team_id' => $teamId,
+				]);
+
+				return;
+			}
+
+			// The delayed delete took it back. Re-issuing AFTER that job has fired is
+			// what makes the restore stick (§6.49) — the second call is not a retry of
+			// a failure, it is the first call that lands on the far side of the undo.
+			$this->restoreOnce($teamId, $penpotId);
+			$this->logger->info('penpot_sync writeback: the parked design needed a second restore (saga §6.49)', [
 				'app' => Application::APP_ID,
 				'penpotId' => $penpotId,
 				'team_id' => $teamId,
@@ -459,6 +497,42 @@ final class MotionService {
 				'exception' => $e,
 			]);
 		}
+	}
+
+	/**
+	 * One restore call. True when Penpot says it actually restored this id.
+	 *
+	 * `restore-deleted-team-files` answers 200 with an EMPTY set for an id it did
+	 * not restore (§C6.11), so the returned ids are the only honest signal — a
+	 * status code here would report success for a design still in the trash.
+	 */
+	private function restoreOnce(string $teamId, string $penpotId): bool {
+		$restored = $this->client->restoreDeletedFiles($teamId, [$penpotId], $this->personalTokens->tokenForActor());
+
+		return in_array($penpotId, $restored, true);
+	}
+
+	/**
+	 * Watch the trash for the delayed delete, rather than sleeping through it.
+	 *
+	 * Same total worst case as one long wait, but a restore that gets undone is
+	 * seen the moment it happens instead of at the end of the window — and once the
+	 * delayed job has removed the file it does not put it back, so an early answer
+	 * is a final one.
+	 */
+	private function staysOutOfTheTrash(string $teamId, string $penpotId): bool {
+		$deadline = microtime(true) + (self::SETTLE_MICROSECONDS / 1_000_000.0);
+		do {
+			usleep(self::SETTLE_POLL_MICROSECONDS);
+
+			foreach ($this->client->deletedFiles($teamId) as $file) {
+				if (($file['id'] ?? null) === $penpotId) {
+					return false;
+				}
+			}
+		} while (microtime(true) < $deadline);
+
+		return true;
 	}
 
 	/** The mode a design in this mapping is born in — the mapping's own. */

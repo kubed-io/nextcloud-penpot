@@ -304,55 +304,6 @@ trait WebDavTrait {
 	 * or null if the property is absent (404 inside the multistatus). This is the
 	 * exact DAV surface view-design.feature specifies.
 	 */
-	/**
-	 * Write one of this app's metadata properties over DAV.
-	 *
-	 * ## THE ONE STATE NO GESTURE CAN PRODUCE
-	 *
-	 * Every other arrangement in this suite goes through a real gesture, on the
-	 * principle that a fixture which hand-writes the state under test proves only
-	 * that the fixture can write. This is the exception, and it earns it: **a file
-	 * carrying a Penpot id that names nothing** has no reliable gesture behind it.
-	 *
-	 * The obvious route — park the design, then purge it — depends on
-	 * `permanently-delete-team-files`, which Penpot documents as *"delete
-	 * immediatelly"* and implements by stamping `deleted_at` and leaving the row
-	 * (§C6.11). So the design often still answers `get-file-summary` afterwards,
-	 * and the arrangement silently produces "trashed" instead of "gone" — the wrong
-	 * precondition, wearing the right name.
-	 *
-	 * A random uuid is exactly the state, deterministically. It is also a state
-	 * users reach by ordinary means: copy a file that carries an id, and the copy
-	 * carries a claim on a design that is not its own.
-	 *
-	 * Uses the same `nc:metadata-<key>` namespace {@see davReadMetadata()} reads,
-	 * so it writes precisely what the app itself stores.
-	 */
-	private function davWriteMetadata(string $path, string $key, string $value): void {
-		$ns = 'http://nextcloud.org/ns';
-		$body = '<?xml version="1.0"?>'
-			. '<d:propertyupdate xmlns:d="DAV:" xmlns:nc="' . $ns . '">'
-			. '<d:set><d:prop><nc:metadata-' . $key . '>'
-			. htmlspecialchars($value, ENT_XML1)
-			. '</nc:metadata-' . $key . '></d:prop></d:set></d:propertyupdate>';
-
-		$res = $this->davClient()->request('PROPPATCH', $this->davEncode($path), [
-			'headers' => ['Content-Type' => 'application/xml'],
-			'body' => $body,
-		]);
-		$this->assertStatus($res, [207], "PROPPATCH $key on $path");
-
-		// A 207 IS NOT A SUCCESS. Sabre answers 207 for a propertyupdate that
-		// refused every property in it, with the refusal in a per-property status —
-		// so an unregistered or read-only key would be silently ignored here and the
-		// scenario would run against the state it was trying to leave.
-		if (($this->davReadMetadata($path, $key) ?? '') !== $value) {
-			throw new \RuntimeException(
-				"PROPPATCH of '{$key}' on '{$path}' reported 207 but the value did not stick",
-			);
-		}
-	}
-
 	private function davReadMetadata(string $path, string $key): ?string {
 		$ns = 'http://nextcloud.org/ns';
 		$reqBody = '<?xml version="1.0"?>'

@@ -47,23 +47,23 @@ use Behat\Gherkin\Node\TableNode;
  * what the parking put in the trash.
  */
 trait MoveSteps {
-	/**
-	 * A well-formed uuid that names no design anywhere.
-	 *
-	 * A LITERAL, not a random value: a fixed id makes a failing run reproducible
-	 * and makes this exact string greppable in the app's log, which is how the
-	 * import fallback was traced the first time. Version-4 shaped so Penpot's own
-	 * schema validation accepts it and answers "not found" rather than "malformed"
-	 * — the whole point is to exercise the not-found branch.
-	 */
-	private const A_DEAD_UUID = '00000000-dead-4000-8000-000000000001';
-
 	/** The id the file on stage arrived carrying, before the app replaced it. */
 	private string $idArrivedWith = '';
+
+	/**
+	 * The team the parked design belongs to.
+	 *
+	 * CAPTURED DURING THE ARRANGE, because by the time a step needs it the file is
+	 * in `Scratch` and `teamIdForPath()` has nothing to resolve — Scratch is mapped
+	 * to nothing, which is the entire point of it. Reading it late sent a `nil`
+	 * team to `restore-deleted-team-files` and Penpot answered with a schema error.
+	 */
+	private string $parkedTeamId = '';
 
 	/** @BeforeScenario */
 	public function forgetTheArrivalId(): void {
 		$this->idArrivedWith = '';
+		$this->parkedTeamId = '';
 	}
 
 	/**
@@ -84,6 +84,7 @@ trait MoveSteps {
 		// feature's Background declares.
 		$this->aDesignFileNamedIn($filename, 'Penpot/Letting Go');
 		$this->idArrivedWith = $this->currentFileId;
+		$this->parkedTeamId = $this->teamIdForPath($this->currentFilePath);
 
 		$this->makeAncestors($path);
 		$this->clearTheWay($path);
@@ -123,7 +124,7 @@ trait MoveSteps {
 		}
 
 		$this->penpotRpc('restore-deleted-team-files', [
-			'team-id' => $this->teamIdForPath($this->currentFilePath),
+			'team-id' => $this->parkedTeamId,
 			'ids' => [$this->idArrivedWith],
 		]);
 	}
@@ -148,14 +149,19 @@ trait MoveSteps {
 			return;
 		}
 
-		// AN ORDINARY UPLOAD, THEN A CLAIM ON NOTHING. See
-		// {@see WebDavTrait::davWriteMetadata()} for why this one state is stamped
-		// rather than gestured: purging the design is the obvious route and Penpot's
-		// permanent delete leaves the row behind, so it produces "trashed" while
-		// claiming "gone".
-		$this->iUploadAnArchiveAt($path);
-		$this->idArrivedWith = self::A_DEAD_UUID;
-		$this->davWriteMetadata($path, 'penpot_id', self::A_DEAD_UUID);
+		// PARK IT, THEN DESTROY WHAT THE PARKING PARKED.
+		//
+		// Stamping a dead uuid on the file would be simpler and is NOT AVAILABLE:
+		// this app's metadata is app-owned, and a PROPPATCH from a client is refused
+		// with *"you do not have enough rights to update 'penpot_id' on this node"*.
+		// That is correct of the app — a client that could forge a design's identity
+		// could re-point any mirror at any design — so the fixture has to reach the
+		// state the same way a person would.
+		//
+		// Purging is the only thing that makes an id unresolvable: Penpot's trash
+		// keeps a design both restorable and exportable, so a delete is not enough.
+		$this->anUnmappedDesignFileCarryingItsPenpotId($path);
+		$this->theDesignIsPurgedFromPenpotsTrash(basename($path, '.penpot'));
 	}
 
 	/**
