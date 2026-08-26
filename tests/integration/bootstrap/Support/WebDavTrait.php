@@ -278,7 +278,14 @@ trait WebDavTrait {
 			// fixture name, a teardown. The symptom was a purge that reported success
 			// and an assertion that then found "the" entry still there — a different
 			// file's, which the purge was never given.
-			if ($wantFrom !== '' && trim(dirname($origFrom . '/' . $origName), '/.') !== $wantFrom) {
+			//
+			// `nc:trashbin-original-location` IS THE FULL ORIGINAL PATH, filename and
+			// all, NOT the folder. The first cut appended the name to it before taking
+			// `dirname()`, which produced `…/File.penpot/File.penpot` and therefore
+			// equalled no folder ever — so this matched NOTHING, and every purge and
+			// restore step in the suite lost its entry. Fourteen scenarios in one leg,
+			// from one wrong assumption about a property name.
+			if ($wantFrom !== '' && trim(dirname($origFrom), '/.') !== $wantFrom) {
 				continue;
 			}
 
