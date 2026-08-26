@@ -57,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Restoring a design from the trash now brings its design back in Penpot too**, and if Penpot no longer has it, tells you your file is the only copy left instead of silently looking fine.
+
+- **Emptying the trash finishes the delete in Penpot**, and only for the file you emptied. A design somebody restored in Penpot in the meantime is left alone, and a purge that cannot reach Penpot destroys nothing.
+
 - **Nextcloud now tells you when Penpot did not get the message.** If a design file cannot be added to Penpot, or a move could not be passed on, you get a notification saying what Penpot said — instead of the failure only appearing in the server log.
 
 - **A design's file now carries the design's own dates.** "Modified" shows when the design last changed in Penpot and "Created" when it was created there, instead of both showing when a sync happened to run — and a project folder carries its project's creation date. Sorting a mapped folder by date finally sorts by the designs.

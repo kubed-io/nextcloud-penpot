@@ -148,6 +148,7 @@ final class RestoreService {
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
 		private readonly PersonalTokenService $personalTokens,
+		private readonly SyncNotifier $notifier,
 		private readonly LoggerInterface $logger,
 		// Injectable ONLY so the unit tests need not pay it. The settle is a real
 		// wait on a real Penpot; a suite whose Penpot is a mock has nothing to wait
@@ -451,9 +452,9 @@ final class RestoreService {
 			return;
 		}
 
-		// Layer 3, and it is not built. Stated rather than swallowed: the archive
-		// this file may hold is now the only copy of that design, and re-importing
-		// it would mint a new id (§6.20). See restore.feature.
+		// Layer 3. Stated rather than swallowed: the archive this file may hold is
+		// now the only copy of that design, and re-importing it would mint a new id
+		// (§6.20). See restore.feature.
 		$this->logger->warning(
 			'penpot_sync restore: the design is gone from Penpot and is not in its trash — the '
 			. 'grace window has closed or it was permanently deleted. The mirror is back in '
@@ -464,6 +465,19 @@ final class RestoreService {
 				'penpot_id' => $penpotId,
 				'file' => $node->getName(),
 			],
+		);
+
+		// AND TOLD TO THE PERSON WHO RESTORED IT. `restore.feature` asks for exactly
+		// this — *"the app reports that the design is gone and the file is now the
+		// only copy"* — and until the notifier existed there was nowhere for that
+		// report to go, so the sentence described a log line only an admin would ever
+		// read. This is the one restore outcome a user must actually be told about:
+		// their file came back and looks entirely normal, and the thing it used to
+		// mirror no longer exists.
+		$this->notifier->restoredWithoutItsDesign(
+			$this->personalTokens->actingUserId(),
+			$node->getId(),
+			$node->getName(),
 		);
 	}
 

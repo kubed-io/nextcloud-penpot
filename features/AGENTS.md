@@ -3729,6 +3729,26 @@ a bystander claim, and the same one already retired from `designs/purge`. Purgin
 plain folder that was never a project asserts the pre-state: with no designs there was
 never anything to finish.
 
+### Why the not-in-the-trash fork has one row here and two in Grafana
+
+Grafana's twin is an Outline — *"two ways to get here, and the purge cannot tell
+them apart"* — crossing `back in the folder` with `gone from Grafana entirely`.
+Penpot carries only the first, and the reason is Penpot's, not an omission.
+
+`permanently-delete-team-files` STAMPS `deleted_at` AND LEAVES THE ROW (§C6.11).
+So a design that was erased is still returned by `get-team-deleted-files`, exactly
+like one that is merely trashed. "Gone from Penpot entirely" is therefore not a
+state this app can observe, let alone one a scenario can arrange and then assert
+`its design is not in Penpot's trash` about — the sentence would be false for the
+very case it was meant to describe.
+
+Which leaves one reachable way to be out of Penpot's trash: somebody restored the
+design over there. That is the row the scenario keeps.
+
+The same fact is why {@see thatFilesDesignIsPermanentlyDeletedFromPenpot} asks the
+PROJECT listing rather than the trash: absent from its project is what "erased"
+means here, and it is the same listing the pull reads.
+
 ### Emptying Penpot's trash reaches back into the Nextcloud trash
 
 Those designs were the only route the project had back — there is no `restore-project`

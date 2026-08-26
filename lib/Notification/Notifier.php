@@ -88,6 +88,20 @@ final class Notifier implements INotifier {
 				);
 
 				return $notification;
+			case 'restored_without_design':
+				// DELIBERATELY NOT PHRASED AS AN ERROR. Nothing failed, and there is
+				// nothing to retry — the file is whole and the design is gone.
+				$notification->setRichSubject(
+					$l->t('{file} is back, but its design is gone from Penpot'),
+					['file' => ['type' => 'highlight', 'id' => $file, 'name' => $file]],
+				);
+				$notification->setParsedSubject($l->t('“%s” is back, but its design is gone from Penpot', [$file]));
+				$notification->setParsedMessage(
+					$l->t('Penpot no longer has that design and it cannot be brought back there. '
+						. 'Your file is complete and is now the only copy of it.'),
+				);
+
+				return $notification;
 			default:
 				throw new UnknownNotificationException();
 		}

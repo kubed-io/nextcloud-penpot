@@ -17,6 +17,7 @@ use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\RestoreService;
+use OCA\PenpotSync\Service\SyncNotifier;
 use OCP\Files\File;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -72,6 +73,7 @@ final class RestoreServiceTest extends TestCase {
 			$this->metadata,
 			$this->resolver,
 			$this->tokens(),
+			$this->createMock(SyncNotifier::class),
 			new NullLogger(),
 			// No settle: Penpot is a mock here, so there is no in-flight delete to
 			// wait on and the wait would only make the suite slower.
@@ -188,6 +190,7 @@ final class RestoreServiceTest extends TestCase {
 			$this->metadata,
 			$this->resolver,
 			$this->tokens(),
+			$this->createMock(SyncNotifier::class),
 			new NullLogger(),
 			// Long enough to poll several times at the 250ms interval, short enough
 			// to sit in a unit suite.
