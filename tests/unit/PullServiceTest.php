@@ -22,9 +22,11 @@ use OCA\PenpotSync\Service\ProjectTags;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\SyncGuard;
+use OCA\PenpotSync\Service\TrashControl;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 use Psr\Log\NullLogger;
 
 /**
@@ -115,6 +117,11 @@ final class PullServiceTest extends TestCase {
 			// and covered on its own in MirrorTimesTest — the pull only owes the field
 			// mapping and the "did we just write?" flag.
 			$this->times,
+			// The real one over a container that resolves nothing: `files_trashbin`
+			// is not loaded in the unit environment, so `withoutTrash()` falls
+			// through to running the callback — which is exactly its documented
+			// behaviour on an instance without the trash app.
+			new TrashControl($this->createStub(ContainerInterface::class), new NullLogger()),
 			new NullLogger(),
 		);
 	}
@@ -299,19 +306,23 @@ final class PullServiceTest extends TestCase {
 	// ── the prune: the most dangerous thing this app does (saga §6.25/§6.46) ──
 
 	/**
-	 * A design deleted in Penpot takes its mirror to the **trash**, and a `link`
-	 * gets one last export on the way so the user is left with something real
-	 * rather than a pointer to nothing (saga §6.42/§6.46).
+	 * WHY A MIRROR VANISHED DECIDES WHERE IT GOES, and the two answers are not
+	 * equally recoverable.
+	 *
+	 * A design that was DELETED in Penpot may have this file as its last copy in
+	 * existence, so the mirror goes to the Nextcloud trash. A design that was MOVED
+	 * is alive and well somewhere we no longer mirror, and a trashed mirror would
+	 * read as a deletion that never happened. The prune tells them apart with
+	 * `get-file-summary` plus the team's trash listing, and every test below is one
+	 * cell of that table.
 	 */
-	public function testAVanishedDesignIsSnapshottedThenTrashed(): void {
-		$stale = $this->mirror(31, 'file-gone');
+	public function testADesignDeletedInPenpotIsSnapshottedThenTrashed(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
 		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: true, trashed: true);
 		$this->archives->method('holdsArchive')->willReturn(false);
 
 		$this->archives->expects($this->once())->method('storeArchive')->with($stale, 'file-gone')->willReturn(4096);
-		// Promoted as it leaves: the file now holds an archive, so its stamp has
-		// to say so or `status` would call a real backup a pointer.
-		$this->metadata->expects($this->once())->method('writeFile')->with(31, [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
 		$stale->expects($this->once())->method('delete');
 
 		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
@@ -321,12 +332,35 @@ final class PullServiceTest extends TestCase {
 		self::assertSame(0, $result['lost']);
 	}
 
-	/** A `sync` file already holds its snapshot, so pruning it costs no export. */
-	public function testAVanishedSyncFileIsTrashedWithoutAnExtraExport(): void {
-		$stale = $this->mirror(31, 'file-gone');
+	/**
+	 * A design PURGED in Penpot — gone from every listing and from its trash — is
+	 * the case where the local file is genuinely the last copy, which is precisely
+	 * why it must land somewhere recoverable rather than be discarded as a move.
+	 */
+	public function testADesignPurgedInPenpotStillOnlyReachesTheNextcloudTrash(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
 		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: false, trashed: false);
 		$this->archives->method('holdsArchive')->willReturn(true);
 
+		$stale->expects($this->once())->method('delete');
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
+	}
+
+	/**
+	 * A DESIGN THAT MOVED LEAVES NO TRASH ENTRY. Nothing was deleted, so offering a
+	 * restore would describe something that did not happen — and the design itself
+	 * is untouched in whichever team it went to.
+	 */
+	public function testADesignMovedOutOfTheMappingInPenpotLeavesNoTrashEntry(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: true, trashed: false);
+		$this->archives->method('holdsArchive')->willReturn(true);
+
+		// No last-gasp export either: the design is fine, so there is nothing to
+		// rescue it from.
 		$this->archives->expects($this->never())->method('storeArchive');
 		$stale->expects($this->once())->method('delete');
 
@@ -334,16 +368,116 @@ final class PullServiceTest extends TestCase {
 
 		self::assertSame(1, $result['pruned']);
 		self::assertSame(0, $result['rescued']);
+		self::assertSame(0, $result['lost']);
 	}
 
 	/**
-	 * Past Penpot's grace window the export simply fails. The pointer is still
+	 * A PROBE THAT CANNOT ANSWER MUST NOT LOOK LIKE A "NO".
+	 *
+	 * `fileExists()` returns null when Penpot is unreachable, unauthorised, or
+	 * answering a schema we read wrong. Reading that as "gone" would send the
+	 * mirror down the discard path and destroy it permanently — so null is treated
+	 * exactly as "still there", and the trash listing alone decides.
+	 */
+	public function testAnUnanswerableProbeKeepsTheMirrorRatherThanDestroyingIt(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: null, trashed: true);
+		$this->archives->method('holdsArchive')->willReturn(true);
+
+		$stale->expects($this->once())->method('delete');
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
+	}
+
+	/**
+	 * THE ROW ABOVE PASSED WHILE THE BUG WAS LIVE, which is the point of this one.
+	 *
+	 * With `trashed: true` the trash listing keeps the mirror on its own, so the
+	 * probe's answer never decides anything and a guard written `!== false` — which
+	 * counts "could not tell" as a YES — looks perfectly fine. It is only when the
+	 * probe is unsure AND the trash listing is empty that the two spellings diverge,
+	 * and there `!== false` takes the PERMANENT discard on a file whose design may
+	 * be gone for good.
+	 *
+	 * So this is the same claim as above with the one input changed that makes it
+	 * load-bearing. Found by review on #44, not by the suite.
+	 */
+	public function testAnUnanswerableProbeWithAnEmptyTrashStillKeepsTheMirror(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: null, trashed: false);
+
+		// THE RESCUE IS THE DISCRIMINATOR, and picking it took a second attempt.
+		// `delete()` cannot tell these paths apart here: `TrashControl` finds no
+		// trash app to pause in the unit environment, so a discard and a trashing
+		// are the same call, and asserting on it gives a test that passes whichever
+		// branch runs. The last-gasp export is the difference — the discard path
+		// skips it (the design is fine, there is nothing to rescue) and the
+		// recoverable path takes it, and `rescued` counts it.
+		$this->archives->method('holdsArchive')->willReturn(false);
+		$this->archives->expects($this->once())->method('storeArchive')->willReturn(4096);
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertSame(1, $result['rescued'], 'an unsure probe must take the recoverable path, not the discard');
+	}
+
+	/**
+	 * A TRASH LISTING WE CANNOT READ IS ALSO NOT A "NO" — same rule, other probe.
+	 * Without this, a Penpot that went down between the two calls would turn every
+	 * pruned mirror into a permanent delete.
+	 */
+	public function testATrashListingThatFailsKeepsTheMirror(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->client->method('fileExists')->willReturn(true);
+		$this->client->method('deletedFiles')->willThrowException(new PenpotApiException('down'));
+		$this->archives->method('holdsArchive')->willReturn(true);
+
+		$stale->expects($this->once())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertNull($result['error'], 'an unreadable trash listing is not a failed pull');
+	}
+
+	/**
+	 * A LINK IS NEVER SNAPSHOTTED, NEVER PROMOTED, AND NEVER TRASHED.
+	 *
+	 * It holds no bytes, so there is nothing for a restore to reconnect to. This is
+	 * the branch that used to fall through to the rescue — and because a link is
+	 * exactly the file that holds no archive, every departing link was exported and
+	 * re-stamped `sync`. That was the last surviving link→sync promotion in the app;
+	 * per-file mode changes were retired courses ago.
+	 */
+	public function testAVanishedLinkIsDiscardedWithoutBecomingASyncFile(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_LINK);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: true, trashed: true);
+		$this->archives->method('holdsArchive')->willReturn(false);
+
+		$this->archives->expects($this->never())->method('storeArchive');
+		$this->metadata->expects($this->never())->method('writeFile');
+		$stale->expects($this->once())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['pruned']);
+		self::assertSame(0, $result['rescued'], 'a link has nothing to rescue');
+	}
+
+	/**
+	 * Past Penpot's grace window the export simply fails. The mirror is still
 	 * trashed — leaving it would be a mirror of nothing — and the loss is counted
 	 * rather than a snapshot being claimed.
 	 */
 	public function testASnapshotThatCannotBeTakenIsReportedNotFaked(): void {
-		$stale = $this->mirror(31, 'file-gone');
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
 		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: false, trashed: false);
 		$this->archives->method('holdsArchive')->willReturn(false);
 		$this->archives->method('storeArchive')->willThrowException(new PenpotApiException('gone for good'));
 
@@ -365,8 +499,9 @@ final class PullServiceTest extends TestCase {
 	 * delete is now free; it simply did not prune anything this time.
 	 */
 	public function testAMirrorThatCannotBeTrashedIsCountedNowhere(): void {
-		$stale = $this->mirror(31, 'file-gone');
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
 		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: true, trashed: true);
 		$this->archives->method('holdsArchive')->willReturn(false);
 		$this->archives->method('storeArchive')->willReturn(4096);
 		$stale->method('delete')->willThrowException(new \RuntimeException('locked'));
@@ -377,6 +512,17 @@ final class PullServiceTest extends TestCase {
 		self::assertSame(0, $result['rescued']);
 		self::assertSame(0, $result['lost']);
 		self::assertNull($result['error'], 'one stuck mirror is not a failed pull');
+	}
+
+	/** The same, on the discard path: a delete that throws prunes nothing. */
+	public function testAMirrorThatCannotBeDiscardedIsCountedNowhere(): void {
+		$stale = $this->mirror(31, 'file-gone', mode: Mapping::MODE_SYNC);
+		$this->givenRootHolding([$stale], listing: []);
+		$this->givenPenpotSays(exists: true, trashed: false);
+		$this->archives->method('holdsArchive')->willReturn(true);
+		$stale->method('delete')->willThrowException(new \RuntimeException('locked'));
+
+		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
 	}
 
 	/**
@@ -513,12 +659,23 @@ final class PullServiceTest extends TestCase {
 	}
 
 	/** A mirror file: node id $id, stamped with Penpot file id $penpotId in `link` mode. */
-	private function mirror(int $id, string $penpotId, string $revision = ''): File {
+	private function mirror(int $id, string $penpotId, string $revision = '', string $mode = Mapping::MODE_LINK): File {
 		$file = $this->createMock(File::class);
 		$file->method('getId')->willReturn($id);
-		$this->stamps[$id] = new PenpotFileMetadata($penpotId, $revision, Mapping::MODE_LINK);
+		$this->stamps[$id] = new PenpotFileMetadata($penpotId, $revision, $mode, self::TEAM_ID);
 
 		return $file;
+	}
+
+	/**
+	 * Why Penpot stopped naming a design, as the two probes the prune actually makes.
+	 *
+	 * @param bool|null $exists what `get-file-summary` says — null being "could not tell"
+	 * @param bool $trashed whether the team's trash listing names it
+	 */
+	private function givenPenpotSays(?bool $exists, bool $trashed, string $penpotId = 'file-gone'): void {
+		$this->client->method('fileExists')->willReturn($exists);
+		$this->client->method('deletedFiles')->willReturn($trashed ? [['id' => $penpotId]] : []);
 	}
 
 	/**
@@ -605,12 +762,30 @@ final class PullServiceTest extends TestCase {
 	 * that project, not this one. Same rule as MembershipResolver read downwards,
 	 * and the same one ProjectFolderService uses to collect designs on opt-in.
 	 * Without it, one project's pull would adopt another project's files.
+	 *
+	 * ## THE NESTED FILE NOW CARRIES A DIFFERENT ID, AND HAD TO
+	 *
+	 * It used to carry `file-acme` — the very id this project's listing reports —
+	 * which conflated two different claims: "a file in another project's folder" and
+	 * "another project's file". They were indistinguishable while a miss simply
+	 * created a new mirror.
+	 *
+	 * They are not indistinguishable any more. Penpot decides which project a design
+	 * is in, so a mirror stamped `file-acme` sitting under another project's folder
+	 * is not a bystander — it is THIS design's mirror, in the wrong place, and the
+	 * pull now moves it rather than writing a duplicate beside it
+	 * ({@see testAMirrorFollowsItsDesignIntoAnotherProject()}).
+	 *
+	 * So the fixture says what it always meant: another project's file is one with
+	 * another design's id. The index rule under test is unchanged — the descent
+	 * still stops at folder 22 — and this now proves it without also asserting the
+	 * duplication bug.
 	 */
 	public function testTheIndexStopsAtANestedProjectFolder(): void {
 		$mapping = $this->mapping(useTeamFolder: false);
 
 		$theirs = $this->emptyFile(50);
-		$this->stamps[50] = new PenpotFileMetadata('file-acme', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
+		$this->stamps[50] = new PenpotFileMetadata('file-theirs', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
 
 		$nested = $this->createMock(Folder::class);
 		$nested->method('getId')->willReturn(22);
@@ -641,6 +816,59 @@ final class PullServiceTest extends TestCase {
 		]);
 		$this->folderMarkersById[20] = new FolderMarkers('proj-acme', '');
 		$this->folderMarkersById[22] = new FolderMarkers('proj-other', '');
+
+		$this->pull->pullOne($mapping);
+	}
+
+	/**
+	 * A DESIGN THAT CHANGED PROJECT IN PENPOT TAKES ITS MIRROR WITH IT.
+	 *
+	 * The design is still in the team's listing, so the prune correctly leaves the
+	 * mirror alone — and the upsert indexes only the destination folder, so it did
+	 * not find it and wrote a SECOND file. Two files, one design, and nothing ever
+	 * reconciled them: the stale one stays in the seen-set forever.
+	 *
+	 * Asserting `newFile` is NEVER called is the whole point. "A file ends up in the
+	 * right folder" was true of the buggy behaviour too.
+	 */
+	public function testAMirrorFollowsItsDesignIntoAnotherProject(): void {
+		$mapping = $this->mapping(useTeamFolder: false);
+
+		// The mirror, sitting under the project the design used to be in.
+		$mirror = $this->emptyFile(50);
+		$mirror->method('getName')->willReturn('Login.penpot');
+		$this->stamps[50] = new PenpotFileMetadata('file-acme', '5@t1', Mapping::MODE_LINK, self::TEAM_ID);
+
+		$oldProject = $this->createMock(Folder::class);
+		$oldProject->method('getId')->willReturn(22);
+		$oldProject->method('getDirectoryListing')->willReturn([$mirror]);
+		$oldProject->method('nodeExists')->willReturn(false);
+
+		$newProject = $this->createMock(Folder::class);
+		$newProject->method('getId')->willReturn(20);
+		$newProject->method('getDirectoryListing')->willReturn([]);
+		$newProject->method('nodeExists')->willReturn(false);
+		$newProject->method('getPath')->willReturn('/admin/files/Penpot/Acme');
+		$newProject->expects($this->never())->method('newFile');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$newProject, $oldProject]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-acme', 'name' => 'Acme', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([
+			['id' => 'file-acme', 'name' => 'Login', 'revn' => 5],
+		]);
+		$this->folderMarkersById[20] = new FolderMarkers('proj-acme', '');
+		$this->folderMarkersById[22] = new FolderMarkers('proj-was', '');
+
+		// MOVED, not copied: the same node lands in the new project's folder.
+		$mirror->expects($this->once())->method('move')->with('/admin/files/Penpot/Acme/Login.penpot');
 
 		$this->pull->pullOne($mapping);
 	}

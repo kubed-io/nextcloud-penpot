@@ -106,6 +106,7 @@ final class PullService {
 		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
 		private readonly MirrorTimes $times,
+		private readonly TrashControl $trash,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -160,6 +161,12 @@ final class PullService {
 				// otherwise O(projects × children) on a big team.
 				$folderIndex = $this->indexProjectFolders($root);
 
+				// EVERY MIRROR UNDER THE ROOT, by id, so a design that changed project
+				// in Penpot can be MOVED rather than duplicated. Built once per mapping
+				// for the same reason the folder index is — the alternative is a
+				// whole-tree walk per project.
+				$strays = $this->collectMirrors($root);
+
 				$folders = 0;
 				$files = 0;
 				$exported = 0;
@@ -206,14 +213,14 @@ final class PullService {
 						$folders++;
 					}
 
-					$files += $this->pullProjectFiles($target, $mapping, $projectId, $seen, $exported, $failed, $skipped, $complete);
+					$files += $this->pullProjectFiles($target, $strays, $mapping, $projectId, $seen, $exported, $failed, $skipped, $complete);
 				}
 
 				// Only now, and only if nothing was missed. An exception on any listing
 				// has already left this closure entirely, which is the same protection
 				// stated as control flow rather than as a flag.
 				if ($complete) {
-					$this->prune($root, $seen, $pruned, $rescued, $lost);
+					$this->prune($root, $mapping, $seen, $pruned, $rescued, $lost);
 				}
 
 				return $this->tally([
@@ -285,7 +292,7 @@ final class PullService {
 	 *
 	 * @throws PenpotApiException
 	 */
-	private function pullProjectFiles(Folder $target, Mapping $mapping, string $projectId, array &$seen, int &$exported, int &$failed, int &$skipped, bool &$complete): int {
+	private function pullProjectFiles(Folder $target, array $strays, Mapping $mapping, string $projectId, array &$seen, int &$exported, int &$failed, int &$skipped, bool &$complete): int {
 		// Index this folder's existing `.penpot` files ONCE (penpot_id -> file)
 		// instead of re-walking the directory listing for every Penpot file.
 		$fileIndex = $this->indexFilesByPenpotId($target);
@@ -313,7 +320,7 @@ final class PullService {
 				}
 				continue;
 			}
-			$this->upsertMirrorFile($target, $fileIndex, $mapping, $fileId, $baseName, $file, $exported, $failed);
+			$this->upsertMirrorFile($target, $fileIndex, $strays, $mapping, $fileId, $baseName, $file, $exported, $failed);
 			$written++;
 		}
 		return $written;
@@ -425,7 +432,7 @@ final class PullService {
 	 * @param int $exported mutated in place
 	 * @param int $failed mutated in place
 	 */
-	private function upsertMirrorFile(Folder $target, array $fileIndex, Mapping $mapping, string $fileId, string $baseName, array $file, int &$exported, int &$failed): void {
+	private function upsertMirrorFile(Folder $target, array $fileIndex, array $strays, Mapping $mapping, string $fileId, string $baseName, array $file, int &$exported, int &$failed): void {
 		$name = $baseName . self::EXTENSION;
 		$revn = (string)($file['revn'] ?? '');
 		$modifiedAt = $this->str($file, 'modified-at');
@@ -436,6 +443,21 @@ final class PullService {
 		$signal = ArchiveService::signal($revn, $modifiedAt);
 
 		$existing = $fileIndex[$fileId] ?? null;
+		if ($existing === null && isset($strays[$fileId])) {
+			// THE DESIGN CHANGED PROJECT IN PENPOT, so its mirror follows.
+			//
+			// `$fileIndex` already recurses through plain subfolders and STOPS at a
+			// nearer project ancestor, so a mirror the user filed into a subfolder of
+			// this very project was found above and is left exactly where they put it
+			// (§6.29 — the pull ensures membership, never a path). A miss here can
+			// therefore only mean the mirror is sitting under a DIFFERENT project,
+			// which is the one case where its position is now a lie.
+			//
+			// Without this the pull wrote a SECOND file into the new project folder
+			// and left the old one behind — and the old one is in the seen-set, so
+			// the prune never touched it. Two files, one design, forever.
+			$existing = $this->relocate($strays[$fileId], $target, $name);
+		}
 		if ($existing !== null) {
 			$this->tryRename($existing, $target, $name);
 			$node = $existing;
@@ -553,21 +575,69 @@ final class PullService {
 	 * @param int $rescued mutated in place
 	 * @param int $lost mutated in place
 	 */
-	private function prune(Folder $root, array $seen, int &$pruned, int &$rescued, int &$lost): void {
+	private function prune(Folder $root, Mapping $mapping, array $seen, int &$pruned, int &$rescued, int &$lost): void {
+		// ONE TRASH LISTING FOR THE WHOLE PRUNE. It is per-TEAM and identical for
+		// every mirror in this loop, so asking per file was an N+1 against Penpot —
+		// and the N is worst exactly when it hurts most, because a Penpot-side
+		// reorganisation is what makes many mirrors vanish at once. Read lazily, so
+		// a pull that prunes nothing still costs nothing. Raised in review on #44.
+		//
+		// @var list<string>|null|false $trashed
+		$trashed = false;
 		foreach ($this->collectMirrors($root) as $penpotId => $node) {
 			if (isset($seen[$penpotId])) {
 				continue;
 			}
 
-			// THE LAST SNAPSHOT, taken before the file moves. A `sync` file that
-			// already holds its archive needs nothing; an empty `link` gets one attempt
-			// at becoming a real backup while Penpot's own trash still has the design.
+			// A LINK LEAVES WITHOUT A TRACE, and never becomes anything else.
+			//
+			// It holds no bytes, so there is nothing to snapshot and nothing a
+			// restore could reconnect to. This branch used to fall through to the
+			// rescue below, which — because a link is exactly the file that holds no
+			// archive — meant every departing link was exported and RE-STAMPED
+			// `sync`. That was the last surviving link→sync promotion in the app,
+			// and per-file mode changes were retired courses ago (`sync-mode.feature`
+			// no longer exists). A link is a link for as long as it exists.
+			if ($this->isLink($node)) {
+				$pruned += $this->discard($node, $penpotId, 'a link whose design left the mapping') ? 1 : 0;
+				continue;
+			}
+
+			// A DESIGN THAT MOVED IS NOT A DESIGN THAT DIED, and only Penpot can say
+			// which happened.
+			//
+			// `=== true`, NOT `!== false`, and the difference is the whole safety
+			// property. `fileExists()` has three answers and the third is "I could
+			// not tell" — unreachable, unauthorised, a schema read wrong. Written as
+			// `!== false`, an unknown counted as a YES, and an unknown paired with an
+			// unreadable trash listing took the PERMANENT discard below. That is
+			// precisely the data loss the three-valued return exists to prevent, and
+			// it survived a unit test (`exists: null, trashed: true`) that only ever
+			// exercised the other branch. Caught in review on #44.
+			//
+			// Only a design Penpot positively confirms is alive may be discarded.
+			// Everything else keeps the recoverable path.
+			// `false` is "not read yet"; `null` is "read and could not be trusted".
+			// Two absent-ish states, and conflating them is how an unreadable listing
+			// would have started discarding files.
+			if ($trashed === false) {
+				$trashed = $this->penpotTrashIds($mapping->teamId);
+			}
+			if (
+				$this->client->fileExists($penpotId) === true
+				&& $trashed !== null
+				&& !in_array($penpotId, $trashed, true)
+			) {
+				$pruned += $this->discard($node, $penpotId, 'a design moved out of this mapping in Penpot') ? 1 : 0;
+				continue;
+			}
+
+			// WHAT IS LEFT IS A DELETE — trashed in Penpot, or purged there. Either
+			// way this file may be the last copy of that design in existence, so it
+			// goes somewhere recoverable and gets one last chance at real bytes.
 			$rescue = null;
 			if (!$this->archives->holdsArchive($node)) {
 				$rescue = $this->snapshot($node, $penpotId);
-				if ($rescue) {
-					$this->metadata->writeFile($node->getId(), [PenpotMetadata::KEY_MODE => Mapping::MODE_SYNC]);
-				}
 			}
 
 			try {
@@ -619,6 +689,98 @@ final class PullService {
 				'ids_listed' => count($seen),
 			]);
 		}
+	}
+
+	/** Is this mirror a pointer rather than a copy? */
+	private function isLink(File $node): bool {
+		return $this->metadata->readFile($node->getId())?->isLink() ?? false;
+	}
+
+	/**
+	 * Every design id in this team's Penpot trash, read once per prune.
+	 *
+	 * ASKED ONLY WHEN {@see PenpotClient::fileExists()} SAID YES, and that pairing is
+	 * the whole subtlety: a design in Penpot's trash still EXISTS — `get-file-summary`
+	 * answers for it happily — so existence alone would read a delete as a move and
+	 * destroy the mirror. The trash listing is what separates them.
+	 *
+	 * The team comes from the MAPPING rather than any file's stamp: the mapping is
+	 * what this root mirrors, it cannot be stale, and it needs no resolver walk.
+	 *
+	 * ## AN UNREADABLE LISTING KEEPS EVERY MIRROR
+	 *
+	 * A failure answers `null`, and the caller reads that as "do not discard
+	 * anything" — the same rule as {@see PenpotClient::fileExists()}'s null. An
+	 * EMPTY list would have been the disastrous spelling: it means "nothing is in
+	 * the trash", which makes every vanished design look moved and every mirror a
+	 * candidate for permanent removal.
+	 *
+	 * @return list<string>|null null when the answer cannot be trusted
+	 */
+	private function penpotTrashIds(string $teamId): ?array {
+		if ($teamId === '') {
+			return null;
+		}
+
+		try {
+			$ids = [];
+			foreach ($this->client->deletedFiles($teamId) as $file) {
+				if (isset($file['id']) && is_string($file['id'])) {
+					$ids[] = $file['id'];
+				}
+			}
+
+			return $ids;
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not read Penpot\'s trash; keeping every mirror it would have judged', [
+				'app' => Application::APP_ID,
+				'team_id' => $teamId,
+				'exception' => $e,
+			]);
+
+			return null;
+		}
+	}
+
+	/**
+	 * Remove a mirror without leaving a Nextcloud trash entry.
+	 *
+	 * Reached only when the design is demonstrably fine on Penpot's side, so there is
+	 * nothing to recover and a trashed file would misreport what happened. A delete
+	 * that fails is logged and skipped, exactly like the trashing path — the mirror
+	 * stays, and the next pull tries again.
+	 *
+	 * @return bool true when the mirror is actually gone, so the caller only counts
+	 *              a prune that happened (the CLI's totals have to reconcile)
+	 */
+	private function discard(File $node, string $penpotId, string $because): bool {
+		$path = $node->getPath();
+
+		try {
+			$this->trash->withoutTrash(static function () use ($node): void {
+				$node->delete();
+			});
+		} catch (\Throwable $e) {
+			// NOT "a mirror Penpot no longer lists" — every caller of this method has
+			// established the opposite. The design is alive and well; it is this
+			// mapping that stopped being the place it lives.
+			$this->logger->warning('penpot_sync pull: could not remove a mirror whose design left this mapping', [
+				'app' => Application::APP_ID,
+				'file' => $path,
+				'penpot_id' => $penpotId,
+				'exception' => $e,
+			]);
+
+			return false;
+		}
+
+		$this->logger->info('penpot_sync pull: removed a mirror with no trash entry — ' . $because, [
+			'app' => Application::APP_ID,
+			'file' => $path,
+			'penpot_id' => $penpotId,
+		]);
+
+		return true;
 	}
 
 	/**
@@ -826,6 +988,49 @@ final class PullService {
 	 * the mirror keeps its old name rather than aborting the whole pull over a
 	 * cosmetic follow.
 	 */
+	/**
+	 * Move a mirror into the folder its design now belongs to.
+	 *
+	 * SEPARATE FROM {@see tryRename()} ON PURPOSE, and the difference is one the
+	 * spec cares about. `tryRename()` returns early when the name already matches,
+	 * which is exactly the case here — the design kept its name and changed project
+	 * — so it would do nothing. Teaching it to compare parents instead would make
+	 * it relocate on EVERY mismatch, and that would yank a mirror out of a plain
+	 * subfolder the user deliberately filed it into, which §6.29 forbids.
+	 *
+	 * So the two callers stay apart: the found-in-this-project path renames in
+	 * place, and only a mirror found under a different project is moved.
+	 *
+	 * @return File|null the relocated node, or null when the move failed — in which
+	 *                   case the caller writes a fresh mirror and the stale one is
+	 *                   left for a later pull rather than the design going unmirrored
+	 */
+	private function relocate(File $node, Folder $target, string $name): ?File {
+		$from = $node->getPath();
+		$to = $target->getPath() . '/' . ($target->nodeExists($name) ? $this->freeName($target, $name) : $name);
+
+		try {
+			$node->move($to);
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not follow a design that changed project; leaving the mirror where it is', [
+				'app' => Application::APP_ID,
+				'from' => $from,
+				'to' => $to,
+				'exception' => $e,
+			]);
+
+			return null;
+		}
+
+		$this->logger->info('penpot_sync pull: moved a mirror to follow its design into another project', [
+			'app' => Application::APP_ID,
+			'from' => $from,
+			'to' => $to,
+		]);
+
+		return $node;
+	}
+
 	private function tryRename(File|Folder $node, Folder $parent, string $name): void {
 		if ($node->getName() === $name) {
 			return;

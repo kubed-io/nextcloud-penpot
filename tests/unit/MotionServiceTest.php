@@ -9,10 +9,12 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\ArchiveService;
 use OCA\PenpotSync\Service\DestinationResolver;
 use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MotionService;
@@ -76,11 +78,15 @@ final class MotionServiceTest extends TestCase {
 	private DestinationResolver $destinations;
 	private PersonalTokenService $personalTokens;
 	private ProjectTags $tags;
+	private ArchiveService $archives;
+	private MappingService $mappings;
 	private MotionService $motion;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->projects = $this->createMock(ProjectFolderService::class);
+		$this->archives = $this->createMock(ArchiveService::class);
+		$this->mappings = $this->createMock(MappingService::class);
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
@@ -99,6 +105,8 @@ final class MotionServiceTest extends TestCase {
 			$this->tags,
 			new SyncGuard(),
 			$this->createMock(ImportService::class),
+			$this->archives,
+			$this->mappings,
 			new NullLogger(),
 		);
 	}
@@ -150,22 +158,67 @@ final class MotionServiceTest extends TestCase {
 		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
 	}
 
-	public function testAMoveOutOfEveryMappedFolderPushesNothing(): void {
-		// The file left the mirror entirely. Penpot keeps it exactly where it is:
-		// unmapping and deleting are Course 5's to decide explicitly, and a drag
-		// is not evidence of either.
+	/**
+	 * The file left every mapping, so its design is PARKED in Penpot's trash —
+	 * keeping its id, revision and history against the day it comes back.
+	 *
+	 * This used to assert the opposite ("Penpot keeps it exactly where it is:
+	 * unmapping and deleting are Course 5's to decide explicitly, and a drag is not
+	 * evidence of either"). What that produced was a design in a project whose
+	 * folder maps nowhere, mirrored by nothing and indistinguishable from live
+	 * work — the absence of a decision, which was the worst of the three options.
+	 */
+	public function testAMoveOutOfEveryMappedFolderParksTheDesign(): void {
 		$this->givenManagedFile();
 		$this->givenMembership([
 			'target' => Membership::none(),
 			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
 		]);
-		$this->client->expects($this->never())->method('moveFiles');
+		$this->archives->method('holdsArchive')->willReturn(true);
 
-		self::assertFalse($this->motion->onMove($this->source(), $this->target()));
+		// Trashed in Penpot, never re-filed: there is no project to re-file into.
+		$this->client->expects($this->once())->method('deleteFile')->with(self::PENPOT_ID, null);
+		$this->client->expects($this->never())->method('moveFiles');
+		// The id STAYS. It is the claim the return redeems; clearing it would make
+		// every comeback an import that mints a new design and drops the history.
+		$this->metadata->expects($this->once())->method('writeFile')->with(
+			$this->anything(),
+			[
+				PenpotMetadata::KEY_MODE => PenpotMetadata::MODE_UNMAPPED,
+				PenpotMetadata::KEY_TEAM_ID => '',
+			],
+		);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
 	}
 
-	public function testATeamWithNoVisibleDraftsProjectPushesNothing(): void {
-		// Better an un-pushed move than a file re-filed into a guess.
+	/** A `sync` mirror already holds its archive, so parking costs no export. */
+	public function testParkingAFileWithoutAnArchiveTakesOneLastSnapshot(): void {
+		// The bytes have to be secured BEFORE the trashing: Penpot keeps a deleted
+		// design exportable only while its own trash holds it.
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => Membership::none(),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+		$this->archives->method('holdsArchive')->willReturn(false);
+
+		$this->archives->expects($this->once())->method('storeArchive');
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * A TEAM WITH NO RESOLVABLE PROJECT IS NOT A DEPARTURE, and telling the two
+	 * apart is the whole reason this test survived the parking change.
+	 *
+	 * Both states reach the same `$to === null`, but this file never left its
+	 * mapping — we simply could not work out which project it landed in. Parking it
+	 * would soft-delete somebody's design because a LOOKUP failed, which is
+	 * destructive and caused by our own blind spot rather than by the user. Better
+	 * an un-pushed move; the next pull reconciles it.
+	 */
+	public function testATeamWithNoVisibleDraftsProjectPushesNothingAndParksNothing(): void {
 		$this->givenManagedFile();
 		$this->givenMembership([
 			'target' => new Membership(null, self::TEAM),
@@ -175,6 +228,7 @@ final class MotionServiceTest extends TestCase {
 			['id' => self::PROJECT_A, 'team-id' => self::TEAM, 'is-default' => false],
 		]);
 		$this->client->expects($this->never())->method('moveFiles');
+		$this->client->expects($this->never())->method('deleteFile');
 
 		self::assertFalse($this->motion->onMove($this->source(), $this->target()));
 	}
@@ -416,8 +470,12 @@ final class MotionServiceTest extends TestCase {
 	 * @param array{target: Membership, oldParent: Membership} $by
 	 */
 	private function givenMembership(array $by): void {
+		// 31 is the destination FOLDER — the node MotionService now asks about for a
+		// file move. 30 and 40 are the moved nodes themselves, still resolved
+		// directly for a FOLDER move (a folder's own markers are the answer) and
+		// still reached by the promotion walk inside DestinationResolver.
 		$this->resolver->method('resolve')->willReturnCallback(
-			static fn (Node $node): Membership => in_array($node->getId(), [30, 40], true)
+			static fn (Node $node): Membership => in_array($node->getId(), [30, 31, 40], true)
 				? $by['target'] : $by['oldParent'],
 		);
 	}
@@ -500,11 +558,27 @@ final class MotionServiceTest extends TestCase {
 		return $source;
 	}
 
+	/**
+	 * The file AFTER the move, and the folder it landed in.
+	 *
+	 * THE PARENT IS NOT DECORATION. {@see MotionService} resolves membership from
+	 * the destination FOLDER rather than from the file, because a design file
+	 * carries its own cached `penpot_team_id` (§C6.7) and would otherwise answer
+	 * about the team it used to be in — which is how a design that had left every
+	 * mapping got re-filed into its old team's Drafts instead of being parked.
+	 *
+	 * So a target with no parent is a fixture that cannot exercise the real path.
+	 * Id 31 is the destination folder, and {@see givenMembership()} answers for it.
+	 */
 	private function target(string $name = 'Login screen.penpot'): File {
+		$parent = $this->createMock(Folder::class);
+		$parent->method('getId')->willReturn(31);
+
 		$file = $this->createMock(File::class);
 		$file->method('getId')->willReturn(30);
 		$file->method('getName')->willReturn($name);
 		$file->method('getPath')->willReturn('/dana/files/Design/' . $name);
+		$file->method('getParent')->willReturn($parent);
 
 		return $file;
 	}

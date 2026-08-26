@@ -64,6 +64,7 @@ final class ImportService {
 		private readonly ArchiveService $archives,
 		private readonly MappingService $mappings,
 		private readonly PersonalTokenService $personalTokens,
+		private readonly SyncNotifier $notifier,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -115,6 +116,17 @@ final class ImportService {
 				'project' => $project,
 				'exception' => $e,
 			]);
+
+			// AND SAY SO, NAMING WHAT PENPOT SAID. A file that silently fails to
+			// become a design is the worst outcome available: it sits in a mapped
+			// folder looking exactly like every design around it, and the only
+			// symptom is that nothing in Penpot ever answers to it.
+			$this->notifier->importFailed(
+				$this->personalTokens->actingUserId(),
+				$node->getId(),
+				$node->getName(),
+				$e->getMessage(),
+			);
 
 			return null;
 		} finally {

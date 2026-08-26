@@ -11,8 +11,10 @@ namespace OCA\PenpotSync\Listener;
 
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Service\MotionService;
+use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\PushService;
 use OCA\PenpotSync\Service\SyncGuard;
+use OCA\PenpotSync\Service\SyncNotifier;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeRenamedEvent;
@@ -55,9 +57,12 @@ use Psr\Log\LoggerInterface;
  *
  * The NC rename/move has already committed by the time this runs, so a Penpot
  * failure is logged, not raised: the local state stands and the next pull
- * reconciles it. There is no notifier yet (penpot has no `SyncNotifier` — a later
- * course), so a failure surfaces in the log only. The two pushes are attempted
- * independently for the same reason: a failed rename must not swallow the move.
+ * reconciles it. It is ALSO reported to the acting user now, through
+ * {@see SyncNotifier} — the log alone reached an admin tailing `nextcloud.log`
+ * and never the person who made the gesture, which is what left
+ * `designs/move.feature`'s "the failure is reported to the user" @unbuilt. The
+ * two pushes are attempted independently for the same reason as ever: a failed
+ * rename must not swallow the move.
  *
  * @implements IEventListener<NodeRenamedEvent>
  */
@@ -66,6 +71,8 @@ final class NodeRenamedListener implements IEventListener {
 		private readonly PushService $push,
 		private readonly MotionService $motion,
 		private readonly SyncGuard $guard,
+		private readonly SyncNotifier $notifier,
+		private readonly PersonalTokenService $personalTokens,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -130,6 +137,18 @@ final class NodeRenamedListener implements IEventListener {
 				'path' => $target->getPath(),
 				'exception' => $e,
 			]);
+
+			// AND TELL THE PERSON WHO DID IT. The log reaches an admin reading
+			// nextcloud.log; the user who dragged the file is the one who can act on
+			// it, and until the notifier existed they were never told at all. Their
+			// file is exactly where they put it — the message says what Penpot did
+			// not do, not that anything was lost.
+			$this->notifier->moveNotPushed(
+				$this->personalTokens->actingUserId(),
+				$target->getId(),
+				$target->getName(),
+				$e->getMessage(),
+			);
 		}
 	}
 

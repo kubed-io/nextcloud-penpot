@@ -56,6 +56,15 @@ namespace OCP {
 			public function getValueString(string $app, string $key, string $default = '', bool $lazy = false, bool $sensitive = false): string;
 
 			public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): bool;
+
+			// THE TYPED PAIR, which the schedule toggle round-trips through. Real
+			// Nextcloud's getValueBool() THROWS AppConfigTypeConflict on a key that
+			// was stored as a string rather than coercing it, and that behaviour is
+			// the entire reason AppConfigReader exists — so a stub missing these
+			// methods is not a smaller stub, it is one that cannot express the bug.
+			public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool;
+
+			public function setValueBool(string $app, string $key, bool $value, bool $lazy = false): bool;
 		}
 	}
 	// PersonalTokenService stores per-USER values, which is a different config
@@ -196,11 +205,23 @@ namespace OCP\Settings {
 			public function getSchema(): array;
 		}
 	}
+	// AutoSyncSettings implements the WithHandlers variant, which is what lets it
+	// own its own storage and dodge core's two typed-getter bugs (see that class).
+	// Extending the base interface here mirrors upstream, so a test that only knows
+	// about IDeclarativeSettingsForm still sees the form as one.
+	if (!interface_exists(IDeclarativeSettingsFormWithHandlers::class, false)) {
+		interface IDeclarativeSettingsFormWithHandlers extends IDeclarativeSettingsForm {
+			public function getValue(string $fieldId, \OCP\IUser $user): mixed;
+
+			public function setValue(string $fieldId, mixed $value, \OCP\IUser $user): void;
+		}
+	}
 	if (!class_exists(DeclarativeSettingsTypes::class, false)) {
 		final class DeclarativeSettingsTypes {
 			public const SECTION_TYPE_ADMIN = 'admin';
 			public const SECTION_TYPE_PERSONAL = 'personal';
 			public const STORAGE_TYPE_INTERNAL = 'internal';
+			public const STORAGE_TYPE_EXTERNAL = 'external';
 			public const TEXT = 'text';
 			public const URL = 'url';
 			public const PASSWORD = 'password';

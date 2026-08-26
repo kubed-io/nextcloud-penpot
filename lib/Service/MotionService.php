@@ -111,6 +111,22 @@ final class MotionService {
 	 */
 	private const MAX_DEPTH = 100;
 
+	/**
+	 * How long a restored design must stay out of the trash before it is believed.
+	 *
+	 * Penpot's `delete-file` schedules a delayed removal that lands about 3.8s
+	 * later and runs whether or not the design was restored in between — measured
+	 * against a live instance and written up in {@see RestoreService}, which pays
+	 * the same window for the same reason. Six seconds covers it with margin.
+	 *
+	 * Only a design that really was in the trash pays this, which in practice means
+	 * a file coming back into a mapping shortly after leaving one.
+	 */
+	private const SETTLE_MICROSECONDS = 6_000_000;
+
+	/** How often to look while waiting out that window. */
+	private const SETTLE_POLL_MICROSECONDS = 250_000;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
@@ -120,6 +136,8 @@ final class MotionService {
 		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
 		private readonly ImportService $imports,
+		private readonly ArchiveService $archives,
+		private readonly MappingService $mappings,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -174,25 +192,60 @@ final class MotionService {
 			return false;
 		}
 
-		// ONE resolver walk, used twice: the project decides whether to push, and
-		// the team decides whether the file's cached `penpot_team_id` still tells
-		// the truth (§C6.7).
-		$membership = $this->resolver->resolve($target);
+		// RESOLVED FROM THE DESTINATION FOLDER, NOT FROM THE FILE — and that
+		// distinction is load-bearing now in a way it never was before.
+		//
+		// {@see MembershipResolver::resolve()} starts its walk AT the node it is
+		// given, and a design file carries its own cached `penpot_team_id` (§C6.7,
+		// so the browser can build a workspace link without walking the tree). Hand
+		// it the file and the file answers about itself: a mirror dragged out to an
+		// unmapped folder still reports the team it used to belong to, because the
+		// stamp travelled with it.
+		//
+		// That was harmless while a null project merely meant "do nothing". It is
+		// not harmless now: it made a design that had left every mapping resolve to
+		// its old team, and therefore to that team's Drafts — so instead of being
+		// parked it was quietly re-filed into Drafts, which is a real project inside
+		// a mapping it is no longer in. Measured in CI, not reasoned about.
+		//
+		// A file's membership IS its folder's membership. Asking the parent is both
+		// the correct question and the one that cannot be answered by a stale stamp.
+		$membership = $this->resolver->resolve($this->destinationFolder($target));
 
 		// THE DESTINATION SIDE ADOPTS; the source side must never (see
 		// `sourceProject()` below). A design dragged into a folder Penpot has never
 		// seen makes that folder a project.
 		$to = $this->destinations->projectForContentIn($target, $membership);
 		if ($to === null) {
-			// Landed outside every mapped folder, or in a team whose Drafts we
-			// could not resolve. Penpot keeps the file where it is: unmapping is
-			// Course 5's decision to make explicitly, not one to infer from a drag.
-			$this->logger->info('penpot_sync writeback: move landed outside any Penpot project; leaving Penpot untouched', [
-				'app' => Application::APP_ID,
-				'fileId' => $target->getId(),
-				'path' => $target->getPath(),
-			]);
-			return false;
+			// TWO VERY DIFFERENT STATES REACH THIS LINE, and only one of them is a
+			// departure:
+			//
+			//   - NO TEAM — the file left every mapped folder. That is the gesture
+			//     park() exists for.
+			//   - A TEAM BUT NO PROJECT — the file is still inside a mapping and we
+			//     merely could not resolve its Drafts project (an unreadable
+			//     listing, a team whose default project we cannot see).
+			//
+			// Parking the second would soft-delete a design because a LOOKUP failed,
+			// on a file that never left the mapping — destructive, and caused by our
+			// own blind spot rather than by anything the user did. Better an
+			// un-pushed move than a design in the trash on a guess; the next pull
+			// reconciles it. The unit suite caught this conflation, which is why the
+			// distinction is spelt out here rather than implied by a null check.
+			if ($membership->teamId !== null && $membership->teamId !== '') {
+				$this->logger->info('penpot_sync writeback: move landed in a team whose project could not be resolved; leaving Penpot untouched', [
+					'app' => Application::APP_ID,
+					'fileId' => $target->getId(),
+					'path' => $target->getPath(),
+					'teamId' => $membership->teamId,
+				]);
+
+				return false;
+			}
+
+			// LEFT EVERY MAPPING. Park the design in Penpot's own trash and let the
+			// file keep its id — see park() for why that is not a delete.
+			return $this->park($target, $meta);
 		}
 
 		$from = $this->sourceProject($source);
@@ -202,13 +255,32 @@ final class MotionService {
 			return false;
 		}
 
-		$this->client->moveFiles($to, [$meta->penpotId], $this->personalTokens->tokenForActor());
-		$this->logger->info('penpot_sync writeback: moved Penpot file to another project', [
-			'app' => Application::APP_ID,
-			'penpotId' => $meta->penpotId,
-			'fromProject' => $from,
-			'toProject' => $to,
-		]);
+		// ARRIVING FROM OUTSIDE EVERY MAPPING, where the design may have been parked
+		// long enough to be unreachable. Settled before the move, because `move-files`
+		// on an id Penpot cannot match is an error, and on a TRASHED id is worse — it
+		// succeeds, and files a deleted design into a project nobody can see it in.
+		// GATED ON WHERE IT CAME FROM, not on the stamp. `isUnmapped()` is the stamp
+		// park() writes, and it is right almost always — but a file that arrived in
+		// unmapped space some other way (copied there, uploaded with a stale id) may
+		// carry any mode at all, and it is the same arrival with the same question.
+		if (($from === null || $meta->isUnmapped()) && !$this->revive($target, $meta, $membership, $to)) {
+			// Nothing to reattach to: the id named nothing, so the archive became a
+			// new design and the file has already been re-stamped. Done.
+			return true;
+		}
+
+		// THE STAMP BELOW RUNS EITHER WAY, which is why this is not an early return.
+		// An arrival whose design Penpot had already filed still needs its team and
+		// its mode written — it is coming back into a mapping, and a file left
+		// stamped `unmapped` inside one is invisible to every later gesture.
+		if ($this->fileInto($to, $meta->penpotId)) {
+			$this->logger->info('penpot_sync writeback: moved Penpot file to another project', [
+				'app' => Application::APP_ID,
+				'penpotId' => $meta->penpotId,
+				'fromProject' => $from,
+				'toProject' => $to,
+			]);
+		}
 
 		// RE-STAMP THE TEAM, but only now — after Penpot accepted the move.
 		//
@@ -226,11 +298,374 @@ final class MotionService {
 		// AFTER the call, never before: a `moveFiles` that throws leaves the design
 		// in its old team, and a stamp written first would describe a move that did
 		// not happen (§6.18 rule 3).
+		$stamp = [];
 		if ($membership->teamId !== null && $membership->teamId !== $meta->teamId) {
-			$this->metadata->writeFile($target->getId(), [PenpotMetadata::KEY_TEAM_ID => $membership->teamId]);
+			$stamp[PenpotMetadata::KEY_TEAM_ID] = $membership->teamId;
+		}
+		if ($meta->isUnmapped()) {
+			// IT IS MAPPED AGAIN. The mode is the mapping's, exactly as a design
+			// created in that folder would be born — a file left stamped `unmapped`
+			// inside a mapping would be skipped by every later gesture that asks
+			// `isManaged()` first, and would read as unmapped to the Files sidebar.
+			$stamp[PenpotMetadata::KEY_MODE] = $this->modeFor($membership);
+		}
+		if ($stamp !== []) {
+			$this->metadata->writeFile($target->getId(), $stamp);
 		}
 
 		return true;
+	}
+
+	/**
+	 * `move-files`, treating "it is already there" as the success it is.
+	 *
+	 * ## PENPOT REFUSES A MOVE INTO THE PROJECT A DESIGN IS ALREADY IN
+	 *
+	 * `cant-move-to-same-project`, HTTP 400. Ordinarily unreachable, because the
+	 * caller compares `$from` against `$to` first and returns early when they match.
+	 * Two paths get past that comparison anyway, and both are legitimate:
+	 *
+	 *   - **an arrival from unmapped space.** `projectForContentIn()` runs BEFORE
+	 *     this, and for a folder that is not yet a project it promotes one — which
+	 *     files the designs already sitting in that folder, ours included. So by the
+	 *     time we ask, Penpot has already put the design where we were about to.
+	 *   - **a drag to the team root** whose file was in Drafts to begin with, where
+	 *     `$from` reads null and `$to` resolves to that same Drafts project.
+	 *
+	 * In both the end state the caller wanted is already true, so reporting a
+	 * failure would be a lie — and an expensive one, since the listener turns it
+	 * into a notification telling the user their move did not reach Penpot.
+	 *
+	 * ONLY THAT ONE CODE. Every other 400 is a real refusal and still throws.
+	 *
+	 * @return bool true when Penpot actually moved it, false when it was already
+	 *              there — the caller uses that only to decide what to log
+	 *
+	 * @throws PenpotApiException
+	 */
+	private function fileInto(string $project, string $penpotId): bool {
+		try {
+			$this->client->moveFiles($project, [$penpotId], $this->personalTokens->tokenForActor());
+
+			return true;
+		} catch (PenpotApiException $e) {
+			if ($e->getPenpotCode() !== 'cant-move-to-same-project') {
+				throw $e;
+			}
+
+			$this->logger->info('penpot_sync writeback: the design was already in the destination project', [
+				'app' => Application::APP_ID,
+				'penpotId' => $penpotId,
+				'project' => $project,
+			]);
+
+			return false;
+		}
+	}
+
+	/**
+	 * The folder a moved file now sits in, for the membership walk.
+	 *
+	 * Falls back to the file itself when the parent cannot be read, which is the
+	 * pre-existing behaviour and the safe direction: a file that answers about
+	 * itself resolves to the team it is stamped with, so the move is PUSHED rather
+	 * than the design parked. Getting a push wrong costs a `move-files` Penpot
+	 * treats as a no-op; getting a park wrong soft-deletes somebody's design.
+	 */
+	private function destinationFolder(File $target): Node {
+		try {
+			return $target->getParent();
+		} catch (NotFoundException) {
+			return $target;
+		}
+	}
+
+	/**
+	 * The file left every mapping: park its design in Penpot's trash, and keep the id.
+	 *
+	 * ## WHY PARKING AND NOT "LEAVE PENPOT ALONE"
+	 *
+	 * This method replaces a `return false` that logged *"move landed outside any
+	 * Penpot project; leaving Penpot untouched"*, on the reasoning that unmapping was
+	 * a decision to make explicitly rather than infer from a drag. What that actually
+	 * produced was a design sitting in a project whose folder maps nowhere — still
+	 * listed, still shared with the team, indistinguishable from live work, and
+	 * mirrored by nothing. The absence of a decision IS a decision, and it was the
+	 * worst of the three available.
+	 *
+	 * Both siblings park instead: n8n ARCHIVES the workflow, Grafana moves the
+	 * dashboard into its `nextcloud-trash` folder. Penpot needs neither invention
+	 * because it HAS a trash, which `designs/delete.feature` already leans on — so
+	 * leaving a mapping is the same soft delete the trash gesture makes, and it keeps
+	 * the design's **id, revision and history** against the day it comes back.
+	 *
+	 * ## THE ID STAYS ON THE FILE, AND THAT IS THE WHOLE TRICK
+	 *
+	 * An unmapped file is not a file that forgot what it was — it is a file holding a
+	 * claim on something parked. {@see revive()} is what redeems that claim. Clearing
+	 * the id here would make every return an import, minting a new design and
+	 * throwing away the history for no reason.
+	 *
+	 * The TEAM goes, because the file is under no team now and a stale
+	 * `penpot_team_id` is a workspace deep link that opens the wrong place (§C6.7).
+	 *
+	 * @throws PenpotApiException the caller logs it; §6.18 rule 3 — the file stays
+	 *                            where the user dropped it either way
+	 */
+	private function park(File $node, PenpotFileMetadata $meta): bool {
+		// THE BYTES FIRST, WHILE THE DESIGN IS STILL REACHABLE. A `sync` mirror
+		// already holds its archive and this is a no-op; anything that does not gets
+		// one last export, because after the trashing Penpot's own grace window is
+		// the only thing keeping it exportable at all.
+		if (!$this->archives->holdsArchive($node)) {
+			try {
+				$this->archives->storeArchive($node, $meta->penpotId);
+			} catch (\Throwable $e) {
+				// Not fatal: the design is going to Penpot's trash, not out of
+				// existence, so a failed snapshot costs a backup rather than the work.
+				$this->logger->warning('penpot_sync writeback: could not snapshot a design on its way out of every mapping', [
+					'app' => Application::APP_ID,
+					'penpotId' => $meta->penpotId,
+					'file' => $node->getName(),
+					'exception' => $e,
+				]);
+			}
+		}
+
+		$this->client->deleteFile($meta->penpotId, $this->personalTokens->tokenForActor());
+
+		// AFTER the call (§6.18 rule 3): a stamp written first would describe a
+		// parking that never happened.
+		$this->metadata->writeFile($node->getId(), [
+			PenpotMetadata::KEY_MODE => PenpotMetadata::MODE_UNMAPPED,
+			PenpotMetadata::KEY_TEAM_ID => '',
+		]);
+
+		$this->logger->info('penpot_sync writeback: a design left every mapping; parked it in Penpot\'s trash', [
+			'app' => Application::APP_ID,
+			'penpotId' => $meta->penpotId,
+			'path' => $node->getPath(),
+		]);
+
+		return true;
+	}
+
+	/**
+	 * An unmapped file is arriving in a mapping. Make sure its id names a design.
+	 *
+	 * ## THREE FAR-SIDE STATES, TWO OUTCOMES
+	 *
+	 * The file carries an id, and the id is a claim that may or may not still be
+	 * good. `designs/restore.feature` names the same three layers for the trash
+	 * gesture, and they resolve the same way here:
+	 *
+	 *   - **live** — somebody restored it in Penpot, or it never went. Nothing to do;
+	 *     the caller's `move-files` files it into the destination.
+	 *   - **trashed** — {@see park()} put it there, or a person did. Untrash it and
+	 *     the id, revision and history all come back with it.
+	 *   - **gone** — past Penpot's grace window, or purged, or an id copied onto a
+	 *     file that never had a design of its own. Nothing can be revived, so the
+	 *     archive is imported as a NEW design and the stale id is replaced.
+	 *
+	 * @return bool true when the id still names a design and the caller should file
+	 *              it; false when the file has been re-stamped with a new one and
+	 *              there is nothing left to move
+	 */
+	private function revive(File $node, PenpotFileMetadata $meta, Membership $membership, string $project): bool {
+		$teamId = $membership->teamId ?? '';
+
+		// THE TRASH LISTING IS ASKED FIRST, and the order is not a preference.
+		//
+		// This began with `fileExists()` and fell through to the untrash — and both
+		// rows of the scenario failed identically, with the design still in the trash
+		// afterwards. `get-file-summary` answers NOT-FOUND for a soft-deleted design,
+		// so a parked design read as "the id names nothing" and was IMPORTED: the
+		// user got a new design with a new id, and the one holding all their history
+		// stayed in the trash where nobody would look for it.
+		//
+		// `get-team-deleted-files` is the authority on what is parked, and it is the
+		// one this app already trusts everywhere else. Existence is only consulted
+		// once the trash has said no.
+		if ($teamId !== '' && $this->isParked($teamId, $meta->penpotId)) {
+			$this->untrash($teamId, $meta->penpotId);
+
+			return true;
+		}
+
+		if ($this->client->fileExists($meta->penpotId) === false) {
+			// THE ID NAMES NOTHING, and the trash agrees. Not an error and not a data
+			// loss — the bytes have been in Nextcloud the whole time, so they become a
+			// design again (§6.33). A failed import leaves the file exactly as it
+			// arrived, which is the honest outcome ImportService gives every archive it
+			// cannot place.
+			$this->imports->adopt($node, $project, $teamId !== '' ? $teamId : null);
+
+			return false;
+		}
+
+		// Live all along. Nothing to revive; the caller files it.
+		return true;
+	}
+
+	/** Is this design sitting in that team's Penpot trash right now? */
+	private function isParked(string $teamId, string $penpotId): bool {
+		try {
+			foreach ($this->client->deletedFiles($teamId) as $file) {
+				if (($file['id'] ?? null) === $penpotId) {
+					return true;
+				}
+			}
+		} catch (\Throwable $e) {
+			// UNREADABLE ANSWERS YES, and that is the cheap direction rather than the
+			// timid one. Saying no drops the id into the existence probe, which is the
+			// only branch that can mint a SECOND design and leave the original holding
+			// the history somewhere nobody will look. Saying yes costs a restore call
+			// that is a no-op for a design which was never trashed — Penpot answers
+			// with an empty set and {@see untrash()} returns having done nothing.
+			$this->logger->warning('penpot_sync writeback: could not read Penpot\'s trash for a returning design; treating it as parked', [
+				'app' => Application::APP_ID,
+				'penpotId' => $penpotId,
+				'exception' => $e,
+			]);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Bring a parked design back out of Penpot's trash, and make it STAY out.
+	 *
+	 * ## `delete-file` FIRES A DELAYED JOB, AND IT DOES NOT CARE THAT YOU RESTORED
+	 *
+	 * The first cut of this restored once and returned, reasoning that the
+	 * `move-files` immediately after would fail visibly if the design had gone. It
+	 * does not fail — it succeeds, and then the design disappears anyway. CI caught
+	 * it on the `trashed` row: the design came back, the move landed, and the design
+	 * was in the trash again by the time the scenario looked.
+	 *
+	 * {@see RestoreService} had already measured exactly this and written it down:
+	 * `delete-file` answers immediately, lists the design in the trash within
+	 * ~0.1–0.3s, and then **about 3.8 seconds later** runs a delayed job that removes
+	 * the file AGAIN, even if it was restored in the meantime. A park followed by a
+	 * prompt return sits squarely inside that window.
+	 *
+	 * So the restore is confirmed rather than assumed, and re-issued once if the
+	 * delayed job takes it back — the same remedy §6.49 arrived at, for the same
+	 * reason. Only a design that was actually trashed pays the wait.
+	 *
+	 * BEST EFFORT THROUGHOUT. A design that is already live is the common case and
+	 * needs nothing; one that cannot be restored leaves the caller's `move-files` to
+	 * fail on its own terms, which is a better error than one invented here.
+	 */
+	private function untrash(string $teamId, string $penpotId): void {
+		try {
+			$this->restoreOnce($teamId, $penpotId);
+
+			if ($this->staysOutOfTheTrash($teamId, $penpotId)) {
+				$this->logger->info('penpot_sync writeback: brought a parked design back out of Penpot\'s trash', [
+					'app' => Application::APP_ID,
+					'penpotId' => $penpotId,
+					'team_id' => $teamId,
+				]);
+
+				return;
+			}
+
+			// STILL LISTED. Either the delayed delete took it back, or the restore
+			// declined and said so with an empty set (§C6.11). Re-issuing AFTER the
+			// undo window is what makes it stick (§6.49) — the second call is not a
+			// retry of a failure, it is the first one landing on the far side of it.
+			$this->restoreOnce($teamId, $penpotId);
+
+			if ($this->staysOutOfTheTrash($teamId, $penpotId)) {
+				$this->logger->info('penpot_sync writeback: the parked design needed a second restore (saga §6.49)', [
+					'app' => Application::APP_ID,
+					'penpotId' => $penpotId,
+					'team_id' => $teamId,
+				]);
+
+				return;
+			}
+
+			// SAID OUT LOUD RATHER THAN SWALLOWED. The move that follows will still
+			// file the design, so the user is not stuck — but a design left flagged
+			// deleted while its mirror sits in a mapped folder is a real desync, and
+			// the first version of this reported nothing at all when the restore
+			// returned an empty set, which is how it went two rounds undiagnosed.
+			$this->logger->warning(
+				'penpot_sync writeback: a returning design is still in Penpot\'s trash after two restores; '
+				. 'its mirror is back in the mapping but Penpot still has it flagged deleted',
+				[
+					'app' => Application::APP_ID,
+					'penpotId' => $penpotId,
+					'team_id' => $teamId,
+				],
+			);
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync writeback: could not untrash a returning design', [
+				'app' => Application::APP_ID,
+				'penpotId' => $penpotId,
+				'exception' => $e,
+			]);
+		}
+	}
+
+	/**
+	 * One restore call, whose RESULT IS DELIBERATELY IGNORED.
+	 *
+	 * `restore-deleted-team-files` answers 200 with an EMPTY set for an id it did
+	 * not restore (§C6.11), and the first version of this treated that empty set as
+	 * final: it returned early and did nothing else. Then Penpot answered empty for
+	 * a design that WAS in the trash, and the untrash silently gave up — no restore,
+	 * no retry, no log line, and two CI rounds spent looking at the wrong thing.
+	 *
+	 * So the returned ids are no longer trusted as the oracle. The trash listing is,
+	 * because it is the same thing the assertion and the pull read. This just makes
+	 * the call; {@see staysOutOfTheTrash()} decides whether it worked.
+	 */
+	private function restoreOnce(string $teamId, string $penpotId): void {
+		$this->client->restoreDeletedFiles($teamId, [$penpotId], $this->personalTokens->tokenForActor());
+	}
+
+	/**
+	 * Watch the trash for the delayed delete, rather than sleeping through it.
+	 *
+	 * Same total worst case as one long wait, but a restore that gets undone is
+	 * seen the moment it happens instead of at the end of the window — and once the
+	 * delayed job has removed the file it does not put it back, so an early answer
+	 * is a final one.
+	 */
+	private function staysOutOfTheTrash(string $teamId, string $penpotId): bool {
+		// BOTH OPERANDS FLOAT, deliberately. `microtime(true)` is a float and an
+		// int/float division is `int|float`, which Psalm's strict binary operands
+		// mode refuses to mix. Casting rather than suppressing keeps the arithmetic
+		// honest — a settle of 6_000_000 really is six seconds, not zero.
+		// {@see RestoreService::staysListed()} carries the same cast for the same
+		// reason; this is the second window in the app and it inherits the finding.
+		$deadline = microtime(true) + ((float)self::SETTLE_MICROSECONDS / 1_000_000.0);
+		do {
+			usleep(self::SETTLE_POLL_MICROSECONDS);
+
+			foreach ($this->client->deletedFiles($teamId) as $file) {
+				if (($file['id'] ?? null) === $penpotId) {
+					return false;
+				}
+			}
+		} while (microtime(true) < $deadline);
+
+		return true;
+	}
+
+	/** The mode a design in this mapping is born in — the mapping's own. */
+	private function modeFor(Membership $membership): string {
+		$teamId = $membership->teamId ?? '';
+		if ($teamId === '') {
+			return Mapping::MODE_LINK;
+		}
+
+		return $this->mappings->getByTeamId($teamId)?->mode ?? Mapping::MODE_LINK;
 	}
 
 	/**

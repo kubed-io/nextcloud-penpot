@@ -286,6 +286,24 @@ trait MetadataSteps {
 				return $actual === $want
 					? null : "expected the body its mapping implies ('{$want}'), the file is '{$actual}'";
 
+			case 'a new one, never the one it arrived with':
+				// TWO CLAIMS IN ONE ROW, and the second is the load-bearing half.
+				// "Set" alone would pass against the bug this exists to catch: an
+				// arrival whose stale id was pushed at Penpot unchanged, leaving the
+				// file pointing at a design that does not exist. So the id must be
+				// real AND different from whatever the file carried in.
+				//
+				// An arrival that carried NO id satisfies the second half trivially,
+				// which is correct rather than sloppy — the row it shares an outline
+				// with is the one where the difference is observable, and asserting
+				// "different from nothing" is exactly as strong as the state allows.
+				if (($actual ?? '') === '') {
+					return 'expected a new design id, found nothing';
+				}
+				if ($this->idArrivedWith !== '' && $actual === $this->idArrivedWith) {
+					return "expected a NEW id; the file still carries the one it arrived with ({$actual})";
+				}
+				return null;
 			case 'set':
 				return ($actual ?? '') !== ''
 					? null : 'expected a value, found nothing';

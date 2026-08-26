@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\AppConfigReader;
 use OCA\PenpotSync\Service\ScheduleConfig;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCP\IAppConfig;
@@ -84,9 +85,14 @@ final class ScheduleConfigTest extends TestCase {
 	}
 
 	/**
-	 * The card stores a STRING (`yes`/`no`), because a declarative CHECKBOX
-	 * cannot save on this Nextcloud at all — see AutoSyncSettings. `occ` can also
-	 * leave `1`/`0` in the same key, so every shape has to read correctly.
+	 * Every shape the `schedule_enabled` key has ever held has to read correctly.
+	 *
+	 * These are all STRING-typed, which is the interesting half: `getValueBool()`
+	 * throws `AppConfigTypeConflict` on each of them rather than coercing, so this
+	 * is the rescue path in {@see \OCA\PenpotSync\Service\AppConfigReader::bool}
+	 * doing the work. `yes`/`no` are what this app itself stored while the toggle
+	 * was a RADIO; `1`/`0` are what `occ config:app:set` writes, which is what the
+	 * integration suite uses. The real-bool case is covered in AppConfigReaderTest.
 	 */
 	#[DataProvider('enabledValues')]
 	public function testReadsTheEnabledFlag(string $stored, bool $expected): void {
@@ -96,14 +102,14 @@ final class ScheduleConfigTest extends TestCase {
 	/** @return array<string, array{string, bool}> */
 	public static function enabledValues(): array {
 		return [
-			'yes from the settings card' => ['yes', true],
-			'no from the settings card' => ['no', false],
+			'yes from the radio era' => ['yes', true],
+			'no from the radio era' => ['no', false],
 			'1 from occ' => ['1', true],
 			'0 from occ' => ['0', false],
 			'true by hand' => ['true', true],
 			'false by hand' => ['false', false],
-			// A bare (bool) cast would read this as TRUE, since any non-empty
-			// string is truthy — the silent inversion the filter avoids.
+			// A bare (bool) cast would read both of these as TRUE, since any
+			// non-empty string is truthy — the silent inversion the parse avoids.
 			'unset falls back to off' => ['', false],
 			'nonsense is off, never on' => ['banana', false],
 		];
@@ -147,7 +153,12 @@ final class ScheduleConfigTest extends TestCase {
 				};
 			},
 		);
+		// The whole point of these fixtures is a STRING-typed key, and that is
+		// precisely what IAppConfig::getValueBool() refuses to read: it raises
+		// AppConfigTypeConflict rather than coercing. Stubbing it to throw is what
+		// makes this exercise the rescue instead of a happy path that cannot occur.
+		$config->method('getValueBool')->willThrowException(new \RuntimeException('AppConfigTypeConflict'));
 
-		return new ScheduleConfig($config);
+		return new ScheduleConfig($config, new AppConfigReader($config));
 	}
 }

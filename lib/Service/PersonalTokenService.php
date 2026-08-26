@@ -65,6 +65,22 @@ final class PersonalTokenService {
 	}
 
 	/**
+	 * Who is performing the current gesture, or '' when nobody is.
+	 *
+	 * SAME SESSION, DIFFERENT QUESTION — and it lives here rather than in each
+	 * caller for the same reason {@see tokenForActor()} does: there is exactly one
+	 * notion of "the acting user" in this app, and two classes answering it
+	 * separately is how they drift.
+	 *
+	 * An empty string is an ordinary answer. The scheduled pull runs with no
+	 * session at all, and {@see SyncNotifier} treats '' as "nobody to tell" rather
+	 * than inventing a recipient.
+	 */
+	public function actingUserId(): string {
+		return $this->userSession->getUser()?->getUID() ?? '';
+	}
+
+	/**
 	 * That user's personal token, decrypted — or null if they have not set one.
 	 *
 	 * Null is the ordinary case, not a failure: most users never set a token,

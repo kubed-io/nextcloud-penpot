@@ -57,28 +57,28 @@ final class ScheduleConfig {
 
 	public function __construct(
 		private readonly IAppConfig $config,
+		private readonly AppConfigReader $reader,
 	) {
 	}
 
 	/**
 	 * Whether the scheduled pull is switched on.
 	 *
-	 * Reads a STRING, because the settings card stores one: a declarative
-	 * CHECKBOX cannot save at all on this Nextcloud (its real-bool value hits
-	 * `setValueString()` and raises a TypeError), so the field is a RADIO with
-	 * `yes`/`no`. See {@see AutoSyncSettings} for the full reasoning.
+	 * FOUR SPELLINGS, ONE ANSWER. The settings card now writes a real bool
+	 * ({@see AutoSyncSettings::setValue}), but the same key also holds `yes`/`no`
+	 * on every instance that ran the RADIO era, `1`/`0` wherever `occ
+	 * config:app:set` wrote it — which is what the integration suite does — and
+	 * `true`/`false` if anyone edited it by hand.
 	 *
-	 * FILTER_VALIDATE_BOOLEAN rather than a bare comparison, so every shape this
-	 * key has ever held reads correctly — `yes`/`no` from the card, `1`/`0` from
-	 * `occ config:app:set`, and `true`/`false` if anyone sets it by hand. A bare
-	 * cast would read the string `"0"` as... false, but `"no"` as TRUE, which is
-	 * exactly the silent inversion this method exists to avoid.
+	 * {@see AppConfigReader::bool} takes the typed read first and parses the
+	 * stored string when that throws `AppConfigTypeConflict`, so none of those
+	 * four reads as off merely because of how it was written. That mattered
+	 * enough to move here from a `filter_var()` on a string read: once the card
+	 * started storing a real bool, the string read would have thrown on exactly
+	 * the instances whose admin had just used the toggle.
 	 */
 	public function isEnabled(): bool {
-		return filter_var(
-			$this->config->getValueString(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, 'no'),
-			FILTER_VALIDATE_BOOLEAN,
-		);
+		return $this->reader->bool(AutoSyncSettings::KEY_ENABLED);
 	}
 
 	/**
