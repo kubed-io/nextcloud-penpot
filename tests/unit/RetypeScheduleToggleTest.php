@@ -127,12 +127,41 @@ final class RetypeScheduleToggleTest extends TestCase {
 		$config = $this->stringTyped('yes');
 		$config->method('setValueBool')->willThrowException(new \RuntimeException('database is gone'));
 
-		$output = $this->createMock(IOutput::class);
 		// A repair step that throws aborts the whole upgrade, and a misbehaving
 		// settings checkbox is nowhere near worth refusing to install the app over.
-		$output->expects(self::once())->method('warning');
+		self::assertStringContainsString('was left as it was', $this->warningFrom($config));
+	}
+
+	/**
+	 * THE MESSAGE TRACKS WHAT ACTUALLY HAPPENED, and this is the case it used to
+	 * lie about (raised in review on #46): when the restore fails too, the key
+	 * really is gone and the schedule really has stopped. Reporting "left as it
+	 * was" there is worse than reporting nothing, because it tells the admin there
+	 * is nothing to go and check.
+	 */
+	public function testAFailedRestoreIsReportedAsTheLossItIs(): void {
+		$config = $this->stringTyped('yes');
+		$config->method('setValueBool')->willThrowException(new \RuntimeException('database is gone'));
+		$config->method('setValueString')->willThrowException(new \RuntimeException('still gone'));
+
+		$warning = $this->warningFrom($config);
+
+		self::assertStringContainsString('UNSET', $warning);
+		self::assertStringNotContainsString('was left as it was', $warning);
+	}
+
+	/** The single warning the step emitted, with `info()` asserted absent. */
+	private function warningFrom(IAppConfig $config): string {
+		$warning = '';
+		$output = $this->createMock(IOutput::class);
+		$output->expects(self::once())->method('warning')
+			->willReturnCallback(static function (string $message) use (&$warning): void {
+				$warning = $message;
+			});
 		$output->expects(self::never())->method('info');
 
 		(new RetypeScheduleToggle($config, new AppConfigReader($config)))->run($output);
+
+		return $warning;
 	}
 }

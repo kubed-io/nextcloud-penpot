@@ -93,8 +93,9 @@ final class RetypeScheduleToggle implements IRepairStep {
 		try {
 			$this->config->deleteKey(Application::APP_ID, AutoSyncSettings::KEY_ENABLED);
 		} catch (\Throwable $e) {
-			// Nothing has changed yet, so there is nothing to undo.
-			$this->giveUp($output, $e);
+			// Nothing has changed yet, so there is nothing to undo and the setting is
+			// provably intact.
+			$this->giveUp($output, $e, intact: true);
 
 			return;
 		}
@@ -110,8 +111,7 @@ final class RetypeScheduleToggle implements IRepairStep {
 			// So it goes back exactly as it was, in meaning AND in type: a string the
 			// reader understands, which leaves the instance no better and no worse
 			// than it started. Raised in review on #46.
-			$this->putItBack($enabled);
-			$this->giveUp($output, $e);
+			$this->giveUp($output, $e, intact: $this->putItBack($enabled));
 
 			return;
 		}
@@ -146,19 +146,24 @@ final class RetypeScheduleToggle implements IRepairStep {
 	 *
 	 * `yes`/`no` rather than `1`/`0` only because it is what this app's own radio
 	 * wrote; {@see AppConfigReader::bool()} reads either. What matters is that it is
-	 * a STRING, so the key comes back the same shape it was — and if this throws
-	 * too, there is nothing further to try and the warning above is what the admin
-	 * gets.
+	 * a STRING, so the key comes back the same shape it was.
+	 *
+	 * ANSWERS WHETHER IT WORKED, rather than swallowing quietly, because the message
+	 * the admin gets turns on it — see {@see giveUp()}.
+	 *
+	 * @return bool true when the old value is back
 	 */
-	private function putItBack(bool $enabled): void {
+	private function putItBack(bool $enabled): bool {
 		try {
 			$this->config->setValueString(
 				Application::APP_ID,
 				AutoSyncSettings::KEY_ENABLED,
 				$enabled ? 'yes' : 'no',
 			);
+
+			return true;
 		} catch (\Throwable) {
-			// Deliberately swallowed: this is already the recovery path.
+			return false;
 		}
 	}
 
@@ -166,12 +171,26 @@ final class RetypeScheduleToggle implements IRepairStep {
 	 * A repair step that THROWS aborts the whole upgrade, and the worst outcome here
 	 * is a settings toggle that keeps misbehaving — nowhere near bad enough to
 	 * refuse to install the app over. So it reports and returns.
+	 *
+	 * ## IT MAY NOT ASSERT A STATE IT CANNOT SEE (raised in review on #46)
+	 *
+	 * This used to say *"the setting was left as it was"* unconditionally, which is
+	 * a guess in the one case that matters: the restore above can fail too, and then
+	 * the key really is gone and the schedule really has stopped. A warning that
+	 * describes the good outcome while the bad one happened is worse than no warning
+	 * — it tells the admin there is nothing to check.
+	 *
+	 * @param bool $intact whether the stored setting is provably unchanged
 	 */
-	private function giveUp(IOutput $output, \Throwable $e): void {
+	private function giveUp(IOutput $output, \Throwable $e, bool $intact): void {
 		$output->warning(
-			'Could not re-store the scheduled-sync toggle as a boolean: ' . $e->getMessage()
-			. '. The setting was left as it was, so the schedule behaves exactly as before '
-			. 'this upgrade; the checkbox in Settings may still fail to save.',
+			'Could not re-store the scheduled-sync toggle as a boolean: ' . $e->getMessage() . '. '
+			. ($intact
+				? 'The setting was left as it was, so the schedule behaves exactly as before this '
+					. 'upgrade; the checkbox in Settings may still fail to save.'
+				: 'The setting could not be put back either, so it is now UNSET and the scheduled '
+					. 'pull will not run. Switch it back on in Settings — with the key gone, the '
+					. 'checkbox writes cleanly.'),
 		);
 	}
 }
