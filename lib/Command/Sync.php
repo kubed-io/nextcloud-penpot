@@ -161,6 +161,17 @@ final class Sync extends Command {
 			));
 		}
 
+		// The other removal, and the only irreversible one this command can cause —
+		// so it is never folded into the line above. A design destroyed in Penpot
+		// takes its already-trashed mirror with it (`designs/purge.feature`).
+		if ($result['reaped'] > 0) {
+			$output->writeln(sprintf(
+				'<comment>%d mirror(s) were emptied from the Nextcloud trash because their design '
+				. 'was permanently deleted in Penpot.</comment>',
+				$result['reaped'],
+			));
+		}
+
 		if ($result['status'] !== 'ok') {
 			$output->writeln('<error>Some mappings failed: ' . (string)$result['message'] . '</error>');
 

@@ -51,9 +51,10 @@ use Psr\Log\LoggerInterface;
  *   - **The project-folder visible tag** (§6.32) — the human pill. Metadata is
  *     written now; the systemtag lands with the Files-app surface.
  *   - **Adopting a mirror out of the Nextcloud trash** (§6.37) — a design that
- *     comes back is currently re-created beside its trashed mirror rather than
- *     matched to it by `penpot_id`. That needs `files_trashbin` and is its own
- *     slice; nothing here hard-deletes, so no data is at risk in the meantime.
+ *     comes back is still re-created beside its trashed mirror rather than matched
+ *     to it by `penpot_id`. The trash is READABLE now ({@see TrashControl}), so
+ *     this is a fork rather than a wall: the n8n sibling's reconcile restores as
+ *     well as reaps, and no scenario asks for the other half yet. Untidy, not lossy.
  *   - **The `/` guard as a reported skip** (§6.51) — a project or file whose
  *     Penpot name contains `/` (illegal as a single Nextcloud node name) is
  *     skipped and logged here; Course 4 turns that into the user-facing report.
@@ -107,6 +108,7 @@ final class PullService {
 		private readonly SyncGuard $guard,
 		private readonly MirrorTimes $times,
 		private readonly TrashControl $trash,
+		private readonly TrashReconcileService $trashReconcile,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -114,7 +116,7 @@ final class PullService {
 	/**
 	 * Pull one mapping, or every mapping when `$mappingId` is null/empty.
 	 *
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, status:string, message:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, status:string, message:?string}
 	 */
 	public function pull(?string $mappingId): array {
 		if ($mappingId !== null && $mappingId !== '') {
@@ -134,7 +136,7 @@ final class PullService {
 	/**
 	 * Pull a single mapping into its Nextcloud root folder.
 	 *
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, error:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, error:?string}
 	 */
 	public function pullOne(Mapping $mapping): array {
 		if (!$this->storage->isAvailable($mapping)) {
@@ -176,6 +178,7 @@ final class PullService {
 				$pruned = 0;
 				$rescued = 0;
 				$lost = 0;
+				$reaped = 0;
 
 				// Every `penpot_id` Penpot named during this walk. Anything mirrored
 				// under the root and NOT in here is a candidate for the prune — which
@@ -221,6 +224,16 @@ final class PullService {
 				// stated as control flow rather than as a flag.
 				if ($complete) {
 					$this->prune($root, $mapping, $seen, $pruned, $rescued, $lost);
+
+					// AND THE TRASH, which the prune never looks in. A mirror already in
+					// the Nextcloud trash is not in `collectMirrors()`' listing, so the
+					// prune above cannot see it at all — that is a separate pass over a
+					// separate backend, with its own rules for what may be destroyed
+					// ({@see TrashReconcileService}). Gated on `$complete` for exactly
+					// the reason the prune is: an incomplete listing makes `$seen` an
+					// understatement, and an understated `$seen` reads live designs as
+					// gone.
+					$reaped = $this->trashReconcile->reap($mapping, $seen);
 				}
 
 				return $this->tally([
@@ -233,6 +246,7 @@ final class PullService {
 					'pruned' => $pruned,
 					'rescued' => $rescued,
 					'lost' => $lost,
+					'reaped' => $reaped,
 				]);
 			});
 		} catch (PenpotApiException $e) {
@@ -262,8 +276,8 @@ final class PullService {
 	 * three separate literal arrays, and the version of this that spelled them out
 	 * had already drifted once.
 	 *
-	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, pruned?:int, rescued?:int, lost?:int, error?:?string} $counts
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, error:?string}
+	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, pruned?:int, rescued?:int, lost?:int, reaped?:int, error?:?string} $counts
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, error:?string}
 	 */
 	private function tally(array $counts): array {
 		return $counts + [
@@ -276,6 +290,7 @@ final class PullService {
 			'pruned' => 0,
 			'rescued' => 0,
 			'lost' => 0,
+			'reaped' => 0,
 			'error' => null,
 		];
 	}
@@ -1081,11 +1096,11 @@ final class PullService {
 	 * reconciled, the previous archive is intact, and the next pull retries. Only
 	 * a failure that stopped a whole mapping (`error`) is a failed pull.
 	 *
-	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, error:?string}> $results
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, status:string, message:?string}
+	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, error:?string}> $results
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, status:string, message:?string}
 	 */
 	private function finalise(array $results): array {
-		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0, 'pruned' => 0, 'rescued' => 0, 'lost' => 0];
+		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0, 'pruned' => 0, 'rescued' => 0, 'lost' => 0, 'reaped' => 0];
 		$errors = [];
 		foreach ($results as $res) {
 			foreach (array_keys($total) as $key) {

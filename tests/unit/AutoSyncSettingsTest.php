@@ -39,6 +39,15 @@ use PHPUnit\Framework\TestCase;
  * combination is correct for reasons that are not visible in the code, and a
  * plausible-looking edit (INTERNAL storage, a `'0'` default, dropping the handlers)
  * would revert it silently. {@see AutoSyncSettings} carries the full reasoning.
+ *
+ * ## AND THEY ARE NOT ENOUGH ON THEIR OWN — THE REAL RULE IS APP-WIDE
+ *
+ * This whole file passed while the toggle was broken, twice, because core answers
+ * `getStorageType()` from the FIRST registered form in the app whatever field was
+ * asked about. `InstanceSettings` said INTERNAL, so nothing ever asked this card
+ * what its storage was and every assertion below was true and irrelevant.
+ * {@see DeclarativeStorageTypeTest} pins the invariant that actually holds the
+ * behaviour up; these stay because this card's own shape still has to be right.
  */
 final class AutoSyncSettingsTest extends TestCase {
 	private IAppConfig $config;

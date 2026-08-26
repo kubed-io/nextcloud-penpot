@@ -43,11 +43,18 @@ use Psr\Log\LoggerInterface;
  *      brings it back with its **id, revision, history and deep links intact**
  *      (§6.49, re-confirmed §C6.11). Lossless, and always preferred.
  *   3. **The design is gone for good** — the grace window closed, or someone
- *      purged it. All that is left is the archive in a `sync` mirror, and
- *      importing it mints a NEW id (§6.20: a purged id cannot be resurrected,
- *      tested directly). That is `restore.feature`'s territory and is **NOT
- *      BUILT YET** — so this class says so, in the log, naming what it would
- *      cost. It never quietly does nothing.
+ *      destroyed it. All that is left is the archive in a `sync` mirror, so the
+ *      archive is IMPORTED into the project the file came back into and the
+ *      restore finishes ({@see ImportService}). The new design necessarily wears
+ *      a NEW id (§6.20: a purged id cannot be resurrected, tested directly),
+ *      which the spec states rather than hides.
+ *
+ * Layer 3 used to stop at a log line and a bell entry saying the design was gone.
+ * `features/AGENTS.md#a-restore-into-a-mapping-imports-what-penpot-no-longer-has`
+ * has the reversal in full; the short version is that the file lands back INSIDE
+ * A MAPPING, and an archive arriving inside a mapping is an import whatever
+ * gesture carried it (§6.33) — refusing here was the one arrival that left a
+ * mapped folder holding a design Penpot had never heard of.
  *
  * ## `end` IS NOT SUCCESS. THE IDS ARE. AND THE IDS ARE NOT SUCCESS EITHER.
  *
@@ -148,6 +155,7 @@ final class RestoreService {
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
 		private readonly PersonalTokenService $personalTokens,
+		private readonly ImportService $imports,
 		private readonly SyncNotifier $notifier,
 		private readonly LoggerInterface $logger,
 		// Injectable ONLY so the unit tests need not pay it. The settle is a real
@@ -197,8 +205,8 @@ final class RestoreService {
 		try {
 			if (!$this->isInPenpotTrash($teamId, $penpotId)) {
 				// Layer 1 or layer 3 — either way there is nothing for the restore
-				// command to do, and which one it is decides what the user is told.
-				$this->reportUnrestorable($node, $teamId, $penpotId);
+				// command to do, and which one it is decides what happens instead.
+				$this->settleOutsideThePenpotTrash($node, $teamId, $penpotId);
 
 				return;
 			}
@@ -424,15 +432,15 @@ final class RestoreService {
 	}
 
 	/**
-	 * The design is not in Penpot's trash. Say which of the two reasons it is.
+	 * The design is not in Penpot's trash. Tell the two reasons apart and act.
 	 *
 	 * This costs one project listing, and only on the uncommon path — the ordinary
 	 * trash-then-restore round trip goes through layer 2 and never gets here. It
-	 * buys the difference between "nothing to do, you are already whole" and "the
-	 * design is gone and this file is now the only copy", which are not remotely
-	 * the same message.
+	 * buys the difference between "nothing to do, you are already whole" (layer 1)
+	 * and "there is no design left, so make one from the archive" (layer 3), which
+	 * are not remotely the same act.
 	 */
-	private function reportUnrestorable(File $node, string $teamId, string $penpotId): void {
+	private function settleOutsideThePenpotTrash(File $node, string $teamId, string $penpotId): void {
 		// The SAME resolution layer 2 confirms with, Drafts fallback and all. An
 		// earlier version asked the resolver alone, which reads `null` for a mirror
 		// at the team root — and then told the user their perfectly healthy Drafts
@@ -452,28 +460,46 @@ final class RestoreService {
 			return;
 		}
 
-		// Layer 3. Stated rather than swallowed: the archive this file may hold is
-		// now the only copy of that design, and re-importing it would mint a new id
-		// (§6.20). See restore.feature.
+		// LAYER 3, AND IT FINISHES THE RESTORE RATHER THAN REPORTING IT UNFINISHED.
+		//
+		// The file is back inside a mapping and it holds the archive, so this is the
+		// §6.33 import — the same act `move.feature` performs for an arrival whose id
+		// names nothing. `adopt()` re-stamps the file with the id that comes back;
+		// nothing here has to clear the dead one first.
+		//
+		// $projectId can only be null when the team has no default project, which
+		// means the resolver could not name anywhere to put it. Importing into a
+		// guess is worse than not importing.
+		if ($projectId !== null && $this->imports->adopt($node, $projectId, $teamId) !== null) {
+			$this->logger->info('penpot_sync restore: Penpot had nothing left to restore, so the archive was imported', [
+				'app' => Application::APP_ID,
+				'was' => $penpotId,
+				'project' => $projectId,
+				'file' => $node->getName(),
+			]);
+
+			return;
+		}
+
+		// NOTHING TO IMPORT, so this really is the outcome the old layer 3 always
+		// reported: the design is gone and the file is what is left of it. Reached by
+		// a mirror whose export never landed (an empty `.penpot` is a create, not an
+		// archive), or by a Penpot that refused the bytes — {@see ImportService} has
+		// already said which, in the log and in the bell.
 		$this->logger->warning(
-			'penpot_sync restore: the design is gone from Penpot and is not in its trash — the '
-			. 'grace window has closed or it was permanently deleted. The mirror is back in '
-			. 'Nextcloud, but nothing was restored in Penpot; re-importing the archive is not '
-			. 'built yet and would create a design with a NEW id.',
+			'penpot_sync restore: the design is gone from Penpot and is not in its trash, and the '
+			. 'mirror holds no archive to import — the file is back in Nextcloud on its own',
 			[
 				'app' => Application::APP_ID,
 				'penpot_id' => $penpotId,
+				'project' => $projectId,
 				'file' => $node->getName(),
 			],
 		);
 
-		// AND TOLD TO THE PERSON WHO RESTORED IT. `restore.feature` asks for exactly
-		// this — *"the app reports that the design is gone and the file is now the
-		// only copy"* — and until the notifier existed there was nowhere for that
-		// report to go, so the sentence described a log line only an admin would ever
-		// read. This is the one restore outcome a user must actually be told about:
-		// their file came back and looks entirely normal, and the thing it used to
-		// mirror no longer exists.
+		// AND TOLD TO THE PERSON WHO RESTORED IT. This is the one restore outcome a
+		// user must actually be told about: their file came back and looks entirely
+		// normal, and the thing it used to mirror no longer exists.
 		$this->notifier->restoredWithoutItsDesign(
 			$this->personalTokens->actingUserId(),
 			$node->getId(),

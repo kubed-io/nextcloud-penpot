@@ -1243,6 +1243,10 @@ files most worth keeping, once the grace window closes.
 
 ### A design purged in Penpot still only reaches the Nextcloud trash
 
+**REVERSED, with the section below it — the trash entry is now reaped too. See
+[a design destroyed in Penpot purges its trashed mirror](#a-design-destroyed-in-penpot-purges-its-trashed-mirror).**
+Only the §C6.16 note under it still holds.
+
 The design is gone from every Penpot listing AND from its trash, so nothing
 about it can ever come back — and the mirror is still only trashed. This is
 the case where the local file is genuinely the last copy of that design,
@@ -1255,6 +1259,14 @@ can still succeed for seconds afterwards. Whether the snapshot lands is
 Penpot's timing, not our behaviour.
 
 ### A mirror already in the Nextcloud trash is invisible to the pull
+
+**REVERSED — see `designs/purge.feature`'s
+[a design destroyed in Penpot purges its trashed mirror](#a-design-destroyed-in-penpot-purges-its-trashed-mirror),
+which says what replaced it and why.** The pull now has a trash pass. What
+survives from this section is its safety property, not its field of view: the
+reap purges only what Penpot can be made to say is GONE, and every uncertain
+answer leaves the entry alone. Kept below as written, because the argument it
+makes is the one the reversal had to answer.
 
 ── the reconciler's field of view: VISIBLE FILES, and nothing else ───────
 
@@ -3393,12 +3405,109 @@ be in three states when a mirror comes back, and each needs something different:
    history and links. Nothing is imported.
 2. **Already back** — someone rescued it in Penpot first. Nothing was lost
    remotely, so nothing is sent; a second restore would be a second design.
-3. **Gone for good** — past the grace window there is nothing to put back. The
-   mirror still holds the archive, so the content is not lost, but importing it
-   would make a NEW design with a new id and no history. That is a different
-   gesture, and not one a restore performs on the user's behalf.
+3. **Gone for good** — past the grace window, or destroyed. There is nothing to
+   put back at the old id, so the archive is IMPORTED and the design starts again.
+   See the section below.
 
 Different end states, so three scenarios rather than three Examples rows.
+
+### A restore into a mapping imports what Penpot no longer has
+
+**This reverses layer 3, and the old answer was the deceptive one.** It used to say
+that importing the archive "would make a NEW design with a new id and no history,
+which is a different gesture, and not one a restore performs on the user's
+behalf" — so the restore put the file back, notified the user that their design
+was gone, and stopped. The scenario asserted `the "Stay Put" Penpot project holds
+no design named "Lost"`.
+
+Two things are wrong with that. First, **the file lands inside a mapping**, and
+`move.feature` already settled what an archive arriving inside a mapping is: an
+import (§6.33), whichever gesture carried it. A restore that refuses is the only
+arrival in the app that leaves a mapped folder holding a design Penpot has never
+heard of — the exact desynced state the mapping exists to prevent. Second, the
+user asked for their design back and the app is holding the only copy of it. A
+bell entry saying "it is gone, this file is all you have" is a report about a
+thing the app could have simply done.
+
+So layer 3 finishes the restore: import the archive into the project the file came
+back into, and stamp the id that comes back. The **new id** is honest and stays
+stated in the spec (§6.20 — a Penpot design cannot be resurrected at the id it
+had), which is why the metadata row reads `a new one, never the one it arrived
+with` rather than `the original id`. Nothing is lost that was not already lost
+when the design was destroyed.
+
+**What this does NOT change.** Layers 1 and 2 still come first and are still
+preferred, in that order — an import is the last resort, never the shortcut. A
+design merely in Penpot's trash is restored losslessly, and a design that never
+left is not touched at all. Reaching the import means the app has already proven
+Penpot has nothing to restore.
+
+### A design destroyed in Penpot purges its trashed mirror
+
+A mirror belongs in the Nextcloud trash only while there is a design in Penpot for
+it to be a mirror OF. Destroy the design and the trash entry stops meaning
+anything: the restore beside it can no longer bring that design back, only import
+a new one. So the purge is mirrored like every other gesture in this lifecycle,
+and the trash is finally symmetrical in both directions.
+
+**This reverses the rule that used to sit here, and the old one was not silly.** It
+was *a mirror already in the Nextcloud trash is invisible to the pull* — the
+reconciler walks the mapped folder's listing, so a trashed mirror was not merely
+spared, it was NOT SEEN AT ALL, and a whole class of question stopped existing
+because nothing was looking. The stated reason was that once Penpot has destroyed
+the design the trashed file is the LAST COPY OF IT IN EXISTENCE, and reaching in
+to delete that, on a schedule, unprompted, is the most destructive thing this app
+could do.
+
+That argument is right about the stakes and wrong about the gesture. Destroying a
+design in Penpot is not something anyone does by accident on a schedule — it is
+the second, deliberate half of a two-step delete, by someone who already trashed
+it once. It is the same gesture Nextcloud spells "empty the trash", which this app
+has always answered by destroying the design. Refusing to answer it in the other
+direction was not caution, it was asymmetry. **Both siblings made this cut first**
+— n8n's `TrashReconcileService` carries the same reversal in its own words, and
+its note names penpot as the sibling that had settled the old rule.
+
+What survives from the old rule is its actual content: **never guess.** The reap
+purges only on three answers agreeing: absent from the projects the pull just
+listed, absent from the team's Penpot trash, and a definite not-found from
+`get-file-summary`. None of the three is sufficient alone, and any uncertainty —
+an unreachable Penpot, a 500, a listing that could not be read — spares the entry
+for the next pull to ask about again. The old rule bought safety by never looking;
+this one buys it by looking carefully.
+
+**Read off the running backend rather than inferred** (`app/rpc/commands/files.clj`
+and `app/db.clj` in the backend jar):
+
+- `permanently-delete-team-files` does `db/update! :file {:deleted-at request-at}`
+  and submits a `delete-object` worker task. So the row survives the call and is
+  collected later — both states have to read as "gone".
+- `get-team-deleted-files` filters `f.deleted_at > now`, so a destroyed design
+  drops out of the trash listing **immediately**, while an ordinarily trashed one
+  (`deleted_at` a week out) stays. **That is the difference the reap turns on**,
+  and it is the only place in the API where the two are distinguishable.
+- Not from a single-file probe, which was the first idea: `get-file-info` looked
+  perfect — `::rpc/auth false`, returns `{:id, :deleted-at}` — until `db/get`
+  turned out to default `::remove-deleted` to true, and `is-row-deleted?` is
+  `(some? deleted-at)`. Any `deleted-at` at all, past or future, and the row is
+  dropped and the command 404s. So it answers exactly what `get-file-summary`
+  already answers, and neither can tell trashed from destroyed.
+
+**AND ALL THREE CAN BE WRONG AT ONCE.** §6.49/§C6.15: Penpot's restore returns
+before its transaction settles, and inside that window a design being restored is
+missing from the project listing, missing from the trash listing, and NOT-FOUND to
+the probe. Every check agrees and every one is wrong — and the pass runs inside a
+pull, which is exactly what follows a restore. So a mirror judged gone is asked
+about a second time after the window, and only agreement reaps it. Paid once per
+candidate, which in the steady state is never.
+
+**The price the old rule quietly paid, and this one does not fix.** A design
+restored in Penpot while its old mirror sits in the trash still gets a NEW mirror
+beside the trashed one — the pull cannot re-adopt what it does not look for. n8n's
+service reaps AND restores; this one only reaps. `Restore a design in Penpot while
+its file is in the trash` passes either way, because the trashed twin is not in
+the folder listing it asserts on, so nothing in the spec demands the other half
+yet. Named here so the next round knows it is a fork and not an oversight.
 
 ### Restoring: what this feature stopped claiming
 

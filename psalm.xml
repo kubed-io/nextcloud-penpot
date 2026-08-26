@@ -65,6 +65,11 @@
 					silenced bug. Same entry, same reasoning, as nextcloud-grafana.
 				-->
 				<referencedClass name="OCA\Files_Trashbin\Trash\ITrashManager" />
+				<!-- Its items, for the same reason: {@see TrashControl::listTrashed()}
+					guards on `instanceof` and converts straight to this app's own
+					{@see OCA\PenpotSync\Service\TrashedFile}, so the interface never
+					leaves that one method. Same entry as nextcloud-n8n. -->
+				<referencedClass name="OCA\Files_Trashbin\Trash\ITrashItem" />
 			</errorLevel>
 		</UndefinedClass>
 		<!--

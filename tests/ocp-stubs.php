@@ -65,6 +65,15 @@ namespace OCP {
 			public function getValueBool(string $app, string $key, bool $default = false, bool $lazy = false): bool;
 
 			public function setValueBool(string $app, string $key, bool $value, bool $lazy = false): bool;
+
+			// THE RETYPE PAIR. AppConfig will not change a key's type in place, so
+			// turning the radio era's string `schedule_enabled` into a real bool means
+			// removing the row and writing it again — which is what
+			// {@see \OCA\PenpotSync\Migration\RetypeScheduleToggle} does, and why it
+			// has to ask whether the key is there before deleting anything.
+			public function hasKey(string $app, string $key, ?bool $lazy = false): bool;
+
+			public function deleteKey(string $app, string $key): void;
 		}
 	}
 	// PersonalTokenService stores per-USER values, which is a different config
@@ -84,6 +93,11 @@ namespace OCP {
 	if (!interface_exists(IUserManager::class, false)) {
 		interface IUserManager {
 			public function userExists(string $uid): bool;
+
+			// {@see \OCA\PenpotSync\Service\TrashControl::listTrashed()} needs the
+			// IUser itself, because `ITrashManager::listTrashRoot()` is scoped to one.
+			// `$uid` is untyped to match core, which never added a type here.
+			public function get($uid): ?IUser;
 		}
 	}
 	// PersonalTokenService answers "whose token attributes this write?", so it
@@ -132,6 +146,38 @@ namespace OCP\App {
 	if (!interface_exists(IAppManager::class, false)) {
 		interface IAppManager {
 			public function isEnabledForUser(string $appId): bool;
+		}
+	}
+}
+
+namespace OCP\Migration {
+	// The repair-step pair, for {@see \OCA\PenpotSync\Migration\RetypeScheduleToggle}
+	// — the one migration this app unit-tests, because it DELETES a user's setting
+	// and a delete that half-lands is worse than the bug it repairs.
+	//
+	// Both are declaration-only and both match core's signatures exactly, untyped
+	// returns included: `RetypeScheduleToggle::run()` narrows to `: void`, which is
+	// legal against an untyped declaration and would NOT be against `: mixed`.
+	if (!interface_exists(IOutput::class, false)) {
+		interface IOutput {
+			public function debug(string $message): void;
+
+			public function info($message);
+
+			public function warning($message);
+
+			public function startProgress($max = 0);
+
+			public function advance($step = 1, $description = '');
+
+			public function finishProgress();
+		}
+	}
+	if (!interface_exists(IRepairStep::class, false)) {
+		interface IRepairStep {
+			public function getName();
+
+			public function run(IOutput $output);
 		}
 	}
 }

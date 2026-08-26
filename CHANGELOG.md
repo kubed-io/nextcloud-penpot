@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Restoring a design whose Penpot design is gone now brings the design back too.** It used to put the file back and tell you the design was lost — while holding the only copy of it. The file's own archive is imported instead, so the restore finishes. The design starts a fresh history, because Penpot cannot revive a design at the id it had.
+
+- **Destroying a design in Penpot now empties its file out of your Nextcloud trash.** The file used to sit there offering a restore that could not work. It goes only when Penpot can be made to say the design is really gone — a design that was merely moved, or an unreachable Penpot, leaves it exactly where it is.
+
 - **The scheduled-sync toggle is a real checkbox again, and it saves.** It had been a pair of radio buttons ("Off — mirror only when run manually" / "On — pull from Penpot automatically") to work around a Nextcloud bug that silently discarded a checkbox's value. The bug is stepped past rather than worked around now, and an instance that was already switched on stays switched on.
 
 - **Dragging a design out of every mapped folder no longer leaves it adrift in Penpot.** The design used to stay sitting in its project, still shared with the team and indistinguishable from live work, while nothing mirrored it any more. It now goes to Penpot's trash, and the file keeps the design's identity — so dragging it back into a mapped folder brings the same design back, with its full history. If it is past Penpot's grace period, the file's own copy becomes a new design instead, so nothing is ever lost.

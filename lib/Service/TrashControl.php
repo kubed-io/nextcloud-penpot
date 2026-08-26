@@ -9,13 +9,17 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Service;
 
+use OCA\Files_Trashbin\Trash\ITrashItem;
 use OCA\Files_Trashbin\Trash\ITrashManager;
 use OCA\PenpotSync\AppInfo\Application;
+use OCP\Files\FileInfo;
+use OCP\IUserManager;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
 /**
- * Deleting a file so that it does NOT land in the Nextcloud trash.
+ * Every conversation this app has with the Nextcloud trash: deleting a file so it
+ * does NOT land there, reading what is in there, and destroying one entry.
  *
  * ## THE TWO GESTURES THAT NEED THIS, AND WHY THE TRASH IS WRONG FOR THEM
  *
@@ -54,11 +58,22 @@ use Psr\Log\LoggerInterface;
  * pause and `delete()` is already permanent, so the fallback is to run the callback
  * unchanged.
  *
+ * ## THE TRASH APP'S TYPES STOP HERE
+ *
+ * {@see listTrashed()} and the operation it hands back are the READING half, used by
+ * {@see TrashReconcileService} to reap mirrors whose design Penpot no longer has.
+ * They answer in {@see TrashedFile}, this app's own shape, for the reason above: a
+ * signature naming `ITrashItem` is a file the unit suite cannot load and psalm
+ * cannot resolve. One class pays that cost; everything downstream is ordinary code.
+ *
+ * Both halves are backend-agnostic in the same way and for the same reason.
+ *
  * Ported from the n8n sibling, where `SyncService::removeMirror` first needed it.
  */
 final class TrashControl {
 	public function __construct(
 		private readonly ContainerInterface $container,
+		private readonly IUserManager $userManager,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -89,6 +104,95 @@ final class TrashControl {
 		} finally {
 			$manager->resumeTrash();
 		}
+	}
+
+	/**
+	 * Every file in the ROOT of $uid's trash — their home trash AND the trash of
+	 * every Team Folder they can see, because `ITrashManager::listTrashRoot()` folds
+	 * in each registered backend.
+	 *
+	 * ROOT ONLY, DELIBERATELY. A file trashed on its own is a root item; one that
+	 * went in as part of a deleted FOLDER is nested inside it, and this does not
+	 * recurse into those. Descending would mean destroying single files out of the
+	 * middle of a folder the user trashed as a unit, leaving them a restore that
+	 * silently comes back incomplete. A folder is restored or purged whole.
+	 *
+	 * Costs one query per backend — a directory listing for the home, one indexed
+	 * lookup for the Team Folders — not one per entry. The caller filters by name and
+	 * metadata before spending anything on what comes back.
+	 *
+	 * Answers `[]` for an unknown user, or when there is no trash app at all: an
+	 * instance without `files_trashbin` cannot have a trashed mirror to reap.
+	 *
+	 * ## THE FILESYSTEM HAS TO BE SET UP FIRST, OR A TEAM FOLDER'S TRASH IS INVISIBLE
+	 *
+	 * `listTrashRoot()` reads nothing from the Team Folders backend until the user's
+	 * mounts exist — and it answers an EMPTY LIST rather than failing, which is the
+	 * worst possible shape for a bug: the reconcile then decides there is nothing to
+	 * reap, reports zero, and looks like it is working. The n8n sibling measured this
+	 * on a live instance, where the same trash answered 0 entries without the setup
+	 * and 4 with it, while every scenario stayed green in CI — because all of them
+	 * ran against the plain admin folder.
+	 *
+	 * The pull happens to satisfy it already ({@see StorageService::ensureRoot()}
+	 * sets the actor's filesystem up first), but a feature standing on a side effect
+	 * of an unrelated call is a regression waiting for the day that call moves. It is
+	 * idempotent and it is one line, so it is stated here rather than assumed.
+	 *
+	 * @return list<TrashedFile>
+	 */
+	public function listTrashed(string $uid): array {
+		$manager = $this->trashManager();
+		if ($manager === null) {
+			return [];
+		}
+		$user = $this->userManager->get($uid);
+		if ($user === null) {
+			return [];
+		}
+		\OC_Util::setupFS($uid);
+
+		try {
+			$items = $manager->listTrashRoot($user);
+		} catch (\Throwable $e) {
+			// A trash we cannot read is not a reason to fail the pull that asked. The
+			// reconcile finds nothing this time round and runs again next tick.
+			$this->logger->warning('penpot_sync: could not list the trash', [
+				'app' => Application::APP_ID,
+				'user' => $uid,
+				'exception' => $e,
+			]);
+
+			return [];
+		}
+
+		$out = [];
+		foreach ($items as $item) {
+			if (!$item instanceof ITrashItem || $item->getType() !== FileInfo::TYPE_FILE) {
+				continue;
+			}
+			// `FileInfo::getId()` is `int|null`. Without an id there is no metadata to
+			// read, so there is no way to know whether this is one of ours — and a file
+			// this app cannot identify is never a file it may destroy.
+			$fileId = $item->getId();
+			if ($fileId === null) {
+				continue;
+			}
+
+			$out[] = new TrashedFile(
+				$fileId,
+				// The ORIGINAL name. `getName()` answers the trash's own spelling, which
+				// carries the deletion timestamp AFTER the extension — the exact shape
+				// that makes `str_ends_with($name, '.penpot')` false for every trashed
+				// file, and that already cost the purge hook a release in the sibling.
+				basename($item->getOriginalLocation()),
+				static function () use ($manager, $item): void {
+					$manager->removeItem($item);
+				},
+			);
+		}
+
+		return $out;
 	}
 
 	private function trashManager(): ?ITrashManager {

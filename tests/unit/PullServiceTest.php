@@ -23,8 +23,10 @@ use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCA\PenpotSync\Service\TrashControl;
+use OCA\PenpotSync\Service\TrashReconcileService;
 use OCP\Files\File;
 use OCP\Files\Folder;
+use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Log\NullLogger;
@@ -121,7 +123,16 @@ final class PullServiceTest extends TestCase {
 			// is not loaded in the unit environment, so `withoutTrash()` falls
 			// through to running the callback — which is exactly its documented
 			// behaviour on an instance without the trash app.
-			new TrashControl($this->createStub(ContainerInterface::class), new NullLogger()),
+			new TrashControl(
+				$this->createStub(ContainerInterface::class),
+				$this->createStub(IUserManager::class),
+				new NullLogger(),
+			),
+			// The trash pass is covered on its own in TrashReconcileServiceTest; here
+			// it is a mock so no test in this file has to arrange a trash it never
+			// mentions. `reap()` returns 0 by default, which is the answer for every
+			// scenario below.
+			$this->createMock(TrashReconcileService::class),
 			new NullLogger(),
 		);
 	}

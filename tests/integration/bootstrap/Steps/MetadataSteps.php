@@ -300,7 +300,14 @@ trait MetadataSteps {
 				if (($actual ?? '') === '') {
 					return 'expected a new design id, found nothing';
 				}
-				if ($this->idArrivedWith !== '' && $actual === $this->idArrivedWith) {
+				// TWO WAYS TO HAVE "ARRIVED", because two gestures reach this row. A
+				// drag into a mapping arrived carrying an id ({@see MoveSteps}); a
+				// restore arrived carrying whatever it held when it was trashed, which
+				// is what every gesture step captures as `idBeforeGesture`. Both are
+				// the id the file came in with, and either one still being on the file
+				// afterwards is the same bug.
+				$arrived = $this->idArrivedWith !== '' ? $this->idArrivedWith : $this->idBeforeGesture;
+				if ($arrived !== '' && $actual === $arrived) {
 					return "expected a NEW id; the file still carries the one it arrived with ({$actual})";
 				}
 				return null;
