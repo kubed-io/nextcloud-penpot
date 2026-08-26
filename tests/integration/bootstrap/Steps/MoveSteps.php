@@ -102,8 +102,47 @@ trait MoveSteps {
 	 * arrangements died this way while the first row's real failure scrolled past.
 	 */
 	private function clearTheWay(string $path): void {
-		if ($this->davExists($path)) {
-			$this->davDelete($path);
+		if (!$this->davExists($path)) {
+			return;
+		}
+
+		// ITS DESIGN GOES TOO, AND THAT IS THE WHOLE POINT OF THIS METHOD.
+		//
+		// Deleting the file alone is what the first version did, and it made the
+		// scenario fail in a way that looked exactly like the app misbehaving: the
+		// leftover is still a TRACKED file, so the delete listener dutifully moved
+		// its design into Penpot's trash — a design carrying the same NAME as the one
+		// this row is about. `the design "Going Loose" is not in Penpot's trash` is a
+		// name lookup, so it found the ghost and reported that the untrash had not
+		// worked, while the log said plainly that it had.
+		//
+		// So the debris is destroyed rather than trashed. The id comes off the file
+		// before it goes, because after the delete there is nothing left to ask.
+		$id = $this->davReadMetadata($path, 'penpot_id') ?? '';
+		$this->davDelete($path);
+
+		if ($id === '' || $this->parkedTeamId === '') {
+			return;
+		}
+
+		// WAITED FOR, not assumed. `delete-file` answers before the design shows up
+		// in the trash listing (~0.1–0.3s, measured in RestoreService), so reading it
+		// straight away can miss — and a miss here leaves the ghost behind, which is
+		// the exact failure this method exists to stop.
+		$this->until(
+			fn (): bool => $this->inTeamTrash($this->parkedTeamId, $id),
+			fn (): string => "the leftover design {$id} never reached Penpot's trash to be purged",
+			5.0,
+		);
+
+		// Only ever an id this suite just put in the trash itself — the same rule the
+		// app holds itself to (§C6.11: `permanently-delete-team-files` has no safety
+		// of its own and will destroy a LIVE design if handed one).
+		if ($this->inTeamTrash($this->parkedTeamId, $id)) {
+			$this->penpotRpc('permanently-delete-team-files', [
+				'team-id' => $this->parkedTeamId,
+				'ids' => [$id],
+			]);
 		}
 	}
 
