@@ -98,6 +98,17 @@ final class DeclarativeStorageTypeTest extends TestCase {
 	 * Each takes different collaborators and none of them are exercised here —
 	 * `getSchema()` is a declaration — so everything is a stub.
 	 *
+	 * ## FILTERED ON THE SOURCE TEXT, NOT ON `is_a()`
+	 *
+	 * `lib/Settings/` also holds the CLASSIC panels (`AdminTest`, `MappingSettings`,
+	 * `SyncSettings`) and the two sections. `is_a($class, …, true)` autoloads every
+	 * one of them to answer, and `AdminTest` implements `OCP\Settings\IDelegatedSettings`,
+	 * which `nextcloud/ocp` does not ship — so the reflection fatals before any
+	 * assertion runs. Reading the file first is not a shortcut around that: a
+	 * declarative form has to NAME the interface to implement it, so the text is a
+	 * sound filter, and it keeps this test from loading classes it has no business
+	 * touching.
+	 *
 	 * @return array<string, IDeclarativeSettingsForm>
 	 */
 	private function forms(): array {
@@ -105,11 +116,12 @@ final class DeclarativeStorageTypeTest extends TestCase {
 
 		$built = [];
 		foreach (glob(__DIR__ . '/../../lib/Settings/*.php') ?: [] as $path) {
-			/** @var class-string $class */
-			$class = 'OCA\\PenpotSync\\Settings\\' . basename($path, '.php');
-			if (!is_a($class, IDeclarativeSettingsForm::class, true)) {
+			if (!str_contains((string)file_get_contents($path), 'IDeclarativeSettingsForm')) {
 				continue;
 			}
+
+			/** @var class-string<IDeclarativeSettingsForm> $class */
+			$class = 'OCA\\PenpotSync\\Settings\\' . basename($path, '.php');
 
 			$built[$class] = match ($class) {
 				InstanceSettings::class => new InstanceSettings($config, $this->createStub(ICrypto::class)),

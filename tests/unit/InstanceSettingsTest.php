@@ -13,7 +13,6 @@ use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Settings\InstanceSettings;
 use OCP\IAppConfig;
-use OCP\IUser;
 use OCP\Security\ICrypto;
 use PHPUnit\Framework\TestCase;
 
