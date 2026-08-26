@@ -50,9 +50,11 @@ use OCP\Migration\IRepairStep;
  * across, so an instance that had the schedule switched on stays switched on: this
  * step changes how the answer is stored and never what the answer is.
  *
- * Idempotent, and cheap enough to run on every upgrade: an instance whose key is
- * already bool-typed reads it, writes the same value back, and `setTypedValue()`
- * returns early without touching the database.
+ * **A delete is not a no-op, so it is gated and it is reversible.** A key that can
+ * already take a bool write is left completely alone, and a retype that fails
+ * between the two halves puts the old string back — because a MISSING key reads as
+ * OFF, which would silently stop a schedule that had been running and look like
+ * nothing to do with an upgrade. Idempotent, and free on every run after the first.
  */
 final class RetypeScheduleToggle implements IRepairStep {
 	public function __construct(
@@ -75,23 +77,41 @@ final class RetypeScheduleToggle implements IRepairStep {
 			return;
 		}
 
+		if ($this->alreadyBoolTyped()) {
+			// The ordinary case on every upgrade after the first, and on any instance
+			// that never ran the radio. Nothing to fix, and the delete below is not a
+			// no-op — so it must not run.
+			return;
+		}
+
 		// THROUGH THE READER, so every spelling the key has ever held is understood —
-		// `yes`/`no` from the radio, `1`/`0` from `occ`, or a real bool that needs no
-		// rescue at all. It is the same read the app makes at runtime, so this step
-		// cannot disagree with the behaviour it is preserving.
+		// `yes`/`no` from the radio, `1`/`0` from `occ`. It is the same read the app
+		// makes at runtime, so this step cannot disagree with the behaviour it is
+		// preserving.
 		$enabled = $this->reader->bool(AutoSyncSettings::KEY_ENABLED);
 
 		try {
 			$this->config->deleteKey(Application::APP_ID, AutoSyncSettings::KEY_ENABLED);
+		} catch (\Throwable $e) {
+			// Nothing has changed yet, so there is nothing to undo.
+			$this->giveUp($output, $e);
+
+			return;
+		}
+
+		try {
 			$this->config->setValueBool(Application::APP_ID, AutoSyncSettings::KEY_ENABLED, $enabled);
 		} catch (\Throwable $e) {
-			// A repair step that throws aborts the whole upgrade. The failure mode
-			// here is a settings toggle that keeps misbehaving — bad, and nowhere near
-			// bad enough to refuse to install the app over.
-			$output->warning(
-				'Could not re-store the scheduled-sync toggle as a boolean: ' . $e->getMessage()
-				. '. The schedule still runs; the checkbox in Settings may not save.',
-			);
+			// THE ONE WINDOW WORTH GUARDING. The key is deleted and the replacement
+			// did not land, which is strictly worse than the bug being repaired: a
+			// missing key reads as OFF, so an instance that was pulling on a schedule
+			// would silently stop — and nobody would connect that to an upgrade.
+			//
+			// So it goes back exactly as it was, in meaning AND in type: a string the
+			// reader understands, which leaves the instance no better and no worse
+			// than it started. Raised in review on #46.
+			$this->putItBack($enabled);
+			$this->giveUp($output, $e);
 
 			return;
 		}
@@ -100,5 +120,58 @@ final class RetypeScheduleToggle implements IRepairStep {
 			'Scheduled-sync toggle stored as a boolean (%s).',
 			$enabled ? 'on' : 'off',
 		));
+	}
+
+	/**
+	 * Can this key take a bool write already?
+	 *
+	 * ASKED BY READING, because that is the only way to find out: `IAppConfig`
+	 * exposes no "what type is this key" accessor, and `getValueBool()` raises
+	 * `AppConfigTypeConflictException` on precisely the keys `setValueBool()` would
+	 * refuse. A read that succeeds therefore proves the write will — including for a
+	 * `VALUE_MIXED` key, which both accept.
+	 */
+	private function alreadyBoolTyped(): bool {
+		try {
+			$this->config->getValueBool(Application::APP_ID, AutoSyncSettings::KEY_ENABLED);
+
+			return true;
+		} catch (\Throwable) {
+			return false;
+		}
+	}
+
+	/**
+	 * Restore the pre-repair state after a failed retype.
+	 *
+	 * `yes`/`no` rather than `1`/`0` only because it is what this app's own radio
+	 * wrote; {@see AppConfigReader::bool()} reads either. What matters is that it is
+	 * a STRING, so the key comes back the same shape it was — and if this throws
+	 * too, there is nothing further to try and the warning above is what the admin
+	 * gets.
+	 */
+	private function putItBack(bool $enabled): void {
+		try {
+			$this->config->setValueString(
+				Application::APP_ID,
+				AutoSyncSettings::KEY_ENABLED,
+				$enabled ? 'yes' : 'no',
+			);
+		} catch (\Throwable) {
+			// Deliberately swallowed: this is already the recovery path.
+		}
+	}
+
+	/**
+	 * A repair step that THROWS aborts the whole upgrade, and the worst outcome here
+	 * is a settings toggle that keeps misbehaving — nowhere near bad enough to
+	 * refuse to install the app over. So it reports and returns.
+	 */
+	private function giveUp(IOutput $output, \Throwable $e): void {
+		$output->warning(
+			'Could not re-store the scheduled-sync toggle as a boolean: ' . $e->getMessage()
+			. '. The setting was left as it was, so the schedule behaves exactly as before '
+			. 'this upgrade; the checkbox in Settings may still fail to save.',
+		);
 	}
 }
