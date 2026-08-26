@@ -53,16 +53,15 @@ Feature: Emptying the trash
     # Restored over there, or erased over there — the purge cannot tell and does not
     # need to. Penpot's permanent delete would destroy a LIVE design if handed one.
 
-    # ── RULE: emptying Penpot's trash finishes the delete from that side ──────
+    # ── RULE: destroying a design in Penpot purges its trashed mirror ─────────
+    # notes: ../AGENTS.md#a-design-destroyed-in-penpot-purges-its-trashed-mirror
 
-  # @unbuilt — nothing in this app can reach a Nextcloud trash ENTRY. Reading that
-  # trash is a deferred slice (§6.37), noted in PullService's own docblock.
-  @in-penpot @gesture @unbuilt
-  Scenario Outline: Empty Penpot's trash in Penpot
+  @in-penpot @gesture
+  Scenario Outline: Permanently delete a design in Penpot
     Given a design file named "Erased Upstream.penpot" in "<source>"
     And the file is in the Nextcloud trash
     And its design is in Penpot's trash
-    When someone empties Penpot's trash
+    When someone permanently deletes the design in Penpot
     Then the file is gone from the Nextcloud trash
 
     Examples: both storage kinds, because a Team Folder's trash is a different one
@@ -71,7 +70,7 @@ Feature: Emptying the trash
       | Shared/Purge Me |
 
     # The purge came from the other side, and it is the same purge: the design is
-    # gone for good, so the trashed mirror has nothing left to be restored to.
+    # gone for good, so a trash entry offering to restore it offers nothing.
 
     # ── RULE: a file the app never mirrored is Nextcloud's alone ──────────────
 

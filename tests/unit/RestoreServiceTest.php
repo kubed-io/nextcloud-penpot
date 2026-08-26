@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
@@ -48,8 +49,8 @@ use Psr\Log\NullLogger;
  * check right mattered less than asking the right thing.
  *
  * The other axis is layer selection — the app must never spend a write on a
- * design that never left, and must never quietly do nothing for one that is
- * gone for good.
+ * design that never left, and must finish the restore for one that is gone for
+ * good rather than reporting it unfinished.
  */
 final class RestoreServiceTest extends TestCase {
 	private const PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
@@ -65,6 +66,7 @@ final class RestoreServiceTest extends TestCase {
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
+	private ImportService $imports;
 	private SyncNotifier $notifier;
 	private RestoreService $restores;
 
@@ -73,6 +75,7 @@ final class RestoreServiceTest extends TestCase {
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
+		$this->imports = $this->createMock(ImportService::class);
 
 		$this->notifier = $this->createMock(SyncNotifier::class);
 		$this->restores = new RestoreService(
@@ -80,6 +83,7 @@ final class RestoreServiceTest extends TestCase {
 			$this->metadata,
 			$this->resolver,
 			$this->tokens(),
+			$this->imports,
 			$this->notifier,
 			new NullLogger(),
 			// No settle: Penpot is a mock here, so there is no in-flight delete to
@@ -197,6 +201,7 @@ final class RestoreServiceTest extends TestCase {
 			$this->metadata,
 			$this->resolver,
 			$this->tokens(),
+			$this->createMock(ImportService::class),
 			$this->createMock(SyncNotifier::class),
 			new NullLogger(),
 			// Long enough to poll several times at the 250ms interval, short enough
@@ -319,6 +324,7 @@ final class RestoreServiceTest extends TestCase {
 			->willReturn([['id' => self::PENPOT_ID]]);
 
 		$this->client->expects($this->never())->method('restoreDeletedFiles');
+		$this->imports->expects($this->never())->method('adopt');
 
 		$this->restores->onRestored($this->file());
 	}
@@ -345,28 +351,74 @@ final class RestoreServiceTest extends TestCase {
 		$this->restores->onRestored($this->file());
 	}
 
-	// ── layer 3: it is gone, and that is not built ──────────────────────────
+	// ── layer 3: it is gone, so the archive becomes the design ──────────────
 
 	/**
-	 * Past the grace window, or permanently deleted. Importing the archive is
-	 * `restore-design.feature`'s slice and does not exist — so nothing is sent, and the
-	 * one thing this must not do is call the restore command anyway on the chance
-	 * it works. §6.20: a purged id cannot be resurrected, tested directly.
+	 * Past the grace window, or destroyed. The file is back INSIDE A MAPPING and it
+	 * holds the archive, so the restore finishes as an import (§6.33).
+	 *
+	 * The two negatives are the load-bearing half. `restoreDeletedFiles` must not be
+	 * called on the chance it works — §6.20: a purged id cannot be resurrected,
+	 * tested directly — and the user must not be told their design is gone when the
+	 * app has just put one back for them.
 	 */
-	public function testADesignThatIsGoneForGoodIsNotSilentlyRecreated(): void {
+	public function testADesignThatIsGoneForGoodIsImportedFromTheArchive(): void {
 		$this->givenStamped();
 		$this->client->method('deletedFiles')->willReturn([]);
 		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
 		$this->client->method('getProjectFiles')->with(self::PROJECT)->willReturn([]);
 
-		$this->client->expects($this->never())->method('restoreDeletedFiles');
+		// INTO THE PROJECT THE FILE CAME BACK INTO, carrying the team — the same
+		// arguments an arrival through `move.feature` is imported with.
+		$this->imports->expects($this->once())->method('adopt')
+			->with($this->anything(), self::PROJECT, self::TEAM)
+			->willReturn('a3fd10a0-fb1c-8118-8008-7c30b6d9a6d2');
 
-		// AND THE USER IS TOLD. This is the one restore outcome that looks like a
-		// complete success from the Files app — the file is back, whole, holding a
-		// valid `.penpot` — while the design it mirrors no longer exists anywhere.
-		// A log line reaches an admin; the person who pressed restore needs to know
-		// their copy is now the only one. Asserted here because the integration
-		// suite cannot read a bell entry (features/AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to).
+		$this->client->expects($this->never())->method('restoreDeletedFiles');
+		$this->notifier->expects($this->never())->method('restoredWithoutItsDesign');
+
+		$this->restores->onRestored($this->file());
+	}
+
+	/**
+	 * A mirror at the team root is imported into DRAFTS, not left unplaceable.
+	 *
+	 * §6.35 again: the team root is a real project with no folder, so the resolver
+	 * reads `null` for it. Layer 2 already resolves that to the default project; the
+	 * import has to use the same answer or a Drafts design would be the one case
+	 * where a restore silently did nothing.
+	 */
+	public function testAMirrorAtTheTeamRootIsImportedIntoDrafts(): void {
+		$this->givenStamped();
+		$this->client->method('deletedFiles')->willReturn([]);
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => self::DRAFTS, 'team-id' => self::TEAM, 'is-default' => true],
+		]);
+		$this->client->method('getProjectFiles')->with(self::DRAFTS)->willReturn([]);
+
+		$this->imports->expects($this->once())->method('adopt')
+			->with($this->anything(), self::DRAFTS, self::TEAM)
+			->willReturn('a3fd10a0-fb1c-8118-8008-7c30b6d9a6d2');
+
+		$this->restores->onRestored($this->file());
+	}
+
+	/**
+	 * NOTHING TO IMPORT IS STILL THE OLD OUTCOME, and it is the only way to reach it.
+	 *
+	 * `adopt()` answers null for a file that holds no archive — a mirror whose export
+	 * never landed — and for one Penpot refused. Either way the design is gone and
+	 * this file is what is left of it, which is the one restore outcome that looks
+	 * like a complete success from the Files app while being nothing of the kind.
+	 */
+	public function testAMirrorWithNoArchiveToImportTellsTheUser(): void {
+		$this->givenStamped();
+		$this->client->method('deletedFiles')->willReturn([]);
+		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
+		$this->client->method('getProjectFiles')->with(self::PROJECT)->willReturn([]);
+		$this->imports->method('adopt')->willReturn(null);
+
 		$this->notifier->expects($this->once())
 			->method('restoredWithoutItsDesign')
 			->with(self::ACTOR, self::FILE_ID, self::FILE_NAME);
@@ -375,19 +427,20 @@ final class RestoreServiceTest extends TestCase {
 	}
 
 	/**
-	 * THE OTHER TWO LAYERS SAY NOTHING, and that is half the claim.
+	 * THE OTHER TWO LAYERS IMPORT NOTHING AND SAY NOTHING, and that is half the claim.
 	 *
-	 * A notification that fired whenever a restore happened would train people to
-	 * ignore it, and layers 1 and 2 are the ordinary cases — the design came back,
-	 * or was never gone. Only the lossy one is worth interrupting someone for.
+	 * An import here would be a second design beside a perfectly good one, which is
+	 * the damage the layer order exists to prevent; a notification that fired on
+	 * every restore would train people to ignore it.
 	 */
-	public function testALosslessRestoreTellsTheUserNothing(): void {
+	public function testALosslessRestoreImportsNothingAndTellsTheUserNothing(): void {
 		$this->givenStamped();
 		$this->givenInPenpotTrash();
 		$this->givenResolvesToProject();
 		$this->client->method('restoreDeletedFiles')->willReturn([self::PENPOT_ID]);
 		$this->client->method('getProjectFiles')->willReturn([['id' => self::PENPOT_ID]]);
 
+		$this->imports->expects($this->never())->method('adopt');
 		$this->notifier->expects($this->never())->method('restoredWithoutItsDesign');
 
 		$this->restores->onRestored($this->file());

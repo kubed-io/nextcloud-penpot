@@ -92,8 +92,8 @@ Feature: Trashing a design
     And the file is gone from "Penpot/Doomed"
     And the file is recoverable from the Nextcloud trash
 
-    # However the design went over there — trashed or erased — its mirror only ever
-    # reaches OUR trash, where the user decides whether it stays.
+    # A delete over there is a trashing over here, and the user decides whether it
+    # stays. Destroying it over there is `purge.feature`'s gesture, not this one.
 
     # ── RULE: a trash that cannot finish leaves the file where it was ─────────
 

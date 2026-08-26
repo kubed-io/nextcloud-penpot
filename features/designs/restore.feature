@@ -55,21 +55,22 @@ Feature: Restoring a design from the trash
     # Nothing was lost remotely, so nothing is sent. A second restore would be a
     # second design.
 
-  # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
-  # @todo — the report travels now; nothing in this suite can read a bell entry.
-  @in-nextcloud @gesture @todo
-  Scenario: Restore a design that is gone from Penpot for good
+  # notes: ../AGENTS.md#a-restore-into-a-mapping-imports-what-penpot-no-longer-has
+  @in-nextcloud @gesture
+  Scenario: Restore a design file when Penpot has no design for it
     Given a design file named "Lost.penpot" in "Penpot/Stay Put"
     And the file is in the Nextcloud trash
-    And its design has been permanently deleted in Penpot
+    And Penpot has no design for it
     When I restore it from the trash
-    Then the "Stay Put" Penpot project holds no design named "Lost"
-    And the app reports that the design is gone and the file is now the only copy
+    Then the file is back in "Penpot/Stay Put"
+    And the design is in the "Stay Put" Penpot project
     And the file holds:
-      | content | an archive |
+      | penpot_id   | a new one, never the one it arrived with |
+      | penpot_mode | the mapping's mode                       |
+      | content     | an archive                               |
 
-    # Past the grace window there is nothing to put back — importing the archive
-    # would be a new design, which is a different gesture. See the notes above.
+    # An archive landing inside a mapping is an import (§6.33), whatever carried it.
+    # A new id because Penpot cannot resurrect the old one (§6.20).
 
     # ── RULE: a file the app never mirrored is Nextcloud's alone ─────────────
     # notes: ../AGENTS.md#restoring-a-file-that-was-never-in-penpot-leaves-penpot-alone
