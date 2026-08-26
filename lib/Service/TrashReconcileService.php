@@ -276,7 +276,7 @@ final class TrashReconcileService {
 	 * above. Only the second look, after the window, tells that apart from a design
 	 * that is really gone.
 	 *
-	 * @param array<string, bool> $seen  ids Penpot named for this mapping's projects
+	 * @param array<string, bool> $seen ids Penpot named for this mapping's projects
 	 * @param array<string, bool> $parked ids in this team's Penpot trash
 	 */
 	private function isGone(string $penpotId, string $teamId, array $seen, array $parked): bool {

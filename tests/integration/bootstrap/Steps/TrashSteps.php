@@ -267,6 +267,33 @@ trait TrashSteps {
 	}
 
 	/**
+	 * Somebody empties Penpot's whole trash, from Penpot.
+	 *
+	 * THE BULK SENTENCE IS STILL A REAL ONE, and it is not the individual purge
+	 * below wearing different words. `projects/purge.feature` needs every design
+	 * under a trashed project folder to go at once — one design going is not that
+	 * claim, and would leave the folder with something left to be restored to.
+	 *
+	 * Its two scenarios are `@todo`, so nothing runs this yet; it exists because a
+	 * step the spec still says has to have a definition, or promoting those rows
+	 * becomes an undefined-step failure rather than a test. Raised in review on #46.
+	 *
+	 * EVERY ID IN THE LISTING, which is both what emptying means and what keeps the
+	 * suite to the rule it holds the app to (§C6.11: the destroy command has no
+	 * safety of its own, so its ids may only ever come from a real trash listing).
+	 *
+	 * @When /^someone empties Penpot's trash$/
+	 */
+	public function someoneEmptiesPenpotsTrash(): void {
+		$team = $this->cursorTeamId();
+		$ids = $this->penpotTrashIds($team);
+		if ($ids !== []) {
+			$this->penpotRpc('permanently-delete-team-files', ['team-id' => $team, 'ids' => $ids]);
+		}
+		$this->theAdminRunsAPull();
+	}
+
+	/**
 	 * Somebody destroys the cursor's design in Penpot, and the sync carries the news.
 	 *
 	 * ONE DESIGN, NOT THE WHOLE BIN. Penpot's UI offers both, and the scenario means

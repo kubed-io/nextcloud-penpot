@@ -128,6 +128,14 @@ this app integrates with.
     </install>
     <post-migration>
       <step>OCA\PenpotSync\Migration\RegisterMimetype</step>
+      <!--
+        Re-stores `schedule_enabled` as a bool for instances that ran the RADIO
+        version of the toggle. IAppConfig refuses to change a key's type, so a
+        string `yes` there makes every save from the settings panel throw. Runs
+        on upgrade only — a fresh install has no key to fix. Idempotent; see
+        lib/Migration/RetypeScheduleToggle.php.
+      -->
+      <step>OCA\PenpotSync\Migration\RetypeScheduleToggle</step>
     </post-migration>
     <uninstall>
       <!-- Mirror image of RegisterMimetype: reverts the core-tree mimetype/icon

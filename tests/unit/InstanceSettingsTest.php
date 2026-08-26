@@ -13,6 +13,8 @@ use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Settings\InstanceSettings;
 use OCP\IAppConfig;
+use OCP\IUser;
+use OCP\Security\ICrypto;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -34,7 +36,7 @@ final class InstanceSettingsTest extends TestCase {
 		// A stub, not a mock — these tests assert on the schema and on the value
 		// getUrl() returns, never on how AppConfig was called.
 		$this->config = $this->createStub(IAppConfig::class);
-		$this->settings = new InstanceSettings($this->config);
+		$this->settings = new InstanceSettings($this->config, $this->createStub(ICrypto::class));
 	}
 
 	public function testSchemaIdIsNotAppPrefixed(): void {
@@ -87,11 +89,11 @@ final class InstanceSettingsTest extends TestCase {
 	public function testTheTokenCopyReportsWhetherOneIsStored(): void {
 		$config = $this->createStub(IAppConfig::class);
 		$config->method('getValueString')->willReturn('');
-		$empty = (new InstanceSettings($config))->getSchema();
+		$empty = (new InstanceSettings($config, $this->createStub(ICrypto::class)))->getSchema();
 
 		$config = $this->createStub(IAppConfig::class);
 		$config->method('getValueString')->willReturn('ENCRYPTED');
-		$stored = (new InstanceSettings($config))->getSchema();
+		$stored = (new InstanceSettings($config, $this->createStub(ICrypto::class)))->getSchema();
 
 		self::assertStringContainsString('No token stored yet', $empty['fields'][1]['description']);
 		self::assertStringContainsString('is stored', $stored['fields'][1]['description']);
