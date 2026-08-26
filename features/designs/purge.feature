@@ -55,7 +55,9 @@ Feature: Emptying the trash
 
     # ── RULE: emptying Penpot's trash finishes the delete from that side ──────
 
-  @in-penpot @gesture
+  # @unbuilt — nothing in this app can reach a Nextcloud trash ENTRY. Reading that
+  # trash is a deferred slice (§6.37), noted in PullService's own docblock.
+  @in-penpot @gesture @unbuilt
   Scenario Outline: Empty Penpot's trash in Penpot
     Given a design file named "Erased Upstream.penpot" in "<source>"
     And the file is in the Nextcloud trash

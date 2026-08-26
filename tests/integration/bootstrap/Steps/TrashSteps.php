@@ -185,6 +185,20 @@ trait TrashSteps {
 		// means "from HERE on". The arrange above has already trashed one on purpose,
 		// and the snapshot taken by the trash gesture predates it — so the assertion
 		// would report the arrange's own delete as damage done by the purge.
+		//
+		// AND WAIT FOR THAT TRASHING TO REACH THE LIVE LISTING FIRST. Two listings are
+		// involved and they do not move together: `get-team-deleted-files` names the
+		// design as trashed a moment before `probe --files` stops naming it as live.
+		// The step above waits on the FORMER, so a snapshot taken immediately after it
+		// can still contain a design that is on its way out — and then the assertion
+		// watches it leave and calls it damage. Measured: exactly one design "lost",
+		// every run, always the one the arrange had just trashed.
+		$id = $this->cursorDesignId();
+		$this->until(
+			fn (): bool => !in_array($id, $this->penpotLiveDesignIds(), true),
+			fn (): string => "the trashed design {$id} is still listed as live in Penpot",
+		);
+
 		$this->designIdsBeforeRefusal = $this->penpotLiveDesignIds();
 
 		$current = $this->occ('penpot_sync:show-config');

@@ -3749,6 +3749,20 @@ Those designs were the only route the project had back — there is no `restore-
 call, measured — so once they are gone the trashed folder has nothing left to be
 restored to, and it goes too.
 
+**@unbuilt, AND THE WALL IS THIS APP'S REACH, NOT PENPOT'S.** Emptying Penpot's
+trash is arrangeable and the pull sees the result perfectly well. What no code here
+can do is remove an ENTRY FROM THE NEXTCLOUD TRASH. Nothing in `lib/` reads that
+trash at all: `TrashControl` only pauses it, and the listeners react to gestures
+someone else made. `PullService`'s own docblock has carried the deferral since it
+was written — *"adopting a mirror out of the Nextcloud trash (§6.37) … needs
+`files_trashbin` and is its own slice"* — and this scenario is the other half of
+exactly that slice.
+
+Worth separating from the walls it sits beside. It is not a harness limit: the
+suite can empty Penpot's trash and can read Nextcloud's. It is not a reporting
+gap either. The behaviour is simply absent, which is what `@unbuilt` means, and
+building it means giving this app a reason to open the trash for the first time.
+
 ### A Penpot purge may not destroy what was never Penpot's
 
 The restraint half, and the reason the rule above needs a second scenario rather than
