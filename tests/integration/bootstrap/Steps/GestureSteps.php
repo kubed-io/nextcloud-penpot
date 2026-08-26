@@ -717,6 +717,42 @@ trait GestureSteps {
 	 * @Then /^the design "([^"]*)" is not in Penpot's trash$/
 	 */
 	public function theDesignIsNotInPenpotsTrash(string $name): void {
+		// BY ID WHEN THE SCENARIO HAS THAT DESIGN ON STAGE, and this is not an
+		// optimisation — a name lookup cannot express the claim at all.
+		//
+		// Penpot's trash accumulates across a whole leg and nothing empties it: the
+		// teardown after each scenario deletes the mapped project folders, and
+		// deleting a project trashes its designs. So by the second row of an Outline
+		// the FIRST row's design is sitting in the trash wearing the same name, and
+		// the assertion answers about it instead. That cost four CI rounds on
+		// `designs/move.feature`, every one of them read as the untrash failing while
+		// the app's own log said plainly that it had worked.
+		//
+		// Purging the debris does not help either: `permanently-delete-team-files`
+		// stamps `deleted_at` and leaves the record (§C6.11), so a destroyed design
+		// is still listed. There is no way to make a name unique in that listing —
+		// only to stop asking by name.
+		//
+		// The cursor's id is checked only when the cursor IS this design, so every
+		// caller that names a design it never put on stage keeps the old behaviour.
+		$onStage = $this->currentFilePath !== ''
+			&& basename($this->currentFilePath, '.penpot') === $name
+			&& $this->currentFileId !== '';
+
+		if ($onStage) {
+			$id = $this->currentFileId;
+			$this->until(
+				fn (): bool => !in_array($id, $this->penpotTrashIds($this->teamId()), true),
+				fn (): string => sprintf(
+					"expected the design '%s' (%s) to be gone from Penpot's trash, but it is still listed",
+					$name,
+					$id,
+				),
+			);
+
+			return;
+		}
+
 		$this->until(
 			fn (): bool => !in_array($name, $this->penpotTrashNames(), true),
 			fn (): string => sprintf("expected '%s' to be gone from Penpot's trash, but it is still listed", $name),

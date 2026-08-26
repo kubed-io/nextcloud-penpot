@@ -2221,6 +2221,25 @@ THE GENERAL RULE, since this cost two CI rounds: **a design name is a scenario's
 own.** Penpot's trash accumulates across a whole feature file and nothing empties
 it, so any assertion phrased by name is really an assertion about the entire run.
 
+**AND RENAMING WAS NOT ENOUGH, WHICH TOOK TWO MORE ROUNDS TO SEE.** Giving the
+return scenario its own name fixed the collision BETWEEN scenarios and left the one
+between the two ROWS of its own Outline — which no name can fix, because both rows
+run the same `Given`. The mechanism is the TEARDOWN: it deletes the mapped project
+folders after every scenario, and deleting a project trashes its designs. So by row
+two, row one's design is in Penpot's trash wearing the identical name.
+
+Every one of those rounds was read as the untrash failing, while the app's own log
+said in as many words that it had worked. Both were true, about different designs.
+The timestamps settled it — the return succeeded at `:09`, the teardown trashed the
+project at `:13`, and the row that failed was the NEXT one.
+
+So `the design "X" is not in Penpot's trash` now resolves the CURSOR's id whenever
+the scenario has that design on stage, falling back to the name only for callers
+naming a design they never staged. Purging the debris is not an alternative:
+`permanently-delete-team-files` leaves the record (§C6.11), so a destroyed design is
+still listed. There is no way to make a name unique in that listing — only to stop
+asking by name.
+
 ### An arrival Penpot cannot match becomes a new design
 
 The other half of the same question, and the two rows that were nearly three scenarios.
