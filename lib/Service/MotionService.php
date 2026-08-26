@@ -638,7 +638,13 @@ final class MotionService {
 	 * is a final one.
 	 */
 	private function staysOutOfTheTrash(string $teamId, string $penpotId): bool {
-		$deadline = microtime(true) + (self::SETTLE_MICROSECONDS / 1_000_000.0);
+		// BOTH OPERANDS FLOAT, deliberately. `microtime(true)` is a float and an
+		// int/float division is `int|float`, which Psalm's strict binary operands
+		// mode refuses to mix. Casting rather than suppressing keeps the arithmetic
+		// honest — a settle of 6_000_000 really is six seconds, not zero.
+		// {@see RestoreService::staysListed()} carries the same cast for the same
+		// reason; this is the second window in the app and it inherits the finding.
+		$deadline = microtime(true) + ((float)self::SETTLE_MICROSECONDS / 1_000_000.0);
 		do {
 			usleep(self::SETTLE_POLL_MICROSECONDS);
 
