@@ -108,11 +108,11 @@ Feature: Moving a design
   # notes: ../AGENTS.md#coming-back-revives-whatever-penpot-still-has
   @in-nextcloud @gesture
   Scenario Outline: Move a design file into a project when Penpot still has its design
-    Given an unmapped design file at "Scratch/Going Loose.penpot" carrying its Penpot id
+    Given an unmapped design file at "Scratch/Coming Back.penpot" carrying its Penpot id
     And its design is <where> in Penpot
     When I move the file into "Penpot/Welcome Back"
     Then the design is in the "Welcome Back" Penpot project
-    And the design "Going Loose" is not in Penpot's trash
+    And the design "Coming Back" is not in Penpot's trash
     And the file holds:
       | penpot_id      | the original id    |
       | penpot_team_id | the mapping's team |

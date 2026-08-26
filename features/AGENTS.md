@@ -2192,6 +2192,35 @@ WHY THE TWO ROWS ARE ONE SCENARIO. The outcome is identical and so is the code p
 between them is only whether one of its steps had anything to do. Splitting them would
 state one claim twice and imply a distinction that is not there.
 
+### A design name is a scenario's own, because Penpot's trash is forever
+
+`Move a design file into a project when Penpot still has its design` used
+`Going Loose.penpot` — the same name the LEAVE scenario above it uses — and its
+closing assertion is `the design "Going Loose" is not in Penpot's trash`. That is
+a lookup BY NAME against a trash the whole feature file shares, and the leave
+scenario parks a design of that name and leaves it there. So the return scenario
+was reading the previous scenario's parked design and reporting that its own
+untrash had failed, while the log said in as many words that it had worked.
+
+Two things make this unfixable in the harness, which is why it is a naming rule
+rather than a cleanup step:
+
+- **Penpot's purge does not remove the row.** `permanently-delete-team-files`
+  stamps `deleted_at` and leaves the record (§C6.11), so a purged design is STILL
+  LISTED by `get-team-deleted-files`. Destroying the debris does not un-name it.
+- **Deleting the leftover file trashes its design.** The file is still tracked, so
+  the delete listener does exactly what it should — and manufactures a fresh ghost
+  wearing the same name.
+
+Every other scenario in the file already avoids this without anyone writing it
+down: `Travelling`, `Relocated`, `Crossing`, `Departing`, `Uploaded`, `Turnbuckle`,
+`Pointer`. One name per scenario, and the reused one was the anomaly. The return
+scenario is now `Coming Back.penpot`.
+
+THE GENERAL RULE, since this cost two CI rounds: **a design name is a scenario's
+own.** Penpot's trash accumulates across a whole feature file and nothing empties
+it, so any assertion phrased by name is really an assertion about the entire run.
+
 ### An arrival Penpot cannot match becomes a new design
 
 The other half of the same question, and the two rows that were nearly three scenarios.

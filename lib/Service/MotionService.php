@@ -269,13 +269,18 @@ final class MotionService {
 			return true;
 		}
 
-		$this->client->moveFiles($to, [$meta->penpotId], $this->personalTokens->tokenForActor());
-		$this->logger->info('penpot_sync writeback: moved Penpot file to another project', [
-			'app' => Application::APP_ID,
-			'penpotId' => $meta->penpotId,
-			'fromProject' => $from,
-			'toProject' => $to,
-		]);
+		// THE STAMP BELOW RUNS EITHER WAY, which is why this is not an early return.
+		// An arrival whose design Penpot had already filed still needs its team and
+		// its mode written — it is coming back into a mapping, and a file left
+		// stamped `unmapped` inside one is invisible to every later gesture.
+		if ($this->fileInto($to, $meta->penpotId)) {
+			$this->logger->info('penpot_sync writeback: moved Penpot file to another project', [
+				'app' => Application::APP_ID,
+				'penpotId' => $meta->penpotId,
+				'fromProject' => $from,
+				'toProject' => $to,
+			]);
+		}
 
 		// RE-STAMP THE TEAM, but only now — after Penpot accepted the move.
 		//
@@ -309,6 +314,53 @@ final class MotionService {
 		}
 
 		return true;
+	}
+
+	/**
+	 * `move-files`, treating "it is already there" as the success it is.
+	 *
+	 * ## PENPOT REFUSES A MOVE INTO THE PROJECT A DESIGN IS ALREADY IN
+	 *
+	 * `cant-move-to-same-project`, HTTP 400. Ordinarily unreachable, because the
+	 * caller compares `$from` against `$to` first and returns early when they match.
+	 * Two paths get past that comparison anyway, and both are legitimate:
+	 *
+	 *   - **an arrival from unmapped space.** `projectForContentIn()` runs BEFORE
+	 *     this, and for a folder that is not yet a project it promotes one — which
+	 *     files the designs already sitting in that folder, ours included. So by the
+	 *     time we ask, Penpot has already put the design where we were about to.
+	 *   - **a drag to the team root** whose file was in Drafts to begin with, where
+	 *     `$from` reads null and `$to` resolves to that same Drafts project.
+	 *
+	 * In both the end state the caller wanted is already true, so reporting a
+	 * failure would be a lie — and an expensive one, since the listener turns it
+	 * into a notification telling the user their move did not reach Penpot.
+	 *
+	 * ONLY THAT ONE CODE. Every other 400 is a real refusal and still throws.
+	 *
+	 * @return bool true when Penpot actually moved it, false when it was already
+	 *              there — the caller uses that only to decide what to log
+	 *
+	 * @throws PenpotApiException
+	 */
+	private function fileInto(string $project, string $penpotId): bool {
+		try {
+			$this->client->moveFiles($project, [$penpotId], $this->personalTokens->tokenForActor());
+
+			return true;
+		} catch (PenpotApiException $e) {
+			if ($e->getPenpotCode() !== 'cant-move-to-same-project') {
+				throw $e;
+			}
+
+			$this->logger->info('penpot_sync writeback: the design was already in the destination project', [
+				'app' => Application::APP_ID,
+				'penpotId' => $penpotId,
+				'project' => $project,
+			]);
+
+			return false;
+		}
 	}
 
 	/**
@@ -509,10 +561,7 @@ final class MotionService {
 	 */
 	private function untrash(string $teamId, string $penpotId): void {
 		try {
-			if (!$this->restoreOnce($teamId, $penpotId)) {
-				// Never in the trash to begin with — the ordinary "still live" case.
-				return;
-			}
+			$this->restoreOnce($teamId, $penpotId);
 
 			if ($this->staysOutOfTheTrash($teamId, $penpotId)) {
 				$this->logger->info('penpot_sync writeback: brought a parked design back out of Penpot\'s trash', [
@@ -524,15 +573,36 @@ final class MotionService {
 				return;
 			}
 
-			// The delayed delete took it back. Re-issuing AFTER that job has fired is
-			// what makes the restore stick (§6.49) — the second call is not a retry of
-			// a failure, it is the first call that lands on the far side of the undo.
+			// STILL LISTED. Either the delayed delete took it back, or the restore
+			// declined and said so with an empty set (§C6.11). Re-issuing AFTER the
+			// undo window is what makes it stick (§6.49) — the second call is not a
+			// retry of a failure, it is the first one landing on the far side of it.
 			$this->restoreOnce($teamId, $penpotId);
-			$this->logger->info('penpot_sync writeback: the parked design needed a second restore (saga §6.49)', [
-				'app' => Application::APP_ID,
-				'penpotId' => $penpotId,
-				'team_id' => $teamId,
-			]);
+
+			if ($this->staysOutOfTheTrash($teamId, $penpotId)) {
+				$this->logger->info('penpot_sync writeback: the parked design needed a second restore (saga §6.49)', [
+					'app' => Application::APP_ID,
+					'penpotId' => $penpotId,
+					'team_id' => $teamId,
+				]);
+
+				return;
+			}
+
+			// SAID OUT LOUD RATHER THAN SWALLOWED. The move that follows will still
+			// file the design, so the user is not stuck — but a design left flagged
+			// deleted while its mirror sits in a mapped folder is a real desync, and
+			// the first version of this reported nothing at all when the restore
+			// returned an empty set, which is how it went two rounds undiagnosed.
+			$this->logger->warning(
+				'penpot_sync writeback: a returning design is still in Penpot\'s trash after two restores; '
+				. 'its mirror is back in the mapping but Penpot still has it flagged deleted',
+				[
+					'app' => Application::APP_ID,
+					'penpotId' => $penpotId,
+					'team_id' => $teamId,
+				],
+			);
 		} catch (\Throwable $e) {
 			$this->logger->warning('penpot_sync writeback: could not untrash a returning design', [
 				'app' => Application::APP_ID,
@@ -543,16 +613,20 @@ final class MotionService {
 	}
 
 	/**
-	 * One restore call. True when Penpot says it actually restored this id.
+	 * One restore call, whose RESULT IS DELIBERATELY IGNORED.
 	 *
 	 * `restore-deleted-team-files` answers 200 with an EMPTY set for an id it did
-	 * not restore (§C6.11), so the returned ids are the only honest signal — a
-	 * status code here would report success for a design still in the trash.
+	 * not restore (§C6.11), and the first version of this treated that empty set as
+	 * final: it returned early and did nothing else. Then Penpot answered empty for
+	 * a design that WAS in the trash, and the untrash silently gave up — no restore,
+	 * no retry, no log line, and two CI rounds spent looking at the wrong thing.
+	 *
+	 * So the returned ids are no longer trusted as the oracle. The trash listing is,
+	 * because it is the same thing the assertion and the pull read. This just makes
+	 * the call; {@see staysOutOfTheTrash()} decides whether it worked.
 	 */
-	private function restoreOnce(string $teamId, string $penpotId): bool {
-		$restored = $this->client->restoreDeletedFiles($teamId, [$penpotId], $this->personalTokens->tokenForActor());
-
-		return in_array($penpotId, $restored, true);
+	private function restoreOnce(string $teamId, string $penpotId): void {
+		$this->client->restoreDeletedFiles($teamId, [$penpotId], $this->personalTokens->tokenForActor());
 	}
 
 	/**
