@@ -285,6 +285,11 @@ trait WebDavTrait {
 			// equalled no folder ever — so this matched NOTHING, and every purge and
 			// restore step in the suite lost its entry. Fourteen scenarios in one leg,
 			// from one wrong assumption about a property name.
+			//
+			// CORE'S OWN USE IS THE PROOF, read out of the running pod rather than
+			// reasoned about: `files_trashbin/lib/Sabre/TrashbinPlugin.php` does
+			// `dirname($fileInfo->getOriginalLocation())` to recover the folder, which
+			// is this line exactly.
 			if ($wantFrom !== '' && trim(dirname($origFrom), '/.') !== $wantFrom) {
 				continue;
 			}
