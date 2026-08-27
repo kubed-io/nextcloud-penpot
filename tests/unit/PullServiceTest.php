@@ -40,8 +40,9 @@ use Psr\Log\NullLogger;
  *     `Drafts` folder (§6.35);
  *   - every mirrored node is stamped — team id on the root, project id on a
  *     project folder, file id/revn/mode on a `.penpot`;
- *   - an illegally-named object (a `/` in the Penpot name) is skipped, not
- *     mirrored, and does not abort the run;
+ *   - a project's name is a PATH — a `/` in it is a level of nesting, mirrored as
+ *     one, while a name that cannot become a path at all is skipped without
+ *     aborting the run (a `/` in a FILE's name is still simply illegal);
  *   - a Team-Folder mapping is skipped while only the plain backend is built;
  *   - and **the prune** — which of the many ways a listing can be incomplete
  *     must switch it off entirely, since every one of them looks exactly like
@@ -192,21 +193,264 @@ final class PullServiceTest extends TestCase {
 		self::assertSame(0, $result['files']);
 	}
 
-	public function testSkipsProjectWithIllegalFolderName(): void {
-		$mapping = $this->mapping(useTeamFolder: false);
+	/**
+	 * A name that cannot become a folder path at all — an empty segment here, and
+	 * `..` below. Not the same thing as a `/`, which is now a level of nesting.
+	 */
+	public function testSkipsProjectWithAnEmptyPathSegment(): void {
+		$this->thenTheProjectNamedIsSkipped('a//b');
+	}
+
+	/**
+	 * `..` IS THE ONE THAT MATTERS. Every other rejected name is untidy; this one
+	 * would walk a project's folder OUT of the mapping root, and a `.` would
+	 * resolve to the root itself and mirror a project's files over it.
+	 */
+	public function testSkipsProjectWhoseNameWouldEscapeTheRoot(): void {
+		$this->thenTheProjectNamedIsSkipped('../Elsewhere');
+	}
+
+	private function thenTheProjectNamedIsSkipped(string $name): void {
 		$root = $this->emptyFolder(10);
+		$root->expects($this->never())->method('newFolder');
 		$this->storage->method('isAvailable')->willReturn(true);
 		$this->storage->method('ensureRoot')->willReturn($root);
 		$this->client->method('getAllProjects')->willReturn([
-			['id' => 'proj-bad', 'name' => 'a/b', 'team-id' => self::TEAM_ID, 'is-default' => false],
+			['id' => 'proj-bad', 'name' => $name, 'team-id' => self::TEAM_ID, 'is-default' => false],
 		]);
 		$this->metadata->expects($this->never())->method('writeFile');
 
-		$result = $this->pull->pullOne($mapping);
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
 
 		self::assertSame(1, $result['processed']);
 		self::assertSame(0, $result['folders']);
 		self::assertSame(1, $result['skipped']);
+	}
+
+	// ── a project's name is a PATH, in both directions (§C6.38) ─────────────
+
+	/**
+	 * THE BUG THIS SECTION EXISTS FOR, measured live: PushService has always
+	 * renamed a project to its path below the mapping when its folder moves, and
+	 * the pull rejected every one of those names as illegal — so the app wrote
+	 * names it then refused to read back. A project named `Bubbles/foo` produced
+	 * no folder at all.
+	 *
+	 * ONLY THE LAST SEGMENT IS THE PROJECT. `Bubbles` is scaffolding and must carry
+	 * no markers, or the resolver's nearest-ancestor walk would attribute the
+	 * project's designs to a folder Penpot has never heard of.
+	 */
+	public function testASlashedProjectNameBecomesNestedFolders(): void {
+		$bubbles = $this->emptyFolder(20);
+		$foo = $this->emptyFolder(21);
+		$bubbles->method('newFolder')->willReturn($foo);
+		$bubbles->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([]);
+		$root->method('nodeExists')->willReturn(false);
+		$root->expects($this->once())->method('newFolder')->with('Bubbles')->willReturn($bubbles);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Bubbles/foo', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$bubbles->expects($this->once())->method('newFolder')->with('foo');
+
+		$stamped = [];
+		$this->metadata->method('writeFolder')->willReturnCallback(
+			static function (int $id, array $values) use (&$stamped): void {
+				$stamped[$id] = $values;
+			},
+		);
+		// The leaf is tagged as a project; the folder holding it is not.
+		$this->tags->expects($this->once())->method('apply')->with(21);
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['folders']);
+		self::assertSame(0, $result['skipped']);
+		self::assertSame([10, 21], array_keys($stamped), 'the root and the leaf are stamped, the scaffolding is not');
+		self::assertSame('proj-b', $stamped[21][PenpotMetadata::KEY_PROJECT_ID]);
+	}
+
+	/**
+	 * The folder is MOVED, not re-made, because the id is what identifies it — so
+	 * the designs and the user's own files inside it come along.
+	 *
+	 * `Bubbles` becoming `Bubbles/foo` asks a folder to move inside itself, which
+	 * no filesystem will do. It parks under the root first, and the two moves in
+	 * order are the whole point of this test.
+	 */
+	public function testAProjectFolderMovesWhenItsPenpotNameGainsALevel(): void {
+		$node = $this->emptyFolder(20);
+		$node->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
+		$this->folderMarkersById[20] = new FolderMarkers('proj-b', '');
+
+		$nested = $this->emptyFolder(21);
+		$nested->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$node]);
+		$root->method('nodeExists')->willReturn(false);
+		$root->method('newFolder')->willReturn($nested);
+		$node->method('getParent')->willReturn($root);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Bubbles/foo', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$moves = [];
+		$node->expects($this->exactly(2))->method('move')->willReturnCallback(
+			function (string $to) use (&$moves, &$node): Folder {
+				$moves[] = $to;
+
+				return $node;
+			},
+		);
+
+		$this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame([
+			'/admin/files/Penpot/.penpot-moving-20',
+			'/admin/files/Penpot/Bubbles/foo',
+		], $moves);
+	}
+
+	/**
+	 * And the same folder going back to `Bubbles` — which asks it to take the name
+	 * its own parent is using. The parent is cleared out from under it while it is
+	 * parked, so the move home lands on the real name rather than `Bubbles (2)`.
+	 */
+	public function testAProjectFolderLosingALevelClearsTheFolderItLeaves(): void {
+		$node = $this->emptyFolder(21);
+		$node->method('getPath')->willReturn('/admin/files/Penpot/Bubbles/foo');
+		$this->folderMarkersById[21] = new FolderMarkers('proj-b', '');
+
+		$inside = [$node];
+		$bubbles = $this->createMock(Folder::class);
+		$bubbles->method('getId')->willReturn(20);
+		$bubbles->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
+		$bubbles->method('nodeExists')->willReturn(false);
+		$bubbles->method('getDirectoryListing')->willReturnCallback(
+			static fn (): array => $inside,
+		);
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$bubbles]);
+		$root->method('nodeExists')->willReturn(false);
+		$bubbles->method('getParent')->willReturn($root);
+		$node->method('getParent')->willReturn($bubbles);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Bubbles', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$moves = [];
+		$node->expects($this->exactly(2))->method('move')->willReturnCallback(
+			function (string $to) use (&$moves, &$inside, &$node): Folder {
+				$moves[] = $to;
+				$inside = [];
+
+				return $node;
+			},
+		);
+		// The empty scaffolding goes to the trash rather than standing forever.
+		$bubbles->expects($this->once())->method('delete');
+		$root->expects($this->never())->method('newFolder');
+
+		$this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame([
+			'/admin/files/Penpot/.penpot-moving-21',
+			'/admin/files/Penpot/Bubbles',
+		], $moves);
+	}
+
+	/**
+	 * THE INDEX HAS TO DESCEND, and this is what it costs when it does not: the
+	 * folder for a nested project is invisible to a scan of the root's children,
+	 * so the pull creates a SECOND folder for it at the root — every pull, each
+	 * one stamped with the same project id.
+	 */
+	public function testANestedProjectFolderIsFoundRatherThanDuplicated(): void {
+		$foo = $this->emptyFolder(21);
+		$foo->method('getPath')->willReturn('/admin/files/Penpot/Bubbles/foo');
+		$this->folderMarkersById[21] = new FolderMarkers('proj-b', '');
+
+		$bubbles = $this->createMock(Folder::class);
+		$bubbles->method('getId')->willReturn(20);
+		$bubbles->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
+		$bubbles->method('getDirectoryListing')->willReturn([$foo]);
+		$bubbles->method('nodeExists')->willReturn(false);
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$bubbles]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Bubbles/foo', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$root->expects($this->never())->method('newFolder');
+		$bubbles->expects($this->never())->method('newFolder');
+		$foo->expects($this->never())->method('move');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['folders']);
+		self::assertSame(0, $result['skipped']);
+	}
+
+	/**
+	 * A FILE standing where a project's parent folder belongs is refused outright,
+	 * and that is deliberately unlike every other name collision here. `freeName()`
+	 * would mirror the project under `Bubbles (2)/` — a path Penpot never named —
+	 * and the next pull would find neither and do it again one suffix higher.
+	 */
+	public function testAFileInTheWayOfAProjectPathIsASkipNotASuffix(): void {
+		$blocker = $this->emptyFile(20);
+		$blocker->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$blocker]);
+		$root->method('nodeExists')->willReturn(true);
+		$root->method('get')->willReturn($blocker);
+		$root->expects($this->never())->method('newFolder');
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Bubbles/foo', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['skipped'], 'one project skipped, not a failed mapping');
+		self::assertSame(0, $result['folders']);
+		self::assertNull($result['error']);
 	}
 
 	// ── `sync` mode: the only thing that costs anything (saga §6.22) ────────
@@ -718,10 +962,10 @@ final class PullServiceTest extends TestCase {
 	}
 
 	/**
-	 * THE SEATBELT, and it is sharper than the prune's. A project SKIPPED for an
-	 * illegal name is absent from the named set while being perfectly alive in
-	 * Penpot — so without the completeness gate, one project with a slash in its
-	 * name would send every other project's folder to the trash on the next pull.
+	 * THE SEATBELT, and it is sharper than the prune's. A project SKIPPED for any
+	 * reason is absent from the named set while being perfectly alive in Penpot —
+	 * so without the completeness gate, one unusable project would send every
+	 * other project's folder to the trash on the next pull.
 	 */
 	public function testAnIncompleteListingReapsNoFolders(): void {
 		$orphan = $this->emptyFolder(40);
@@ -733,9 +977,10 @@ final class PullServiceTest extends TestCase {
 		$root->method('nodeExists')->willReturn(false);
 		$this->storage->method('isAvailable')->willReturn(true);
 		$this->storage->method('ensureRoot')->willReturn($root);
-		// A `/` in the name is skipped, which is what makes the listing incomplete.
+		// A project Penpot named with no id is skipped, which is what makes the
+		// listing incomplete.
 		$this->client->method('getAllProjects')->willReturn([
-			['id' => 'proj-illegal', 'name' => 'has/slash', 'team-id' => self::TEAM_ID, 'is-default' => false],
+			['id' => '', 'name' => 'Nameless', 'team-id' => self::TEAM_ID, 'is-default' => false],
 		]);
 
 		$orphan->expects($this->never())->method('delete');

@@ -2711,6 +2711,29 @@ Grafana states it the same way (`Move a folder in Grafana`, whose Examples capti
 *"Grafana can move and rename in one call where a Files gesture cannot"*), and it has
 no separate cross-mapping scenario on the remote side either.
 
+**FOR A LONG TIME THE CODE DID THE OPPOSITE OF ALL OF THIS, and the scenarios were
+`@todo` so nothing said so.** `PullService` treated a `/` in a project's name as an
+illegal Nextcloud node name and SKIPPED the project — while `PushService` had always
+renamed a project to its path below the mapping when its folder moved. The app wrote
+names it then refused to read back, and the everyday gesture this whole section
+describes produced no folder at all.
+
+The second half of that cost was worse than the missing folder. A skipped project
+clears the pull's completeness flag, which switches off the prune AND the orphaned-
+project reap for the WHOLE mapping — so one nested project silently disabled every
+reconciliation that mapping had, permanently, with no error anywhere. Found by hand
+on a live instance: a project renamed to `Bubbles/foo` in Penpot moved nothing,
+created nothing, and stopped its mapping pruning.
+
+Fixed by making the pull read a name the way the push writes one: a `/` is a level,
+the path above the leaf is provisioned as ordinary unmarked folders, the folder is
+found by its id wherever it sits and MOVED, and an emptied bare parent is cleared
+behind it. The one case none of the scenarios here reach is a project moving INSIDE
+ITSELF (`Bubbles` → `Bubbles/foo`), which asks a folder to be moved into a folder
+that does not exist yet and whose name it is currently using — the folder parks
+under the mapping root for one step, which is also what lets the reverse
+(`Bubbles/foo` → `Bubbles`) land on the real name instead of `Bubbles (2)`.
+
 ---
 
 ## designs/open-with

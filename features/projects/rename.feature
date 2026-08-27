@@ -61,10 +61,11 @@ Feature: Renaming a project
     And there is no folder at "<from>"
 
     Examples: however deep it sits, in either kind of storage
-      | from           | named   | to             |
-      | Penpot/Old     | New     | Penpot/New     |
-      | Penpot/foo/Old | foo/New | Penpot/foo/New |
-      | Shared/Old     | New     | Shared/New     |
+      | from           | named       | to                 |
+      | Penpot/Old     | New         | Penpot/New         |
+      | Penpot/foo/Old | foo/New     | Penpot/foo/New     |
+      | Shared/Old     | New         | Shared/New         |
+      | Penpot/Bubbles | Bubbles/foo | Penpot/Bubbles/foo |
 
     # THE FOLDER IS RENAMED, NOT REPLACED. Everything in it comes along, the user's
     # own files included — nothing here is deleted and re-made under the new name.
