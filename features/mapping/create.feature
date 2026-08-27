@@ -46,33 +46,6 @@ Feature: Mapping a Penpot team to a Nextcloud folder
 
     # notes: ../AGENTS.md#creating-a-mapping-saves-the-form
 
-  Scenario Outline: Using invalid values for a mapping
-    Given a mapping with the following values:
-      | team   | Northwind |
-      | folder | Designs   |
-    And a Penpot team named "<team>" exists
-    And the penpot team "Outsiders" does not exist
-    When the admin submits this mapping:
-      | team    | <team>    |
-      | folder  | <folder>  |
-      | mode    | <mode>    |
-      | storage | <storage> |
-    Then the mapping is rejected, explaining "<reason>"
-
-    Examples: Creating a mapping when the team is already mapped
-      | team      | folder    | mode | storage     | reason         |
-      | Northwind | Elsewhere | sync | team folder | The team is already mapped to another folder |
-
-    Examples: Creating a mapping when the folder is already mapped
-      | team       | folder  | mode | storage      | reason       |
-      | Bundt Cake | Designs | link | admin folder | The folder is already mapped to another team |
-
-    Examples: Creating a mapping when the team does not exist
-      | team      | folder  | mode | storage     | reason                  |
-      | Outsiders | Designs | link | team folder | The team was not found using the given credentials |
-
-    # notes: ../AGENTS.md#using-invalid-values-for-a-mapping
-
   # notes: ../AGENTS.md#a-link-mapping-may-not-be-made-over-designs-that-already-exist
   @occ
   Scenario: Mapping in link mode over a folder that already holds designs
@@ -87,6 +60,41 @@ Feature: Mapping a Penpot team to a Nextcloud folder
     Then the mapping matches the form, unset fields at their defaults
     And no ".penpot" designs exist under "/Designs" in Nextcloud
     And "Designs/Sketches/Keeper.penpot" left no trash entry
+
+  # notes: ../AGENTS.md#a-team-may-only-be-mapped-once
+  @occ
+  Scenario: A team may only be mapped once
+    Given a mapping with the following values:
+      | team   | Northwind |
+      | folder | Designs   |
+    When the admin submits this mapping:
+      | team   | Northwind |
+      | folder | Elsewhere |
+      | mode   | sync      |
+    Then the mapping is rejected, explaining "The team is already mapped to another folder"
+
+  # notes: ../AGENTS.md#a-folder-may-only-be-mapped-once
+  @occ
+  Scenario: A folder may only be mapped once
+    Given a mapping with the following values:
+      | team   | Northwind |
+      | folder | Designs   |
+    And a penpot team named "Bundt Cake" exists
+    When the admin submits this mapping:
+      | team   | Bundt Cake |
+      | folder | Designs    |
+      | mode   | link       |
+    Then the mapping is rejected, explaining "The folder is already mapped to another team"
+
+  # api only because the ui is a drop down of the teams it can reach
+  # notes: ../AGENTS.md#a-team-that-cannot-be-reached-cannot-be-mapped
+  @api @occ
+  Scenario: A team that cannot be reached cannot be mapped
+    Given the penpot team "Outsiders" does not exist
+    When the admin submits this mapping:
+      | team   | Outsiders |
+      | folder | Designs   |
+    Then the mapping is rejected, explaining "The team was not found using the given credentials"
 
   # notes: ../AGENTS.md#without-a-service-account-token-nothing-can-be-mapped
   @occ

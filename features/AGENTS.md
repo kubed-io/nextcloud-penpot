@@ -296,54 +296,63 @@ field nobody can meaningfully fill in does not earn a column. The design
 question survives where an unbuilt design belongs, in the saga (§6.53,
 question #47).
 
-### Using invalid values for a mapping
+### A team may only be mapped once
 
-THREE RULES, ONE ACTION, ONE OUTLINE. Every refusal here is the same gesture — an
-admin submits a mapping — against a different pre-state, so they share the sentence
-and differ only in the row. Apart they were three scenarios saying "a mapping is
-submitted, it is refused", with the whole difference living in a `Given` several
-lines up.
+`getByTeamId()` refuses a team that already has a mapping. A mapping IS its team
+(saga §6.24), so a second one would be two answers to the same question — which
+folder does this team mirror into.
 
-AN EXAMPLES BLOCK PER RULE, and the caption names it. Split by what is being
-refused rather than by which cells are filled, so a reader learns the rules from
-the captions alone instead of diffing rows to work out what changed.
+THE REFUSAL NAMES WHICH SIDE THE CLASH IS ON. "The team is already mapped" alone
+leaves an admin looking at the wrong half of the form; "to another folder" says
+where to go and look.
 
-THE MODE AND STORAGE ARE CHOSEN, NOT ENUMERATED. All three checks run before
-anything is provisioned, so neither field ever enters into them; rows leaving both
-blank could only fail to contradict that, never state it. Each row asks for a
-different combination and is refused identically — the claim being that what you
-are asking to create makes no difference once the team is taken, the folder is
-taken, or the team cannot be reached. A cross product would say the same thing in
-twelve rows and be slower for it.
+### A folder may only be mapped once
 
-#### The team that cannot be reached
+`assertFolderUnique()` refuses a folder some other mapping already uses, for the
+mirror-image reason: a folder can only mirror one team, and two mappings pointed at
+one folder would each prune what the other wrote.
 
-`get-teams` is membership-scoped (§6.12), so a team that does not exist and a team
-the service account was never invited to arrive identically: the lookup returns
-nothing. There used to be a second scenario for the invited case, and a later draft
-tried to split them again with "a team exists / and the service account cannot see
-it". Both were testing Penpot's permission model rather than this app's, and
-neither could be arranged honestly — the harness has one Penpot account, and
-`a penpot team named "…" exists` is find-or-create THROUGH it, so anything it names
-is visible by construction.
+### A team that cannot be reached cannot be mapped
+
+Better an honest refusal than a mapping that silently pulls nothing.
+
+ONE SCENARIO FOR TWO CAUSES, because there is only one behaviour. `get-teams` is
+membership-scoped (§6.12), so a team that does not exist and a team the service
+account was never invited to arrive identically: the lookup returns nothing. There
+used to be a second scenario for the invited case, and a later draft tried to split
+them again with "a team exists / and the service account cannot see it". Both were
+testing Penpot's permission model rather than this app's, and neither could be
+arranged honestly — the harness has one Penpot account, and `a penpot team named
+"…" exists` is find-or-create THROUGH it, so anything it names is visible by
+construction.
 
 The refusal used to read "is not visible to the service account", which names one
 of the two causes and sends an admin looking for an invite to a team that was never
 there. It says the team was not found using the given credentials now, and offers
 both explanations.
 
-THE ARRANGE SAYS BOTH THINGS, AND THE SECOND WINS. An Outline cannot run one Given
-per row, so `a Penpot team named "<team>" exists` fires for the unreachable row too
-and does create a team of that name. `the penpot team "Outsiders" does not exist`
-follows it and repoints the cursor at an id no lookup can return, which is what the
-submission carries. The contradiction is only in the arrange; what is submitted is
-unambiguous.
-
 IT NEVER SPEAKS IN IDS. Nobody types a team id to make a mapping — the UI is a drop
 down and the id is what the app derives from the name it was handed — so the id
 lives in the step. `the admin submits this mapping:` resolves a `team` cell by
 LOOKUP, never find-or-create: a `When` that builds fixtures would have conjured
 `Outsiders` and then mapped it successfully.
+
+### Why these three are scenarios and not one Outline
+
+They were an Outline, briefly, on the grounds that they are one action against three
+pre-states. The pre-state IS the difference here, and that is what makes them three:
+each enforces a rule of its own, the captions had ended up carrying the rules that
+the scenario titles should, and a reader had to hold three Examples blocks in their
+head to see what any single one claimed.
+
+NEITHER MODE NOR STORAGE MATTERS TO ANY OF THEM, so `storage` is gone from all
+three. All three checks run before anything is provisioned, so the backend never
+enters into them, and a column that never changes the outcome is a column a reader
+has to rule out. `mode` stays because it varies the submission without pretending
+to be load-bearing.
+
+They sit together at the bottom of the file, after the two scenarios that succeed,
+so the refusals read as a group.
 
 
 ### A link mapping may not be made over designs that already exist
