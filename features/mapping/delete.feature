@@ -18,10 +18,9 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
 
   @occ
   Scenario: Removing a mapping in link mode takes its designs with it
-    Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
-      | mode   | link         |
+    Given the following mappings were made:
+      | team      | folder       | mode |
+      | Northwind | Design Files | link |
     And the following items in the mappings:
       | path                                |
       | /Design Files/Cogs/Gizmo.penpot     |
@@ -35,10 +34,9 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
 
   @occ
   Scenario: Removing a mapping in sync mode leaves its designs behind, unmapped
-    Given a mapping with the following values:
-      | team   | Northwind    |
-      | folder | Design Files |
-      | mode   | sync         |
+    Given the following mappings were made:
+      | team      | folder       | mode |
+      | Northwind | Design Files | sync |
     And the following items in the mappings:
       | path                                |
       | /Design Files/Cogs/Gizmo.penpot     |

@@ -78,7 +78,7 @@ final class MappingTeardownServiceTest extends TestCase {
 
 	/** A pointer holds nothing, so with the mapping gone there is nothing to keep. */
 	public function testAPointerIsRemoved(): void {
-		$result = $this->tearDown([$this->mirror(1, holdsArchive: false)]);
+		$result = $this->tearDownOver([$this->mirror(1, holdsArchive: false)]);
 
 		self::assertSame([1], $this->deleted);
 		self::assertSame(['removed' => 1, 'unmapped' => 0], $result);
@@ -91,7 +91,7 @@ final class MappingTeardownServiceTest extends TestCase {
 			PenpotMetadata::KEY_TEAM_ID => '',
 		]);
 
-		$result = $this->tearDown([$this->mirror(7, holdsArchive: true)]);
+		$result = $this->tearDownOver([$this->mirror(7, holdsArchive: true)]);
 
 		self::assertSame([], $this->deleted, 'a design holding an archive must never be removed');
 		self::assertSame(['removed' => 0, 'unmapped' => 1], $result);
@@ -108,12 +108,12 @@ final class MappingTeardownServiceTest extends TestCase {
 			self::logicalNot(self::arrayHasKey(PenpotMetadata::KEY_ID)),
 		);
 
-		$this->tearDown([$this->mirror(7, holdsArchive: true)]);
+		$this->tearDownOver([$this->mirror(7, holdsArchive: true)]);
 	}
 
 	/** One mapping, one walk, both endings — the two scenarios' shapes together. */
 	public function testAMixedTreeGetsBothEndings(): void {
-		$result = $this->tearDown([
+		$result = $this->tearDownOver([
 			$this->mirror(1, holdsArchive: false),
 			$this->mirror(2, holdsArchive: true),
 			$this->mirror(3, holdsArchive: false),
@@ -132,7 +132,7 @@ final class MappingTeardownServiceTest extends TestCase {
 	 * Penpot at all.
 	 */
 	public function testEveryRemovalHappensBehindTheSyncGuard(): void {
-		$this->tearDown([
+		$this->tearDownOver([
 			$this->mirror(1, holdsArchive: false),
 			$this->mirror(2, holdsArchive: false),
 		]);
@@ -149,7 +149,7 @@ final class MappingTeardownServiceTest extends TestCase {
 	public function testAnUntrackedDesignIsLeftAlone(): void {
 		$this->metadata->expects(self::never())->method('writeFile');
 
-		$result = $this->tearDown([$this->mirror(9, holdsArchive: false, penpotId: '')]);
+		$result = $this->tearDownOver([$this->mirror(9, holdsArchive: false, penpotId: '')]);
 
 		self::assertSame([], $this->deleted);
 		self::assertSame(['removed' => 0, 'unmapped' => 0], $result);
@@ -159,7 +159,7 @@ final class MappingTeardownServiceTest extends TestCase {
 	public function testAnOrdinaryFileIsLeftAlone(): void {
 		$this->metadata->expects(self::never())->method('writeFile');
 
-		$result = $this->tearDown([$this->file(4, 'Budget.xlsx')]);
+		$result = $this->tearDownOver([$this->file(4, 'Budget.xlsx')]);
 
 		self::assertSame([], $this->deleted);
 		self::assertSame(['removed' => 0, 'unmapped' => 0], $result);
@@ -191,7 +191,7 @@ final class MappingTeardownServiceTest extends TestCase {
 	 * stop the mirrors after it being dealt with.
 	 */
 	public function testAFileThatWillNotDeleteDoesNotStopTheRest(): void {
-		$result = $this->tearDown([
+		$result = $this->tearDownOver([
 			$this->mirror(1, holdsArchive: false, stubborn: true),
 			$this->mirror(2, holdsArchive: false),
 		]);
@@ -209,7 +209,7 @@ final class MappingTeardownServiceTest extends TestCase {
 	 */
 	public function testTheWalkDescendsIntoProjectFolders(): void {
 		$nested = $this->folder([$this->mirror(1, holdsArchive: false)]);
-		$result = $this->tearDown([$nested]);
+		$result = $this->tearDownOver([$nested]);
 
 		self::assertSame([1], $this->deleted);
 		self::assertSame(['removed' => 1, 'unmapped' => 0], $result);
@@ -220,11 +220,15 @@ final class MappingTeardownServiceTest extends TestCase {
 	/**
 	 * Run one teardown over a root holding $children.
 	 *
+	 * NOT `tearDown()`: that is {@see \PHPUnit\Framework\TestCase}'s own hook, and
+	 * a private one here is a fatal error before a single test runs — "access level
+	 * must be protected or weaker".
+	 *
 	 * @param list<\OCP\Files\Node> $children
 	 *
 	 * @return array{removed:int, unmapped:int}
 	 */
-	private function tearDown(array $children): array {
+	private function tearDownOver(array $children): array {
 		$root = $this->folder($children);
 
 		$storage = $this->createStub(StorageService::class);

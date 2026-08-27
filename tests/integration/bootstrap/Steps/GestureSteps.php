@@ -1117,7 +1117,7 @@ trait GestureSteps {
 
 		if ($missing !== []) {
 			throw new \RuntimeException(
-				"nothing in the Nextcloud trash came from: " . implode(', ', $missing),
+				'nothing in the Nextcloud trash came from: ' . implode(', ', $missing),
 			);
 		}
 	}

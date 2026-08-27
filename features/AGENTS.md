@@ -2892,8 +2892,10 @@ on Penpot's side.
 {@see \OCA\PenpotSync\Service\MappingTeardownService} is where it lives, and BOTH
 routes call it — `occ penpot_sync:remove-mapping` and the admin panel's delete —
 because a teardown on one route only would leave the CLI and the UI producing two
-different instances. It runs BEFORE the mapping is removed, since it finds the
-mirrors THROUGH the mapping.
+different instances. It runs AFTER the mapping is removed — the mapping OBJECT is
+already loaded and that is all `StorageService::findRoot()` needs, and `remove()` is
+the half that can throw. Torn down first, a throw would leave the mapping configured
+over a tree already dismantled.
 
 IT RUNS UNDER {@see \OCA\PenpotSync\Service\SyncGuard}, and that is not a detail.
 Each removal is a `Node::delete()`, which fires the same event a person's delete

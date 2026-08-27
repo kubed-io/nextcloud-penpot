@@ -108,8 +108,14 @@ final class MoveRules {
 	 *
 	 * So the question this actually asks is *would the pull put it back*:
 	 *
-	 *   - a `.penpot` file — in a link mapping every one of them is Penpot's, since
-	 *     creating, moving and copying one in are all already refused;
+	 *   - a `.penpot` file CARRYING A `penpot_id` — the id, not the extension, is
+	 *     what makes one ours. The first cut tested the extension, reasoning that
+	 *     every route into a link mapping is already refused; {@see forLinkFile}
+	 *     says otherwise — it lets an UNTRACKED `.penpot` move in freely, since it
+	 *     is nobody's business but its owner's. So does adopting a folder that
+	 *     already held one. Either way the extension test re-created the very trap
+	 *     this method exists to remove, for the design archive somebody keeps
+	 *     beside the mirrors. Raised by Copilot on #47;
 	 *   - a folder carrying a project marker, or the mapping root's team marker;
 	 *   - a folder with either of those anywhere below it — a project's name is its
 	 *     PATH, so `foo` holding `foo/bar` is as much Penpot's as `foo/bar` is.
@@ -157,7 +163,16 @@ final class MoveRules {
 	 */
 	private function filledFromPenpot(Node $node, int $depth): bool {
 		if ($node instanceof File) {
-			return str_ends_with($node->getName(), PullService::EXTENSION);
+			if (!str_ends_with($node->getName(), PullService::EXTENSION)) {
+				return false;
+			}
+
+			try {
+				return ($this->metadata->readFile($node->getId())?->penpotId ?? '') !== '';
+			} catch (\Throwable) {
+				// A file this app cannot identify is never a file it may refuse.
+				return false;
+			}
 		}
 		if (!$node instanceof Folder) {
 			return false;

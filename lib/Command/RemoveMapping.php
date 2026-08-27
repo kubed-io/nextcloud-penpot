@@ -59,17 +59,24 @@ final class RemoveMapping extends Command {
 		$id = (string)$input->getArgument('id');
 		$mapping = $this->service->getById($id);
 
-		// THE MIRRORS FIRST, WHILE THE MAPPING IS STILL THERE TO FIND THEM BY. The
-		// teardown resolves the mapped folder through the mapping itself, so running
-		// it after the removal would have nothing left to walk.
-		$torn = $mapping === null ? ['removed' => 0, 'unmapped' => 0] : $this->teardown->tearDown($mapping);
-
 		if ($mapping === null || !$this->service->remove($id)) {
 			$output->writeln('<error>No mapping with id ' . $id . '.</error>');
 			$output->writeln('List them with: occ penpot_sync:list-mappings');
 
 			return 1;
 		}
+
+		// THE MIRRORS AFTER THE MAPPING, AND THAT ORDER IS A CHOICE. It reads
+		// backwards — the teardown finds the mirrors through the mapping — but the
+		// mapping OBJECT is already loaded and that is all
+		// {@see StorageService::findRoot()} needs, so the config is not consulted
+		// again. What the order buys is the failure mode: `remove()` writes app
+		// config and can throw, while `tearDown()` is total by construction. Torn
+		// down first, a throw here would leave the mapping configured over a tree
+		// already dismantled. This way the worst case is a removed mapping with its
+		// pointers still lying about, which the next removal or a person can clear.
+		// Raised by Copilot on #47.
+		$torn = $this->teardown->tearDown($mapping);
 
 		$output->writeln(sprintf(
 			'<info>Removed the mapping for %s.</info>',

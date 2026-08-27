@@ -256,15 +256,39 @@ final class LinkWriteGuardPluginTest extends TestCase {
 	public function testAFolderHoldingADesignIsStillRefused(): void {
 		$design = $this->createStub(File::class);
 		$design->method('getName')->willReturn('Login screen.penpot');
+		$design->method('getId')->willReturn(11);
 
 		$refusal = $this->deleteWithTeam(
 			'team-link',
 			linkTeam: 'team-link',
 			markers: [],
 			children: [$design],
+			designIds: [11 => 'design-1'],
 		);
 
 		self::assertInstanceOf(Forbidden::class, $refusal);
+	}
+
+	/**
+	 * AN UNTRACKED `.penpot` IS THE PERSON'S OWN, and the extension does not make
+	 * it ours. {@see MoveRules::forLinkFile()} lets one MOVE into a link mapping
+	 * freely — it is nobody's business but its owner's — and adopting a folder that
+	 * already held one puts it there too. Testing the extension rather than the id
+	 * re-created the exact trap this rule exists to remove, for the design archive
+	 * somebody keeps beside the mirrors. Raised by Copilot on #47.
+	 */
+	public function testAFolderHoldingAnUntrackedDesignMayBeDeleted(): void {
+		$design = $this->createStub(File::class);
+		$design->method('getName')->willReturn('My own export.penpot');
+		$design->method('getId')->willReturn(11);
+
+		self::assertNull($this->deleteWithTeam(
+			'team-link',
+			linkTeam: 'team-link',
+			markers: [],
+			children: [$design],
+			designIds: [],
+		));
 	}
 
 	/**
@@ -441,6 +465,9 @@ final class LinkWriteGuardPluginTest extends TestCase {
 	 *
 	 * @param array<int, array{string, string}> $markers
 	 * @param list<Folder> $children what the deleted folder lists
+	 * @param array<int, string> $designIds file id => the `penpot_id` it carries.
+	 *                                      Absent means UNTRACKED, which is a
+	 *                                      design the person put there themselves.
 	 */
 	private function deleteWithTeam(
 		string $team,
@@ -448,6 +475,7 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		bool $withUser = true,
 		array $markers = [7 => ['p1', '']],
 		array $children = [],
+		array $designIds = [],
 	): ?Forbidden {
 		$node = $this->createStub(Folder::class);
 		$node->method('getName')->willReturn('Existing');
@@ -456,6 +484,13 @@ final class LinkWriteGuardPluginTest extends TestCase {
 
 		// KEYED BY ID, so a child can carry markers its parent does not — which is
 		// the only way to state "a bare folder with a project below it".
+		// A `.penpot` is only ours if it carries an id — the extension alone is not
+		// enough, since an untracked one can be moved into a link mapping freely.
+		$this->metadata->method('readFile')->willReturnCallback(
+			static fn (int $id): ?PenpotFileMetadata => isset($designIds[$id])
+				? new PenpotFileMetadata($designIds[$id], 'r1', Mapping::MODE_LINK, 't1')
+				: null,
+		);
 		$this->metadata->method('readFolder')->willReturnCallback(
 			static function (int $id) use ($markers): FolderMarkers {
 				[$project, $team] = $markers[$id] ?? ['', ''];

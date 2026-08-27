@@ -878,9 +878,21 @@ final class PullService {
 	 * Every folder at or below $root carrying a project id Penpot did not name.
 	 *
 	 * DESCENDS PAST A PROJECT FOLDER, unlike {@see indexProjectFolders()} which
-	 * reads the root's direct children only. A project whose name contains a slash
-	 * mirrors as a nested folder, and one nested inside another project's folder is
-	 * as capable of being deleted in Penpot as any other.
+	 * reads the root's direct children only.
+	 *
+	 * NOT because the pull nests them — it cannot: {@see isLegalName()} rejects a
+	 * `/`, so a project named `foo/bar` is skipped rather than mirrored two levels
+	 * down. (An earlier draft of this docblock said the opposite; caught by Copilot
+	 * on #47.) They arrive from the NEXTCLOUD side: a project folder made inside
+	 * another folder is a project whose Penpot name is its path (§C6.38), which
+	 * `projects/delete.feature` spells out as `/Penpot/foo/bar`. Deleted in Penpot,
+	 * one of those is as orphaned as any other, and a scan of the root's children
+	 * would never see it.
+	 *
+	 * WORTH KNOWING, AND NOT FIXED HERE: the same `isLegalName()` rule means a
+	 * mapping holding such a project has `$complete = false` on every pull, so the
+	 * prune and this reap are both switched off for it — a pre-existing hole this
+	 * change inherits rather than opens.
 	 *
 	 * @param array<string, true> $named
 	 *

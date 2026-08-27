@@ -207,18 +207,18 @@ final class MappingController extends Controller {
 
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function destroy(string $id): JSONResponse {
-		// THE MIRRORS FIRST, for the reason {@see \OCA\PenpotSync\Command\RemoveMapping}
-		// gives: the teardown finds them THROUGH the mapping, so once the mapping is
-		// gone there is nothing left to walk. Both routes tear down, or the admin
-		// panel and the CLI would leave the instance in two different states.
+		// THE MAPPING IS READ BEFORE IT IS REMOVED and torn down AFTER, for the
+		// reason {@see \OCA\PenpotSync\Command\RemoveMapping} spells out: the
+		// teardown needs only the loaded object, and `remove()` is the half that can
+		// throw. Both routes tear down, or the admin panel and the CLI would leave
+		// the instance in two different states.
 		$mapping = $this->service->getById($id);
-		$torn = $mapping === null ? ['removed' => 0, 'unmapped' => 0] : $this->teardown->tearDown($mapping);
 
-		if (!$this->service->remove($id)) {
+		if ($mapping === null || !$this->service->remove($id)) {
 			return new JSONResponse(['message' => 'No such mapping.'], Http::STATUS_NOT_FOUND);
 		}
 
-		return new JSONResponse(['status' => 'removed'] + $torn);
+		return new JSONResponse(['status' => 'removed'] + $this->teardown->tearDown($mapping));
 	}
 
 	/**
