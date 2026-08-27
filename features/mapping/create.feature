@@ -5,6 +5,12 @@ Feature: Mapping a Penpot team to a Nextcloud folder
   I want to point a Penpot team at a folder
   So that its designs mirror into Nextcloud, scriptably (e.g. from a k8s job)
 
+  rules: 
+  - creating a mapping does not trigger a sync
+  - creating a mapping creates its nextcloud folder if it doesn't exist at the moment of creation
+  - if the folder is a team folder, the folder is created with the team folder api
+  - if link mapping is created over unmapped files and they are opted to be purged, the creation of the mapping is what sets the stage for the sync whenever it happens 
+
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance
@@ -13,16 +19,16 @@ Feature: Mapping a Penpot team to a Nextcloud folder
     # ── one fact, one table — the same shape as pre-state or as the action ─────
     # notes: ../AGENTS.md#the-preconditions
 
-  Scenario Outline: Creating a mapping saves the form
-    Given no Penpot teams are mapped
-    And a Penpot team named "Northwind" exists
-    And the Nextcloud groups "design" exist
+  Scenario Outline: Creating a new mapping to a penpot team 
+    Given a penpot team named "Northwind" exists
+    And the Nextcloud groups "design" exists
     And an unset field on the mapping form defaults to:
       | folder  | Northwind           |
       | mode    | link                |
       | groups  |                     |
       | storage | plain shared folder |
-    When the admin maps it with:
+    When the admin submits this mapping:
+      | team    | Northwind |
       | folder  | <folder>  |
       | mode    | <mode>    |
       | groups  | <groups>  |
@@ -46,43 +52,63 @@ Feature: Mapping a Penpot team to a Nextcloud folder
 
     # notes: ../AGENTS.md#creating-a-mapping-saves-the-form
 
-  # api only because the ui is a drop down
-  @api @occ
-  Scenario: A team id that resolves to nothing cannot be mapped
-    Given no Penpot teams are mapped
-    When the admin tries to map the team id "11111111-2222-3333-4444-555555555555"
-    Then the mapping is rejected
-    And the refusal explains "not visible to the service account"
-    And there are exactly 0 configured team mappings
-    # The only scenario here that names no team: this step exists to hand
-    # add-mapping something no lookup could have produced.
-    # notes: ../AGENTS.md#a-team-id-that-resolves-to-nothing-cannot-be-mapped
+  # notes: ../AGENTS.md#a-link-mapping-may-not-be-made-over-designs-that-already-exist
+  @occ
+  Scenario: Mapping in link mode over a folder that already holds designs
+    Given a penpot team named "Northwind" exists
+    And a folder "Designs" already exists
+    And an unmapped design file at "Designs/Sketches/Keeper.penpot"
+    When the admin submits this mapping:
+      | team   | Northwind |
+      | folder | Designs   |
+      | mode   | link      |
+    And allows the existing unmapped designs to be purged
+    Then the mapping matches the form, unset fields at their defaults
+    And no ".penpot" designs exist under "/Designs" in Nextcloud
+    And "Designs/Sketches/Keeper.penpot" left no trash entry
 
-  Scenario Outline: A mapping may not reuse a team or a folder
+  # notes: ../AGENTS.md#a-team-may-only-be-mapped-once
+  @occ
+  Scenario: A team may only be mapped once
+    Given a penpot team named "Northwind" exists
+    And a mapping with the following values:
+      | team   | Northwind |
+      | folder | Designs   |
+    When the admin submits this mapping:
+      | team   | Northwind |
+      | folder | Elsewhere |
+      | mode   | sync      |
+    Then the mapping is rejected, explaining "The team is already mapped to another folder"
+
+  # notes: ../AGENTS.md#a-folder-may-only-be-mapped-once
+  @occ
+  Scenario: A folder may only be mapped once
     Given a mapping with the following values:
       | team   | Northwind |
       | folder | Designs   |
-    And a Penpot team named "<team>" exists
-    When the admin maps it with:
-      | folder | <folder> |
-    Then the mapping is rejected
-    And the refusal explains "<reason>"
-    And there is exactly 1 configured team mapping
+    And a penpot team named "Bundt Cake" exists
+    When the admin submits this mapping:
+      | team   | Bundt Cake |
+      | folder | Designs    |
+      | mode   | link       |
+    Then the mapping is rejected, explaining "The folder is already mapped to another team"
 
-    Examples: a team may be mapped once, and a folder may be used once
-      | team       | folder    | reason         |
-      | Northwind  | Elsewhere | already mapped |
-      | Bundt Cake | Designs   | already used   |
+  # api only because the ui is a drop down of the teams it can reach
+  # notes: ../AGENTS.md#a-team-that-cannot-be-reached-cannot-be-mapped
+  @api @occ
+  Scenario: A team that cannot be reached cannot be mapped
+    Given the penpot team "Outsiders" does not exist
+    When the admin submits this mapping:
+      | team   | Outsiders |
+      | folder | Designs   |
+    Then the mapping is rejected, explaining "The team was not found using the given credentials"
 
-    # notes: ../AGENTS.md#a-mapping-may-not-reuse-a-team-or-a-folder
-
-  # @todo AND IT FAILS, WHICH IS A FINDING: "it" has no referent here. Naming a
-  # team needs a token, and this scenario is about not having one.
   # notes: ../AGENTS.md#without-a-service-account-token-nothing-can-be-mapped
-  @todo
+  @occ
   Scenario: Without a service-account token, nothing can be mapped
-    Given no service-account token is configured
-    When the admin maps it with:
-      | folder | Designs |
-    Then the mapping is rejected
-    And the refusal explains "service-account token"
+    Given a penpot team named "Northwind" exists
+    And no service-account token is configured
+    When the admin submits this mapping:
+      | team   | Northwind |
+      | folder | Designs   |
+    Then the mapping is rejected, explaining "A service-account token is not configured yet."

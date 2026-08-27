@@ -235,7 +235,7 @@ than choosing one, which is exactly the difference that makes it a separate
 sentence rather than an alias.
 
 AND ONE ACTION TO MATCH. Creating a mapping is a single `When` — "the admin
-maps it with:" and a table. Saving the form, being refused because the folder
+submits this mapping:" and a table. Saving the form, being refused because the folder
 is taken, and being refused because the team is already mapped are the SAME
 action against three different pre-states, so they share the sentence and
 differ in their `Given` and their `Then`. A draft had a second sentence, "the
@@ -296,36 +296,116 @@ field nobody can meaningfully fill in does not earn a column. The design
 question survives where an unbuilt design belongs, in the saga (§6.53,
 question #47).
 
-### A team id that resolves to nothing cannot be mapped
+### A team may only be mapped once
+
+`getByTeamId()` refuses a team that already has a mapping. A mapping IS its team
+(saga §6.24), so a second one would be two answers to the same question — which
+folder does this team mirror into.
+
+THE TEAM BEING SUBMITTED IS ALWAYS STATED, and that is the rule the two reuse
+scenarios follow rather than a difference between them. Here `Northwind` is both
+the incumbent and the team being submitted, so its existence is load-bearing and
+said out loud; in the folder scenario the submitted team is `Bundt Cake`, which is
+named there, and `Northwind` is only the incumbent — carried by the mapping
+statement, which creates it.
+
+THE REFUSAL NAMES WHICH SIDE THE CLASH IS ON. "The team is already mapped" alone
+leaves an admin looking at the wrong half of the form; "to another folder" says
+where to go and look.
+
+### A folder may only be mapped once
+
+`assertFolderUnique()` refuses a folder some other mapping already uses, for the
+mirror-image reason: a folder can only mirror one team, and two mappings pointed at
+one folder would each prune what the other wrote.
+
+### A team that cannot be reached cannot be mapped
 
 Better an honest refusal than a mapping that silently pulls nothing.
 
-AND THIS IS THE WHOLE OF IT. There used to be a second scenario here for a
-team that EXISTS but has not invited the service account. From this side of
-the wire the two are one case: `get-teams` is membership-scoped (§6.12), so
-a team we were never invited to is a team that is not there. Testing the
-difference would be testing Penpot's own permission model, which is not
-ours to prove — the token works or nothing in this suite runs at all.
+ONE SCENARIO FOR TWO CAUSES, because there is only one behaviour. `get-teams` is
+membership-scoped (§6.12), so a team that does not exist and a team the service
+account was never invited to arrive identically: the lookup returns nothing. There
+used to be a second scenario for the invited case, and a later draft tried to split
+them again with "a team exists / and the service account cannot see it". Both were
+testing Penpot's permission model rather than this app's, and neither could be
+arranged honestly — the harness has one Penpot account, and `a penpot team named
+"…" exists` is find-or-create THROUGH it, so anything it names is visible by
+construction.
 
-### A mapping may not reuse a team or a folder
+The refusal used to read "is not visible to the service account", which names one
+of the two causes and sends an admin looking for an invite to a team that was never
+there. It says the team was not found using the given credentials now, and offers
+both explanations.
 
-TWO RULES THAT READ AS ONE SCENARIO WRITTEN TWICE. `getByTeamId()` refuses a
-team that is already mapped; `assertFolderUnique()` refuses a folder that is
-already used. Apart, both scenarios said "a mapping exists, the admin maps one,
-it is refused" — the whole difference lived in whether a second team had been
-named first, which is invisible on the page and was flagged as a duplicate the
-moment someone read them together.
+IT NEVER SPEAKS IN IDS. Nobody types a team id to make a mapping — the UI is a drop
+down and the id is what the app derives from the name it was handed — so the id
+lives in the step. `the admin submits this mapping:` resolves a `team` cell by
+LOOKUP, never find-or-create: a `When` that builds fixtures would have conjured
+`Outsiders` and then mapped it successfully.
 
-Side by side the columns ARE the difference: row 1 reuses the team and takes a
-free folder, row 2 brings a fresh team to the taken folder. The `reason` column
-is what makes them two rules rather than one, and asserting it is what would
-catch the app refusing for the right-sounding wrong reason.
+### Why these three are scenarios and not one Outline
+
+They were an Outline, briefly, on the grounds that they are one action against three
+pre-states. The pre-state IS the difference here, and that is what makes them three:
+each enforces a rule of its own, the captions had ended up carrying the rules that
+the scenario titles should, and a reader had to hold three Examples blocks in their
+head to see what any single one claimed.
+
+NEITHER MODE NOR STORAGE MATTERS TO ANY OF THEM, so `storage` is gone from all
+three. All three checks run before anything is provisioned, so the backend never
+enters into them, and a column that never changes the outcome is a column a reader
+has to rule out. `mode` stays because it varies the submission without pretending
+to be load-bearing.
+
+They sit together at the bottom of the file, after the two scenarios that succeed,
+so the refusals read as a group.
 
 
-The pre-state is a mapping that already exists, so the scenario opens where
-the interesting part starts. It used to map twice inside the `When` block,
-which put half the setup in the behaviour and needed a "the same team
-again" step to refer back to a team it had never named.
+### A link mapping may not be made over designs that already exist
+
+@unbuilt — nothing purges on create yet.
+
+THE STATE THIS PREVENTS IS ONE THE APP HAS NO ANSWER FOR. A `link` mirror is a
+zero-byte pointer; a `.penpot` holding an archive inside a link mapping is a
+contradiction, and every rule that reads one has to guess which it is. The live
+instance produced exactly that: a folder mapped `sync`, unmapped (leaving three
+real archives behind), then re-mapped `link` over them. Removing the mapping then
+took the three pointers and kept the three archives — which is
+`MappingTeardownService`'s stated rule working correctly and
+`mapping/delete.feature`'s promise ("takes its designs with it") failing, at the
+same time. CI could not have caught it: every scenario there builds a clean tree.
+
+So the contradiction is designed out at the only moment it can be created.
+
+THE ACKNOWLEDGEMENT IS A SECOND BEAT, NOT A FORM FIELD. It began life as a
+`| purge designs | yes |` row in the submitted table, which was wrong twice over:
+it is not a setting the mapping stores, and it put the consent BEFORE the app had
+said what it would cost. As an `And` after the `When` it reads the way the
+interaction actually goes — the admin submits, the app answers with a count, the
+admin accepts — and it keeps the form table to fields a mapping really has.
+
+PURGED, NOT TRASHED, and that is the load-bearing word. A trashed design offers a
+restore, and restoring INTO a link mapping is already ruled out — there is nowhere
+for the bytes to go, because Penpot has no write path for design content. Rather
+than invent an answer for a restore that cannot work, the files never reach the
+trash. Which is why the confirmation has to say HOW MANY and that they are not
+recoverable: this is the one gesture in the app that destroys something outright.
+
+CANCELLING NEEDS NO HANDLING, and that is a design property rather than an
+omission. The admin goes and does whatever they were going to do with those files
+— move them, delete them, keep them somewhere else — and when they come back the
+tree holds no designs, so the mapping is created with no warning at all. Nothing
+destructive, nothing to confirm.
+
+ONLY *UNMAPPED* DESIGNS, ON PURPOSE. A tree already belonging to a mapping cannot
+reach this rule: `A mapping may not reuse a team or a folder` refuses first, and a
+mapping may not be made under or over an existing one. So "no `.penpot` anywhere in
+the tree" holds implicitly for every mapped tree without being checked, and the
+only case left to handle is the one this scenario names.
+
+SYNC IS UNTOUCHED. Designs already in the tree are adopted and imported when a
+`sync` mapping arrives (§6.33), so nothing is destroyed and nothing is confirmed.
 
 ### Removing a mapping deletes nothing
 

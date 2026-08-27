@@ -80,12 +80,12 @@ final class ConnectionTesterTest extends TestCase {
 
 	public function testAnUnconfiguredTokenKeepsTheClientsOwnMessage(): void {
 		$result = $this->tester(
-			$this->clientThrowing(PenpotApiException::KIND_UNCONFIGURED, 'No Penpot service-account token is configured.'),
+			$this->clientThrowing(PenpotApiException::KIND_UNCONFIGURED, 'A service-account token is not configured yet.'),
 		)->test();
 
 		self::assertFalse($result->success);
 		self::assertSame(PenpotApiException::KIND_UNCONFIGURED, $result->kind);
-		self::assertStringContainsString('No Penpot service-account token', $result->message);
+		self::assertStringContainsString('service-account token is not configured', $result->message);
 	}
 
 	/**

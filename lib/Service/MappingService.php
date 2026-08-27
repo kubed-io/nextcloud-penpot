@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
+use OCA\PenpotSync\Exception\ExistingDesignsException;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCP\IAppConfig;
 
@@ -56,6 +57,7 @@ final class MappingService {
 		private readonly IAppConfig $config,
 		private readonly PenpotClient $client,
 		private readonly StorageService $storage,
+		private readonly ExistingDesigns $existing,
 	) {
 	}
 
@@ -135,10 +137,10 @@ final class MappingService {
 	 *                            Penpot" and "that team does not exist" are
 	 *                            different problems needing different fixes.
 	 */
-	public function add(Mapping $mapping, array|string $groups = []): Mapping {
+	public function add(Mapping $mapping, array|string $groups = [], bool $purgeDesigns = false): Mapping {
 		if ($this->getByTeamId($mapping->teamId) !== null) {
 			throw new \InvalidArgumentException(
-				'That Penpot team is already mapped. A team may only be mapped once.',
+				'The team is already mapped to another folder. A team may only be mapped once.',
 			);
 		}
 
@@ -147,9 +149,16 @@ final class MappingService {
 		$team = $this->findVisibleTeam($mapping->teamId);
 
 		if ($team === null) {
+			// ONE MESSAGE FOR TWO CAUSES, BECAUSE THERE IS NO THIRD ANSWER TO GIVE.
+			// `get-teams` is membership-scoped (§6.12), so a team that does not exist
+			// and a team the service account was never invited to come back
+			// identically: the lookup returns nothing. This used to say "is not
+			// visible to the service account", which named only the second and sent
+			// an admin looking for an invite to a team that was never there.
 			throw new \InvalidArgumentException(sprintf(
-				'The Penpot team %s is not visible to the service account. '
-				. 'Invite the service account to that team in Penpot first, then map it.',
+				'The team was not found using the given credentials (%s). Either it does not '
+				. 'exist, or the service account has not been invited to it — check in Penpot, '
+				. 'then map it.',
 				$mapping->teamId,
 			));
 		}
@@ -184,6 +193,33 @@ final class MappingService {
 		}
 
 		$this->assertFolderUnique($mapping->ncFolder, null);
+
+		// A LINK MAPPING MAY NOT BE MADE OVER DESIGNS THAT ALREADY EXIST, and the
+		// count is read here — before anything is provisioned — so a refusal costs
+		// nothing and the number the admin is shown is the number that would go.
+		//
+		// AFTER `assertFolderUnique()`, WHICH IS WHY THIS ONLY EVER SEES UNMAPPED
+		// FILES. A folder already in use is refused one line up, and a mapping may
+		// not be made under or over another, so a tree that belongs to some other
+		// mapping never reaches this check. "No `.penpot` anywhere in the tree"
+		// holds implicitly for every mapped tree without being asked.
+		$designs = $mapping->mode === Mapping::MODE_LINK ? $this->existing->under($mapping) : [];
+
+		if ($designs !== [] && !$purgeDesigns) {
+			// THE FOLDER NAME AS THE APP RESOLVED IT, not as the admin typed it —
+			// they may have typed nothing at all and taken the team's name as the
+			// default, which is settled a few lines above this. The panel puts this
+			// in the confirmation, and `"" already holds 3 designs` is a poor sentence
+			// to read before destroying something. Raised by Copilot on #48.
+			throw new ExistingDesignsException(sprintf(
+				'"%s" already holds %d design%s. A link mapping holds pointers rather than '
+				. 'designs, so they would be permanently deleted — not moved to the trash, and '
+				. 'not recoverable. Move them elsewhere first, or confirm the deletion.',
+				$mapping->ncFolder,
+				count($designs),
+				count($designs) === 1 ? '' : 's',
+			), count($designs), $mapping->ncFolder);
+		}
 
 		// THE FOLDER IS WHAT A MAPPING IS. Refuse before persisting if the chosen
 		// backend cannot be built — a mapping whose destination can never exist is
@@ -223,6 +259,19 @@ final class MappingService {
 		$all = $this->list();
 		$all[] = $mapping;
 		$this->persist($all);
+
+		// THE PURGE IS LAST, AND AFTER THE WRITE ON PURPOSE. It is the one
+		// irreversible thing this app does, so it must not happen for a mapping that
+		// then fails to save — the admin would be left having destroyed designs to
+		// make room for nothing. `persist()` can throw (it encodes and writes app
+		// config); everything after this point cannot.
+		//
+		// The reverse order fails worse in the only other direction available: a
+		// saved link mapping over surviving archives is the contradiction this whole
+		// rule exists to prevent, and it would be created deliberately.
+		if ($designs !== []) {
+			$this->existing->purge($designs);
+		}
 
 		return $mapping;
 	}
@@ -407,9 +456,14 @@ final class MappingService {
 			}
 
 			if (strcasecmp($existing->ncFolder, $ncFolder) === 0) {
+				// THE PLACEHOLDER IS THE TEAM, and it was the folder for one commit:
+				// the message used to open with `The Nextcloud folder "%s"` and so
+				// carried two arguments. Rewording it to say which SIDE the clash is
+				// on left one placeholder and two arguments, and sprintf silently
+				// filled it with the first — announcing the folder's own name as the
+				// team that holds it. Raised by Copilot on #48.
 				throw new \InvalidArgumentException(sprintf(
-					'The Nextcloud folder "%s" is already used by the mapping for %s. Pick another name.',
-					$ncFolder,
+					'The folder is already mapped to another team (%s). Pick another name.',
 					$existing->teamName !== '' ? $existing->teamName : $existing->teamId,
 				));
 			}

@@ -110,7 +110,7 @@ final class ProbeTest extends TestCase {
 
 	public function testAFailedConnectionExitsNonZeroAndNamesTheKind(): void {
 		$this->client->method('ping')->willThrowException(new PenpotApiException(
-			'No Penpot service-account token is configured.',
+			'A service-account token is not configured yet.',
 			0,
 			null,
 			PenpotApiException::KIND_UNCONFIGURED,
@@ -119,7 +119,7 @@ final class ProbeTest extends TestCase {
 		self::assertSame(1, $this->tester->execute([]));
 
 		$display = $this->tester->getDisplay();
-		self::assertStringContainsString('token is configured', $display);
+		self::assertStringContainsString('token is not configured', $display);
 		// The kind is what tells an operator whether to fix config or fix the network.
 		self::assertStringContainsString(PenpotApiException::KIND_UNCONFIGURED, $display);
 	}
