@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Confirming the deletion of designs no longer flashes a failure at you.** Saying yes worked, but an error appeared for a moment first, claiming the mapping had not been saved — while it was being saved. Nextcloud's own confirmation dialog answers a second time after it closes, and the app was listening to the echo.
+
 - **Deleting a project in Penpot no longer leaves a folder behind claiming to be it.** The designs went to your trash as they always did, but the folder stayed — and it was stuck: under a linked folder it could not be deleted afterwards, by any route. An emptied folder now goes to your trash too, and one still holding your own files keeps them and quietly stops being a Penpot project.
 
 - **An ordinary folder inside a linked folder can be deleted again.** Any folder or file you put inside a folder mapped in `link` mode refused to be deleted — forever, and with a reason ("it would come back on the next sync") that was never going to happen, because nothing had ever synced it. Only the designs and project folders Penpot actually fills are protected now.
@@ -60,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When a move is refused — anything crossing the edge of a link folder — Nextcloud now shows you the reason instead of an empty error.
 
 ### Changed
+
+- Every confirmation in the admin panel is now the same dialog, so a question about deleting designs looks and behaves exactly like one about removing a mapping.
 
 - **The "Purge Nextcloud files" button is gone from Sync Actions.** It had never worked — it was rendered greyed out with a tooltip promising it was coming — and the feature behind it was cancelled. Emptying the Nextcloud trash is unaffected.
 
