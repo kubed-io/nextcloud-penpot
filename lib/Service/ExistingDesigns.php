@@ -159,19 +159,28 @@ final class ExistingDesigns {
 		try {
 			$children = $folder->getDirectoryListing();
 		} catch (\Throwable $e) {
-			// AN UNREADABLE FOLDER IS NOT AN EMPTY ONE, and the difference matters
-			// here more than anywhere else in the app: this list becomes both the
-			// warning's count and the set that is destroyed. Understating it would
-			// create the mapping while leaving designs behind — the exact state the
-			// class exists to prevent — so the failure is logged loudly rather than
-			// returned as "nothing found".
+			// AN UNREADABLE FOLDER IS NOT AN EMPTY ONE, and this used to say so and
+			// then return `[]` anyway — the comment and the code disagreeing, which
+			// Copilot caught on #48. Answering "nothing found" here would let the
+			// mapping be created over designs nobody could see, which is precisely
+			// the state this class exists to prevent.
+			//
+			// SO IT FAILS CLOSED, as an `InvalidArgumentException` — the type both
+			// front doors already turn into a refusal the admin can read, rather than
+			// a 500 from the panel and a stack trace from `occ`. A folder that cannot
+			// be listed is a folder nothing should be mapped over.
 			$this->logger->error('penpot_sync: could not read a folder while looking for existing designs', [
 				'app' => Application::APP_ID,
 				'folder' => $folder->getPath(),
 				'exception' => $e,
 			]);
 
-			return [];
+			throw new \InvalidArgumentException(sprintf(
+				'The contents of "%s" could not be read, so it is not possible to tell whether it '
+				. 'already holds designs. Nothing was changed — try again, and check the folder\'s '
+				. 'permissions if this persists.',
+				$folder->getName(),
+			), 0, $e);
 		}
 
 		$found = [];

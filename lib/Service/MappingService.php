@@ -206,6 +206,11 @@ final class MappingService {
 		$designs = $mapping->mode === Mapping::MODE_LINK ? $this->existing->under($mapping) : [];
 
 		if ($designs !== [] && !$purgeDesigns) {
+			// THE FOLDER NAME AS THE APP RESOLVED IT, not as the admin typed it —
+			// they may have typed nothing at all and taken the team's name as the
+			// default, which is settled a few lines above this. The panel puts this
+			// in the confirmation, and `"" already holds 3 designs` is a poor sentence
+			// to read before destroying something. Raised by Copilot on #48.
 			throw new ExistingDesignsException(sprintf(
 				'"%s" already holds %d design%s. A link mapping holds pointers rather than '
 				. 'designs, so they would be permanently deleted — not moved to the trash, and '
@@ -213,7 +218,7 @@ final class MappingService {
 				$mapping->ncFolder,
 				count($designs),
 				count($designs) === 1 ? '' : 's',
-			), count($designs));
+			), count($designs), $mapping->ncFolder);
 		}
 
 		// THE FOLDER IS WHAT A MAPPING IS. Refuse before persisting if the chosen
@@ -264,7 +269,9 @@ final class MappingService {
 		// The reverse order fails worse in the only other direction available: a
 		// saved link mapping over surviving archives is the contradiction this whole
 		// rule exists to prevent, and it would be created deliberately.
-		$this->existing->purge($designs);
+		if ($designs !== []) {
+			$this->existing->purge($designs);
+		}
 
 		return $mapping;
 	}
@@ -449,9 +456,14 @@ final class MappingService {
 			}
 
 			if (strcasecmp($existing->ncFolder, $ncFolder) === 0) {
+				// THE PLACEHOLDER IS THE TEAM, and it was the folder for one commit:
+				// the message used to open with `The Nextcloud folder "%s"` and so
+				// carried two arguments. Rewording it to say which SIDE the clash is
+				// on left one placeholder and two arguments, and sprintf silently
+				// filled it with the first — announcing the folder's own name as the
+				// team that holds it. Raised by Copilot on #48.
 				throw new \InvalidArgumentException(sprintf(
 					'The folder is already mapped to another team (%s). Pick another name.',
-					$ncFolder,
 					$existing->teamName !== '' ? $existing->teamName : $existing->teamId,
 				));
 			}

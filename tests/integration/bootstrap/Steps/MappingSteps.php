@@ -74,7 +74,7 @@ trait MappingSteps {
 	public function allowsTheExistingDesignsToBePurged(): void {
 		if ($this->lastExit === 0) {
 			throw new \RuntimeException(
-				"the mapping was created without asking about the designs already in the "
+				'the mapping was created without asking about the designs already in the '
 				. "folder — the acknowledgement is not being required:\n" . $this->lastOutput,
 			);
 		}
@@ -135,7 +135,7 @@ trait MappingSteps {
 		$after = $this->mappingIds();
 		if ($after !== $this->mappingsBeforeAttempt) {
 			throw new \RuntimeException(sprintf(
-				"the mapping was refused and the store changed anyway: %d mapping(s) before, %d after",
+				'the mapping was refused and the store changed anyway: %d mapping(s) before, %d after',
 				count($this->mappingsBeforeAttempt),
 				count($after),
 			));

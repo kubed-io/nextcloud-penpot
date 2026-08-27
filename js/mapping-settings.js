@@ -188,7 +188,7 @@
 			cardStatus(card, 'success', t('penpot_sync', 'Saved.'));
 		}).catch(function (err) {
 			if (typeof err.designs === 'number' && !purge) {
-				confirmPurge(card, isNew, data, err.designs);
+				confirmPurge(card, isNew, data, err.designs, err.folder);
 				return;
 			}
 			cardStatus(card, 'error', err.message || t('penpot_sync', 'Save failed.'));
@@ -209,7 +209,7 @@
 	 * an omission. The admin goes and moves the files, and when they come back the
 	 * folder holds no designs — so the mapping is created with no warning at all.
 	 */
-	function confirmPurge(card, isNew, data, count) {
+	function confirmPurge(card, isNew, data, count, folder) {
 		var msg = n(
 			'penpot_sync',
 			'"{folder}" already holds {count} design. Mapping it in link mode will '
@@ -217,7 +217,7 @@
 			'"{folder}" already holds {count} designs. Mapping it in link mode will '
 				+ 'permanently delete them — they will not go to the trash and cannot be recovered.',
 			count,
-			{ folder: data.ncFolder || '', count: count }
+			{ folder: folder || data.ncFolder, count: count }
 		);
 
 		OC.dialogs.confirmDestructive(
@@ -465,6 +465,11 @@
 					// ask it. Reading it off the sentence would break on translation.
 					if (data && typeof data.designs === 'number') {
 						err.designs = data.designs;
+						// The folder as the SERVER resolved it. An admin who left the
+						// field blank took the team's name as the default, and the
+						// panel never saw it — so the submitted value would put an
+						// empty string in the one dialog that destroys something.
+						err.folder = data.folder || '';
 					}
 					return Promise.reject(err);
 				}

@@ -262,7 +262,7 @@ final class PenpotClientTest extends TestCase {
 			->willReturnCallback(static fn (string $app, string $key): string => $key === 'penpot_url' ? 'https://penpot.example.com' : '');
 
 		$this->expectException(PenpotApiException::class);
-		$this->expectExceptionMessageMatches('/No Penpot service-account token/');
+		$this->expectExceptionMessageMatches('/service-account token is not configured/');
 
 		$this->client->getTeams();
 	}

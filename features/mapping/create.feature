@@ -5,6 +5,12 @@ Feature: Mapping a Penpot team to a Nextcloud folder
   I want to point a Penpot team at a folder
   So that its designs mirror into Nextcloud, scriptably (e.g. from a k8s job)
 
+  rules: 
+  - creating a mapping does not trigger a sync
+  - creating a mapping creates its nextcloud folder if it doesn't exist at the moment of creation
+  - if the folder is a team folder, the folder is created with the team folder api
+  - if link mapping is created over unmapped files and they are opted to be purged, the creation of the mapping is what sets the stage for the sync whenever it happens 
+
   Background:
     Given the app is enabled
     And the Penpot base URL points at the test instance

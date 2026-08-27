@@ -114,6 +114,24 @@ final class ExistingDesignsTest extends TestCase {
 		self::assertSame([], $service->under($this->mapping()));
 	}
 
+	/**
+	 * AN UNREADABLE FOLDER IS NOT AN EMPTY ONE, and answering "nothing found" would
+	 * let the mapping be created over designs nobody could see — the exact state
+	 * this class exists to prevent. It fails closed instead, as the type both front
+	 * doors already turn into a refusal. Raised by Copilot on #48.
+	 */
+	public function testAnUnreadableFolderRefusesRatherThanReadingAsEmpty(): void {
+		$root = $this->createStub(Folder::class);
+		$root->method('getName')->willReturn('Designs');
+		$root->method('getPath')->willReturn('/admin/files/Designs');
+		$root->method('getDirectoryListing')->willThrowException(new \RuntimeException('no access'));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('could not be read');
+
+		$this->service($root)->under($this->mapping());
+	}
+
 	// ── what must not happen ────────────────────────────────────────────────
 
 	/**
@@ -191,6 +209,7 @@ final class ExistingDesignsTest extends TestCase {
 	/** @param list<Node> $children */
 	private function folder(array $children): Folder {
 		$folder = $this->createStub(Folder::class);
+		$folder->method('getName')->willReturn('Designs');
 		$folder->method('getPath')->willReturn('/admin/files/Designs');
 		$folder->method('getDirectoryListing')->willReturn($children);
 

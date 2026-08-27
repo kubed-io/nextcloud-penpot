@@ -448,7 +448,7 @@ final class MappingServiceTest extends TestCase {
 		]));
 
 		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('already used');
+		$this->expectExceptionMessage('already mapped to another team');
 
 		$this->service()->add(Mapping::fromArray([
 			'team_id' => self::OTHER_TEAM_ID,
@@ -468,7 +468,7 @@ final class MappingServiceTest extends TestCase {
 		]));
 
 		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('already used');
+		$this->expectExceptionMessage('already mapped to another team');
 
 		$this->service()->add(Mapping::fromArray([
 			'team_id' => self::OTHER_TEAM_ID,

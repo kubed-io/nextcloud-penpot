@@ -23,7 +23,9 @@ namespace OCA\PenpotSync\Exception;
  *
  *   - the panel turns it into a confirmation and re-submits with the
  *     acknowledgement, which means it needs the COUNT as a number rather than as
- *     a sentence it would have to parse back out;
+ *     a sentence it would have to parse back out — and the FOLDER as the app
+ *     resolved it, since an admin who left the field blank took the team's name
+ *     as the default and the panel never saw it;
  *   - `occ` prints it like any other refusal, because a CLI has nowhere to ask.
  *
  * It extends `InvalidArgumentException` so every existing caller — the command's
@@ -34,6 +36,7 @@ final class ExistingDesignsException extends \InvalidArgumentException {
 	public function __construct(
 		string $message,
 		public readonly int $designs,
+		public readonly string $folder,
 	) {
 		parent::__construct($message);
 	}

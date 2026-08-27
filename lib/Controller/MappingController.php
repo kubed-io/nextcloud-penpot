@@ -118,7 +118,7 @@ final class MappingController extends Controller {
 			// would break the first time the sentence is translated. Caught before
 			// the `InvalidArgumentException` arm below, which it extends.
 			return new JSONResponse(
-				['message' => $e->getMessage(), 'designs' => $e->designs],
+				['message' => $e->getMessage(), 'designs' => $e->designs, 'folder' => $e->folder],
 				Http::STATUS_UNPROCESSABLE_ENTITY,
 			);
 		} catch (\InvalidArgumentException $e) {
