@@ -64,7 +64,8 @@ Feature: Mapping a Penpot team to a Nextcloud folder
   # notes: ../AGENTS.md#a-team-may-only-be-mapped-once
   @occ
   Scenario: A team may only be mapped once
-    Given a mapping with the following values:
+    Given a penpot team named "Northwind" exists
+    And a mapping with the following values:
       | team   | Northwind |
       | folder | Designs   |
     When the admin submits this mapping:

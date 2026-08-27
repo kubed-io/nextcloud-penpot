@@ -302,6 +302,13 @@ question #47).
 (saga §6.24), so a second one would be two answers to the same question — which
 folder does this team mirror into.
 
+THE TEAM BEING SUBMITTED IS ALWAYS STATED, and that is the rule the two reuse
+scenarios follow rather than a difference between them. Here `Northwind` is both
+the incumbent and the team being submitted, so its existence is load-bearing and
+said out loud; in the folder scenario the submitted team is `Bundt Cake`, which is
+named there, and `Northwind` is only the incumbent — carried by the mapping
+statement, which creates it.
+
 THE REFUSAL NAMES WHICH SIDE THE CLASH IS ON. "The team is already mapped" alone
 leaves an admin looking at the wrong half of the form; "to another folder" says
 where to go and look.
