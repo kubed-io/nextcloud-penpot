@@ -452,22 +452,22 @@ trait PullSteps {
 	 *
 	 * ## A TREE IS ONE FACT TOO
 	 *
-	 * Every path a sync should have produced, and whether it wears a tag. It
-	 * replaces a column of "the folder X carries…" / "the file Y carries…" lines
-	 * that said one thing each and made a six-node tree into six assertions, none
-	 * of which showed the SHAPE the sync was supposed to build.
+	 * Every path a sync should have produced. It replaces a column of "the folder
+	 * X carries…" / "the file Y carries…" lines that said one thing each and made
+	 * a six-node tree into six assertions, none of which showed the SHAPE the sync
+	 * was supposed to build.
 	 *
-	 * `-` in the tagged column means "no tag expected" and is not checked; naming
-	 * a tag checks it is there. The tag lives here rather than in a scenario of
-	 * its own because it is a property of a node in the tree, the same as the
-	 * node existing at all.
+	 * IT USED TO CHECK A `tagged` COLUMN TOO, and the column is gone with the
+	 * behaviour: the pull no longer puts a `penpot` system tag on the folders it
+	 * mirrors. Nothing ever read that tag to decide anything — a project folder is
+	 * one because it carries `penpot_project_id` — and `nextcloud-grafana` puts no
+	 * marker tag on a mirrored folder either.
 	 *
 	 * @Then /^the mapped folder holds:$/
 	 */
 	public function theMappedFolderHolds(TableNode $tree): void {
 		foreach ($tree->getHash() as $row) {
 			$path = trim((string)($row['path'] ?? ''));
-			$tag = trim((string)($row['tagged'] ?? ''));
 
 			if ($path === '') {
 				continue;
@@ -475,20 +475,6 @@ trait PullSteps {
 
 			if (!$this->davExists($path)) {
 				throw new \RuntimeException("the sync did not produce \"{$path}\"");
-			}
-
-			if ($tag === '' || $tag === '-') {
-				continue;
-			}
-
-			$tags = $this->davSystemTags($path);
-			if (!in_array($tag, $tags, true)) {
-				throw new \RuntimeException(sprintf(
-					'"%s" should carry the "%s" tag, carries: %s',
-					$path,
-					$tag,
-					$tags === [] ? '(none)' : implode(', ', $tags),
-				));
 			}
 		}
 	}

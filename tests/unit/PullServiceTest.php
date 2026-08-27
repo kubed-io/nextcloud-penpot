@@ -261,6 +261,8 @@ final class PullServiceTest extends TestCase {
 		$this->client->method('getProjectFiles')->willReturn([]);
 
 		$bubbles->expects($this->once())->method('newFolder')->with('foo');
+		// NO TAG, on either of them. The id is the only marker a project folder gets.
+		$this->tags->expects($this->never())->method('apply');
 
 		$stamped = [];
 		$this->metadata->method('writeFolder')->willReturnCallback(
@@ -269,8 +271,6 @@ final class PullServiceTest extends TestCase {
 			},
 		);
 		// The leaf is tagged as a project; the folder holding it is not.
-		$this->tags->expects($this->once())->method('apply')->with(21);
-
 		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
 
 		self::assertSame(1, $result['folders']);
@@ -342,8 +342,12 @@ final class PullServiceTest extends TestCase {
 		$bubbles->method('getId')->willReturn(20);
 		$bubbles->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
 		$bubbles->method('nodeExists')->willReturn(false);
+		// A CLOSURE, NOT AN ARROW FUNCTION. `fn` captures by VALUE at creation, so
+		// `$inside` would be frozen holding the node this test is about to move out.
 		$bubbles->method('getDirectoryListing')->willReturnCallback(
-			static fn (): array => $inside,
+			static function () use (&$inside): array {
+				return $inside;
+			},
 		);
 
 		$root = $this->createMock(Folder::class);
@@ -420,6 +424,118 @@ final class PullServiceTest extends TestCase {
 
 		self::assertSame(1, $result['folders']);
 		self::assertSame(0, $result['skipped']);
+	}
+
+	/**
+	 * AND THE FOLDERS IT MADE ON THE WAY DOWN GO WITH IT. `a/b/c` can create `a` and
+	 * only then find that `b` is a file — and nothing would ever look at the `a` it
+	 * left behind: the tidy only runs behind a move that happened, and the orphan
+	 * reap only considers folders carrying a project id. Raised by Copilot on #50.
+	 */
+	public function testScaffoldingIsRolledBackWhenTheRestOfThePathFails(): void {
+		$blocker = $this->emptyFile(30);
+		$blocker->method('getPath')->willReturn('/admin/files/Penpot/a/b');
+
+		$made = $this->createMock(Folder::class);
+		$made->method('getId')->willReturn(20);
+		$made->method('getPath')->willReturn('/admin/files/Penpot/a');
+		$made->method('getDirectoryListing')->willReturn([]);
+		$made->method('nodeExists')->willReturn(true);
+		$made->method('get')->willReturn($blocker);
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([]);
+		$root->method('nodeExists')->willReturn(false);
+		$root->method('newFolder')->willReturn($made);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'a/b/c', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+
+		$made->expects($this->once())->method('delete');
+
+		$result = $this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(1, $result['skipped']);
+		self::assertSame(0, $result['folders']);
+	}
+
+	/**
+	 * ADOPTION TAKES A BARE FOLDER ONLY. Two Penpot projects may share a name (§31),
+	 * so the folder already sitting on it can belong to the OTHER one — and adopting
+	 * it would re-stamp it with this project's id, handing one project's folder, its
+	 * designs and its history to another. The newcomer takes a free name instead.
+	 * Raised by Copilot on #50.
+	 */
+	public function testAFolderAlreadyClaimedByAnotherProjectIsNotAdopted(): void {
+		$taken = $this->emptyFolder(20);
+		$taken->method('getPath')->willReturn('/admin/files/Penpot/Cogs');
+		$this->folderMarkersById[20] = new FolderMarkers('proj-other', '');
+		$fresh = $this->emptyFolder(21);
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$taken]);
+		$root->method('nodeExists')->willReturnCallback(static fn (string $n): bool => $n === 'Cogs');
+		$root->method('get')->willReturn($taken);
+		$root->expects($this->once())->method('newFolder')->with('Cogs (2)')->willReturn($fresh);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-other', 'name' => 'Cogs', 'team-id' => self::TEAM_ID, 'is-default' => false],
+			['id' => 'proj-b', 'name' => 'Cogs', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$stamped = [];
+		$this->metadata->method('writeFolder')->willReturnCallback(
+			static function (int $id, array $values) use (&$stamped): void {
+				$stamped[$id] = $values;
+			},
+		);
+
+		$this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame('proj-other', $stamped[20][PenpotMetadata::KEY_PROJECT_ID], 'the folder keeps the project it already had');
+		self::assertSame('proj-b', $stamped[21][PenpotMetadata::KEY_PROJECT_ID]);
+	}
+
+	/**
+	 * AND THE SUFFIX IS NOT RE-COMPUTED EVERY PULL. `Cogs` is taken — by the other
+	 * project above, or by a user's own file — so this folder is `Cogs (2)` and
+	 * stays it. Taking a free name here instead would rename it `Cogs (3)` on this
+	 * pull and `Cogs (4)` on the next, forever: the wanted name never frees up, and
+	 * the suffix is computed against a listing holding this very folder.
+	 */
+	public function testAProjectFolderOnASuffixedNameStaysOnIt(): void {
+		$node = $this->emptyFolder(21);
+		$node->method('getPath')->willReturn('/admin/files/Penpot/Cogs (2)');
+		$this->folderMarkersById[21] = new FolderMarkers('proj-b', '');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$node]);
+		$root->method('nodeExists')->willReturnCallback(static fn (string $n): bool => $n === 'Cogs');
+		$node->method('getParent')->willReturn($root);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Cogs', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$node->expects($this->never())->method('move');
+		$root->expects($this->never())->method('newFolder');
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['folders']);
 	}
 
 	/**
@@ -796,8 +912,10 @@ final class PullServiceTest extends TestCase {
 
 		$this->storage->method('isAvailable')->willReturn(true);
 		$this->storage->method('ensureRoot')->willReturn($root);
+		// An empty segment — a name that cannot become a path at all. A plain `/` is
+		// a level of nesting now, and would be mirrored rather than skipped.
 		$this->client->method('getAllProjects')->willReturn([
-			['id' => 'proj-bad', 'name' => 'a/b', 'team-id' => self::TEAM_ID, 'is-default' => false],
+			['id' => 'proj-bad', 'name' => 'a//b', 'team-id' => self::TEAM_ID, 'is-default' => false],
 		]);
 
 		$stale->expects($this->never())->method('delete');

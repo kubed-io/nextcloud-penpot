@@ -248,7 +248,7 @@ outcome.
 
 WHAT THIS FILE IS NOT ABOUT: what is INSIDE a mapped folder. A mapping
 guarantees exactly one thing — the Nextcloud folder it names. Project folders,
-their names, their `penpot` tags and the designs in them all arrive with the
+their names and the designs in them all arrive with the
 FIRST SYNC, and two scenarios that used to sit here ("Project folder names
 always match their Penpot projects", "Two Penpot projects in one team sharing a
 name") moved to sync-now.feature for that reason. They had been reading as
@@ -1100,9 +1100,22 @@ works without the other.
 REPLACES the tag mechanism. A `penpot` tag used to be what made a folder a project,
 and the app carried a whole vocabulary for tagging, un-tagging, tagging something
 already tagged, and tagging outside every mapping. None of it was behaviour anyone
-performed on purpose — it was a mechanism wearing a feature's clothes. The tag
-survives only as the visible pill `PullService::tagProject()` already describes it
-as: decoration over an authoritative id, never at the cost of the pull.
+performed on purpose — it was a mechanism wearing a feature's clothes.
+
+**AND THEN THE PILL WENT TOO.** For a while the tag survived as decoration: the
+pull stamped `penpot` on every folder it mirrored so a project folder was visible
+as one in the Files app. It no longer does. Nothing ever read that tag to decide
+anything — `MembershipResolver` has only ever read `penpot_project_id`, and
+`ProjectTags::isTagged()` had no callers at all — so it was a second marker some
+code had to remember to keep in step with the first, saying nothing the first did
+not. `nextcloud-grafana` settles it: same folder-mirroring shape, real tag support
+in `tag-sync.feature`, and no marker tag on a mirrored folder, because *"there is
+no tagging scheme to maintain for placement"*.
+
+What is left of the tag is the one thing a user does with it on purpose:
+`ProjectFolderService::onTagged()`, assigning it by hand to ask for a folder to
+become a project. That is a gesture, not a marker. **It has no scenario anywhere in
+this suite** — a leftover worth deciding about rather than inheriting.
 
 ### A folder is a project when a design is in it
 
@@ -1895,11 +1908,11 @@ which has been false since Course 3):
   lib/Migration/RegisterMimetype.php on every install/upgrade, reverted on
   uninstall (lifecycle.feature).
 
-  NOT BUILT — the project folder's visible system TAG (§6.32). The folder
-  metadata is written; the human-visible pill is still Course 6 work. No
-  scenario here asserts it: this file looks at a design FILE, and the tag is a
-  folder's — `connection/sync-now.feature` claims it, in the tags column of the
-  tree a pull leaves behind.
+  WITHDRAWN — the project folder's visible system TAG (§6.32). Not deferred:
+  the pull no longer writes one, and the tags column it used to be claimed in
+  (`connection/sync-now.feature`, `mapping/sync-now.feature`) is gone with it.
+  A project folder is one because it carries `penpot_project_id`. See
+  projects/create for why, and for what is left of the tag.
 
 @todo — the scenarios are all DAV/mimetype assertions and the integration
 harness is occ-only. The mimetype registration in particular is UNASSERTED IN
@@ -4245,15 +4258,18 @@ having made them.
 One `Nextcloud holds exactly these resources:` table replaces five scenarios, because
 every one of them was a claim about the same tree:
 
-- **adoption** — `/Penpot/Cogs` was in the Background and is in the result, tagged.
-  No `Cogs (2)` appears, which is the whole of the old `A folder already named like a
-  Penpot project is adopted, not duplicated`;
+- **adoption** — `/Penpot/Cogs` was in the Background and is in the result. No
+  `Cogs (2)` appears, which is the whole of the old `A folder already named like a
+  Penpot project is adopted, not duplicated`. Adoption takes a BARE folder only: one
+  already carrying markers belongs to another project, and re-stamping it would hand
+  one project's designs to another;
 - **untouched content** — `notes.txt` and `plan.txt` go in and come out, which is the
   whole of `A sync leaves content it does not manage alone`;
 - **Drafts** — `Loose Idea.penpot` surfaces at the mapping root and no `Drafts` folder
   is created, because Drafts is a state rather than a place;
 - **the path model** — the project named `Region/Deep` arrives as two folders, and only
-  the deeper one is tagged. `/Penpot/Region` holds no design and is nobody's project;
+  the deeper one carries the project id. `/Penpot/Region` is scaffolding: it holds no
+  design and is nobody's project;
 - **every storage kind and mode at once** — an admin folder, a Team Folder and a link
   team, in one table.
 

@@ -27,7 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Removing a mapping now cleans up after itself.** The empty pointer files a `link` mapping left behind are removed — they held nothing and meant nothing once the mapping went. Designs that hold a real copy are kept exactly where they are and simply stop being mirrors, so nothing you could lose is ever deleted. Penpot is still never contacted.
 
+### Changed
+
+- **A project folder no longer gets a `penpot` tag.** It never decided anything — a folder is a Penpot project because of what the app records on it, not what it wears — and the tag it left on your folders was a leftover from an older design. Tag your folders however you like; the app will not add to them.
+
 ### Fixed
+
+- **A project with a `/` in its name now arrives in Nextcloud.** Renaming a project to `Bubbles/foo` in Penpot did nothing at all: no folder appeared, no design moved, and — invisibly — that mapping stopped tidying up after itself entirely, so nothing deleted in Penpot was ever cleared from Nextcloud again. The name is a path now, the way it always was on the way out: `Bubbles/foo` is a folder inside a folder, and moving a project between them moves everything it holds.
 
 - **Confirming the deletion of designs no longer flashes a failure at you.** Saying yes worked, but an error appeared for a moment first, claiming the mapping had not been saved — while it was being saved. Nextcloud's own confirmation dialog answers a second time after it closes, and the app was listening to the echo.
 
