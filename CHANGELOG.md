@@ -21,7 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Removing a mapping now cleans up after itself.** The empty pointer files a `link` mapping left behind are removed — they held nothing and meant nothing once the mapping went. Designs that hold a real copy are kept exactly where they are and simply stop being mirrors, so nothing you could lose is ever deleted. Penpot is still never contacted.
+
 ### Fixed
+
+- **Deleting a project in Penpot no longer leaves a folder behind claiming to be it.** The designs went to your trash as they always did, but the folder stayed — and it was stuck: under a linked folder it could not be deleted afterwards, by any route. An emptied folder now goes to your trash too, and one still holding your own files keeps them and quietly stops being a Penpot project.
+
+- **An ordinary folder inside a linked folder can be deleted again.** Any folder or file you put inside a folder mapped in `link` mode refused to be deleted — forever, and with a reason ("it would come back on the next sync") that was never going to happen, because nothing had ever synced it. Only the designs and project folders Penpot actually fills are protected now.
 
 - **Restoring a design whose Penpot design is gone now brings the design back too.** It used to put the file back and tell you the design was lost — while holding the only copy of it. The file's own archive is imported instead, so the restore finishes. The design starts a fresh history, because Penpot cannot revive a design at the id it had.
 

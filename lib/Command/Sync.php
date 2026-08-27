@@ -172,6 +172,18 @@ final class Sync extends Command {
 			));
 		}
 
+		// The FOLDER-shaped removal, which the two above cannot cover because both
+		// count files. A project deleted in Penpot retires its folder — emptied to
+		// the trash, or kept and stripped of its project id when it still holds
+		// something that was never Penpot's (`projects/delete.feature`).
+		if ($result['orphaned'] > 0) {
+			$output->writeln(sprintf(
+				'<comment>%d folder(s) stopped being a Penpot project, because the project was '
+				. 'deleted in Penpot.</comment>',
+				$result['orphaned'],
+			));
+		}
+
 		if ($result['status'] !== 'ok') {
 			$output->writeln('<error>Some mappings failed: ' . (string)$result['message'] . '</error>');
 

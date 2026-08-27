@@ -123,6 +123,17 @@ trait ArrangeSteps {
 	private array $declaredDesignIds = [];
 
 	/**
+	 * The design PATHS the most recent items table named, in order.
+	 *
+	 * {@see $declaredDesignIds} is keyed by basename and answers "what id did this
+	 * design have"; this answers "which designs is the scenario talking about",
+	 * which is a different question and the one a `Then` saying "the designs" needs.
+	 *
+	 * @var list<string>
+	 */
+	private array $lastDeclaredDesigns = [];
+
+	/**
 	 * The last folder declared as a project, so a `Then` can say "the original id"
 	 * about a folder whose NAME has just changed.
 	 *
@@ -160,6 +171,7 @@ trait ArrangeSteps {
 		$this->mappingTeamNames = [];
 		$this->declaredProjectIds = [];
 		$this->declaredDesignIds = [];
+		$this->lastDeclaredDesigns = [];
 		$this->lastDeclaredProject = '';
 		$this->currentFilePath = '';
 		$this->currentFolder = '';
@@ -315,6 +327,12 @@ trait ArrangeSteps {
 	 * @Given /^the following items in the mappings:$/
 	 */
 	public function theFollowingItemsInTheMappings(TableNode $table): void {
+		// RESET PER TABLE, so "the designs" below means the ones THIS table named.
+		// The Background declares items too, and a scenario's own `Given` re-declares
+		// what it is about — the same convention {@see $lastDeclaredProject} relies
+		// on, for the same reason: the most recent sentence is the subject.
+		$this->lastDeclaredDesigns = [];
+
 		foreach ($table->getHash() as $row) {
 			$path = ltrim(trim($row['path'] ?? ''), '/');
 			if ($path === '') {
@@ -332,6 +350,7 @@ trait ArrangeSteps {
 			switch ($kind) {
 				case 'design':
 					$this->declareDesign($path);
+					$this->lastDeclaredDesigns[] = $path;
 					break;
 				case 'project':
 					$this->davMkcol($path);

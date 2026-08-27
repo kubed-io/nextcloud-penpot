@@ -10,55 +10,46 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And the Penpot base URL points at the test instance
     And the admin has configured the service-account token
 
-    # THE BACKGROUND WAS FICTION until the live scenario below joined this file:
-    # its three steps had never been written. notes: ../AGENTS.md#team-mappingdelete
+    # THE BACKGROUND WAS FICTION until the scenarios below joined this file: its
+    # three steps had never been written. notes: ../AGENTS.md#team-mappingdelete
 
-  @todo
-  Scenario: Removing the team mapping trashes its mirrored files and leaves standalone files alone
-    Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
-    And a mirrored ".penpot" file in the "My Stuff" folder
-    And an untracked standalone ".penpot" file also sitting in the "My Stuff" folder
+    # ── RULE: teardown keeps whatever the files were worth keeping for ────────
+    # notes: ../AGENTS.md#removing-a-mapping-keeps-what-the-mode-made-worth-keeping
+
+  @occ
+  Scenario: Removing a mapping in link mode takes its designs with it
+    Given the following mappings were made:
+      | team      | folder       | mode |
+      | Northwind | Design Files | link |
+    And the following items in the mappings:
+      | path                                |
+      | /Design Files/Cogs/Gizmo.penpot     |
+      | /Design Files/Cogs/Doohickey.penpot |
     When the admin removes the "Northwind" mapping
-    Then the mirrored file is moved to the Nextcloud trash
-    And the mirrored file becomes "unmapped"
-    And the standalone file is left in place, untouched
-    And the "Northwind" mapping is no longer configured
-    And Penpot is never contacted by this action
-    And the design still exists, unchanged, in Penpot
+    Then the "Northwind" mapping is no longer configured
+    And no ".penpot" designs exist under "/Design Files" in Nextcloud
 
-  @todo
-  Scenario: There is no project mapping to remove
-    Given the "Northwind" mapping exists with several mirrored project folders
-    Then no individual project folder can be unmapped
-    And the only teardown available is removing the team mapping itself
-    # Project folders exist because the pull created them (saga §6.24).
+    # A link holds nothing, so once the mapping that gave it meaning is gone there
+    # is nothing left for it to be — whatever else the folder happens to hold.
 
-  @todo
-  Scenario: Removing a mapping warns about what is actually being trashed
-    Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
-    And 3 mirrored files in "sync" mode and 10 in "link" mode under the mapping
+  @occ
+  Scenario: Removing a mapping in sync mode leaves its designs behind, unmapped
+    Given the following mappings were made:
+      | team      | folder       | mode |
+      | Northwind | Design Files | sync |
+    And the following items in the mappings:
+      | path                                |
+      | /Design Files/Cogs/Gizmo.penpot     |
+      | /Design Files/Cogs/Doohickey.penpot |
     When the admin removes the "Northwind" mapping
-    Then the confirmation names how many files hold real archives
-    And it explains that link files hold no content to lose
-    # Don't-lose-data starts with telling the user what's at stake.
+    Then the "Northwind" mapping is no longer configured
+    And "Design Files/Cogs/Gizmo.penpot" holds:
+      | penpot_id      | the original id |
+      | penpot_team_id | absent          |
+      | penpot_mode    | "unmapped"      |
+      | content        | an archive      |
 
-  @todo
-  Scenario: Trashed mirrored files keep their identity so they can reconnect
-    Given a Penpot team named "Northwind" is mapped to the folder "Penpot"
-    And a mirrored ".penpot" file in the "My Stuff" folder
-    When the admin removes the "Northwind" mapping
-    Then the trashed file keeps its "penpot_id" metadata
-    And it keeps its archive content if it was in "sync" mode
-
-  @todo
-  Scenario: Re-mapping the same team and restoring from trash reconnects the file
-    Given the admin removed the "Northwind" mapping and the file is trashed
-    When the admin maps the Penpot team "Northwind" again
-    And the admin restores the trashed file into the mirrored "My Stuff" subfolder
-    Then the file keeps the same "penpot_id" it had before
-    And the next pull confirms it is current, or refreshes it if Penpot has since changed
-    And no duplicate mirror is created alongside it
-    # Reconnecting is matched on penpot_id, so a restored file is adopted rather
-    # than duplicated — the same id-matching guarantee sync-now.feature asserts.
-
+    # The one difference from the link teardown, and it is the archive: a sync
+    # mirror holds the design itself, so it stays and stops being a mirror.
+  
 

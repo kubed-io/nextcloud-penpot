@@ -647,6 +647,115 @@ final class PullServiceTest extends TestCase {
 		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['pruned']);
 	}
 
+	// ── a project deleted in Penpot (`projects/delete.feature`) ─────────────
+
+	/**
+	 * The folder-shaped half of the prune, and until now it did not exist.
+	 *
+	 * `collectMirrors()` gathers FILES, so deleting a project in Penpot trashed its
+	 * designs and left the FOLDER standing, still carrying a `penpot_project_id`
+	 * that named nothing. Nothing ever looked at it again — and a dead marker is
+	 * indistinguishable from a live one to everything that reads one.
+	 */
+	public function testAProjectDeletedInPenpotTakesItsEmptyFolderToTheTrash(): void {
+		$orphan = $this->emptyFolder(40);
+		$this->folderMarkersById[40] = new FolderMarkers('proj-gone', '');
+		$this->givenRootHolding([$orphan], []);
+
+		$orphan->expects($this->once())->method('delete');
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['orphaned']);
+	}
+
+	/**
+	 * The other ending. Deleting a user's spreadsheets because a Penpot project
+	 * went away is not this app's call, so the folder stays and merely stops being
+	 * a project — the id cleared and the `penpot` tag off with it.
+	 */
+	public function testAnOrphanedFolderHoldingOtherFilesKeepsThemAndLosesItsId(): void {
+		$orphan = $this->createMock(Folder::class);
+		$orphan->method('getId')->willReturn(40);
+		$orphan->method('nodeExists')->willReturn(false);
+		$orphan->method('getDirectoryListing')->willReturn([$this->emptyFile(41)]);
+		$this->folderMarkersById[40] = new FolderMarkers('proj-gone', '');
+		$this->givenRootHolding([$orphan], []);
+
+		$orphan->expects($this->never())->method('delete');
+		$this->metadata->expects($this->atLeastOnce())->method('writeFolder')
+			->willReturnCallback(static function (int $id, array $values): void {
+				if ($id === 40) {
+					self::assertSame([PenpotMetadata::KEY_PROJECT_ID => ''], $values);
+				}
+			});
+		$this->tags->expects($this->once())->method('remove')->with(40);
+
+		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['orphaned']);
+	}
+
+	/**
+	 * A folder whose project Penpot STILL lists is not an orphan, however empty it
+	 * is. The negative half, and the one that would turn this feature into a
+	 * project-folder shredder if it broke.
+	 */
+	public function testAFolderWhoseProjectStillExistsIsLeftAlone(): void {
+		$live = $this->emptyFolder(40);
+		$this->folderMarkersById[40] = new FolderMarkers('proj-live', '');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$live]);
+		$root->method('nodeExists')->willReturn(false);
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-live', 'name' => 'Live', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$live->expects($this->never())->method('delete');
+
+		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false))['orphaned']);
+	}
+
+	/**
+	 * THE SEATBELT, and it is sharper than the prune's. A project SKIPPED for an
+	 * illegal name is absent from the named set while being perfectly alive in
+	 * Penpot — so without the completeness gate, one project with a slash in its
+	 * name would send every other project's folder to the trash on the next pull.
+	 */
+	public function testAnIncompleteListingReapsNoFolders(): void {
+		$orphan = $this->emptyFolder(40);
+		$this->folderMarkersById[40] = new FolderMarkers('proj-gone', '');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getDirectoryListing')->willReturn([$orphan]);
+		$root->method('nodeExists')->willReturn(false);
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		// A `/` in the name is skipped, which is what makes the listing incomplete.
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-illegal', 'name' => 'has/slash', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+
+		$orphan->expects($this->never())->method('delete');
+
+		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false))['orphaned']);
+	}
+
+	/**
+	 * A folder that will not delete keeps its dead id for one more tick and is
+	 * counted nowhere — the same shape every other per-node failure here has.
+	 */
+	public function testAnOrphanThatCannotBeTrashedIsCountedNowhere(): void {
+		$orphan = $this->emptyFolder(40);
+		$orphan->method('delete')->willThrowException(new \RuntimeException('locked'));
+		$this->folderMarkersById[40] = new FolderMarkers('proj-gone', '');
+		$this->givenRootHolding([$orphan], []);
+
+		self::assertSame(0, $this->pull->pullOne($this->mapping(useTeamFolder: false))['orphaned']);
+	}
+
 	/**
 	 * A root holding $nodes, mirroring a Drafts project whose files are $listing.
 	 *

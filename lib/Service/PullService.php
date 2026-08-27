@@ -98,6 +98,12 @@ final class PullService {
 	/** Nextcloud-side extension for a mirrored Penpot design (saga §6.4). */
 	public const EXTENSION = '.penpot';
 
+	/**
+	 * A ceiling on {@see orphanProjectFolders()}'s descent, mirroring the seatbelts
+	 * in {@see MembershipResolver}, {@see DeletionService} and {@see PushService}.
+	 */
+	private const MAX_DEPTH = 100;
+
 	public function __construct(
 		private readonly MappingService $mappings,
 		private readonly PenpotClient $client,
@@ -116,7 +122,7 @@ final class PullService {
 	/**
 	 * Pull one mapping, or every mapping when `$mappingId` is null/empty.
 	 *
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, status:string, message:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, orphaned:int, status:string, message:?string}
 	 */
 	public function pull(?string $mappingId): array {
 		if ($mappingId !== null && $mappingId !== '') {
@@ -136,7 +142,7 @@ final class PullService {
 	/**
 	 * Pull a single mapping into its Nextcloud root folder.
 	 *
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, error:?string}
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, orphaned:int, error:?string}
 	 */
 	public function pullOne(Mapping $mapping): array {
 		if (!$this->storage->isAvailable($mapping)) {
@@ -179,11 +185,16 @@ final class PullService {
 				$rescued = 0;
 				$lost = 0;
 				$reaped = 0;
+				$orphaned = 0;
 
 				// Every `penpot_id` Penpot named during this walk. Anything mirrored
 				// under the root and NOT in here is a candidate for the prune — which
 				// is why $complete has to travel with it.
 				$seen = [];
+				// AND EVERY PROJECT ID PENPOT NAMED, for the folder-shaped half of the
+				// same question. A folder under the root carrying a project id that is
+				// NOT in here is a project somebody deleted in Penpot ({@see reapOrphanProjects}).
+				$named = [];
 				$complete = true;
 
 				foreach ($this->teamProjects($mapping->teamId) as $project) {
@@ -194,6 +205,7 @@ final class PullService {
 						$complete = false;
 						continue;
 					}
+					$named[$projectId] = true;
 
 					$target = $root;
 					if (!$this->isDefaultProject($project)) {
@@ -234,6 +246,12 @@ final class PullService {
 					// understatement, and an understated `$seen` reads live designs as
 					// gone.
 					$reaped = $this->trashReconcile->reap($mapping, $seen);
+
+					// AND THE FOLDERS THE PRUNE DOES NOT LOOK AT. `collectMirrors()`
+					// gathers FILES, so a project deleted in Penpot had its designs
+					// pruned and left its folder standing, still claiming an id nothing
+					// answers to — see {@see reapOrphanProjects}.
+					$orphaned = $this->reapOrphanProjects($root, $named);
 				}
 
 				return $this->tally([
@@ -247,6 +265,7 @@ final class PullService {
 					'rescued' => $rescued,
 					'lost' => $lost,
 					'reaped' => $reaped,
+					'orphaned' => $orphaned,
 				]);
 			});
 		} catch (PenpotApiException $e) {
@@ -276,8 +295,8 @@ final class PullService {
 	 * three separate literal arrays, and the version of this that spelled them out
 	 * had already drifted once.
 	 *
-	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, pruned?:int, rescued?:int, lost?:int, reaped?:int, error?:?string} $counts
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, error:?string}
+	 * @param array{processed?:int, folders?:int, files?:int, exported?:int, failed?:int, skipped?:int, pruned?:int, rescued?:int, lost?:int, reaped?:int, orphaned?:int, error?:?string} $counts
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, orphaned:int, error:?string}
 	 */
 	private function tally(array $counts): array {
 		return $counts + [
@@ -291,6 +310,7 @@ final class PullService {
 			'rescued' => 0,
 			'lost' => 0,
 			'reaped' => 0,
+			'orphaned' => 0,
 			'error' => null,
 		];
 	}
@@ -799,6 +819,182 @@ final class PullService {
 	}
 
 	/**
+	 * A PROJECT DELETED IN PENPOT LEAVES NO FOLDER CLAIMING ITS ID (`projects/delete.feature`).
+	 *
+	 * ## THE HALF OF THE PRUNE THAT DID NOT EXIST
+	 *
+	 * {@see prune()} works from {@see collectMirrors()}, which gathers FILES. So
+	 * deleting a project in Penpot did the right thing to its designs — they went
+	 * to the Nextcloud trash, each with a last-chance snapshot — and nothing at all
+	 * to the FOLDER. It stayed, still carrying a `penpot_project_id` that named a
+	 * project no longer in existence, and no pull ever looked at it again.
+	 *
+	 * That is not merely untidy. A dead marker is indistinguishable from a live one
+	 * to everything that reads it: {@see MembershipResolver} resolves designs into a
+	 * project that is gone, and {@see MoveRules::refusalForDeleting()} refuses to
+	 * let the folder be deleted under a `link` mapping — permanently, because the
+	 * reason it gives ("it would come back on the next sync") is not true and never
+	 * becomes true. Measured on a live instance: a folder in exactly that state
+	 * could not be removed by any route.
+	 *
+	 * ## TWO ENDINGS, DECIDED BY WHAT IS LEFT IN THE FOLDER
+	 *
+	 * The prune has already run, so the designs are in the trash and what remains
+	 * is whatever was never Penpot's:
+	 *
+	 *   - **nothing remains** — the folder was only ever the project's mirror, and
+	 *     with the project gone there is nothing left for it to be. It goes to the
+	 *     Nextcloud trash, recoverable like any folder somebody deletes.
+	 *   - **something remains** — a spreadsheet, a subfolder, anything. The folder
+	 *     STAYS and merely stops being a project: the id is cleared and the `penpot`
+	 *     tag comes off, so it reads as the ordinary folder it now is. Deleting a
+	 *     user's files because a Penpot project went away is not this app's call.
+	 *
+	 * ## ONLY EVER CALLED BEHIND `$complete`
+	 *
+	 * Same gate as the prune, and for a sharper reason. A project skipped for an
+	 * illegal name is absent from `$named` while being perfectly alive in Penpot —
+	 * so without the gate, one project with a slash in its name would send its
+	 * whole folder to the trash on the next pull.
+	 *
+	 * @param array<string, true> $named every project id Penpot listed this run
+	 *
+	 * @return int how many folders stopped claiming a project
+	 */
+	private function reapOrphanProjects(Folder $root, array $named): int {
+		$orphaned = 0;
+
+		// COLLECTED BEFORE ANYTHING CHANGES. The walk reads folder metadata and the
+		// endings below delete folders, so listing and mutating in one pass would
+		// have the descent stepping through a tree it is editing.
+		foreach ($this->orphanProjectFolders($root, $named, 0) as $folder) {
+			$orphaned += $this->stopBeingAProject($folder) ? 1 : 0;
+		}
+
+		return $orphaned;
+	}
+
+	/**
+	 * Every folder at or below $root carrying a project id Penpot did not name.
+	 *
+	 * DESCENDS PAST A PROJECT FOLDER, unlike {@see indexProjectFolders()} which
+	 * reads the root's direct children only.
+	 *
+	 * NOT because the pull nests them — it cannot: {@see isLegalName()} rejects a
+	 * `/`, so a project named `foo/bar` is skipped rather than mirrored two levels
+	 * down. (An earlier draft of this docblock said the opposite; caught by Copilot
+	 * on #47.) They arrive from the NEXTCLOUD side: a project folder made inside
+	 * another folder is a project whose Penpot name is its path (§C6.38), which
+	 * `projects/delete.feature` spells out as `/Penpot/foo/bar`. Deleted in Penpot,
+	 * one of those is as orphaned as any other, and a scan of the root's children
+	 * would never see it.
+	 *
+	 * WORTH KNOWING, AND NOT FIXED HERE: the same `isLegalName()` rule means a
+	 * mapping holding such a project has `$complete = false` on every pull, so the
+	 * prune and this reap are both switched off for it — a pre-existing hole this
+	 * change inherits rather than opens.
+	 *
+	 * @param array<string, true> $named
+	 *
+	 * @return list<Folder>
+	 */
+	private function orphanProjectFolders(Folder $root, array $named, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		try {
+			$children = $root->getDirectoryListing();
+		} catch (\Throwable $e) {
+			// An unreadable folder is not a folder to act on. The next pull tries again.
+			$this->logger->warning('penpot_sync pull: could not list a folder while looking for orphaned projects', [
+				'app' => Application::APP_ID,
+				'folder' => $root->getPath(),
+				'exception' => $e,
+			]);
+
+			return [];
+		}
+
+		$found = [];
+		foreach ($children as $child) {
+			if (!$child instanceof Folder) {
+				continue;
+			}
+			$projectId = $this->metadata->readFolder($child->getId())->projectId;
+			if ($projectId !== '' && !isset($named[$projectId])) {
+				$found[] = $child;
+			}
+			foreach ($this->orphanProjectFolders($child, $named, $depth + 1) as $nested) {
+				$found[] = $nested;
+			}
+		}
+
+		return $found;
+	}
+
+	/**
+	 * One orphaned folder reaches one of the two endings above.
+	 *
+	 * NEVER THROWS. A folder that will not move is not a failed pull — it keeps its
+	 * dead id for one more tick and the next pull tries again, which is the same
+	 * shape every other per-node failure in this class has.
+	 *
+	 * @return bool true when the folder stopped claiming a project
+	 */
+	private function stopBeingAProject(Folder $folder): bool {
+		$path = $folder->getPath();
+
+		try {
+			$empty = $folder->getDirectoryListing() === [];
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not read an orphaned project folder', [
+				'app' => Application::APP_ID,
+				'folder' => $path,
+				'exception' => $e,
+			]);
+
+			return false;
+		}
+
+		try {
+			if ($empty) {
+				// TO THE TRASH, NOT PAST IT. Unlike a link — which holds nothing, so a
+				// restore of it restores nothing — a folder is a place someone made, and
+				// its recoverability costs nothing to keep.
+				$folder->delete();
+				$this->logger->info('penpot_sync pull: a project was deleted in Penpot; its empty folder went to the trash', [
+					'app' => Application::APP_ID,
+					'folder' => $path,
+				]);
+
+				return true;
+			}
+
+			$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => '']);
+			// THE TAG COMES OFF WITH THE ID, or the folder still reads as a project to
+			// every human looking at it — and worse, {@see ProjectFolderService} treats
+			// the tag as the opt-in that MAKES one, so a folder left wearing it is a
+			// folder waiting to be adopted back into a project it is not.
+			$this->tags->remove($folder->getId());
+			$this->logger->info('penpot_sync pull: a project was deleted in Penpot; its folder kept the other files and stopped being a project', [
+				'app' => Application::APP_ID,
+				'folder' => $path,
+			]);
+
+			return true;
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not retire an orphaned project folder', [
+				'app' => Application::APP_ID,
+				'folder' => $path,
+				'exception' => $e,
+			]);
+
+			return false;
+		}
+	}
+
+	/**
 	 * One last `export-binfile` for a design that is already gone.
 	 *
 	 * BEST-EFFORT BY DESIGN (saga §6.42): Penpot keeps a deleted file exportable
@@ -1096,11 +1292,11 @@ final class PullService {
 	 * reconciled, the previous archive is intact, and the next pull retries. Only
 	 * a failure that stopped a whole mapping (`error`) is a failed pull.
 	 *
-	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, error:?string}> $results
-	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, status:string, message:?string}
+	 * @param list<array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, orphaned:int, error:?string}> $results
+	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, orphaned:int, status:string, message:?string}
 	 */
 	private function finalise(array $results): array {
-		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0, 'pruned' => 0, 'rescued' => 0, 'lost' => 0, 'reaped' => 0];
+		$total = ['processed' => 0, 'folders' => 0, 'files' => 0, 'exported' => 0, 'failed' => 0, 'skipped' => 0, 'pruned' => 0, 'rescued' => 0, 'lost' => 0, 'reaped' => 0, 'orphaned' => 0];
 		$errors = [];
 		foreach ($results as $res) {
 			foreach (array_keys($total) as $key) {

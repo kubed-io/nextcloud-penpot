@@ -488,11 +488,129 @@ trait MappingSteps {
 		$this->removalOutput = $res['output'];
 	}
 
-	/** @Then removing it reported that nothing was deleted */
-	public function removingReportedNothingDeleted(): void {
-		if (!str_contains($this->removalOutput, 'Nothing was deleted')) {
+	/**
+	 * Remove one NAMED mapping, which is what a scenario with more than one needs.
+	 *
+	 * "that mapping" above resolves to `mappingIds()[0]` — fine when a scenario
+	 * declares exactly one, and quietly wrong the moment it declares two. A
+	 * teardown scenario is precisely where that matters: the claim is that THIS
+	 * mapping's mirrors were dealt with, and picking the wrong one would prove it
+	 * about somebody else's.
+	 *
+	 * @When /^the admin removes the "([^"]*)" mapping$/
+	 */
+	public function theAdminRemovesTheNamedMapping(string $team): void {
+		$id = $this->mappingIdForTeam($team);
+		if ($id === null) {
+			throw new \RuntimeException("there is no mapping for the team '{$team}' to remove");
+		}
+
+		$res = $this->occ('penpot_sync:remove-mapping ' . escapeshellarg($id));
+
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("remove-mapping failed:\n{$res['output']}");
+		}
+
+		$this->removalOutput = $res['output'];
+	}
+
+	/**
+	 * THAT mapping is gone — and says nothing about how many others there are.
+	 *
+	 * It replaced `there are exactly 0 configured team mappings` in the teardown
+	 * scenarios, which only held because the arrange declared exactly one. Removing
+	 * one of ten mappings must not read as an assertion that the other nine went.
+	 *
+	 * @Then /^the "([^"]*)" mapping is no longer configured$/
+	 */
+	public function theNamedMappingIsNoLongerConfigured(string $team): void {
+		if ($this->mappingIdForTeam($team) !== null) {
+			throw new \RuntimeException("the '{$team}' mapping is still configured after being removed");
+		}
+	}
+
+	/**
+	 * Nothing under this path is a design any more — asked of the whole subtree.
+	 *
+	 * A SWEEP, NOT A LIST, and that is stronger than naming the two files the
+	 * arrange made: it also catches a design the pull put there that the scenario
+	 * never mentioned. The teardown's claim is that a link mapping leaves NO
+	 * pointers behind, and only a sweep says "no".
+	 *
+	 * @Then /^no "\.penpot" designs exist under "([^"]*)" in Nextcloud$/
+	 */
+	public function noDesignsExistUnder(string $path): void {
+		$found = $this->designsBelow(trim($path, '/'), 0);
+		if ($found !== []) {
 			throw new \RuntimeException(
-				"expected the removal to state that nothing was deleted, got:\n" . $this->removalOutput,
+				"'{$path}' still holds " . implode(', ', $found)
+				. ' — removing the mapping was supposed to take every pointer with it.',
+			);
+		}
+	}
+
+	/**
+	 * Every `.penpot` at or below $path, as full paths so a failure says WHERE.
+	 *
+	 * @return list<string>
+	 */
+	private function designsBelow(string $path, int $depth): array {
+		if ($depth > 20) {
+			return [];
+		}
+
+		try {
+			$children = $this->davChildren($path);
+		} catch (\Throwable) {
+			// Not a folder, or gone. Either way it holds no designs.
+			return [];
+		}
+
+		$found = [];
+		foreach ($children as $child) {
+			if (str_ends_with($child, '.penpot')) {
+				$found[] = $child;
+				continue;
+			}
+			foreach ($this->designsBelow($child, $depth + 1) as $nested) {
+				$found[] = $nested;
+			}
+		}
+
+		return $found;
+	}
+
+	/** The id of the mapping for a team NAME, or null when none is configured. */
+	private function mappingIdForTeam(string $team): ?string {
+		$res = $this->occ('penpot_sync:list-mappings');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("list-mappings failed:\n{$res['output']}");
+		}
+
+		// `<id>  <team>  <folder>  <mode>  <groups>` — the id is the first column and
+		// the team name the second. Anchored on the id's shape so a team called
+		// "TEAM" in a header row cannot match.
+		foreach (explode("\n", $res['output']) as $line) {
+			if (preg_match('/^([0-9a-f]{8,})\s+' . preg_quote($team, '/') . '\s/', trim($line), $m) === 1) {
+				return $m[1];
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @Then removing it reported that nothing was deleted in Penpot
+	 *
+	 * NARROWED WHEN THE TEARDOWN LANDED. It used to look for "Nothing was deleted",
+	 * which was the whole truth then and is half of it now: removing a mapping does
+	 * remove the pointers it left in Nextcloud. Penpot is the half that stays true,
+	 * and the half worth a step.
+	 */
+	public function removingReportedNothingDeleted(): void {
+		if (!str_contains($this->removalOutput, 'Nothing was deleted in Penpot')) {
+			throw new \RuntimeException(
+				"expected the removal to state that nothing was deleted in Penpot, got:\n" . $this->removalOutput,
 			);
 		}
 	}

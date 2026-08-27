@@ -48,6 +48,28 @@ trait PruneSteps {
 		$this->theAdminRunsAPull();
 	}
 
+	/**
+	 * A PROJECT deleted in Penpot, with the sync folded in — the folder-shaped twin
+	 * of the step above, and the trigger for `projects/delete.feature`'s last rule.
+	 *
+	 * ON THE WIRE IT IS A BARE `id`, and reading the app's own call site is how to
+	 * get that wrong. {@see \OCA\PenpotSync\Service\PenpotClient::deleteProject()}
+	 * passes `['project' => …]`, but `PenpotClient` carries a param-rename map that
+	 * rewrites it to `id` before it is sent (saga Ch3 §C6.38, read off
+	 * `schema:delete-project`). This step posts raw JSON, so it must spell what
+	 * Penpot actually reads — the first cut copied the PHP spelling and CI answered
+	 * `HTTP 400 … [:id] :malli.core/missing-key`, with `{:project "…"}` quoted back.
+	 *
+	 * Soft, like `delete-file`: the project goes to Penpot's own trash, which is
+	 * what leaves its designs exportable for the prune's rescue on the way past.
+	 *
+	 * @When /^someone deletes the "([^"]*)" project in Penpot$/
+	 */
+	public function someoneDeletesTheProjectInPenpot(string $name): void {
+		$this->penpotRpc('delete-project', ['id' => $this->projectIdNamed($name)]);
+		$this->theAdminRunsAPull();
+	}
+
 	/** @When /^someone permanently deletes the design "([^"]*)" in Penpot$/ */
 	public function someonePermanentlyDeletesTheDesignInPenpot(string $name): void {
 		$this->theDesignIsPermanentlyDeletedInPenpot($name);

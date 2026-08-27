@@ -1086,6 +1086,42 @@ trait GestureSteps {
 		}
 	}
 
+	/**
+	 * Every design the scenario declared is in the Nextcloud trash.
+	 *
+	 * THE PLURAL MATTERS, which is why this is not the singular step repeated. A
+	 * project deleted in Penpot is one gesture over many designs, and "the designs
+	 * are recoverable" is the claim that ALL of them landed somewhere recoverable —
+	 * a check on one would pass while the rest were destroyed.
+	 *
+	 * Matched through `nc:trashbin-filename` and the original location, so a design
+	 * of the same name trashed by an earlier scenario cannot answer for this one
+	 * ({@see trashbinPathFor()}).
+	 *
+	 * @Then /^the designs are recoverable from the Nextcloud trash$/
+	 */
+	public function theDesignsAreRecoverableFromTheNextcloudTrash(): void {
+		if ($this->lastDeclaredDesigns === []) {
+			throw new \RuntimeException(
+				'"the designs are recoverable" has no designs to talk about — the scenario '
+				. 'declared none.',
+			);
+		}
+
+		$missing = [];
+		foreach ($this->lastDeclaredDesigns as $path) {
+			if ($this->trashbinPathFor($path) === null) {
+				$missing[] = $path;
+			}
+		}
+
+		if ($missing !== []) {
+			throw new \RuntimeException(
+				'nothing in the Nextcloud trash came from: ' . implode(', ', $missing),
+			);
+		}
+	}
+
 	// ── "+ New → Penpot design", by folder rather than by path ───────────────
 
 	/**

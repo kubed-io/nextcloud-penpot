@@ -49,6 +49,12 @@ trait ProjectFolderSteps {
 	 * folder here", not "I created one" — and "not a project" is the load-bearing
 	 * half, because a folder only becomes a project by carrying a project id.
 	 *
+	 * THE BARE FORM CARRIES NO CLAIM, and that is the point of it. "that is not a
+	 * project" says two things in one sentence, and the second one belongs to
+	 * Penpot rather than to Nextcloud — so a scenario that needs both states them
+	 * separately and lets `Penpot holds no project named` speak for Penpot.
+	 *
+	 * @Given /^a folder at "([^"]*)"$/
 	 * @Given /^a folder at "([^"]*)" that is not a project$/
 	 * @Given /^a folder at "([^"]*)" that is not mapped$/
 	 * @Given /^a folder at "([^"]*)" in the user's home that is not a project$/
@@ -144,7 +150,91 @@ trait ProjectFolderSteps {
 		);
 	}
 
+	/**
+	 * The folder went, because the project it mirrored went.
+	 *
+	 * "Gone from Nextcloud" and not "gone", deliberately: the folder is in the
+	 * Nextcloud trash, and the scenario beside this one asserts its designs are
+	 * recoverable from there. What this claims is that nothing stands at the path
+	 * any more.
+	 *
+	 * @Then /^"([^"]*)" is gone from Nextcloud$/
+	 */
+	public function isGoneFromNextcloud(string $path): void {
+		if ($this->davExists(trim($path, '/'))) {
+			throw new \RuntimeException(
+				"'{$path}' was supposed to be gone, but it is still there — the project was "
+				. 'deleted in Penpot and its folder outlived it.',
+			);
+		}
+	}
+
+	/**
+	 * The other ending: the folder stayed, because it held something that was
+	 * never Penpot's.
+	 *
+	 * NAMES THE SURVIVOR rather than describing an absence. "Still exists" alone
+	 * would pass on a folder that had been emptied of everything, which is the
+	 * failure this pair exists to rule out — deleting a user's spreadsheets
+	 * because a Penpot project went away is not the app's call.
+	 *
+	 * @Then /^"([^"]*)" still exists in Nextcloud, holding "([^"]*)"$/
+	 */
+	public function stillExistsHolding(string $path, string $child): void {
+		$path = trim($path, '/');
+		if (!$this->davExists($path)) {
+			throw new \RuntimeException("'{$path}' was supposed to survive, but there is nothing there.");
+		}
+		$this->assertedFolder = $path;
+
+		$want = $path . '/' . $child;
+		if (!$this->davExists($want)) {
+			throw new \RuntimeException(
+				"'{$path}' survived but '{$child}' did not — the folder was kept and then emptied.",
+			);
+		}
+	}
+
+	/**
+	 * The folder that survived kept everything EXCEPT the designs.
+	 *
+	 * Reads "it" from the folder the step above named, which is the only sentence
+	 * that can have put one on stage — a bare "it holds no design files" with no
+	 * preceding claim has no referent, and this says so rather than passing.
+	 *
+	 * @Then /^it holds no design files$/
+	 */
+	public function itHoldsNoDesignFiles(): void {
+		if ($this->assertedFolder === '') {
+			throw new \RuntimeException(
+				'"it holds no design files" has no folder to talk about — say which folder '
+				. 'survived first.',
+			);
+		}
+
+		$designs = [];
+		foreach ($this->davChildren($this->assertedFolder) as $child) {
+			if (str_ends_with($child, '.penpot')) {
+				$designs[] = basename($child);
+			}
+		}
+
+		if ($designs !== []) {
+			throw new \RuntimeException(
+				"'{$this->assertedFolder}' still holds " . implode(', ', $designs)
+				. " — the project's designs were supposed to go with it.",
+			);
+		}
+	}
+
 	// ── helpers ─────────────────────────────────────────────────────────────
+
+	/**
+	 * The folder {@see stillExistsHolding()} put on stage, so the sentence after it
+	 * can say "it". Held rather than re-derived because the two steps are one claim
+	 * split across two lines, and the second one carries no path of its own.
+	 */
+	private string $assertedFolder = '';
 
 	/**
 	 * A path in the acting user's files, as the ROOT-relative form `occ` wants.

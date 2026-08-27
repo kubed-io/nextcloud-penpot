@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\DAV\Connector\Sabre\File as DavFile;
 use OCA\PenpotSync\DAV\LinkWriteGuardPlugin;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
@@ -211,6 +212,101 @@ final class LinkWriteGuardPluginTest extends TestCase {
 		self::assertNull($this->deleteWithTeam('team-link', linkTeam: 'team-link', withUser: false));
 	}
 
+	/**
+	 * THE TRAP, and the reason this handler needed a second question.
+	 *
+	 * A folder somebody made inside a link mapping is not part of the mirror: no
+	 * project marker, nothing below it, and no pull will ever write it back. The
+	 * first version refused it anyway, on the mapping alone — so an empty folder
+	 * created in "Design Files" could not be deleted by any route, and the 403 it
+	 * answered explained itself with a sync that was never going to happen. Found
+	 * by hand on the live instance, not in CI.
+	 */
+	public function testAPlainFolderInALinkMappingMayBeDeleted(): void {
+		self::assertNull($this->deleteWithTeam('team-link', linkTeam: 'team-link', markers: []));
+	}
+
+	/**
+	 * A plain folder is NOT plain when a project is named through it.
+	 *
+	 * `foo` carries no marker of its own and is still Penpot's, because a project's
+	 * name is its PATH: `foo/bar` stops meaning anything the moment `foo` goes. So
+	 * the scan descends, and one project below is enough to refuse.
+	 */
+	public function testAFolderHoldingAProjectIsStillRefused(): void {
+		$project = $this->createStub(Folder::class);
+		$project->method('getId')->willReturn(9);
+		$project->method('getDirectoryListing')->willReturn([]);
+
+		$refusal = $this->deleteWithTeam(
+			'team-link',
+			linkTeam: 'team-link',
+			markers: [9 => ['p1', '']],
+			children: [$project],
+		);
+
+		self::assertInstanceOf(Forbidden::class, $refusal);
+		self::assertStringContainsString('Existing', $refusal->getMessage());
+	}
+
+	/**
+	 * A design below a bare folder refuses it too — the same descent, one rung
+	 * down, and the case a folder-markers-only scan would have missed.
+	 */
+	public function testAFolderHoldingADesignIsStillRefused(): void {
+		$design = $this->createStub(File::class);
+		$design->method('getName')->willReturn('Login screen.penpot');
+		$design->method('getId')->willReturn(11);
+
+		$refusal = $this->deleteWithTeam(
+			'team-link',
+			linkTeam: 'team-link',
+			markers: [],
+			children: [$design],
+			designIds: [11 => 'design-1'],
+		);
+
+		self::assertInstanceOf(Forbidden::class, $refusal);
+	}
+
+	/**
+	 * AN UNTRACKED `.penpot` IS THE PERSON'S OWN, and the extension does not make
+	 * it ours. {@see MoveRules::forLinkFile()} lets one MOVE into a link mapping
+	 * freely — it is nobody's business but its owner's — and adopting a folder that
+	 * already held one puts it there too. Testing the extension rather than the id
+	 * re-created the exact trap this rule exists to remove, for the design archive
+	 * somebody keeps beside the mirrors. Raised by Copilot on #47.
+	 */
+	public function testAFolderHoldingAnUntrackedDesignMayBeDeleted(): void {
+		$design = $this->createStub(File::class);
+		$design->method('getName')->willReturn('My own export.penpot');
+		$design->method('getId')->willReturn(11);
+
+		self::assertNull($this->deleteWithTeam(
+			'team-link',
+			linkTeam: 'team-link',
+			markers: [],
+			children: [$design],
+			designIds: [],
+		));
+	}
+
+	/**
+	 * An ordinary file below a bare folder does NOT. A spreadsheet somebody put in
+	 * a mapped folder is theirs, and so is the folder they put it in.
+	 */
+	public function testAFolderHoldingOnlyOrdinaryFilesMayBeDeleted(): void {
+		$sheet = $this->createStub(File::class);
+		$sheet->method('getName')->willReturn('Budget.xlsx');
+
+		self::assertNull($this->deleteWithTeam(
+			'team-link',
+			linkTeam: 'team-link',
+			markers: [],
+			children: [$sheet],
+		));
+	}
+
 	// ── beforeCreateFile: where a NEW design may be authored (§6.34, §6.44) ──
 
 	/**
@@ -360,11 +456,48 @@ final class LinkWriteGuardPluginTest extends TestCase {
 	 *
 	 * $team is what the node resolves to; $linkTeam is the one mapped in `link`
 	 * mode. Passing the same value for both is a delete inside a link mapping.
+	 *
+	 * $markers maps a folder id to the `[project, team]` markers it carries, and it
+	 * is the difference between a mirrored project and a folder the person made —
+	 * the second question {@see MoveRules::refusalForDeleting()} did not used to
+	 * ask. It defaults to the deleted node being a project folder, because that is
+	 * the node the refusal is FOR; the bare cases have their own tests.
+	 *
+	 * @param array<int, array{string, string}> $markers
+	 * @param list<Folder> $children what the deleted folder lists
+	 * @param array<int, string> $designIds file id => the `penpot_id` it carries.
+	 *                                      Absent means UNTRACKED, which is a
+	 *                                      design the person put there themselves.
 	 */
-	private function deleteWithTeam(string $team, string $linkTeam, bool $withUser = true): ?Forbidden {
+	private function deleteWithTeam(
+		string $team,
+		string $linkTeam,
+		bool $withUser = true,
+		array $markers = [7 => ['p1', '']],
+		array $children = [],
+		array $designIds = [],
+	): ?Forbidden {
 		$node = $this->createStub(Folder::class);
 		$node->method('getName')->willReturn('Existing');
 		$node->method('getId')->willReturn(7);
+		$node->method('getDirectoryListing')->willReturn($children);
+
+		// KEYED BY ID, so a child can carry markers its parent does not — which is
+		// the only way to state "a bare folder with a project below it".
+		// A `.penpot` is only ours if it carries an id — the extension alone is not
+		// enough, since an untracked one can be moved into a link mapping freely.
+		$this->metadata->method('readFile')->willReturnCallback(
+			static fn (int $id): ?PenpotFileMetadata => isset($designIds[$id])
+				? new PenpotFileMetadata($designIds[$id], 'r1', Mapping::MODE_LINK, 't1')
+				: null,
+		);
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static function (int $id) use ($markers): FolderMarkers {
+				[$project, $team] = $markers[$id] ?? ['', ''];
+
+				return new FolderMarkers($project, $team);
+			},
+		);
 
 		$userFolder = $this->createStub(Folder::class);
 		$userFolder->method('get')->willReturn($node);

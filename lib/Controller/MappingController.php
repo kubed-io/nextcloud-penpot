@@ -13,6 +13,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ConnectionTester;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
+use OCA\PenpotSync\Service\MappingTeardownService;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\PullStatus;
 use OCA\PenpotSync\Settings\AdminTest;
@@ -53,6 +54,7 @@ final class MappingController extends Controller {
 		string $appName,
 		IRequest $request,
 		private readonly MappingService $service,
+		private readonly MappingTeardownService $teardown,
 		private readonly ConnectionTester $tester,
 		private readonly PullService $pull,
 		private readonly PullStatus $status,
@@ -205,11 +207,18 @@ final class MappingController extends Controller {
 
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function destroy(string $id): JSONResponse {
-		if (!$this->service->remove($id)) {
+		// THE MAPPING IS READ BEFORE IT IS REMOVED and torn down AFTER, for the
+		// reason {@see \OCA\PenpotSync\Command\RemoveMapping} spells out: the
+		// teardown needs only the loaded object, and `remove()` is the half that can
+		// throw. Both routes tear down, or the admin panel and the CLI would leave
+		// the instance in two different states.
+		$mapping = $this->service->getById($id);
+
+		if ($mapping === null || !$this->service->remove($id)) {
 			return new JSONResponse(['message' => 'No such mapping.'], Http::STATUS_NOT_FOUND);
 		}
 
-		return new JSONResponse(['status' => 'removed']);
+		return new JSONResponse(['status' => 'removed'] + $this->teardown->tearDown($mapping));
 	}
 
 	/**
