@@ -54,6 +54,13 @@ final class MappingSettings implements IDelegatedSettings {
 
 	#[\Override]
 	public function getForm(): TemplateResponse {
+		// THE SHARED DIALOG HELPER FIRST, and on every admin section rather than
+		// only the one that has a modal today. `js/` is unbundled, so this is a
+		// `window` global and the page script needs it defined by the time a button
+		// is pressed — registering it here means a modal added to this section
+		// later is the same modal as everywhere else, with no second answer to "are
+		// you sure" ever getting written.
+		Util::addScript(Application::APP_ID, 'dialogs');
 		Util::addScript(Application::APP_ID, 'mapping-settings');
 		Util::addStyle(Application::APP_ID, 'mapping-settings');
 

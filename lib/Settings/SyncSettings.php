@@ -51,6 +51,13 @@ final class SyncSettings implements IDelegatedSettings {
 		// Loaded via Util so they pick up the CSP nonce — inline <script>/<style>
 		// in templates is blocked by Nextcloud's strict CSP.
 		Util::addStyle(Application::APP_ID, 'sync-settings');
+		// THE SHARED DIALOG HELPER FIRST, and on every admin section rather than
+		// only the one that has a modal today. `js/` is unbundled, so this is a
+		// `window` global and the page script needs it defined by the time a button
+		// is pressed — registering it here means a modal added to this section
+		// later is the same modal as everywhere else, with no second answer to "are
+		// you sure" ever getting written.
+		Util::addScript(Application::APP_ID, 'dialogs');
 		Util::addScript(Application::APP_ID, 'sync-settings');
 
 		return new TemplateResponse(Application::APP_ID, 'sync_settings', [], 'blank');

@@ -220,23 +220,17 @@
 			{ folder: folder || data.ncFolder, count: count }
 		);
 
-		OC.dialogs.confirmDestructive(
-			msg,
-			t('penpot_sync', 'Delete these designs?'),
-			{
-				type: OC.dialogs.YES_NO_BUTTONS,
-				confirm: n('penpot_sync', 'Delete {count} design', 'Delete {count} designs', count, { count: count }),
-				confirmClasses: 'error',
-				cancel: t('penpot_sync', 'Cancel')
-			},
-			function (ok) {
-				if (!ok) {
-					cardStatus(card, 'error', t('penpot_sync', 'Not saved — the folder still holds designs.'));
-					return;
-				}
+		window.PenpotSync.confirmDestructive({
+			title: t('penpot_sync', 'Delete these designs?'),
+			text: msg,
+			confirm: n('penpot_sync', 'Delete {count} design', 'Delete {count} designs', count, { count: count }),
+			onConfirm: function () {
 				submit(card, isNew, data, true);
+			},
+			onCancel: function () {
+				cardStatus(card, 'error', t('penpot_sync', 'Not saved — the folder still holds designs.'));
 			}
-		);
+		});
 	}
 
 	/**
@@ -328,32 +322,15 @@
 				{ team: card.dataset.teamName || '', folder: card.dataset.ncFolder || '' }
 			);
 
-		// THE NATIVE DIALOG, NOT `window.confirm`. `OC.dialogs.confirmDestructive`
-		// is not the old browser box and not the old jQuery one either: in
-		// Nextcloud 34 it is built on the same `DialogBuilder` the Vue components
-		// use, so it inherits the instance's theming — read out of the shipped
-		// `core-main.js`, not assumed. This shape (YES_NO_BUTTONS, an explicit
-		// destructive verb, `confirmClasses: 'error'`) is copied from the Files
-		// app's own delete confirmation, which is the strongest available argument
-		// for "native".
-		//
-		// No bundling needed, which is why it suits this file: `js/` is served
-		// verbatim with no build step, so `@nextcloud/dialogs` is not importable
-		// here — and reaching for it would mean moving the whole admin panel into
-		// the Vite bundle for a confirmation box.
-		OC.dialogs.confirmDestructive(
-			msg,
-			t('penpot_sync', 'Remove mapping'),
-			{
-				type: OC.dialogs.YES_NO_BUTTONS,
-				confirm: t('penpot_sync', 'Remove mapping'),
-				confirmClasses: 'error',
-				cancel: t('penpot_sync', 'Cancel')
-			},
-			function (ok) {
-				if (!ok) {
-					return;
-				}
+		// ONE MODAL FOR THE WHOLE PANEL. Everything about how it is asked — the
+		// native dialog, the button shape, the once-only latch around a core bug —
+		// lives in `js/dialogs.js`, so every confirmation in this app is the same
+		// confirmation. This call says only what is being asked.
+		window.PenpotSync.confirmDestructive({
+			title: t('penpot_sync', 'Remove mapping'),
+			text: msg,
+			confirm: t('penpot_sync', 'Remove mapping'),
+			onConfirm: function () {
 				api('DELETE', url('/mappings/' + encodeURIComponent(card.dataset.id)))
 					.then(function () {
 						card.remove();
@@ -363,7 +340,7 @@
 						cardStatus(card, 'error', err.message || t('penpot_sync', 'Delete failed.'));
 					});
 			}
-		);
+		});
 	}
 
 	function info(tip) {
