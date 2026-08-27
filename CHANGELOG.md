@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mapping a folder that already holds designs in link mode now asks first.** A linked folder holds pointers, so a real design cannot survive in one — the app used to map over them anyway and leave files that looked like designs and were not. It now tells you how many are there and that deleting them is permanent, and does nothing until you say so. Sync mappings are unaffected: they adopt what they find.
+
 - **Removing a mapping now cleans up after itself.** The empty pointer files a `link` mapping left behind are removed — they held nothing and meant nothing once the mapping went. Designs that hold a real copy are kept exactly where they are and simply stop being mirrors, so nothing you could lose is ever deleted. Penpot is still never contacted.
 
 ### Fixed
@@ -34,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Restoring a design whose Penpot design is gone now brings the design back too.** It used to put the file back and tell you the design was lost — while holding the only copy of it. The file's own archive is imported instead, so the restore finishes. The design starts a fresh history, because Penpot cannot revive a design at the id it had.
 
 - **Destroying a design in Penpot now empties its file out of your Nextcloud trash.** The file used to sit there offering a restore that could not work. It goes only when Penpot can be made to say the design is really gone — a design that was merely moved, or an unreachable Penpot, leaves it exactly where it is.
+
+- **The refusals when a mapping cannot be created say what is actually wrong.** "Not visible to the service account" became "the team was not found using the given credentials", which covers both causes — a team that is not there, and one the service account was never invited to — instead of sending you looking for an invite to a team that never existed. The already-mapped and already-used messages now name which side the clash is on.
+
+- **Removing a mapping asks in a native Nextcloud dialog** instead of the browser's own alert box, and says what will happen to that mapping's files rather than promising that nothing is deleted — which stopped being true when the teardown landed.
 
 - **The scheduled-sync toggle is a real checkbox again, and it saves.** It had been a pair of radio buttons ("Off — mirror only when run manually" / "On — pull from Penpot automatically") to work around a Nextcloud bug that silently discarded a checkbox's value. The bug is stepped past rather than worked around now, and an instance that was already switched on stays switched on.
 

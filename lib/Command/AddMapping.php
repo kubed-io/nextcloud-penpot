@@ -77,6 +77,17 @@ final class AddMapping extends Command {
 				InputOption::VALUE_REQUIRED,
 				'Default mode for files under this mapping: link or sync.',
 				Mapping::MODE_LINK,
+			)
+			// THE ONE OPTION THAT DESTROYS SOMETHING, so it is opt-in, it is spelled
+			// out, and without it the mapping is refused rather than made quietly.
+			// The refusal names the count; this is how an admin answers it.
+			->addOption(
+				'purge-designs',
+				null,
+				InputOption::VALUE_NONE,
+				'Permanently delete any .penpot files already under the folder, which a '
+				. 'link mapping requires. They do NOT go to the trash and cannot be '
+				. 'recovered. Without this, a folder holding designs is refused.',
 			);
 	}
 
@@ -93,7 +104,11 @@ final class AddMapping extends Command {
 			// Groups ride alongside rather than on the mapping: they are applied to
 			// the folder, not stored (§C6.35). A comma-separated string is accepted
 			// verbatim by the normaliser, so the CLI parses nothing of its own.
-			$saved = $this->service->add($mapping, (string)$input->getOption('groups'));
+			$saved = $this->service->add(
+				$mapping,
+				(string)$input->getOption('groups'),
+				(bool)$input->getOption('purge-designs'),
+			);
 		} catch (\InvalidArgumentException $e) {
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 

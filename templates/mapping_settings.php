@@ -124,7 +124,15 @@ $info = static function (string $tip) use ($icon): string {
 			$selectedGroups = $m['nc_groups'] ?? [];
 			$useTf = filter_var($m['use_team_folder'] ?? $tfAvailable, FILTER_VALIDATE_BOOLEAN);
 			?>
-			<div class="penpot-sync-mappings__card" data-id="<?php p($m['id']); ?>">
+			<?php /* THE FACTS, NOT THE LABELS. The three fields below render as
+					 LOCALISED text — "Link"/"Sync", and a team name with its id in
+					 brackets — which is right for a reader and useless to a script.
+					 The delete confirmation needs the plain values, and scraping the
+					 spans would have it comparing against a translated "Sync". */ ?>
+			<div class="penpot-sync-mappings__card" data-id="<?php p($m['id']); ?>"
+				data-team-name="<?php p($teamName !== '' ? $teamName : $teamId); ?>"
+				data-nc-folder="<?php p((string)($m['nc_folder'] ?? '')); ?>"
+				data-mode="<?php p($modeSel); ?>">
 				<div class="penpot-sync-mappings__grid">
 					<div class="penpot-sync-field pp-team">
 						<label><?php p($l->t('Penpot team'));

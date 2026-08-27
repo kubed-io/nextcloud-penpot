@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Controller;
 
+use OCA\PenpotSync\Exception\ExistingDesignsException;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ConnectionTester;
 use OCA\PenpotSync\Service\Mapping;
@@ -86,6 +87,13 @@ final class MappingController extends Controller {
 	 * `$ncGroups` is passed alongside the mapping rather than into it: groups are
 	 * applied to the provisioned folder and read back from it, never stored
 	 * (§C6.35).
+	 *
+	 * `purgeDesigns` DEFAULTS TO FALSE, AND THAT IS THE SAFETY. A link mapping over
+	 * a folder that already holds `.penpot` files is refused with a 422 naming the
+	 * count; the panel turns that into a confirmation and re-submits with the flag
+	 * set. So the destructive path cannot be reached by a client that does not know
+	 * about it — an older panel, a script, a curl — which is the property that
+	 * matters for the one operation here that does not go to the trash.
 	 */
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function create(
@@ -94,6 +102,7 @@ final class MappingController extends Controller {
 		array $ncGroups = [],
 		bool $useTeamFolder = false,
 		string $mode = Mapping::MODE_LINK,
+		bool $purgeDesigns = false,
 	): JSONResponse {
 		try {
 			$mapping = $this->service->add(Mapping::fromArray([
@@ -101,7 +110,17 @@ final class MappingController extends Controller {
 				'nc_folder' => $ncFolder,
 				'use_team_folder' => $useTeamFolder,
 				'mode' => $mode,
-			]), $ncGroups);
+			]), $ncGroups, $purgeDesigns);
+		} catch (ExistingDesignsException $e) {
+			// THE COUNT TRAVELS AS A NUMBER. The panel turns this refusal into a
+			// confirmation and re-submits with `purgeDesigns`, so it needs the figure
+			// to put in the warning — and parsing it back out of a localised sentence
+			// would break the first time the sentence is translated. Caught before
+			// the `InvalidArgumentException` arm below, which it extends.
+			return new JSONResponse(
+				['message' => $e->getMessage(), 'designs' => $e->designs],
+				Http::STATUS_UNPROCESSABLE_ENTITY,
+			);
 		} catch (\InvalidArgumentException $e) {
 			return new JSONResponse(['message' => $e->getMessage()], Http::STATUS_UNPROCESSABLE_ENTITY);
 		} catch (PenpotApiException $e) {

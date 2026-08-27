@@ -142,9 +142,31 @@
 			return;
 		}
 
+		submit(card, isNew, data);
+	}
+
+	/**
+	 * Send one card, and handle the ONE refusal that is a question.
+	 *
+	 * A link mapping over a folder that already holds designs comes back 422 with
+	 * a count. Everything else is a dead end and lands in the card's status line;
+	 * this one becomes a confirmation, because the admin can answer it — and
+	 * answering it destroys files that do NOT go to the trash.
+	 *
+	 * `purge` is passed on the retry only, never on the first attempt, so the panel
+	 * cannot destroy anything the admin has not just been shown a number for.
+	 */
+	function submit(card, isNew, data, purge) {
+		var body = data;
+		if (purge) {
+			// A COPY, so a retry cannot leave the flag on the card's own state and
+			// quietly arm the next save.
+			body = Object.assign({}, data, { purgeDesigns: true });
+		}
+
 		var req = isNew
-			? api('POST', url('/mappings'), data)
-			: api('PUT', url('/mappings/' + encodeURIComponent(card.dataset.id)), data);
+			? api('POST', url('/mappings'), body)
+			: api('PUT', url('/mappings/' + encodeURIComponent(card.dataset.id)), body);
 
 		req.then(function (res) {
 			if (isNew && res.id) {
@@ -165,8 +187,56 @@
 			showGroups(card, res.nc_groups || []);
 			cardStatus(card, 'success', t('penpot_sync', 'Saved.'));
 		}).catch(function (err) {
+			if (typeof err.designs === 'number' && !purge) {
+				confirmPurge(card, isNew, data, err.designs);
+				return;
+			}
 			cardStatus(card, 'error', err.message || t('penpot_sync', 'Save failed.'));
 		});
+	}
+
+	/**
+	 * Ask before destroying designs, and say how many and that they will not come
+	 * back.
+	 *
+	 * THE COUNT AND THE WORD "PERMANENTLY" ARE THE POINT. This is the only gesture
+	 * in the app that destroys something outright — a link mirror is a pointer, so
+	 * a design already in the folder cannot survive there, and it may not go to the
+	 * trash either: restoring one into a link mapping cannot work, so offering the
+	 * restore would be a worse lie than refusing it.
+	 *
+	 * Cancelling needs no cleanup, and that is a property of the rule rather than
+	 * an omission. The admin goes and moves the files, and when they come back the
+	 * folder holds no designs — so the mapping is created with no warning at all.
+	 */
+	function confirmPurge(card, isNew, data, count) {
+		var msg = n(
+			'penpot_sync',
+			'"{folder}" already holds {count} design. Mapping it in link mode will '
+				+ 'permanently delete it — it will not go to the trash and cannot be recovered.',
+			'"{folder}" already holds {count} designs. Mapping it in link mode will '
+				+ 'permanently delete them — they will not go to the trash and cannot be recovered.',
+			count,
+			{ folder: data.ncFolder || '', count: count }
+		);
+
+		OC.dialogs.confirmDestructive(
+			msg,
+			t('penpot_sync', 'Delete these designs?'),
+			{
+				type: OC.dialogs.YES_NO_BUTTONS,
+				confirm: n('penpot_sync', 'Delete {count} design', 'Delete {count} designs', count, { count: count }),
+				confirmClasses: 'error',
+				cancel: t('penpot_sync', 'Cancel')
+			},
+			function (ok) {
+				if (!ok) {
+					cardStatus(card, 'error', t('penpot_sync', 'Not saved — the folder still holds designs.'));
+					return;
+				}
+				submit(card, isNew, data, true);
+			}
+		);
 	}
 
 	/**
@@ -238,27 +308,62 @@
 			return;
 		}
 
-		// Deliberately explicit that nothing is deleted upstream. An admin
-		// removing a mapping most fears losing files or designs; saying so here
-		// prevents the hesitation and the support question both.
-		var name = card.querySelector('.js-team');
-		var msg = t(
-			'penpot_sync',
-			'Stop mirroring {team}? Nothing is deleted — not in Penpot, and not in Nextcloud.',
-			{ team: name ? name.textContent.trim() : '' }
-		);
-		if (!window.confirm(msg)) {
-			return;
-		}
+		// WHAT THE ADMIN LOSES, IN THE WORDS OF THE MODE THEY PICKED. The old
+		// message said "Nothing is deleted — not in Penpot, and not in Nextcloud",
+		// which stopped being true when the teardown landed: a `link` mapping's
+		// pointers DO go. Saying so per mode is the difference between a warning
+		// and a surprise, and the Penpot half — the one an admin actually fears —
+		// is still the reassurance it always was.
+		var msg = card.dataset.mode === 'sync'
+			? t(
+				'penpot_sync',
+				'Remove mapping for team {team} to {folder}? Its designs stay in Nextcloud '
+					+ 'and become unmapped, and Penpot is left alone.',
+				{ team: card.dataset.teamName || '', folder: card.dataset.ncFolder || '' }
+			)
+			: t(
+				'penpot_sync',
+				'Remove mapping for team {team} to {folder}? Its links will be removed from '
+					+ 'Nextcloud, and Penpot is left alone.',
+				{ team: card.dataset.teamName || '', folder: card.dataset.ncFolder || '' }
+			);
 
-		api('DELETE', url('/mappings/' + encodeURIComponent(card.dataset.id)))
-			.then(function () {
-				card.remove();
-				flash('success', t('penpot_sync', 'Mapping removed.'));
-			})
-			.catch(function (err) {
-				cardStatus(card, 'error', err.message || t('penpot_sync', 'Delete failed.'));
-			});
+		// THE NATIVE DIALOG, NOT `window.confirm`. `OC.dialogs.confirmDestructive`
+		// is not the old browser box and not the old jQuery one either: in
+		// Nextcloud 34 it is built on the same `DialogBuilder` the Vue components
+		// use, so it inherits the instance's theming — read out of the shipped
+		// `core-main.js`, not assumed. This shape (YES_NO_BUTTONS, an explicit
+		// destructive verb, `confirmClasses: 'error'`) is copied from the Files
+		// app's own delete confirmation, which is the strongest available argument
+		// for "native".
+		//
+		// No bundling needed, which is why it suits this file: `js/` is served
+		// verbatim with no build step, so `@nextcloud/dialogs` is not importable
+		// here — and reaching for it would mean moving the whole admin panel into
+		// the Vite bundle for a confirmation box.
+		OC.dialogs.confirmDestructive(
+			msg,
+			t('penpot_sync', 'Remove mapping'),
+			{
+				type: OC.dialogs.YES_NO_BUTTONS,
+				confirm: t('penpot_sync', 'Remove mapping'),
+				confirmClasses: 'error',
+				cancel: t('penpot_sync', 'Cancel')
+			},
+			function (ok) {
+				if (!ok) {
+					return;
+				}
+				api('DELETE', url('/mappings/' + encodeURIComponent(card.dataset.id)))
+					.then(function () {
+						card.remove();
+						flash('success', t('penpot_sync', 'Mapping removed.'));
+					})
+					.catch(function (err) {
+						cardStatus(card, 'error', err.message || t('penpot_sync', 'Delete failed.'));
+					});
+			}
+		);
 	}
 
 	function info(tip) {
@@ -349,11 +454,19 @@
 				if (!res.ok) {
 					// The server's own message is already localised and specific;
 					// the status fallback only fires when there is no JSON body.
-					return Promise.reject(new Error(
+					var err = new Error(
 						data && data.message
 							? data.message
 							: t('penpot_sync', 'Request failed ({status})', { status: res.status })
-					));
+					);
+					// AND ANY STRUCTURED DETAIL THAT CAME WITH IT. One refusal is a
+					// question rather than a dead end — a link mapping over a folder
+					// that already holds designs — and the caller needs the COUNT to
+					// ask it. Reading it off the sentence would break on translation.
+					if (data && typeof data.designs === 'number') {
+						err.designs = data.designs;
+					}
+					return Promise.reject(err);
 				}
 
 				if (data === null) {

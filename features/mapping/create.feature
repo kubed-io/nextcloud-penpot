@@ -13,16 +13,16 @@ Feature: Mapping a Penpot team to a Nextcloud folder
     # ── one fact, one table — the same shape as pre-state or as the action ─────
     # notes: ../AGENTS.md#the-preconditions
 
-  Scenario Outline: Creating a mapping saves the form
-    Given no Penpot teams are mapped
-    And a Penpot team named "Northwind" exists
-    And the Nextcloud groups "design" exist
+  Scenario Outline: Creating a new mapping to a penpot team 
+    Given a penpot team named "Northwind" exists
+    And the Nextcloud groups "design" exists
     And an unset field on the mapping form defaults to:
       | folder  | Northwind           |
       | mode    | link                |
       | groups  |                     |
       | storage | plain shared folder |
-    When the admin maps it with:
+    When the admin submits this mapping:
+      | team    | Northwind |
       | folder  | <folder>  |
       | mode    | <mode>    |
       | groups  | <groups>  |
@@ -46,43 +46,54 @@ Feature: Mapping a Penpot team to a Nextcloud folder
 
     # notes: ../AGENTS.md#creating-a-mapping-saves-the-form
 
-  # api only because the ui is a drop down
-  @api @occ
-  Scenario: A team id that resolves to nothing cannot be mapped
-    Given no Penpot teams are mapped
-    When the admin tries to map the team id "11111111-2222-3333-4444-555555555555"
-    Then the mapping is rejected
-    And the refusal explains "not visible to the service account"
-    And there are exactly 0 configured team mappings
-    # The only scenario here that names no team: this step exists to hand
-    # add-mapping something no lookup could have produced.
-    # notes: ../AGENTS.md#a-team-id-that-resolves-to-nothing-cannot-be-mapped
-
-  Scenario Outline: A mapping may not reuse a team or a folder
+  Scenario Outline: Using invalid values for a mapping
     Given a mapping with the following values:
       | team   | Northwind |
       | folder | Designs   |
     And a Penpot team named "<team>" exists
-    When the admin maps it with:
-      | folder | <folder> |
-    Then the mapping is rejected
-    And the refusal explains "<reason>"
-    And there is exactly 1 configured team mapping
+    And the penpot team "Outsiders" does not exist
+    When the admin submits this mapping:
+      | team    | <team>    |
+      | folder  | <folder>  |
+      | mode    | <mode>    |
+      | storage | <storage> |
+    Then the mapping is rejected, explaining "<reason>"
 
-    Examples: a team may be mapped once, and a folder may be used once
-      | team       | folder    | reason         |
-      | Northwind  | Elsewhere | already mapped |
-      | Bundt Cake | Designs   | already used   |
+    Examples: Creating a mapping when the team is already mapped
+      | team      | folder    | mode | storage     | reason         |
+      | Northwind | Elsewhere | sync | team folder | The team is already mapped to another folder |
 
-    # notes: ../AGENTS.md#a-mapping-may-not-reuse-a-team-or-a-folder
+    Examples: Creating a mapping when the folder is already mapped
+      | team       | folder  | mode | storage      | reason       |
+      | Bundt Cake | Designs | link | admin folder | The folder is already mapped to another team |
 
-  # @todo AND IT FAILS, WHICH IS A FINDING: "it" has no referent here. Naming a
-  # team needs a token, and this scenario is about not having one.
+    Examples: Creating a mapping when the team does not exist
+      | team      | folder  | mode | storage     | reason                  |
+      | Outsiders | Designs | link | team folder | The team was not found using the given credentials |
+
+    # notes: ../AGENTS.md#using-invalid-values-for-a-mapping
+
+  # notes: ../AGENTS.md#a-link-mapping-may-not-be-made-over-designs-that-already-exist
+  @occ
+  Scenario: Mapping in link mode over a folder that already holds designs
+    Given a penpot team named "Northwind" exists
+    And a folder "Designs" already exists
+    And an unmapped design file at "Designs/Sketches/Keeper.penpot"
+    When the admin submits this mapping:
+      | team   | Northwind |
+      | folder | Designs   |
+      | mode   | link      |
+    And allows the existing unmapped designs to be purged
+    Then the mapping matches the form, unset fields at their defaults
+    And no ".penpot" designs exist under "/Designs" in Nextcloud
+    And "Designs/Sketches/Keeper.penpot" left no trash entry
+
   # notes: ../AGENTS.md#without-a-service-account-token-nothing-can-be-mapped
-  @todo
+  @occ
   Scenario: Without a service-account token, nothing can be mapped
-    Given no service-account token is configured
-    When the admin maps it with:
-      | folder | Designs |
-    Then the mapping is rejected
-    And the refusal explains "service-account token"
+    Given a penpot team named "Northwind" exists
+    And no service-account token is configured
+    When the admin submits this mapping:
+      | team   | Northwind |
+      | folder | Designs   |
+    Then the mapping is rejected, explaining "A service-account token is not configured yet."

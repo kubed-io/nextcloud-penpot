@@ -67,6 +67,28 @@ trait MoveSteps {
 	}
 
 	/**
+	 * A `.penpot` file this app is not mirroring, and nothing more.
+	 *
+	 * NO ID, ON PURPOSE — the sibling below is the one that carries one, and it
+	 * costs a mapped folder, a create in Penpot and a drag to produce. A scenario
+	 * that only needs "there is a design here that no mapping owns" should not pay
+	 * for provenance it never asserts: `mapping/create.feature` purges the file
+	 * either way, so whether it once had an id changes nothing about its fate.
+	 *
+	 * PLAUSIBLE ARCHIVE BYTES rather than a real export. The fixture that produces
+	 * a genuine one needs a `Penpot` mapping to export through, which this scenario
+	 * has not got — and it would be wasted anyway, since nothing imports these
+	 * bytes. They exist so the file reads as a design rather than an empty create,
+	 * which is a different gesture with a different rule (§6.44).
+	 *
+	 * @Given /^an unmapped design file at "([^"]*)"$/
+	 */
+	public function anUnmappedDesignFileAt(string $path): void {
+		$this->makeAncestors($path);
+		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+	}
+
+	/**
 	 * A design file sitting outside every mapping, still carrying its Penpot id.
 	 *
 	 * Reached the only way the app can produce it: made in a mapped folder, then
@@ -273,6 +295,25 @@ trait MoveSteps {
 		$path = trim($folder, '/') . '/' . basename($this->currentFilePath);
 		if ($this->davExists($path)) {
 			throw new \RuntimeException("'{$path}' is still there; the mirror was supposed to go");
+		}
+
+		$this->theFileIsNotInTheNextcloudTrash($path);
+	}
+
+	/**
+	 * Gone, and Nextcloud kept no copy — said of a path rather than of "the file".
+	 *
+	 * THE SECOND HALF IS THE WHOLE CLAIM, as in the sibling above. "Gone" is true of
+	 * a trashing too, and a trashed design is exactly what `mapping/create.feature`
+	 * refuses to create: restoring one into a link mapping cannot work, so it must
+	 * never be offered. A status-only check would pass against the bug.
+	 *
+	 * @Then /^"([^"]*)" left no trash entry$/
+	 */
+	public function leftNoTrashEntry(string $path): void {
+		$path = trim($path, '/');
+		if ($this->davExists($path)) {
+			throw new \RuntimeException("'{$path}' is still there; it was supposed to be purged");
 		}
 
 		$this->theFileIsNotInTheNextcloudTrash($path);

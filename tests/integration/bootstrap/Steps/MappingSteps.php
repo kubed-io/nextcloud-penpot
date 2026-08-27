@@ -35,6 +35,13 @@ use Behat\Gherkin\Node\TableNode;
  * minted per run (§6.47), so CI has a genuine team to map.
  */
 trait MappingSteps {
+	/**
+	 * A team id that is syntactically valid and that no lookup can ever return —
+	 * so it reaches the app's own visibility check rather than being refused as
+	 * malformed on the way in.
+	 */
+	private const UNREACHABLE_TEAM_ID = '11111111-2222-3333-4444-555555555555';
+
 	/** @Given no Penpot teams are mapped */
 	public function noPenpotTeamsAreMapped(): void {
 		foreach ($this->mappingIds() as $id) {
@@ -47,43 +54,100 @@ trait MappingSteps {
 	}
 
 	/**
-	 * Map by RAW ID, for the ids that resolve to nothing.
+	 * The admin accepts the warning, and the submission goes through.
 	 *
-	 * The one step here that does not take a NAME, and deliberately so: it exists
-	 * to hand `add-mapping` something no lookup could have produced. Naming it
-	 * "team id" rather than "Penpot team" keeps it from reading like the named
-	 * steps above, which seed the team they name.
+	 * ## TWO BEATS, AND THE ORDER IS THE INTERACTION
 	 *
-	 * @When /^the admin tries to map the team id "([^"]*)"$/
+	 * This follows the `When` rather than sitting inside its table, because that is
+	 * the shape of the real gesture: the admin submits, the app answers with a count
+	 * and the word "permanently", and only then does the admin accept. Consent
+	 * expressed as a form field would arrive before the app had said what it costs.
+	 *
+	 * So the first submission is EXPECTED to have been refused, and this re-sends
+	 * the same form with the acknowledgement attached. Asserting that refusal here
+	 * is what stops the scenario passing on an app that purges without asking —
+	 * which would satisfy every `Then` below while being the exact behaviour the
+	 * confirmation exists to prevent.
+	 *
+	 * @When /^allows the existing unmapped designs to be purged$/
 	 */
-	public function theAdminTriesToMapTheTeamId(string $teamId): void {
-		$this->occ('penpot_sync:add-mapping ' . escapeshellarg($teamId));
-	}
-
-	/** @Then /^there (?:is|are) exactly (\d+) configured team mappings?$/ */
-	public function thereAreExactlyNMappings(int $expected): void {
-		$actual = count($this->mappingIds());
-
-		if ($actual !== $expected) {
+	public function allowsTheExistingDesignsToBePurged(): void {
+		if ($this->lastExit === 0) {
 			throw new \RuntimeException(
-				"expected {$expected} mapping(s), found {$actual}:\n" . $this->lastOutput,
+				"the mapping was created without asking about the designs already in the "
+				. "folder — the acknowledgement is not being required:\n" . $this->lastOutput,
 			);
 		}
+
+		$flags = [];
+		foreach ($this->submittedForm as $field => $value) {
+			$value = trim($value);
+			if ($value !== '') {
+				$flags[] = $this->flagFor($field, $value);
+			}
+		}
+		$flags[] = '--purge-designs';
+
+		$this->occ(sprintf(
+			'penpot_sync:add-mapping %s %s',
+			escapeshellarg($this->theNamedTeam()),
+			implode(' ', $flags),
+		));
 	}
 
-	/** @Then the mapping is rejected */
-	public function theMappingIsRejected(): void {
+	/**
+	 * The attempt was refused, and said why — ONE sentence, because it is one claim.
+	 *
+	 * It was two (`the mapping is rejected` / `the refusal explains "…"`), which
+	 * read as two facts about a refusal when a refusal that does not say why is not
+	 * a thing this app ships. Splitting them also invited a third line to say
+	 * nothing was created, and the one that used to be there counted the mappings —
+	 * the arrange's fact, not the behaviour's.
+	 *
+	 * ## THE THIRD CHECK IS HERE, AND IT IS NOT SPECIFICATION
+	 *
+	 * "Rejected" already means "nothing was created" — a spec does not have to say
+	 * it, and `create.feature` no longer does. But a rejection that stored the
+	 * mapping anyway would satisfy both halves above, so the guarantee is asserted
+	 * where it belongs: in the step, against a snapshot taken before the attempt.
+	 *
+	 * A SNAPSHOT AND NOT A COUNT, because `A mapping may not reuse a team or a
+	 * folder` is refused with a mapping ALREADY configured — "no mapping for this
+	 * team" would be false there, and "exactly one" would be counting the arrange.
+	 * What is actually claimed is that the store did not move, which is what this
+	 * compares.
+	 *
+	 * @Then /^the mapping is rejected, explaining "([^"]*)"$/
+	 */
+	public function theMappingIsRejectedExplaining(string $needle): void {
+		// THE OUTPUT IS READ BEFORE ANYTHING ELSE RUNS. `mappingIds()` shells out to
+		// `list-mappings`, which replaces `$this->lastOutput` — so the refusal has to
+		// be examined first or the message is gone by the time it is asserted.
+		$output = $this->lastOutput;
+
 		if ($this->lastExit === 0) {
-			throw new \RuntimeException("expected the mapping to be refused, but it succeeded:\n" . $this->lastOutput);
+			throw new \RuntimeException("expected the mapping to be refused, but it succeeded:\n" . $output);
+		}
+		if (!str_contains(strtolower($output), strtolower($needle))) {
+			throw new \RuntimeException("expected the message to mention '{$needle}', got:\n" . $output);
+		}
+
+		$after = $this->mappingIds();
+		if ($after !== $this->mappingsBeforeAttempt) {
+			throw new \RuntimeException(sprintf(
+				"the mapping was refused and the store changed anyway: %d mapping(s) before, %d after",
+				count($this->mappingsBeforeAttempt),
+				count($after),
+			));
 		}
 	}
 
-	/** @Then /^the refusal explains "([^"]*)"$/ */
-	public function theRefusalExplains(string $needle): void {
-		if (!str_contains(strtolower($this->lastOutput), strtolower($needle))) {
-			throw new \RuntimeException("expected the message to mention '{$needle}', got:\n" . $this->lastOutput);
-		}
-	}
+	/**
+	 * The mapping store as it stood before the last attempt to add one.
+	 *
+	 * @var list<string>
+	 */
+	private array $mappingsBeforeAttempt = [];
 
 	/**
 	 * A Penpot team this app deliberately does NOT map.
@@ -113,7 +177,13 @@ trait MappingSteps {
 	 * — which is the whole reason this is a precondition of its own rather than
 	 * the first clause of a longer sentence.
 	 *
-	 * @Given /^a Penpot team named "([^"]*)" exists$/
+	 * CASE-TOLERANT ON THE PRODUCT NAME. The spec is the requirement and the code
+	 * follows it, so a scenario writing "a penpot team" is not a typo to correct in
+	 * the feature file — it is a sentence this step has to answer to. One regex
+	 * rather than a second annotation, so there is still exactly one definition to
+	 * find and no near-duplicate pattern for the checker to trip over.
+	 *
+	 * @Given /^a [Pp]enpot team named "([^"]*)" exists$/
 	 */
 	public function aPenpotTeamNamedExists(string $team): void {
 		$this->namedTeamId = $this->teamNamed($team);
@@ -123,9 +193,27 @@ trait MappingSteps {
 	/** Whether this scenario has already reset the mapping store. */
 	private bool $mappingsDeclared = false;
 
-	/** @BeforeScenario */
+	/**
+	 * EVERY SCENARIO STARTS WITH NOTHING MAPPED, and the harness is where that
+	 * belongs rather than in a `Given`.
+	 *
+	 * `mapping/create.feature` used to open with `Given no Penpot teams are
+	 * mapped`, which is false as specification: an admin can map a team with ten
+	 * mappings already configured, and a scenario about creating one that insists
+	 * nothing is mapped reads as "you may only ever make the first". It was only
+	 * ever there for isolation — without it the second row of an Outline re-maps
+	 * the same team and is correctly rejected as already mapped.
+	 *
+	 * Isolation is the harness's job, so it moved here. Nothing about the app
+	 * changed: this is the same clear the two mapping-declaring arranges already
+	 * performed lazily, now done once, up front, for every scenario — which is why
+	 * the flag below is set rather than cleared, so those two do not repeat it.
+	 *
+	 * @BeforeScenario
+	 */
 	public function armMappingReset(): void {
-		$this->mappingsDeclared = false;
+		$this->noPenpotTeamsAreMapped();
+		$this->mappingsDeclared = true;
 	}
 
 	/** The team the scenario last named, and its Penpot id. */
@@ -158,7 +246,7 @@ trait MappingSteps {
 	 *
 	 * ## ONE VOCABULARY FOR THE PRE-STATE AND THE ACTION
 	 *
-	 * The table takes the SAME fields as the creation form ({@see theAdminMapsWith()}),
+	 * The table takes the SAME fields as the creation form ({@see theAdminSubmitsThisMapping()}),
 	 * and both run them through {@see flagFor()}, so there is one definition of what
 	 * "storage" or "groups" means and a scenario reads the same whether a value is
 	 * being set up or submitted. An omitted or blank row is the app's own default,
@@ -233,7 +321,7 @@ trait MappingSteps {
 	 * Idempotent: a leg runs many scenarios against one Nextcloud, so this
 	 * find-or-creates exactly as {@see teamNamed()} does for Penpot teams.
 	 *
-	 * @Given /^the Nextcloud groups "([^"]*)" exist$/
+	 * @Given /^the Nextcloud groups "([^"]*)" exists?$/
 	 */
 	public function theNextcloudGroupsExist(string $groups): void {
 		foreach (explode(',', $groups) as $gid) {
@@ -293,10 +381,32 @@ trait MappingSteps {
 	 * Does not throw on a non-zero exit: two of the three scenarios using it expect
 	 * a refusal, and that verdict belongs to the `Then`.
 	 *
-	 * @When /^the admin maps it with:$/
+	 * NO LONGER "maps it with", AND NO LONGER "it". The table names the team now,
+	 * so the sentence has a subject of its own and does not lean on a cursor set
+	 * three lines earlier — which is what "it" was, and what made a reader carry
+	 * state to know which team was being mapped.
+	 *
+	 * SUBMITS, NOT CREATES. Three of the five scenarios using this sentence end in
+	 * a refusal, so a `When` that says "creates" states an outcome the `Then` has
+	 * not decided yet — and reads as a contradiction on every row where the mapping
+	 * is rejected. What the admin does is submit; what happens next is the claim.
+	 *
+	 * @When /^the admin submits this mapping:$/
 	 */
-	public function theAdminMapsWith(TableNode $form): void {
+	public function theAdminSubmitsThisMapping(TableNode $form): void {
 		$this->submittedForm = $form->getRowsHash();
+
+		// THE TEAM IS THE ARGUMENT, NOT A FLAG, which is why it comes out of the
+		// table before the loop rather than earning a `flagFor()` case:
+		// `add-mapping` takes the team positionally and every other field as an
+		// option.
+		//
+		// OPTIONAL, because "it" still works. Most scenarios here name a team in a
+		// `Given` and then say "it", which reads well while only one team is on
+		// stage. Naming it in the table is for the ones where a reader should not
+		// have to carry a cursor in their head to know which team is being mapped.
+		$team = trim($this->submittedForm['team'] ?? '');
+		unset($this->submittedForm['team']);
 
 		$flags = [];
 		foreach ($this->submittedForm as $field => $value) {
@@ -306,11 +416,70 @@ trait MappingSteps {
 			}
 		}
 
+		// BEFORE the attempt, so {@see theMappingIsRejectedExplaining()} can prove the
+		// store did not move. Taken here rather than in the assertion because by then
+		// the attempt has already happened.
+		$this->mappingsBeforeAttempt = $this->mappingIds();
+
 		$this->occ(sprintf(
 			'penpot_sync:add-mapping %s %s',
-			escapeshellarg($this->theNamedTeam()),
+			escapeshellarg($team === '' ? $this->theNamedTeam() : $this->idOfTeamNamed($team)),
 			implode(' ', $flags),
 		));
+	}
+
+	/**
+	 * A team the app cannot reach, WITHOUT SAYING WHY IT CANNOT.
+	 *
+	 * `get-teams` is membership-scoped (§6.12), so "this team does not exist" and
+	 * "the service account was never invited to it" are ONE case on this side of
+	 * the wire: the lookup returns nothing either way. There is no behaviour that
+	 * separates them, so the spec does not either — and this step reaches the state
+	 * by the cheap route rather than standing up a second Penpot account to own a
+	 * team the first cannot see.
+	 *
+	 * IT NAMES THE TEAM SO THE SUBMISSION CAN, and that is load-bearing rather than
+	 * decorative. {@see theAdminSubmitsThisMapping()} resolves a `team` cell through
+	 * {@see idOfTeamNamed()}, which prefers this cursor — so naming it here is what
+	 * stops the submission going to a lookup for a team that is supposed to be
+	 * missing.
+	 *
+	 * @Given /^the penpot team "([^"]*)" does not exist$/
+	 */
+	public function thePenpotTeamDoesNotExist(string $team): void {
+		$this->namedTeam = $team;
+		// Syntactically a uuid, so it reaches the lookup rather than being refused
+		// as malformed — and no lookup could ever return it.
+		$this->namedTeamId = self::UNREACHABLE_TEAM_ID;
+	}
+
+	/**
+	 * The id a submission should carry for a team of this name.
+	 *
+	 * ## IT LOOKS UP; IT NEVER CREATES
+	 *
+	 * {@see teamNamed()} is find-or-CREATE, and calling it from a `When` would make
+	 * the submission a fixture: `A mapping using invalid combinations is rejected`
+	 * has a row that maps `Outsiders`, a team whose whole point is that it is not
+	 * there, and find-or-create would conjure it and then map it successfully. So a
+	 * name nothing answers to becomes an id nothing answers to — which is the state
+	 * that row describes, reached without the `When` building anything.
+	 *
+	 * Seeding belongs in a `Given`, and the rows that need a real team have one.
+	 *
+	 * THE CURSOR COMES FIRST, so a team a `Given` just named is used without a
+	 * second round trip — and so a scenario that has deliberately broken the app's
+	 * view of Penpot (no token, say) still submits the id it meant rather than one
+	 * a now-failing lookup could not return.
+	 */
+	private function idOfTeamNamed(string $team): string {
+		if ($team === $this->namedTeam && $this->namedTeamId !== '') {
+			return $this->namedTeamId;
+		}
+
+		// Syntactically a uuid so it reaches the app's own lookup rather than being
+		// refused as malformed, and one no lookup could ever return.
+		return $this->visibleTeamIdNamed($team) ?? self::UNREACHABLE_TEAM_ID;
 	}
 
 	/**
@@ -329,13 +498,20 @@ trait MappingSteps {
 			throw new \RuntimeException("expected the mapping to be created, it was refused:\n" . $this->lastOutput);
 		}
 
-		if ($this->formDefaults === []) {
-			throw new \RuntimeException('no form defaults were declared; the assertion would check nothing');
+		// EVERY FIELD WITH AN EXPECTATION, from either side. A scenario that declared
+		// defaults is asserting the untouched fields too, which is the whole point of
+		// that table; one that did not is still asserting what it submitted. Only a
+		// scenario that declared neither would check nothing, and that is the case
+		// worth refusing.
+		$fields = array_keys($this->formDefaults + $this->submittedForm);
+		if ($fields === []) {
+			throw new \RuntimeException('nothing was declared or submitted; the assertion would check nothing');
 		}
 
 		$mapping = $this->firstMapping();
 
-		foreach ($this->formDefaults as $field => $default) {
+		foreach ($fields as $field) {
+			$default = $this->formDefaults[$field] ?? '';
 			$typed = trim($this->submittedForm[$field] ?? '');
 			$expected = $typed === '' ? trim($default) : $typed;
 			// Groups come back from the FOLDER in whatever order it stores them
@@ -517,9 +693,12 @@ trait MappingSteps {
 	/**
 	 * THAT mapping is gone — and says nothing about how many others there are.
 	 *
-	 * It replaced `there are exactly 0 configured team mappings` in the teardown
-	 * scenarios, which only held because the arrange declared exactly one. Removing
-	 * one of ten mappings must not read as an assertion that the other nine went.
+	 * It replaced `there are exactly 0 configured team mappings`, which only held
+	 * because the arrange declared exactly one. Removing one of ten mappings must
+	 * not read as an assertion that the other nine went — and the same objection
+	 * retired that sentence everywhere else too: a COUNT is the arrange's fact, not
+	 * the behaviour's, so a create that was refused proves nothing by the total
+	 * being unchanged. The step it named is gone with the last scenario using it.
 	 *
 	 * @Then /^the "([^"]*)" mapping is no longer configured$/
 	 */

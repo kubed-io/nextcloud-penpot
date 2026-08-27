@@ -10,10 +10,12 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Exception\PenpotApiException;
+use OCA\PenpotSync\Service\ExistingDesigns;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\StorageService;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\IAppConfig;
 use PHPUnit\Framework\MockObject\Stub;
@@ -63,6 +65,17 @@ final class MappingServiceTest extends TestCase {
 	private StorageService $storage;
 
 	/**
+	 * The designs already under a folder, stubbed EMPTY by default.
+	 *
+	 * The overwhelming case is a folder nothing has used, and every test here that
+	 * predates the rule is about the store's own checks rather than what is on
+	 * disk. The scenarios that care set it themselves.
+	 *
+	 * @var ExistingDesigns&Stub
+	 */
+	private ExistingDesigns $existing;
+
+	/**
 	 * What the fake storage believes each mapping's folder is shared with.
 	 *
 	 * @var array<string, list<string>>
@@ -91,6 +104,9 @@ final class MappingServiceTest extends TestCase {
 		);
 
 		$this->appliedGroups = [];
+		$this->existing = $this->createStub(ExistingDesigns::class);
+		$this->existing->method('under')->willReturn([]);
+
 		$this->storage = $this->createStub(StorageService::class);
 		$this->storage->method('isAvailable')->willReturn(true);
 		$this->storage->method('ensureRoot')->willReturnCallback(
@@ -119,7 +135,115 @@ final class MappingServiceTest extends TestCase {
 		// A fresh instance per call, because the service memoises the parsed list
 		// for the request — reusing one would hide persistence bugs behind the
 		// cache.
-		return new MappingService($this->config, $this->client, $this->storage);
+		return new MappingService($this->config, $this->client, $this->storage, $this->existing);
+	}
+
+	// ── a link mapping may not be made over designs that already exist ──────
+
+	/**
+	 * THE ONE IRREVERSIBLE ACT IN THIS APP IS OPT-IN, and this is the test that
+	 * keeps it that way. A link mirror holds no bytes, so an archive inside a link
+	 * mapping is a contradiction every later rule has to guess about — but clearing
+	 * it means destroying files with no trash entry, so it may only happen on an
+	 * acknowledgement the admin actually gave.
+	 */
+	public function testALinkMappingOverExistingDesignsIsRefused(): void {
+		$this->existingHolds(2);
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('already holds 2 designs');
+
+		$this->service()->add(Mapping::fromArray([
+			'team_id' => self::TEAM_ID,
+			'mode' => Mapping::MODE_LINK,
+		]));
+	}
+
+	/** The refusal says what would happen, in the words that make it a decision. */
+	public function testTheRefusalSaysTheDesignsWouldBeDestroyed(): void {
+		$this->existingHolds(1);
+
+		try {
+			$this->service()->add(Mapping::fromArray([
+				'team_id' => self::TEAM_ID,
+				'mode' => Mapping::MODE_LINK,
+			]));
+			self::fail('expected the mapping to be refused');
+		} catch (\InvalidArgumentException $e) {
+			// SINGULAR, because "1 designs" in a warning about permanent deletion
+			// reads as a bug and undermines the sentence it appears in.
+			self::assertStringContainsString('already holds 1 design.', $e->getMessage());
+			self::assertStringContainsString('permanently deleted', $e->getMessage());
+			self::assertStringContainsString('not recoverable', $e->getMessage());
+		}
+	}
+
+	/** Acknowledged, it goes ahead — and the designs are destroyed, not trashed. */
+	public function testAnAcknowledgedLinkMappingPurgesThem(): void {
+		$designs = $this->existingHolds(2);
+
+		$existing = $this->createMock(ExistingDesigns::class);
+		$existing->method('under')->willReturn($designs);
+		$existing->expects(self::once())->method('purge')->with($designs);
+
+		$saved = (new MappingService($this->config, $this->client, $this->storage, $existing))
+			->add(Mapping::fromArray([
+				'team_id' => self::TEAM_ID,
+				'mode' => Mapping::MODE_LINK,
+			]), [], true);
+
+		self::assertSame(self::TEAM_ID, $saved->teamId);
+	}
+
+	/**
+	 * SYNC IS UNTOUCHED. Designs already in the tree are adopted and imported when
+	 * a sync mapping arrives (§6.33), so nothing is destroyed and nothing has to be
+	 * confirmed — asking would be a warning about an act that never happens.
+	 */
+	public function testASyncMappingOverExistingDesignsIsAllowed(): void {
+		$existing = $this->createMock(ExistingDesigns::class);
+		// NEVER EVEN ASKED. The check is skipped for `sync` rather than asked and
+		// ignored, so a folder of ten thousand files costs a sync mapping nothing.
+		$existing->expects(self::never())->method('under');
+		$existing->expects(self::never())->method('purge');
+
+		$saved = (new MappingService($this->config, $this->client, $this->storage, $existing))
+			->add(Mapping::fromArray([
+				'team_id' => self::TEAM_ID,
+				'mode' => Mapping::MODE_SYNC,
+			]));
+
+		self::assertSame(self::TEAM_ID, $saved->teamId);
+	}
+
+	/** An empty folder needs no acknowledgement, which is the ordinary case. */
+	public function testALinkMappingOverAnEmptyFolderNeedsNoAcknowledgement(): void {
+		$existing = $this->createMock(ExistingDesigns::class);
+		$existing->method('under')->willReturn([]);
+		$existing->expects(self::never())->method('purge');
+
+		(new MappingService($this->config, $this->client, $this->storage, $existing))
+			->add(Mapping::fromArray([
+				'team_id' => self::TEAM_ID,
+				'mode' => Mapping::MODE_LINK,
+			]));
+	}
+
+	/**
+	 * Stub $count designs under the folder the next `add()` will claim.
+	 *
+	 * @return list<File>
+	 */
+	private function existingHolds(int $count): array {
+		$designs = [];
+		for ($i = 0; $i < $count; $i++) {
+			$designs[] = $this->createStub(File::class);
+		}
+
+		$this->existing = $this->createStub(ExistingDesigns::class);
+		$this->existing->method('under')->willReturn($designs);
+
+		return $designs;
 	}
 
 	public function testAddsAVisibleTeam(): void {
@@ -136,7 +260,7 @@ final class MappingServiceTest extends TestCase {
 	 */
 	public function testRefusesATeamTheServiceAccountCannotSee(): void {
 		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('not visible to the service account');
+		$this->expectExceptionMessage('was not found using the given credentials');
 
 		$this->service()->add(Mapping::fromArray([
 			'team_id' => '11111111-2222-3333-4444-555555555555',
@@ -176,7 +300,7 @@ final class MappingServiceTest extends TestCase {
 
 		$this->expectException(PenpotApiException::class);
 
-		(new MappingService($this->config, $client, $this->storage))
+		(new MappingService($this->config, $client, $this->storage, $this->existing))
 			->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 	}
 
@@ -193,7 +317,7 @@ final class MappingServiceTest extends TestCase {
 		$storage->method('isAvailable')->willReturn(true);
 		$storage->method('ensureRoot')->willThrowException(new \RuntimeException('no sync actor'));
 
-		$service = new MappingService($this->config, $this->client, $storage);
+		$service = new MappingService($this->config, $this->client, $storage, $this->existing);
 
 		try {
 			$service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
@@ -202,7 +326,7 @@ final class MappingServiceTest extends TestCase {
 			self::assertSame('no sync actor', $e->getMessage());
 		}
 
-		self::assertSame([], (new MappingService($this->config, $this->client, $storage))->list());
+		self::assertSame([], (new MappingService($this->config, $this->client, $storage, $this->existing))->list());
 	}
 
 	/**
@@ -293,7 +417,7 @@ final class MappingServiceTest extends TestCase {
 			['id' => self::TEAM_ID, 'name' => 'Design/Brand'],
 		]);
 
-		$service = new MappingService($this->config, $client, $this->storage);
+		$service = new MappingService($this->config, $client, $this->storage, $this->existing);
 		$saved = $service->add(Mapping::fromArray(['team_id' => self::TEAM_ID]));
 
 		self::assertStringNotContainsString('/', $saved->ncFolder);
@@ -301,7 +425,7 @@ final class MappingServiceTest extends TestCase {
 
 		// The real point: it must still be readable back. A stored row that
 		// fromArray() rejects would silently disappear from list().
-		self::assertCount(1, (new MappingService($this->config, $client, $this->storage))->list());
+		self::assertCount(1, (new MappingService($this->config, $client, $this->storage, $this->existing))->list());
 	}
 
 	public function testAnExplicitFolderNameSurvivesTheLookup(): void {

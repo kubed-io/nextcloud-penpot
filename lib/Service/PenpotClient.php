@@ -1489,7 +1489,7 @@ final class PenpotClient {
 
 		if ($stored === '') {
 			throw new PenpotApiException(
-				'No Penpot service-account token is configured.',
+				'A service-account token is not configured yet.',
 				0,
 				null,
 				PenpotApiException::KIND_UNCONFIGURED,

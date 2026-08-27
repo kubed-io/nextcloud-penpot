@@ -1,0 +1,192 @@
+<?php
+
+/**
+ * SPDX-FileCopyrightText: 2026 kubed-io
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+declare(strict_types=1);
+
+namespace OCA\PenpotSync\Service;
+
+use OCA\PenpotSync\AppInfo\Application;
+use OCP\Files\File;
+use OCP\Files\Folder;
+use Psr\Log\LoggerInterface;
+
+/**
+ * The `.penpot` files already sitting under a folder a mapping is about to claim
+ * (`mapping/create.feature`).
+ *
+ * ## WHAT THIS PREVENTS IS A STATE THE APP HAS NO ANSWER FOR
+ *
+ * A `link` mirror is a zero-byte pointer. A `.penpot` holding an archive inside a
+ * link mapping is a contradiction, and every rule that reads one has to guess
+ * which it is — {@see MappingTeardownService} keys on the bytes and keeps it,
+ * `mapping/delete.feature` says a link mapping's designs all go, and both are
+ * right about a tree that should not exist.
+ *
+ * It is not hypothetical. A live instance reached it in three steps: a folder
+ * mapped `sync`, the mapping removed (leaving real archives behind, unmapped),
+ * then re-mapped `link` over them. Removing that mapping took the pointers and
+ * kept the archives — the teardown working exactly as written and the spec's
+ * promise failing, at the same time. CI could not have caught it, because every
+ * scenario there builds a clean tree.
+ *
+ * So the contradiction is designed out at the only moment it can be created.
+ *
+ * ## PURGED, NOT TRASHED — THE ONE PLACE THIS APP DESTROYS SOMETHING
+ *
+ * A trashed design offers a restore, and restoring INTO a link mapping is already
+ * ruled out: Penpot has no write path for design content, so there is nowhere for
+ * the bytes to go. Rather than invent an answer for a restore that cannot work,
+ * the files never reach the trash.
+ *
+ * Which is why {@see under()} exists as its own call. Nothing here purges without
+ * the admin having been told HOW MANY and that they are not recoverable, and the
+ * count has to come from the same walk that does the deleting or the number in the
+ * warning is a different question's answer.
+ *
+ * ## IT RUNS UNDER THE GUARD, OR IT DELETES THE DESIGNS IN PENPOT
+ *
+ * The files this destroys are `unmapped`, and an unmapped design KEEPS its
+ * `penpot_id` — that is the whole point of the state ({@see MotionService}). So
+ * each `delete()` here fires the same `BeforeNodeDeletedEvent` a person's delete
+ * does, and {@see \OCA\PenpotSync\Listener\DeleteListener} answers that by putting
+ * the design in Penpot's trash. Without {@see SyncGuard} raised, clearing a folder
+ * so it can be mirrored would delete the very designs it is about to mirror.
+ *
+ * ## ONLY `link`, AND ONLY UNMAPPED
+ *
+ * A `sync` mapping adopts what it finds and imports it (§6.33), so nothing is
+ * destroyed and nothing is confirmed — the caller decides that, not this class.
+ * And a tree that already belongs to a mapping never reaches here: a folder in use
+ * is refused first ({@see MappingService::assertFolderUnique()}), and a mapping may
+ * not be made under or over another. So "no `.penpot` anywhere in the tree" holds
+ * implicitly for every mapped tree without being checked.
+ */
+final class ExistingDesigns {
+	/** A ceiling on the descent, mirroring the seatbelts in {@see DeletionService}. */
+	private const MAX_DEPTH = 100;
+
+	public function __construct(
+		private readonly StorageService $storage,
+		private readonly TrashControl $trash,
+		private readonly SyncGuard $guard,
+		private readonly LoggerInterface $logger,
+	) {
+	}
+
+	/**
+	 * Every `.penpot` at or below the folder this mapping would claim.
+	 *
+	 * ANSWERS `[]` FOR A FOLDER THAT IS NOT THERE, which is the ordinary case: most
+	 * mappings are made against a name nothing has used yet, and a folder that does
+	 * not exist holds no designs to warn about.
+	 *
+	 * COUNTS EVERY `.penpot`, TRACKED OR NOT, and that is deliberate. The mapped
+	 * tree is about to be filled from Penpot, and a design the app has never heard
+	 * of is no more able to survive there than one it has: both are archives in a
+	 * folder that may only hold pointers. The distinction {@see PullService} draws
+	 * between mirrored and untracked is about ownership, and ownership is not the
+	 * question here.
+	 *
+	 * @return list<File>
+	 */
+	public function under(Mapping $mapping): array {
+		$root = $this->storage->findRoot($mapping);
+
+		return $root === null ? [] : $this->designsBelow($root, 0);
+	}
+
+	/**
+	 * Destroy them, permanently, and answer how many went.
+	 *
+	 * NEVER THROWS. A file that will not delete is logged and stepped over: the
+	 * mapping this clears the way for has already been created, and failing here
+	 * would leave the admin with a mapping they cannot see and an error they cannot
+	 * act on. The survivor is visible in the folder and in the log.
+	 *
+	 * @param list<File> $designs from {@see under()}, so the count the admin
+	 *                            acknowledged is the set that is destroyed
+	 */
+	public function purge(array $designs): int {
+		if ($designs === []) {
+			return 0;
+		}
+
+		$purged = 0;
+
+		// ONE GUARD FOR THE WHOLE SWEEP. See the class docblock: without it every
+		// delete below reaches Penpot and deletes the design the file points at.
+		$this->guard->run(function () use ($designs, &$purged): void {
+			foreach ($designs as $design) {
+				$path = $design->getPath();
+
+				try {
+					$this->trash->withoutTrash(static function () use ($design): void {
+						$design->delete();
+					});
+				} catch (\Throwable $e) {
+					$this->logger->warning('penpot_sync: could not purge a design to make way for a link mapping', [
+						'app' => Application::APP_ID,
+						'file' => $path,
+						'exception' => $e,
+					]);
+
+					continue;
+				}
+
+				$purged++;
+				$this->logger->info('penpot_sync: purged a design to make way for a link mapping', [
+					'app' => Application::APP_ID,
+					'file' => $path,
+				]);
+			}
+		});
+
+		return $purged;
+	}
+
+	/**
+	 * @return list<File>
+	 */
+	private function designsBelow(Folder $folder, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		try {
+			$children = $folder->getDirectoryListing();
+		} catch (\Throwable $e) {
+			// AN UNREADABLE FOLDER IS NOT AN EMPTY ONE, and the difference matters
+			// here more than anywhere else in the app: this list becomes both the
+			// warning's count and the set that is destroyed. Understating it would
+			// create the mapping while leaving designs behind — the exact state the
+			// class exists to prevent — so the failure is logged loudly rather than
+			// returned as "nothing found".
+			$this->logger->error('penpot_sync: could not read a folder while looking for existing designs', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'exception' => $e,
+			]);
+
+			return [];
+		}
+
+		$found = [];
+		foreach ($children as $child) {
+			if ($child instanceof Folder) {
+				foreach ($this->designsBelow($child, $depth + 1) as $nested) {
+					$found[] = $nested;
+				}
+				continue;
+			}
+			if ($child instanceof File && str_ends_with($child->getName(), PullService::EXTENSION)) {
+				$found[] = $child;
+			}
+		}
+
+		return $found;
+	}
+}
