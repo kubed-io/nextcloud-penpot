@@ -13,6 +13,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
 use OCA\PenpotSync\Service\ConnectionTester;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MappingService;
+use OCA\PenpotSync\Service\MappingTeardownService;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\PullStatus;
 use OCA\PenpotSync\Settings\AdminTest;
@@ -53,6 +54,7 @@ final class MappingController extends Controller {
 		string $appName,
 		IRequest $request,
 		private readonly MappingService $service,
+		private readonly MappingTeardownService $teardown,
 		private readonly ConnectionTester $tester,
 		private readonly PullService $pull,
 		private readonly PullStatus $status,
@@ -205,11 +207,18 @@ final class MappingController extends Controller {
 
 	#[AuthorizedAdminSetting(settings: MappingSettings::class)]
 	public function destroy(string $id): JSONResponse {
+		// THE MIRRORS FIRST, for the reason {@see \OCA\PenpotSync\Command\RemoveMapping}
+		// gives: the teardown finds them THROUGH the mapping, so once the mapping is
+		// gone there is nothing left to walk. Both routes tear down, or the admin
+		// panel and the CLI would leave the instance in two different states.
+		$mapping = $this->service->getById($id);
+		$torn = $mapping === null ? ['removed' => 0, 'unmapped' => 0] : $this->teardown->tearDown($mapping);
+
 		if (!$this->service->remove($id)) {
 			return new JSONResponse(['message' => 'No such mapping.'], Http::STATUS_NOT_FOUND);
 		}
 
-		return new JSONResponse(['status' => 'removed']);
+		return new JSONResponse(['status' => 'removed'] + $torn);
 	}
 
 	/**

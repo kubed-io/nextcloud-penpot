@@ -48,6 +48,24 @@ trait PruneSteps {
 		$this->theAdminRunsAPull();
 	}
 
+	/**
+	 * A PROJECT deleted in Penpot, with the sync folded in — the folder-shaped twin
+	 * of the step above, and the trigger for `projects/delete.feature`'s last rule.
+	 *
+	 * `delete-project` takes `project`, not `id` or `project-id` — the spelling
+	 * {@see \OCA\PenpotSync\Service\PenpotClient::deleteProject()} already uses,
+	 * confirmed against a live instance rather than guessed from its siblings.
+	 *
+	 * Soft, like `delete-file`: the project goes to Penpot's own trash, which is
+	 * what leaves its designs exportable for the prune's rescue on the way past.
+	 *
+	 * @When /^someone deletes the "([^"]*)" project in Penpot$/
+	 */
+	public function someoneDeletesTheProjectInPenpot(string $name): void {
+		$this->penpotRpc('delete-project', ['project' => $this->projectIdNamed($name)]);
+		$this->theAdminRunsAPull();
+	}
+
 	/** @When /^someone permanently deletes the design "([^"]*)" in Penpot$/ */
 	public function someonePermanentlyDeletesTheDesignInPenpot(string $name): void {
 		$this->theDesignIsPermanentlyDeletedInPenpot($name);

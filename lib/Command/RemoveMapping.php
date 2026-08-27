@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Command;
 
 use OCA\PenpotSync\Service\MappingService;
+use OCA\PenpotSync\Service\MappingTeardownService;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -20,15 +21,18 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * Stop mirroring a Penpot team.
  *
- * ## THIS DELETES NOTHING — SAY SO, EVERY TIME
+ * ## NOTHING IS REMOVED FROM PENPOT — SAY SO, EVERY TIME
  *
- * Nothing is removed from Penpot (this app never deletes upstream content
- * without an explicit, confirmed user action — saga §6.19), and nothing local is
- * removed either. What *should* happen to already-mirrored files when a mapping
- * goes away is a real open decision with its own feature file
- * (remove-mapping.feature) and it belongs to Course 5. Until then the safe
- * behaviour is to leave the files alone and say so plainly, so nobody assumes a
- * cleanup happened that did not.
+ * This app never deletes upstream content without an explicit, confirmed user
+ * action (saga §6.19), and a mapping does not exist on Penpot's side at all, so
+ * there is nothing there to tear down.
+ *
+ * WHAT HAPPENS LOCALLY IS NO LONGER "NOTHING", and this docblock used to say it
+ * was. `mapping/delete.feature` settled the open decision: the mirrors that hold
+ * nothing go, the mirrors that hold a design stay and become unmapped. The line
+ * printed below reports which, because "removed the mapping" and "removed the
+ * mapping and 40 pointers" are different events and the admin should not have to
+ * go and look.
  *
  * Takes the mapping id rather than the team id: ids come straight from
  * `list-mappings` output, and using the same key for remove and list keeps the
@@ -37,6 +41,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 final class RemoveMapping extends Command {
 	public function __construct(
 		private MappingService $service,
+		private MappingTeardownService $teardown,
 	) {
 		parent::__construct();
 	}
@@ -45,7 +50,7 @@ final class RemoveMapping extends Command {
 	protected function configure(): void {
 		$this
 			->setName('penpot_sync:remove-mapping')
-			->setDescription('Remove a Penpot team mapping (stops mirroring; deletes nothing).')
+			->setDescription('Remove a Penpot team mapping (stops mirroring; never touches Penpot).')
 			->addArgument('id', InputArgument::REQUIRED, 'The mapping id (see penpot_sync:list-mappings).');
 	}
 
@@ -53,6 +58,11 @@ final class RemoveMapping extends Command {
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$id = (string)$input->getArgument('id');
 		$mapping = $this->service->getById($id);
+
+		// THE MIRRORS FIRST, WHILE THE MAPPING IS STILL THERE TO FIND THEM BY. The
+		// teardown resolves the mapped folder through the mapping itself, so running
+		// it after the removal would have nothing left to walk.
+		$torn = $mapping === null ? ['removed' => 0, 'unmapped' => 0] : $this->teardown->tearDown($mapping);
 
 		if ($mapping === null || !$this->service->remove($id)) {
 			$output->writeln('<error>No mapping with id ' . $id . '.</error>');
@@ -65,7 +75,12 @@ final class RemoveMapping extends Command {
 			'<info>Removed the mapping for %s.</info>',
 			$mapping->teamName !== '' ? $mapping->teamName : $mapping->teamId,
 		));
-		$output->writeln('<comment>Nothing was deleted — not in Penpot, and not in Nextcloud.</comment>');
+		$output->writeln('<comment>Nothing was deleted in Penpot.</comment>');
+		$output->writeln(sprintf(
+			'<comment>In Nextcloud: removed %d empty pointer(s), left %d design(s) in place, now unmapped.</comment>',
+			$torn['removed'],
+			$torn['unmapped'],
+		));
 
 		return 0;
 	}

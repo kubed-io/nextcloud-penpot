@@ -67,17 +67,38 @@ Feature: Deleting a project
 
   @in-nextcloud @gesture
   Scenario: Trashing a project folder in a link team is refused
+    Given a folder at "Pointers/Existing"
+    And Penpot holds a project named "Existing"
     When I try to move "Pointers/Existing" to the trash
     Then the trash is refused with a message
     And Penpot holds a project named "Existing"
 
-    # The same refusal a single link gets, for the same reason: under a link the
-    # tree is Penpot's, and Nextcloud is a read-only mirror of it.
+    # The refusal turns on the project EXISTING, which is why the premise is stated
+    # rather than left to the Background — the rule below is the same folder without one.
+
+    # ── RULE: a folder Penpot never named is an ordinary folder ──────────────
+    # notes: ../AGENTS.md#a-folder-penpot-never-named-is-an-ordinary-folder
+
+  @in-nextcloud @gesture
+  Scenario Outline: Trash a folder that is not mapped to a penpot project
+    Given a folder at "<folder>/Odds and ends"
+    And Penpot holds no project named "Odds and ends"
+    When I move "<folder>/Odds and ends" to the trash
+    Then "<folder>/Odds and ends" is recoverable from the Nextcloud trash
+
+    Examples: a folder Penpot never named is an ordinary folder, whatever the mapping
+      | folder   |
+      | Penpot   |
+      | Shared   |
+      | Pointers |
+
+    # The refusal above is about the MIRROR, not about the mapping — which is the
+    # boundary the "Pointers" row draws, and the only row that was ever broken.
 
     # ── RULE: a project deleted in Penpot takes only what is Penpot's ─────────
     # notes: ../AGENTS.md#a-project-deleted-in-penpot-leaves-no-folder-claiming-its-id
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Delete a project in Penpot whose folder holds only designs
     Given the following items in the mappings:
       | path                         |
@@ -87,7 +108,7 @@ Feature: Deleting a project
     Then "Penpot/Doomed" is gone from Nextcloud
     And the designs are recoverable from the Nextcloud trash
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Delete a project in Penpot whose folder holds other files too
     Given the following items in the mappings:
       | path                        |
@@ -96,6 +117,7 @@ Feature: Deleting a project
     When someone deletes the "Doomed" project in Penpot
     Then "Penpot/Doomed" still exists in Nextcloud, holding "Budget.xlsx"
     And it holds no design files
+    And the designs are recoverable from the Nextcloud trash
     And the mappings hold:
       | path           | identity |
       | /Penpot/Doomed | absent   |

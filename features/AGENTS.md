@@ -1449,6 +1449,47 @@ is Penpot's and Nextcloud is a read-only mirror of it. Removing the folder local
 would only make the mapping disagree with the team it mirrors until the next pull
 wrote it back.
 
+BOTH SIDES OF THE PREMISE ARE STATED, rather than left to the Background: the folder
+in Nextcloud, and the project in Penpot that it is a folder FOR. The refusal is not "this is a link team", it is "this folder IS a project
+Penpot still holds" — and the rule below is the same gesture on the same kind of
+folder with no project behind it, which goes. Without the `Given`, the two scenarios
+look like they disagree about link mode instead of agreeing about the project, and
+the one thing that separates them is invisible.
+
+The `Given` and the `Then` say the same sentence deliberately: one is what makes the
+refusal correct, the other is that the refusal did not destroy it on the way past.
+
+### A folder Penpot never named is an ordinary folder
+
+The boundary of the two rules above, and the axis is *is this folder a project* —
+NOT what mode its team is in. A folder somebody made themselves holds no designs and
+maps to no project, so no pull will ever write it back and no gesture in Penpot can
+reach it. It is a Nextcloud folder that happens to sit under a mapped team, and it
+goes when they say it goes.
+
+TWO STATEMENTS, NOT ONE, and the split is what makes the scenario legible. "a folder
+that is not a project" bundles a Nextcloud fact and a Penpot fact into one sentence,
+and only the Penpot half is load-bearing — so the arrange states the folder, and
+`Penpot holds no project named` states Penpot's side in Penpot's own words.
+
+THE CONTENTS ARE NOT THE VECTOR, which is why no row puts a file in the folder. A
+design in a folder under a team implies a matching Penpot project, so "no matching
+project" already means "no designs" — there is nothing an `.txt` row would add that
+the missing project does not already say. (`LinkWriteGuardPluginTest` covers a folder
+of ordinary files at the unit level, where the subtree walk actually lives.)
+
+The `Pointers` row is the one that earns the scenario; the other two are what make
+the claim "the mapping makes no difference" rather than "link is special". It was
+also the only row that was ever broken. `MoveRules::refusalForDeleting()` first read
+the link rule as being about the MAPPING and refused every delete anywhere under a
+`link` team, whatever the node was — so an empty folder made in a link-mapped folder
+could not be removed by any route, ever, and the 403 explained itself with a sync
+that was never going to happen. Found by hand on the live instance, not in CI.
+
+Nothing stops the folder being made, either: `refusalForCreating` guards `.penpot`
+names and says nothing about folders or spreadsheets. An app that lets you make a
+thing and never lets you remove it is worse than one that refused the creation.
+
 ### A project deleted in Penpot leaves no folder claiming its id
 
 Two endings, decided by what the folder holds, and the pair only works if both are
@@ -1462,6 +1503,26 @@ project went away is not this app's call, and "still exists, holding Budget.xlsx
 the only phrasing that proves it didn't.
 
 The pair is Grafana's, verbatim in shape, and the reasoning transfers exactly.
+
+IT IS THE PRUNE'S MISSING HALF, and that is why nothing implemented it for so long.
+`PullService::collectMirrors()` gathers FILES, so deleting a project in Penpot
+already did the right thing to its designs — they went to the Nextcloud trash, each
+with a last-chance snapshot — and nothing at all to the FOLDER. The folder stayed,
+still carrying a `penpot_project_id` naming a project that no longer existed, and no
+pull ever looked at it again.
+
+A DEAD MARKER IS NOT MERELY UNTIDY. Nothing that reads one can tell it from a live
+one: `MembershipResolver` resolves designs into a project that is gone, and
+`MoveRules::refusalForDeleting()` refuses to let the folder be deleted under a `link`
+mapping — permanently, because the reason it gives ("it would come back on the next
+sync") is not true and never becomes true. Found by hand on a live instance, where a
+folder in exactly that state could not be removed by any route.
+
+`PullService::reapOrphanProjects()` is the repair, and it runs behind the same
+`$complete` gate the prune does — for a sharper reason. A project skipped for an
+illegal name is absent from the run's named set while being perfectly alive in
+Penpot, so without the gate one slash in one project name would send every other
+project's folder to the trash on the next pull.
 
 ---
 
@@ -2823,18 +2884,53 @@ deletes anything in Penpot at all, so teardown collapses to ONE rule — but the
 file is still needed, because the app DOES provision real folders that a
 removed mapping leaves behind.
 
-THE CONTRACT: every mirrored file connected to the removed mapping goes to the
-Nextcloud trash and becomes unmapped — purely local, since there is no remote
-state to reconcile. Files that were never part of the mapping are left strictly
-alone. Penpot is never contacted, at any point.
+THE CONTRACT: the mapping goes, and each mirrored design is left in whatever
+state its MODE made it worth leaving in. Penpot is never contacted, at any point
+— there is no remote state to reconcile, because nothing about a mapping exists
+on Penpot's side.
 
-MODE MATTERS FOR WHAT THE USER ACTUALLY LOSES (saga §6.22): a trashed "sync"
-file still holds its real archive, so it's recoverable content. A trashed
-"link" file was only ever a pointer — there's nothing in it to recover. The
-teardown warns about this, because "removing a mapping deleted my backups" and
-"removing a mapping deleted some pointers" are very different events.
+{@see \OCA\PenpotSync\Service\MappingTeardownService} is where it lives, and BOTH
+routes call it — `occ penpot_sync:remove-mapping` and the admin panel's delete —
+because a teardown on one route only would leave the CLI and the UI producing two
+different instances. It runs BEFORE the mapping is removed, since it finds the
+mirrors THROUGH the mapping.
 
-@todo — no lib/Service/MappingTeardownService exists yet.
+IT RUNS UNDER {@see \OCA\PenpotSync\Service\SyncGuard}, and that is not a detail.
+Each removal is a `Node::delete()`, which fires the same event a person's delete
+does — and `DeleteListener` answers that by putting the design in PENPOT's trash.
+Without the guard, removing a link mapping would delete every design it mirrored,
+in Penpot, from the one action whose whole promise is that it touches nothing there.
+
+### Removing a mapping keeps what the mode made worth keeping
+
+MODE DECIDES, AND IT DECIDES BY WHAT THE FILE ACTUALLY HOLDS (saga §6.22). The
+two scenarios are one rule asked of the two modes, and the code asks it one level
+down — of each FILE, "does it hold an archive?" — which is the same answer for
+every tree the pull builds (mode is what decides whether a mirror gets bytes) and
+the right answer for a tree that is mixed, which reading the mapping's mode would
+get wrong. The difference is the archive:
+
+- **`link`** — the designs GO. A link is a zero-byte pointer whose only meaning
+  was the mapping, so once the mapping is gone there is nothing left for it to
+  be. It is the same reasoning {@see PullService}'s prune already applies to a
+  link whose design left the mapping: keeping one offers a restore that
+  reconnects to nothing.
+- **`sync`** — the designs STAY, and become unmapped. The file holds the design
+  itself, and may be the last copy of it in existence. Removing a mapping is an
+  administrative act about a connection; destroying somebody's archives is not
+  something it gets to do on the way past.
+
+WHATEVER ELSE THE FOLDER HELD IS NOT PART OF THE QUESTION, which is why neither
+scenario puts an ordinary file in the tree. Files this app never mirrored were
+never the mapping's to touch in either mode, so a row proving it would be
+proving something about Nextcloud rather than about the teardown.
+
+An earlier draft of this file said the opposite — that every mirrored file, both
+modes alike, went to the Nextcloud trash and became unmapped, and that the
+teardown warned the admin how many archives were at stake. Five scenarios stated
+it and all five were `@todo`. The rule above splits on the one thing that makes
+the two cases different, and it means the warning has nothing left to warn
+about: nothing recoverable is ever removed.
 
 ---
 

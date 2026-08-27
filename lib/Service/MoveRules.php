@@ -64,6 +64,12 @@ use OCP\IL10N;
  * {@see positionOf} has always started at the parent.
  */
 final class MoveRules {
+	/**
+	 * A ceiling on {@see filledFromPenpot}'s descent, matching the seatbelts in
+	 * {@see MembershipResolver} and {@see DeletionService}.
+	 */
+	private const SCAN_DEPTH = 100;
+
 	public function __construct(
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
@@ -85,20 +91,41 @@ final class MoveRules {
 	/**
 	 * The reason this node may not be deleted, or null when it may.
 	 *
-	 * ONE QUESTION, NOT TWO, which is what makes this shorter than the move rules
-	 * rather than a copy of them. A move asks about the node AND where it is
-	 * going; a delete has only the node — and under a `link` mapping the answer is
-	 * the same whatever the node is. A file, a project folder, a plain folder
-	 * holding either: the tree is Penpot's and Nextcloud mirrors it read-only, so
-	 * the only thing worth asking is which mapping it sits under.
+	 * TWO QUESTIONS, AND THE SECOND ONE COST A LIVE BUG. The first is the mapping:
+	 * outside a `link` team there is nothing to refuse at all. The second is
+	 * whether the node is one PENPOT FILLS — and the first version of this method
+	 * did not ask it. It refused the whole subtree on the strength of one sentence
+	 * ("the tree is Penpot's and Nextcloud mirrors it read-only"), which is true
+	 * of the mirror and false of everything a person puts beside it.
 	 *
-	 * Deliberately silent everywhere else. A `sync` mirror deleted here goes to
-	 * Penpot's trash and comes back (§C6.11), and an ordinary file in a mapped
-	 * folder is nobody's business but its owner's — refusing either would break
-	 * the thing that makes a mapped folder usable as a folder.
+	 * What that shipped was a trap. Nothing stops someone making a plain folder or
+	 * dropping a spreadsheet inside a link mapping — {@see refusalForCreating}
+	 * only guards `.penpot` names — and once made, it could never be removed
+	 * again, by anyone, by any route. Measured on the live instance: an empty
+	 * folder in a `link` mapping answered 403 to every delete, and the reason it
+	 * gave ("it would only come back on the next sync") was not even true, because
+	 * no pull has ever written that folder.
+	 *
+	 * So the question this actually asks is *would the pull put it back*:
+	 *
+	 *   - a `.penpot` file — in a link mapping every one of them is Penpot's, since
+	 *     creating, moving and copying one in are all already refused;
+	 *   - a folder carrying a project marker, or the mapping root's team marker;
+	 *   - a folder with either of those anywhere below it — a project's name is its
+	 *     PATH, so `foo` holding `foo/bar` is as much Penpot's as `foo/bar` is.
+	 *
+	 * Anything else is the person's own, and goes when they say it goes.
+	 *
+	 * Deliberately silent outside a link mapping. A `sync` mirror deleted there
+	 * goes to Penpot's trash and comes back (§C6.11), and an ordinary file in a
+	 * mapped folder is nobody's business but its owner's — refusing either would
+	 * break the thing that makes a mapped folder usable as a folder.
 	 */
 	public function refusalForDeleting(Node $node): ?string {
 		if (!$this->isLinkTeam($this->resolver->resolve($node)->teamId)) {
+			return null;
+		}
+		if (!$this->filledFromPenpot($node, 0)) {
 			return null;
 		}
 
@@ -108,6 +135,54 @@ final class MoveRules {
 			. 'back on the next sync. Delete it in Penpot instead.',
 			[$node->getName()],
 		);
+	}
+
+	/**
+	 * Would a pull put this node there? Asked of the whole subtree, cheaply.
+	 *
+	 * A `.penpot` under a link mapping is always Penpot's: every route that could
+	 * author one there — create, move in, copy in — is refused above, so the only
+	 * way one exists is that a pull wrote it. A folder is Penpot's when it carries
+	 * a project marker, when it IS the mapping root (the team marker), or when
+	 * either of those is below it.
+	 *
+	 * STOPS AT THE FIRST HIT, so the ordinary answer for a plain folder is one
+	 * metadata read and one listing. The descent only goes deep on a tree that is
+	 * about to be refused anyway.
+	 *
+	 * FAIL OPEN, like the guard that asks: a listing this cannot read, or a tree
+	 * deeper than the ceiling, answers "not Penpot's". The cost of being wrong
+	 * that way is a link file deleted locally, which holds no bytes and comes back
+	 * on the next pull. The cost of the other way is the trap above.
+	 */
+	private function filledFromPenpot(Node $node, int $depth): bool {
+		if ($node instanceof File) {
+			return str_ends_with($node->getName(), PullService::EXTENSION);
+		}
+		if (!$node instanceof Folder) {
+			return false;
+		}
+
+		$markers = $this->metadata->readFolder($node->getId());
+		if ($markers->hasProject() || $markers->hasTeam()) {
+			return true;
+		}
+		if ($depth >= self::SCAN_DEPTH) {
+			return false;
+		}
+
+		try {
+			$children = $node->getDirectoryListing();
+		} catch (\Throwable) {
+			return false;
+		}
+		foreach ($children as $child) {
+			if ($this->filledFromPenpot($child, $depth + 1)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
