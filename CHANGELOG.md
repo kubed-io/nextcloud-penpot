@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **A project folder no longer gets a `penpot` tag.** It never decided anything — a folder is a Penpot project because of what the app records on it, not what it wears — and the tag it left on your folders was a leftover from an older design. Tag your folders however you like; the app will not add to them.
+- **Folders mirrored from Penpot no longer get a `penpot` tag.** The tag never decided anything — a folder is a Penpot project because of what the app records on it, not what it wears — so a sync no longer writes one onto every folder it creates. A folder you turn into a project from the Nextcloud side still gets it, since there the tag is the visible half of a thing you did.
 
 ### Fixed
 

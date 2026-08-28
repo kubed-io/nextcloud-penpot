@@ -69,8 +69,11 @@ trait WebDavTrait {
 	}
 
 	/**
-	 * MKCOL at any depth under the user's files root, unlike {@see davMkdir()}
-	 * which only makes a top-level folder and registers it for teardown.
+	 * MKCOL at any depth under the user's files root.
+	 *
+	 * The only folder-maker the harness has. A `davMkdir()` sat beside it for
+	 * top-level folders, registering each for teardown; nothing called it once the
+	 * steps that did were removed, so it went with them.
 	 *
 	 * This is the folder half of "+ New": a user making a subfolder inside a
 	 * mapped folder, which `create-project.feature` requires to stay an ORDINARY

@@ -235,9 +235,6 @@ trait PullSteps {
 	 * The path is relative to the actor's root exactly as every other path in the
 	 * suite is, so a scenario names it the same way it later asserts on it.
 	 *
-	 * davMkcol(), not davMkdir(): the folder sits INSIDE the mapped folder, and
-	 * davMkdir only makes a top-level one.
-	 *
 	 * @Given /^a folder "([^"]*)" already exists$/
 	 */
 	public function aFolderAlreadyExists(string $path): void {
