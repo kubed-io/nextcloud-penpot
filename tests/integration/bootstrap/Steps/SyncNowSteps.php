@@ -28,6 +28,14 @@ use Behat\Gherkin\Node\TableNode;
  */
 trait SyncNowSteps {
 	/**
+	 * Where {@see syncNowArchive()} keeps the design it exports bytes from.
+	 *
+	 * Inside the mapping, because a design can only be born in one — and therefore
+	 * inside what both `exactly` assertions walk, which is why they skip it.
+	 */
+	private const FIXTURE_FOLDER = 'Penpot/Sync Now Source';
+
+	/**
 	 * Rows the Background asked for, waiting for the mappings to be made.
 	 *
 	 * @var list<string>
@@ -203,6 +211,9 @@ trait SyncNowSteps {
 		$actual = [];
 		foreach (array_keys($roots) as $root) {
 			foreach ($this->syncNowWalk($root) as $found) {
+				if ($this->syncNowIsFixture($found)) {
+					continue;
+				}
 				$actual[] = $found;
 			}
 		}
@@ -274,6 +285,8 @@ trait SyncNowSteps {
 						$actual[] = $team . ' / ' . $projectName . ' / ' . $name;
 					}
 				}
+				// (the fixture's own project cannot appear here: the table names the
+				// projects to look in, and no table names it — see the docblock)
 			}
 		}
 		sort($actual);
@@ -390,15 +403,21 @@ trait SyncNowSteps {
 			return $this->syncNowArchiveBytes;
 		}
 
-		// A FRESH NAME EVERY TIME. The folder is deleted at the end of this helper,
-		// and a delete leaves a TRASH entry — a second scenario re-creating the same
-		// path is how a suite ends up with `Source (2).penpot`.
-		$folder = 'Penpot/Sync Now Source ' . uniqid();
+		// ONE FIXED NAME, shared by every scenario in the leg. It is never deleted
+		// now, so there is no trash entry to collide with — and a stable name is
+		// what lets the assertions skip it without guessing.
+		$folder = self::FIXTURE_FOLDER;
 		$path = $folder . '/Source.penpot';
 
-		$this->syncNowAncestors($path);
-		$this->davPut($path, '');
-		$this->theAdminRunsAPull();
+		// ONLY CREATE IT ONCE PER LEG. The fixture is permanent now, so on the
+		// second scenario it is already there holding its archive — and a blind
+		// `PUT ''` would blank a real export and then pull over the wreckage, which
+		// is the "arranging by overwriting" hazard {@see ArrangeSteps} documents.
+		if (!$this->davExists($path)) {
+			$this->syncNowAncestors($path);
+			$this->davPut($path, '');
+			$this->theAdminRunsAPull();
+		}
 
 		$bytes = $this->davGet($path);
 		if (!str_starts_with($bytes, "PK\x03\x04")) {
@@ -408,10 +427,18 @@ trait SyncNowSteps {
 			);
 		}
 
-		// SWEEP UP. Both `exactly` assertions would otherwise report this fixture —
-		// the folder in the tree table, its project in the Penpot one. Deleting the
-		// mirror trashes the design, so the team is left clean too.
-		$this->davDelete($folder);
+		// NOT DELETED, AND THAT WAS THE LAST BUG IN THIS HELPER.
+		//
+		// Sweeping the folder up looked tidy and is a gesture inside a LIVE mapping:
+		// a delete there reaches Penpot ({@see \OCA\PenpotSync\Listener\DeleteListener}),
+		// and it took the Background's own designs with it — `Gizmo` and `Doohickey`
+		// vanished out of Design Team between one scenario and the next, which is
+		// the harness's own "unmap before touching any content" warning arriving
+		// from the other direction.
+		//
+		// So the fixture STAYS, and the two `exactly` assertions skip it by name
+		// instead ({@see syncNowIsFixture()}). An assertion that ignores one known
+		// path is honest; a delete that silently trashes designs is not.
 
 		return $this->syncNowArchiveBytes = $bytes;
 	}
@@ -429,5 +456,18 @@ trait SyncNowSteps {
 	public function armSyncNow(): void {
 		$this->syncNowPending = [];
 		$this->syncNowArchiveBytes = '';
+	}
+
+	/**
+	 * Is this path the archive fixture, rather than something the table describes?
+	 *
+	 * {@see syncNowArchive()} has to keep a real design inside the mapping to
+	 * export bytes from, and deleting it afterwards is what trashed the
+	 * Background's own designs. So it stays, and the tree assertion steps over it —
+	 * one named path, matched as a prefix so the folder and its contents both go.
+	 */
+	private function syncNowIsFixture(string $path): bool {
+		return $path === self::FIXTURE_FOLDER
+			|| str_starts_with($path, self::FIXTURE_FOLDER . '/');
 	}
 }
