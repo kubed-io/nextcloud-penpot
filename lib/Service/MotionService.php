@@ -265,7 +265,24 @@ final class MotionService {
 				'penpotId' => $meta->penpotId,
 				'path' => $target->getPath(),
 			]);
-			$this->imports->adopt($target, $to, $membership->teamId);
+			if ($this->imports->adopt($target, $to, $membership->teamId) === null) {
+				// THE IMPORT FAILED, AND THE ID MUST STILL GO. `adopt()` answers null
+				// when Penpot refused the archive or there was none to send — and the
+				// file is then still carrying the id of a design ANOTHER file in this
+				// mapping is mirroring, which is precisely the state this branch exists
+				// to prevent. Leaving it is worse than a file with no design: two
+				// mirrors of one design is what nothing downstream can separate.
+				//
+				// So it becomes an ordinary untracked `.penpot` — the same shape any
+				// file the app never adopted has, and one a later gesture can still
+				// import. Raised by Copilot on #52.
+				$this->metadata->clear($target->getId());
+				$this->logger->warning('penpot_sync writeback: could not import a duplicate arrival; cleared its stale id', [
+					'app' => Application::APP_ID,
+					'penpotId' => $meta->penpotId,
+					'path' => $target->getPath(),
+				]);
+			}
 
 			return true;
 		}
