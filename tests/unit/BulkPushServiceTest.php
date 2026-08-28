@@ -272,7 +272,6 @@ final class BulkPushServiceTest extends TestCase {
 	/** @var array<int, bool> fileId => should the import throw */
 	private array $stubbornFiles = [];
 
-
 	/** @param list<\OCP\Files\Node> $children */
 	private function folder(array $children, int $id = 900): Folder {
 		$folder = $this->createStub(Folder::class);

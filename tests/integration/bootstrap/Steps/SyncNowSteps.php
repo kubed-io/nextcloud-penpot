@@ -28,11 +28,11 @@ use Behat\Gherkin\Node\TableNode;
  */
 trait SyncNowSteps {
 	/**
-	 * `.penpot` paths the Background asked for, waiting for a mapping to exist.
+	 * Rows the Background asked for, waiting for the mappings to be made.
 	 *
 	 * @var list<string>
 	 */
-	private array $syncNowPendingArchives = [];
+	private array $syncNowPending = [];
 
 	/**
 	 * Penpot's side of the picture, across SEVERAL teams.
@@ -77,17 +77,25 @@ trait SyncNowSteps {
 	 * there" is testing that the app skips an empty file. Everything else is a
 	 * plain folder (no extension) or an ordinary file.
 	 *
-	 * ## THE ARCHIVE IS DEFERRED, BECAUSE NOTHING IS MAPPED YET
+	 * ## EVERY ROW IS DEFERRED, NOT JUST THE ARCHIVES
 	 *
 	 * This step runs BEFORE `the following mappings were made` — the Background is
-	 * a picture of the pre-state, and both siblings order it the same way. But the
-	 * only way this harness can obtain real `.penpot` bytes is to make a design and
-	 * export it, and a design can only be born inside a mapped folder.
+	 * a picture of the pre-state, and both siblings order it that way. Writing the
+	 * files here is what does not survive, for two separate reasons:
 	 *
-	 * So the file is recorded here and written at the START OF THE SYNC, by which
-	 * time the Background has finished and the mapping exists. The pre-state the
-	 * scenario describes is still true when the scenario acts, which is all the
-	 * Background is claiming.
+	 *   - {@see ArrangeSteps::theFollowingMappingsWereMade()} UNMAPS FIRST ("unmap
+	 *     before touching any content"), and since `remove-mapping` learned to tear
+	 *     down a mapping's mirrors, that teardown deletes whatever this step has
+	 *     already put inside the folder. `notes.txt` and `plan.txt` disappeared out
+	 *     of a Background that had just created them. Grafana's twin does not unmap,
+	 *     which is why the identical Gherkin is safe there and destructive here.
+	 *   - a real `.penpot` can only be OBTAINED by exporting a design, and a design
+	 *     can only be born inside a mapped folder.
+	 *
+	 * So the whole table is recorded and replayed at the START OF THE SYNC, by which
+	 * time the mappings exist and nothing further will tear them down. The pre-state
+	 * the scenario describes is true when the scenario acts, which is all a
+	 * Background claims.
 	 *
 	 * @Given /^Nextcloud holds these resources:$/
 	 */
@@ -98,6 +106,24 @@ trait SyncNowSteps {
 				throw new \RuntimeException('every row needs a path');
 			}
 
+			$this->syncNowPending[] = $path;
+		}
+	}
+
+	/**
+	 * Write the rows the Background deferred, now that the mappings are made.
+	 *
+	 * Called from BOTH sync steps rather than one, because either direction may be
+	 * the first thing a scenario does and the pre-state has to hold for both.
+	 * Idempotent: the list is drained as it is replayed, and a row that already
+	 * exists is left alone — the legs share one Nextcloud, so a second scenario
+	 * finds what the first left and a `Given` that is already true stops.
+	 */
+	private function syncNowWritePending(): void {
+		$pending = $this->syncNowPending;
+		$this->syncNowPending = [];
+
+		foreach ($pending as $path) {
 			if ($this->davExists($path)) {
 				continue;
 			}
@@ -105,7 +131,7 @@ trait SyncNowSteps {
 			$this->syncNowAncestors($path);
 
 			if (str_ends_with($path, '.penpot')) {
-				$this->syncNowPendingArchives[] = $path;
+				$this->davPut($path, $this->syncNowArchive());
 				continue;
 			}
 			if (pathinfo($path, PATHINFO_EXTENSION) === '') {
@@ -127,7 +153,7 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
-		$this->syncNowWritePendingArchives();
+		$this->syncNowWritePending();
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -142,7 +168,7 @@ trait SyncNowSteps {
 	 * @When /^the admin syncs every mapping to Penpot$/
 	 */
 	public function theAdminSyncsEveryMappingToPenpot(): void {
-		$this->syncNowWritePendingArchives();
+		$this->syncNowWritePending();
 
 		$res = $this->occ('penpot_sync:sync push');
 		if ($res['exit'] !== 0) {
@@ -401,27 +427,7 @@ trait SyncNowSteps {
 	 * @BeforeScenario
 	 */
 	public function armSyncNow(): void {
-		$this->syncNowPendingArchives = [];
+		$this->syncNowPending = [];
 		$this->syncNowArchiveBytes = '';
-	}
-
-	/**
-	 * Write the archives the Background deferred, now that the mappings are made.
-	 *
-	 * Called from BOTH sync steps rather than from one, because either direction
-	 * may be the first thing a scenario does and the pre-state has to be true for
-	 * both. Idempotent by construction — the list is emptied as it is drained.
-	 */
-	private function syncNowWritePendingArchives(): void {
-		$pending = $this->syncNowPendingArchives;
-		$this->syncNowPendingArchives = [];
-
-		foreach ($pending as $path) {
-			if ($this->davExists($path)) {
-				continue;
-			}
-			$this->syncNowAncestors($path);
-			$this->davPut($path, $this->syncNowArchive());
-		}
 	}
 }
