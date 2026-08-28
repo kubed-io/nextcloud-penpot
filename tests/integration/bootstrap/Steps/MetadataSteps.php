@@ -286,6 +286,35 @@ trait MetadataSteps {
 				return $actual === $want
 					? null : "expected the body its mapping implies ('{$want}'), the file is '{$actual}'";
 
+			case 'the id the destination already had':
+				// THE COLLISION BASELINE, captured by {@see MoveConflictSteps} before
+				// the gesture. "The destination" is the file that was already standing
+				// in the mapping, so this is the answer to "did the arrival leave the
+				// original alone" — and it is the whole of the `existing version` row.
+				if ($this->destinationIdBefore === '') {
+					return 'no collision was arranged, so there is no destination id to compare against';
+				}
+				return $actual === $this->destinationIdBefore
+					? null : "expected the destination's own id ({$this->destinationIdBefore}), found '{$actual}'";
+
+			case 'its own, not the destination\'s':
+				// The `both versions` arrival. Real, and NOT the design the file it
+				// landed beside is mirroring — which is the entire point of the answer:
+				// two files in one mapping may not claim one design.
+				if (($actual ?? '') === '') {
+					return 'expected a design id of its own, found nothing';
+				}
+				return $actual !== $this->destinationIdBefore
+					? null : 'expected an id of its own; it carries the destination\'s';
+
+			case 'a new one':
+				// Deliberately weaker than the row below it, because the scenario that
+				// says this no longer states what the file arrived carrying — so
+				// "different from what it arrived with" would compare against a value
+				// the Gherkin has stopped mentioning. Real is all that can be claimed.
+				return ($actual ?? '') !== ''
+					? null : 'expected a new design id, found nothing';
+
 			case 'a new one, never the one it arrived with':
 				// TWO CLAIMS IN ONE ROW, and the second is the load-bearing half.
 				// "Set" alone would pass against the bug this exists to catch: an

@@ -97,7 +97,7 @@ Feature: Moving a design
     # One move changing team and project together, keeping the id, the revision and
     # the history. A design is never re-created to cross a team boundary.
 
-    # ── RULE: leaving every mapping trashes the design, and coming back revives it ──
+    # ── RULE: leaving every mapping trashes the design; coming back is a new one ──
     # notes: ../AGENTS.md#moving-a-design-out-of-both-mappings-unmaps-it-from-either-side
 
   # notes: ../AGENTS.md#a-cross-team-move-always-crosses-a-storage-boundary
@@ -112,46 +112,23 @@ Feature: Moving a design
       | penpot_mode    | "unmapped"      |
       | content        | an archive      |
 
-    # The id stays on the file because it is what makes the return below a reattach
-    # rather than an import, and the trash is what keeps that id worth naming.
+    # The id stays on the file so a later arrival can be told apart from a stranger,
+    # never to be reattached to — moving back in is an import.
 
-  # notes: ../AGENTS.md#coming-back-revives-whatever-penpot-still-has
+  # notes: ../AGENTS.md#an-arrival-becomes-its-own-design-whatever-it-arrived-carrying
   @in-nextcloud @gesture
-  Scenario Outline: Move a design file into a project when Penpot still has its design
-    Given an unmapped design file at "Scratch/Coming Back.penpot" carrying its Penpot id
-    And its design is <where> in Penpot
-    When I move the file into "Penpot/Welcome Back"
-    Then the design is in the "Welcome Back" Penpot project
-    And the design "Coming Back" is not in Penpot's trash
-    And the file holds:
-      | penpot_id      | the original id    |
-      | penpot_team_id | the mapping's team |
-      | penpot_mode    | the mapping's mode |
-
-    Examples: parked or never gone, the id in the file names it either way
-      | where   |
-      | trashed |
-      | live    |
-
-  # notes: ../AGENTS.md#an-arrival-penpot-cannot-match-becomes-a-new-design
-  @in-nextcloud @gesture
-  Scenario Outline: Move a design file into a project when Penpot has no design for it
-    Given a design file at "Scratch/Uploaded.penpot" carrying <what>
+  Scenario: Move an unmapped design file into a project
+    Given an unmapped design file at "Scratch/Uploaded.penpot"
     When I move the file into "Penpot/Adopt Me"
     Then the design is in the "Adopt Me" Penpot project
     And the file holds:
-      | penpot_id      | a new one, never the one it arrived with |
-      | penpot_team_id | the mapping's team                       |
-      | penpot_mode    | the mapping's mode                       |
-      | content        | an archive                               |
+      | penpot_id      | a new one          |
+      | penpot_team_id | the mapping's team |
+      | penpot_mode    | the mapping's mode |
+      | content        | an archive         |
 
-    Examples: an id nothing answers to and no id at all are the same question
-      | what                       |
-      | an id no design answers to |
-      | no Penpot id at all        |
-
-    # Nothing is lost either way, because the bytes were never anywhere but Nextcloud:
-    # the archive is imported (§6.33) and the design starts a fresh history.
+    # The bytes moved in are the bytes that end up in Penpot: the archive is imported
+    # (§6.33), which mints an id, and the design starts a fresh history.
 
   # notes: ../AGENTS.md#there-is-nowhere-for-a-failure-to-be-reported-to
   # @todo — the report travels now; nothing in this suite can read a bell entry.
@@ -181,53 +158,48 @@ Feature: Moving a design
     # A move is not a delete, and a trashed mirror would read as one. Nobody deleted
     # anything: Penpot still holds the design, in the team it was moved to.
 
-    # ── RULE: a duplicate arriving in a project keeps the id already there ────
-    # The person answers what the CONTENT should be; the identity is never theirs to pick.
-    # notes: ../AGENTS.md#a-duplicate-arriving-in-a-project-keeps-the-id-already-there
+    # ── RULE: a duplicate arriving in a project is answered by content ────────
+    # The person answers what the CONTENT should be; the identity follows from it.
+    # notes: ../AGENTS.md#a-duplicate-arriving-in-a-project-is-answered-by-content
 
-  # @blocked — `I select "<kept>"` is Nextcloud's conflict dialog and there is no
-  # browser here; WebDAV never asks the question, it just overwrites.
-  @in-nextcloud @gesture @blocked
+  @in-nextcloud @gesture
   Scenario Outline: Keeping one version of a duplicate leaves one file and one design
     Given a design file named "Turnbuckle.penpot" in "Penpot/Crowded"
-    And an unmapped design file at "Scratch/Turnbuckle.penpot" carrying "<its id>"
+    And an unmapped design file at "Scratch/Turnbuckle.penpot"
     And that file's archive differs from the design's
     When I move that file into "Penpot/Crowded"
     And I select "<kept>"
     Then "Penpot/Crowded/Turnbuckle.penpot" holds the archive of "<the body that wins>"
-    And its design in Penpot still exists and holds that same archive
+    And its design in Penpot holds that same archive
     And "Penpot/Crowded/Turnbuckle.penpot" holds:
-      | penpot_id      | the id the destination already had |
-      | penpot_team_id | the mapping's team                 |
-      | penpot_mode    | the mapping's mode                 |
+      | penpot_id      | <the identity>     |
+      | penpot_team_id | the mapping's team |
+      | penpot_mode    | the mapping's mode |
 
-    Examples: the answer decides whose body it keeps, and the id it arrived with never does
-      | kept                 | its id                | the body that wins     |
-      | the existing version | the same penpot_id    | the file already there |
-      | the existing version | a different penpot_id | the file already there |
-      | the existing version | no penpot_id at all   | the file already there |
-      | the new version      | the same penpot_id    | the file that arrived  |
-      | the new version      | a different penpot_id | the file that arrived  |
-      | the new version      | no penpot_id at all   | the file that arrived  |
+    Examples: the answer decides whose body it keeps, and the identity follows it
+      | kept                 | the body that wins     | the identity                       |
+      | the existing version | the file already there | the id the destination already had |
+      | the new version      | the file that arrived  | a new one                          |
+
+    # Penpot has no way to put new bytes inside an existing design — `import-binfile`
+    # always mints one — so choosing the new content necessarily mints an id with it.
 
   # notes: ../AGENTS.md#keeping-both-versions-of-a-duplicate-makes-the-arrival-its-own-design
-  # @blocked — the same dialog as above, and `both versions` is the branch of it
-  # that only a browser can take.
-  @in-nextcloud @gesture @blocked
+  @in-nextcloud @gesture
   Scenario: Keeping both versions of a duplicate makes the arrival its own design
     Given a design file named "Turnbuckle.penpot" in "Penpot/Crowded"
-    And an unmapped design file at "Scratch/Turnbuckle.penpot" carrying "the same penpot_id"
+    And an unmapped design file at "Scratch/Turnbuckle.penpot"
     And that file's archive differs from the design's
     When I move that file into "Penpot/Crowded"
     And I select "both versions"
     Then "Penpot/Crowded/Turnbuckle.penpot" holds:
       | penpot_id   | the id the destination already had |
       | penpot_mode | the mapping's mode                 |
-    And its design in Penpot is named "Turnbuckle" and holds the archive it always had
+    And the design behind "Penpot/Crowded/Turnbuckle.penpot" is named "Turnbuckle" and holds the archive it always had
     And "Penpot/Crowded/Turnbuckle (1).penpot" holds:
-      | penpot_id   | its own, not the one it arrived with |
-      | penpot_mode | the mapping's mode                   |
-    And its design in Penpot is named "Turnbuckle (1)" and holds the archive that arrived
+      | penpot_id   | its own, not the destination's |
+      | penpot_mode | the mapping's mode             |
+    And the design behind "Penpot/Crowded/Turnbuckle (1).penpot" is named "Turnbuckle (1)" and holds the archive that arrived
 
     # ── RULE: a link is not movable, and a link mapping is not a destination ──
     # notes: ../AGENTS.md#a-link-cannot-be-moved-out-of-the-project-it-points-into

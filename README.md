@@ -138,6 +138,8 @@ complete list:
 |---|---|---|
 | Drag a design into another project folder | It moves to that project | Drag it back |
 | Drag it to the team root | It moves to Drafts | Drag it back |
+| Drag it **out of every mapped folder** | The design goes to **Penpot's trash** | Drag it back in — as a new design |
+| Drag an unmapped design file **in** | Its contents become a new design | Delete it |
 | **New → Penpot design** | A design is created | Delete it |
 | Copy a design file | A real copy is created | Delete it |
 | Rename a design or project folder | It's renamed | Rename it back |
@@ -450,9 +452,11 @@ Tag a `sync` file with the app's ignore marker and this app takes its hands off:
 never refreshed, never renamed, never moved, **never pruned** — even if the design
 is deleted in Penpot. The archive stays yours.
 
-This is the same state as moving a file out of every mapped folder — one
-mechanism, two entrances. Either way, **nothing is deleted in Penpot.** "Taken out
-of Penpot" describes the mirroring relationship ending, not a remote deletion.
+This is the same state a file reaches by leaving every mapped folder, and the app
+treats them alike from there — but the two entrances differ in what they cost.
+Ignoring touches Penpot not at all. Moving out puts the design in **Penpot's
+trash**, where it ages out on its own, because a design nothing mirrors is a
+design nobody in Nextcloud can see.
 
 Ignoring is refused on `link` files: a `link` file holds no archive, so an
 "ignored link" is a pointer to something nobody is tracking — it looks like a
@@ -578,9 +582,22 @@ or check the account the mapping was created under.
 
 **Want a copy that no Penpot deletion can ever touch?** Move the file **out of
 the mapped folder** first. The sync only ever prunes inside folders it manages,
-so a design parked anywhere else is yours permanently — and if it is in `sync`
-mode it is a real archive, not a pointer. That is the honest way to keep
-something before deleting it in Penpot.
+so a file parked anywhere else is yours permanently — and if it is in `sync` mode
+it is a real archive, not a pointer. That is the honest way to keep something
+before deleting it in Penpot.
+
+Note what that costs on the way out and back. Moving a design out of every mapped
+folder puts **the design** in Penpot's trash, where it ages out on its own; the
+file keeps its bytes. Moving it back in **imports those bytes as a new design** —
+so the file you are holding is exactly what ends up in Penpot, and the identity
+and edit history of the old one do not come with it.
+
+That is deliberate, and the alternative is worse. The app used to hunt down the
+original design and bring it back instead, which meant that if anyone had touched
+it in Penpot in the meantime you silently got their version rather than the file
+you had. Penpot offers no way to put new bytes inside an existing design —
+`import-binfile` always creates one — so the choice is between your content and
+their id, and your content wins.
 
 ### Failures never cost you data
 

@@ -80,7 +80,14 @@ final class MotionServiceTest extends TestCase {
 	private ProjectTags $tags;
 	private ArchiveService $archives;
 	private MappingService $mappings;
+	private ImportService $imports;
 	private MotionService $motion;
+
+	/** @var array<int, string> node id -> the penpot_id stamped on it */
+	private array $siblingStamps = [];
+
+	/** The mapped folder above the moved file, when a test arranges one. */
+	private ?Folder $mappingRoot = null;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -104,7 +111,7 @@ final class MotionServiceTest extends TestCase {
 			$this->personalTokens,
 			$this->tags,
 			new SyncGuard(),
-			$this->createMock(ImportService::class),
+			$this->imports = $this->createMock(ImportService::class),
 			$this->archives,
 			$this->mappings,
 			new NullLogger(),
@@ -457,9 +464,193 @@ final class MotionServiceTest extends TestCase {
 	 * this service listens to is ever emitted, and {@see testALinkIsNeverPushed()}
 	 * pins the belt-and-braces return that says so here too.
 	 */
-	private function givenManagedFile(): void {
-		$this->metadata->method('readFile')
-			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC));
+	/**
+	 * The moved file is a `sync` mirror; any sibling answers with its own stamp.
+	 *
+	 * ONE CALLBACK RATHER THAN A FLAT RETURN, because the duplicate walk asks about
+	 * the OTHER files in the mapping too — and a blanket answer would hand every
+	 * sibling the moved file's id, so every move would read as a collision.
+	 */
+	private function givenManagedFile(string $mode = Mapping::MODE_SYNC): void {
+		$this->metadata->method('readFile')->willReturnCallback(
+			fn (int $nodeId): PenpotFileMetadata => new PenpotFileMetadata(
+				$this->siblingStamps[$nodeId] ?? self::PENPOT_ID,
+				'5@x',
+				$mode,
+			),
+		);
+	}
+
+	// ── an arrival is a new design, whatever it arrived carrying (§C6.52) ────
+
+	/**
+	 * THE RULE THAT REPLACED THE REATTACH. A file coming back into a mapping used
+	 * to have its id read, its design untrashed, and that design filed into the
+	 * destination — which made Penpot authoritative for CONTENT the user never
+	 * chose. Unarchive in Penpot, edit, re-trash, drag the file back inside one
+	 * sync interval and the reattach hands over bytes nobody asked for.
+	 *
+	 * The bytes in Nextcloud are what the person is holding, so an import is the
+	 * only answer that guarantees they survive.
+	 */
+	public function testAFileArrivingFromUnmappedSpaceIsImported(): void {
+		$this->givenManagedFile(PenpotMetadata::MODE_UNMAPPED);
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			'oldParent' => new Membership(null, null),
+		]);
+
+		// NOT reattached, and never untrashed: the parked design ages out on its own.
+		$this->client->expects($this->never())->method('restoreDeletedFiles');
+		$this->client->expects($this->never())->method('moveFiles');
+		$this->imports->expects($this->once())->method('adopt')
+			->with($this->anything(), self::PROJECT_A, self::TEAM);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * A SOURCE INSIDE A MAPPING IS NOT AN ARRIVAL, even when its project cannot be
+	 * resolved. `sourceProject()` answers null for two unrelated reasons — the
+	 * source was outside every mapping, and the source was inside one whose Drafts
+	 * project the token could not see — and reading the second as an arrival would
+	 * IMPORT a file that never left, minting a new design and abandoning its
+	 * history because a lookup failed on our side. Raised by Copilot on #52.
+	 */
+	public function testAnUnresolvableSourceProjectIsNotTreatedAsAnArrival(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			// A team, but no project — and Drafts unreadable, so projectFor() is null.
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+		$this->client->method('getAllProjects')->willReturn([]);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_A, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * A PERSONAL PROJECT IS PENPOT SPACE TOO. §6.31's state is a project id with NO
+	 * team, so a file re-filed inside one has no team above it and never left — and
+	 * a check keyed on the team alone would import it, minting a design and
+	 * abandoning its history on an ordinary move. Raised by Copilot on #52, against
+	 * the fix for its own earlier finding.
+	 */
+	public function testAMoveOutOfAPersonalProjectIsNotTreatedAsAnArrival(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			// A project and no team: STATE_PERSONAL.
+			'oldParent' => new Membership(self::PROJECT_B, null),
+		]);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_A, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * TWO FILES MAY NOT CLAIM ONE DESIGN — the "keep both versions" answer. The
+	 * Files app moves the arrival in under a free name, so both files land in the
+	 * mapping carrying one id. Reattaching would leave the state the pull's own
+	 * indexes are written to avoid, and no later pass separates them.
+	 */
+	public function testAnArrivalWhoseIdIsAlreadyHeldHereBecomesItsOwnDesign(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			'oldParent' => new Membership(self::PROJECT_B, self::TEAM),
+		]);
+		$this->givenMappingRootHolding($this->sibling(77, self::PENPOT_ID));
+
+		$this->client->expects($this->never())->method('moveFiles');
+		$this->imports->expects($this->once())->method('adopt')
+			->with($this->anything(), self::PROJECT_A, self::TEAM);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * AND THE ORDINARY MOVE IS UNTOUCHED. The same walk runs for every re-file, so
+	 * a mapping holding no other file on this id must still take the `move-files`
+	 * path — otherwise the guard above has quietly replaced re-filing with import.
+	 */
+	public function testAMoveIsStillARefileWhenNoOtherFileHoldsTheId(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			'oldParent' => new Membership(self::PROJECT_B, self::TEAM),
+		]);
+		// A sibling that is a mirror of something else, plus the moved file itself.
+		$this->givenMappingRootHolding($this->sibling(77, '0f0f0f0f-dead-beef-0000-000000000001'));
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_A, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * An unreadable tree answers "no". A false positive imports a design that did
+	 * not need importing — visible and recoverable; a false negative leaves two
+	 * files on one id, which nothing separates. But a failed listing is not
+	 * evidence of a collision, and inventing one would make an unreadable folder
+	 * mint designs.
+	 */
+	public function testAnUnreadableMappingTreeIsNotReadAsACollision(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			'oldParent' => new Membership(self::PROJECT_B, self::TEAM),
+		]);
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(9);
+		$root->method('getDirectoryListing')->willThrowException(new \RuntimeException('storage down'));
+		$this->givenMappingRoot($root);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles');
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/** A `.penpot` mirror sitting in the mapping, stamped with $penpotId. */
+	private function sibling(int $id, string $penpotId): File {
+		$file = $this->createMock(File::class);
+		$file->method('getId')->willReturn($id);
+		$file->method('getName')->willReturn('Sibling.penpot');
+		$this->siblingStamps[$id] = $penpotId;
+
+		return $file;
+	}
+
+	/** The mapped folder above the moved file, holding $nodes. */
+	private function givenMappingRootHolding(File ...$nodes): void {
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(9);
+		$root->method('getDirectoryListing')->willReturn($nodes);
+		$this->givenMappingRoot($root);
+	}
+
+	/**
+	 * Wire $root as the file's mapping root: node 31 is the destination folder and
+	 * 9 the mapped one above it, which is the rung carrying the team marker that
+	 * stops the upward walk.
+	 */
+	private function givenMappingRoot(Folder $root): void {
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => $id === 9
+				? new FolderMarkers('', self::TEAM)
+				: new FolderMarkers('', ''),
+		);
+		$this->mappingRoot = $root;
 	}
 
 	/**
@@ -573,6 +764,11 @@ final class MotionServiceTest extends TestCase {
 	private function target(string $name = 'Login screen.penpot'): File {
 		$parent = $this->createMock(Folder::class);
 		$parent->method('getId')->willReturn(31);
+		// THE RUNG ABOVE IT IS THE MAPPED FOLDER, when a test arranged one. The
+		// duplicate walk starts at the file and climbs to the nearest team marker,
+		// so without this the walk runs off the top and every arrival reads as
+		// unique — which would make the collision tests pass for the wrong reason.
+		$parent->method('getParent')->willReturn($this->mappingRoot ?? $parent);
 
 		$file = $this->createMock(File::class);
 		$file->method('getId')->willReturn(30);

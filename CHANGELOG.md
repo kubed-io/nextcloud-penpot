@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Folders mirrored from Penpot no longer get a `penpot` tag.** The tag never decided anything — a folder is a Penpot project because of what the app records on it, not what it wears — so a sync no longer writes one onto every folder it creates. A folder you turn into a project from the Nextcloud side still gets it, since there the tag is the visible half of a thing you did.
 
+- **Moving a design back into a mapped folder now keeps the file you moved.** It used to hunt down the design that file came from and bring that back instead — so if anyone had touched it in Penpot since, you silently got their version rather than yours. The file you dragged is what ends up in Penpot now. It arrives as a new design, because creating one is the only way Penpot can be handed new contents.
+
+- **Two files can no longer end up claiming one design.** Answering "keep both" when a design of that name is already there used to leave both files pointing at the same design in Penpot, permanently, with nothing able to separate them again. The one you moved in becomes a design of its own.
+
+- **Choosing which version to keep now does what it says.** "Keep the new one" replaces the contents; "keep the existing one" changes nothing at all.
+
 ### Fixed
 
 - **A project with a `/` in its name now arrives in Nextcloud.** Renaming a project to `Bubbles/foo` in Penpot did nothing at all: no folder appeared, no design moved, and — invisibly — that mapping stopped tidying up after itself entirely, so nothing deleted in Penpot was ever cleared from Nextcloud again. The name is a path now, the way it always was on the way out: `Bubbles/foo` is a folder inside a folder, and moving a project between them moves everything it holds.

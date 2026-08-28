@@ -562,3 +562,104 @@ finds a `New` already there. Real isolation needs either a unique team per scena
 scenario created — and Round 4 removed the excuse for the second: `delete-project`
 takes `{id}`, read off `schema:delete-project`. Whether a teardown SHOULD delete
 from Penpot is still a question worth asking before it is built.
+
+---
+
+## Round 7 — the id stopped deciding anything
+
+Two scenarios had sat `@blocked` since the spec rewrite on the reasoning that
+*"`I select` is Nextcloud's conflict dialog and there is no browser here; WebDAV
+never asks the question, it just overwrites"*. Both halves are true and the
+conclusion does not follow, which the grafana sibling had already demonstrated by
+running the same two scenarios all along.
+
+**The dialog is a CLIENT concept.** `moveOrCopyAction.ts` PROPFINDs the
+destination, finds the collision, and opens the picker *before a single request
+goes out* — so the answer decides whether one is sent at all, and under what name.
+Each answer is one ordinary WebDAV request:
+
+| answer | request |
+|---|---|
+| the existing version | none at all — doing nothing IS the implementation |
+| both versions | one MOVE to a free name |
+| the new version | one MOVE with `Overwrite: T`; Sabre deletes the destination, then moves |
+
+A `@blocked` tag that names a *capability* the harness lacks is checkable. This one
+named a conclusion, and the conclusion was wrong for two years of rounds.
+
+### What the scenarios turned out to be asking for
+
+`the new version` wanted the surviving file to hold the arriving archive **and**
+keep the destination's id. Penpot cannot do that. The whole surface `PenpotClient`
+wraps is `create-file`, `rename-file`, `duplicate-file`, `delete-file`,
+`move-files`, `export-binfile`, `import-binfile` and the project/trash commands —
+and `import-binfile` always mints a new design. There is no way to put new bytes
+inside an existing one.
+
+So the spec was asking for something the API cannot express, and the two halves of
+that `Then` were mutually unsatisfiable: keep the id, or have Penpot hold the
+chosen bytes. Not both.
+
+**Content won, and it was not close.** What a person answering that dialog is
+choosing is which *design* they end up with; the id is bookkeeping they never see.
+`its id` went from an Examples column to nothing at all — six rows became two.
+
+### The rule underneath, which was the real find
+
+Chasing that exposed something older and worse. Moving a file back into a mapping
+**reattached**: read the id off the file, untrash the design if parked, file THAT
+design into the project. The id was authoritative for identity while Nextcloud
+stayed authoritative for content — and inside one sync interval those collide:
+
+> park a design → unarchive it in Penpot → edit it → trash it again → drag the
+> file back, all before a scheduled pull
+
+The reattach hands back bytes the user never saw and could not have asked for.
+Nothing local can find out in time; the pull that would have noticed has not run.
+
+The bytes in Nextcloud are what the person is holding, so they are what must exist
+afterwards. An import guarantees it and mints an id doing so, which is why the id
+a file arrives carrying now decides **nothing**. Three scenarios collapsed into
+one: a live design, a parked one, a stranger's id and no id at all had been four
+branches of a question that no longer has branches.
+
+`revive()`, `isParked()`, `untrash()`, `restoreOnce()` and `staysOutOfTheTrash()`
+went with the rule they served — **−200 lines from `MotionService`**, and no unit
+test covered any of it, which is how it lasted.
+
+### The duplicate guard, and the state it prevents
+
+The other half of the same rule. `both versions` lands two files in one mapping
+carrying one `penpot_id` — the "two files, one design, forever" state the pull's
+own indexes are written to avoid, which no later pass separates. An arrival whose
+id is already held by another file under the same mapping root now imports as its
+own design. **The arrival always gives way**: the file already there is what every
+other node has been resolving against.
+
+### What review caught that CI could not
+
+`$from === null` stood in for "arrived from outside every mapping". But
+`DestinationResolver::projectFor()` returns null for two unrelated reasons — no
+team above the source, *or* a team whose Drafts project the token cannot see. The
+second reading imports a file that never left, minting a design and abandoning its
+history, because a lookup failed on our side. It asks `sourceTeam()` now: folder
+markers only, nothing in it that can fail the way a Penpot lookup can.
+
+Correct for every case considered, wrong for one that was not. That is the case
+for a reviewer, and no integration run would have produced it — the failure needs
+a Drafts lookup to fail, which CI has no reason to arrange.
+
+### Seven harness bugs, one shape
+
+Getting there cost seven CI rounds, and the failures rhymed: **a shared fixture
+whose assumptions changed without its other callers being checked.** A cursor an
+arrange never set. A path an assertion inherited instead of naming. A folder two
+features apart, deleted by a scenario with nothing to do with this one. A fake
+archive that stopped being good enough the moment arrivals started being imported
+— and then a real one, in the single feature that has no mapping to export
+through, because it is the feature that *makes* mappings.
+
+The step definitions in this suite are far more coupled than they look. Every one
+of those was caught by CI rather than by reading, which worked, but the reading
+would have been cheaper.
+

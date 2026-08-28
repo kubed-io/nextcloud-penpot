@@ -2376,19 +2376,6 @@ The behaviour itself is very probably right — nothing suggests the app mishand
 cross-team move it can actually see. It is unprovable here, which is a different
 thing, and the tag now says which.
 
-### Coming back revives whatever Penpot still has
-
-The `penpot_id` on the file names a design that EXISTS — parked in Penpot's trash, or
-never gone at all. Both rows behave identically: the app untrashes it if it needs to,
-files it into the destination project, and re-stamps the file. **The id, the revision
-and the history all survive**, which is the entire reason leaving a mapping was a
-trashing rather than a delete.
-
-WHY THE TWO ROWS ARE ONE SCENARIO. The outcome is identical and so is the code path —
-"make sure the design exists and is in this project" absorbs both, and the difference
-between them is only whether one of its steps had anything to do. Splitting them would
-state one claim twice and imply a distinction that is not there.
-
 ### A design name is a scenario's own, because Penpot's trash is forever
 
 `Move a design file into a project when Penpot still has its design` used
@@ -2437,24 +2424,50 @@ naming a design they never staged. Purging the debris is not an alternative:
 still listed. There is no way to make a name unique in that listing — only to stop
 asking by name.
 
-### An arrival Penpot cannot match becomes a new design
+### An arrival becomes its own design, whatever it arrived carrying
 
-The other half of the same question, and the two rows that were nearly three scenarios.
-Penpot has no design for this file. That is TWO stored states — the file carries an id
-nothing answers to, or it carries no id at all — and exactly one outcome: the archive
-is imported (§6.33), a fresh id is minted, and the stale one (if there was one) is
-overwritten.
+THREE SCENARIOS COLLAPSED INTO ONE, because the question they branched on stopped
+existing. They were: the design is live, the design is parked, and Penpot has no
+design for this file at all — five Examples rows across two outlines, all asking
+what the `penpot_id` on an arriving file names.
 
-**Nothing is lost, and that is the point.** A `sync` file IS the design — a complete,
-valid `.penpot` archive that has been sitting in Nextcloud the whole time. What the
-user does not get back is the id and the version history, which is why this cannot be
-another row on the scenario above: `penpot_id | a new one, never the one it arrived
-with` is the opposite claim to `the original id`, and no Examples table can hold both.
+It names nothing that matters. A file moving into a mapping is IMPORTED, so the
+bytes that arrive are the bytes that end up in Penpot, and the import mints an id
+whatever the file was carrying.
 
-This is n8n's `Restoring when the n8n workflow was hard-deleted falls back to create`,
-in Penpot's terms — except that n8n needs a second scenario for the never-tracked case
-and this does not, because an import does not care whether the id it is replacing was
-stale or absent.
+### WHY THE REATTACH HAD TO GO
+
+It read the id off the file, untrashed the design if it was parked, and filed THAT
+design into the project. So the id was authoritative for identity while Nextcloud
+stayed authoritative for content — and those two collide silently inside one sync
+interval:
+
+> park a design → unarchive it in Penpot → edit it → trash it again → drag the file
+> back in, all before a scheduled pull
+
+The reattach hands back bytes the user never saw and could not have asked for.
+Nothing local ever knew the design had moved on, and no amount of care at the
+Nextcloud end can find out in time.
+
+**The bytes in Nextcloud are what the person is holding, so they are what must
+exist afterwards.** That is the whole rule, and an import is the only thing that
+guarantees it. Penpot has no way to put new bytes inside an existing design —
+`import-binfile` always creates one — so the new id is not a compromise, it is the
+shape of the only operation that can be honest.
+
+What that costs is the version history of a design somebody had already unmapped,
+which is the right thing to spend: the alternative spends the user's actual work.
+
+### WHAT THE ID IS STILL FOR
+
+Kept on the file, and {@see park()} still says so — but for one question only, and
+it is not identity. Two files inside one mapping may not claim one design, and the
+id is how the "keep both versions" answer is recognised. See
+`#keeping-both-versions-of-a-duplicate-makes-the-arrival-its-own-design`.
+
+The parked design is left where it is. Penpot's trash empties itself, and one that
+somebody unarchives by hand is a new design the reconciler picks up like any other
+— which is exactly what it now is.
 
 ### An arrival is told apart by what the file carries, never by its history
 
@@ -2482,12 +2495,18 @@ So the discriminator is not the history, not the folder, and not the gesture. It
 
 | the file carries | what the arrival does | scenario |
 | --- | --- | --- |
-| an id a design still answers to — trashed or live | REATTACHES: untrash if needed, re-file, re-stamp, id kept | `…when Penpot still has its design` |
-| an id nothing answers to, or no id at all | IMPORTS (§6.33): a new id is minted and any stale one overwritten | `…when Penpot has no design for it` |
+| anything at all — a live id, a parked one, a stranger's, none | IMPORTS (§6.33): a new id is minted and any stale one overwritten | `Move an unmapped design file into a project` |
 
-Two scenarios, two rows each, and the split between them is forced rather than
-stylistic: one asserts `penpot_id | the original id` and the other `a new one, never
-the one it arrived with`, so no Examples table could hold all four rows.
+**That table used to have two rows**, split on whether the id still named a design:
+one reattached and asserted `penpot_id | the original id`, the other imported and
+asserted a new one, and the split was called forced rather than stylistic because
+no Examples table could hold both claims.
+
+It was forced by a rule that has since gone. Reattaching made the id authoritative
+for identity while Nextcloud stayed authoritative for content, and those collide
+silently inside one sync interval — see *"An arrival becomes its own design"* above
+for the sequence. With the reattach removed the discriminator disappears with it:
+one row, one scenario, and what the file carries when it lands decides nothing.
 
 The words `unmapped` and `untracked` stay in the `Given`s where they are precise and
 already load-bearing — `designs/delete.feature` has a `Trash an untracked design file`
@@ -2526,19 +2545,34 @@ mapping, is refused` is a person being stopped by the guard in Nextcloud. Nothin
 happens in Nextcloud here, so no guard is ever consulted — `MoveRules` has no say over
 what someone does in Penpot's UI.
 
-### A duplicate arriving in a project keeps the id already there
+### A duplicate arriving in a project is answered by content
 
-THE PERSON ANSWERS WHAT THE CONTENT SHOULD BE; the identity is never theirs to
-pick. Nextcloud's conflict dialog offers keep-existing, keep-new or keep-both, and
-all three questions are about BYTES. Whichever body wins, the file that stays at
-that path goes on being the design it already was — because a project holds exactly
-one file per design id, and the arrival's id is an accident of where it came from.
+THE PERSON ANSWERS WHAT THE CONTENT SHOULD BE; the identity follows from it.
+Nextcloud's conflict dialog offers keep-existing, keep-new or keep-both, and all
+three questions are about BYTES. What the person is choosing is which design they
+end up with; the id is bookkeeping they never see.
 
-The Examples cross the three answers with the three identities an arrival can carry
-(the same id, a different one, none at all) because the whole claim is that the
-third column does not read the second. Ported from the Grafana sibling, which found
-the bug this table exists to catch: an arrival carrying a stale id re-bound the
-destination to a design nobody was looking at.
+**This section used to say the id already there always wins**, and the Examples
+crossed the three answers with the three identities an arrival can carry — the
+same id, a different one, none at all — on the claim that the third column never
+reads the second. The claim was right and the conclusion was not reachable:
+
+  - *keep the existing version* sends no request at all, so the destination keeps
+    its id because nothing happened to it;
+  - *keep the new version* is `Overwrite: T`, and Sabre DELETES the destination
+    before moving. The design it mirrored is gone, and the arriving bytes have to
+    become a design of their own — `import-binfile` is the only way to put bytes
+    in Penpot and it always mints an id.
+
+So the surviving file keeps the destination's id in one case and gets a new one in
+the other, and both are the same rule: the answer picks the content, and the
+identity is whatever that content requires. The `its id` column went with the
+distinction it was drawing — six rows became two, because what a file ARRIVED
+carrying stopped being an input to anything.
+
+The Grafana sibling's bug this table was ported to catch is still caught, by the
+guard rather than the column: an arrival must never re-bind an id another file in
+the mapping is still using. See below.
 
 ### Keeping both versions of a duplicate makes the arrival its own design
 
