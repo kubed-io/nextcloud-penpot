@@ -77,7 +77,6 @@ final class ProjectTags {
 		$this->tagMapper->assignTags((string)$folderId, 'files', [$tag->getId()]);
 	}
 
-
 	/**
 	 * True when the tag is among the given tag ids.
 	 *

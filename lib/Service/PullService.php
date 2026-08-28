@@ -626,16 +626,23 @@ final class PullService {
 		try {
 			$from = $node->getParent();
 
-			// THE NAME IS TAKEN AND THE FOLDER IS ALREADY IN THE RIGHT PLACE — IT STAYS.
+			// THE NAME IS TAKEN AND THE FOLDER IS ALREADY ON A SETTLED FORM OF IT — IT STAYS.
 			//
 			// Two Penpot projects may share a name (§31), and a user's own file may sit
 			// on the one this project wants. Taking a free name here would rename
 			// `Cogs (2)` to `Cogs (3)` on this pull and `Cogs (4)` on the next, forever:
 			// the wanted name never frees up, and the suffix is computed against a
 			// listing that includes this very node. Staying put is stable, and the ID —
-			// never the name — is what anything reading this folder goes by. Raised by
+			// never the name — is what anything reading this folder goes by.
+			//
+			// `isVariantOf()` IS WHAT KEEPS IT FROM STRANDING A PARKED FOLDER. Without
+			// it this arm fires on ANY name in the right parent, `.penpot-moving-21`
+			// included — so a park whose second move failed, and whose unpark failed
+			// too, would be answered with "you are already where you belong" on every
+			// pull afterwards and keep the temporary name for good. That is the exact
+			// opposite of the self-healing this class promises. Both halves raised by
 			// Copilot on #50.
-			if ($wantedParent === $hereParent && $from->nodeExists($leaf)) {
+			if ($wantedParent === $hereParent && $from->nodeExists($leaf) && self::isVariantOf($node->getName(), $leaf)) {
 				return;
 			}
 
@@ -1637,6 +1644,30 @@ final class PullService {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Is $name the leaf itself, or a name {@see freeName()} would have made from it?
+	 *
+	 * The test is deliberately shaped by `freeName()` rather than guessed at: the
+	 * suffix goes before the extension, and the 1000th collision falls back to a
+	 * `uniqid()` instead of a number — hence `\w+` rather than `\d+`. Anything else
+	 * is a name that has nothing to do with this project's, which is the state a
+	 * parked folder is in.
+	 */
+	private static function isVariantOf(string $name, string $leaf): bool {
+		if ($name === $leaf) {
+			return true;
+		}
+
+		$dot = strrpos($leaf, '.');
+		$stem = $dot === false ? $leaf : substr($leaf, 0, $dot);
+		$ext = $dot === false ? '' : substr($leaf, $dot);
+
+		return preg_match(
+			'/^' . preg_quote($stem, '/') . ' \(\w+\)' . preg_quote($ext, '/') . '$/',
+			$name,
+		) === 1;
 	}
 
 	/**

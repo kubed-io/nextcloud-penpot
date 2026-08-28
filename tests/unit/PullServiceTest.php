@@ -515,6 +515,9 @@ final class PullServiceTest extends TestCase {
 	public function testAProjectFolderOnASuffixedNameStaysOnIt(): void {
 		$node = $this->emptyFolder(21);
 		$node->method('getPath')->willReturn('/admin/files/Penpot/Cogs (2)');
+		// The NAME matters here, not just the path: staying put is only right when the
+		// folder is already on a settled form of the name it wants.
+		$node->method('getName')->willReturn('Cogs (2)');
 		$this->folderMarkersById[21] = new FolderMarkers('proj-b', '');
 
 		$root = $this->createMock(Folder::class);
@@ -535,6 +538,47 @@ final class PullServiceTest extends TestCase {
 		$root->expects($this->never())->method('newFolder');
 
 		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['folders']);
+	}
+
+	/**
+	 * AND A PARKED FOLDER IS NOT "ALREADY IN THE RIGHT PLACE". The stay-put rule
+	 * above fires on the parent, so without a check on the NAME it would answer a
+	 * folder stranded at `.penpot-moving-…` — a park whose second move and whose
+	 * unpark both failed — with "you already belong here", every pull, for good.
+	 * Raised by Copilot on #50.
+	 */
+	public function testAParkedFolderIsPlacedEvenWhenTheNameItWantsIsTaken(): void {
+		$node = $this->emptyFolder(21);
+		$node->method('getPath')->willReturn('/admin/files/Penpot/.penpot-moving-21');
+		$node->method('getName')->willReturn('.penpot-moving-21');
+		$this->folderMarkersById[21] = new FolderMarkers('proj-b', '');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/admin/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$node]);
+		$root->method('nodeExists')->willReturnCallback(static fn (string $n): bool => $n === 'Bubbles');
+		$node->method('getParent')->willReturn($root);
+
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-b', 'name' => 'Bubbles', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		$moves = [];
+		$node->expects($this->once())->method('move')->willReturnCallback(
+			function (string $to) use (&$moves, &$node): Folder {
+				$moves[] = $to;
+
+				return $node;
+			},
+		);
+
+		$this->pull->pullOne($this->mapping(useTeamFolder: false));
+
+		self::assertSame(['/admin/files/Penpot/Bubbles (2)'], $moves);
 	}
 
 	/**

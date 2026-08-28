@@ -116,7 +116,6 @@ final class PersonalTokenService {
 		return $token !== '' ? $token : null;
 	}
 
-
 	/**
 	 * Store a user's personal token, encrypted — the `occ` twin's write path.
 	 *

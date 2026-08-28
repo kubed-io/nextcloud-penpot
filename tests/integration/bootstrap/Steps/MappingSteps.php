@@ -838,7 +838,6 @@ trait MappingSteps {
 		return $mappings[0];
 	}
 
-
 	/** @return list<array<string, mixed>> */
 	private function mappings(): array {
 		$res = $this->occ('penpot_sync:list-mappings --json');

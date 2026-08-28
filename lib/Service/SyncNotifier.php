@@ -144,7 +144,6 @@ final class SyncNotifier {
 		);
 	}
 
-
 	/**
 	 * One exception message, made fit to show a person.
 	 *
