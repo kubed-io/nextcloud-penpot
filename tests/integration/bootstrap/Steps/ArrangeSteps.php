@@ -220,6 +220,7 @@ trait ArrangeSteps {
 	 * @Given /^the following mappings were made:$/
 	 */
 	public function theFollowingMappingsWereMade(TableNode $table): void {
+		$this->arrangeProbe('mappings step START');
 		if (!$this->mappingsDeclared) {
 			// UNMAP BEFORE TOUCHING ANY CONTENT — see the trait docblock. While a
 			// mapping is live, deleting inside it is a gesture that reaches Penpot.
@@ -238,7 +239,9 @@ trait ArrangeSteps {
 				$this->theNextcloudGroupsExist($groups);
 			}
 
+			$this->arrangeProbe("before empty {$folder}");
 			$this->emptyMappedFolder($folder);
+			$this->arrangeProbe("after empty {$folder}");
 
 			$team = trim($row['team'] ?? '');
 			if ($team === '') {
@@ -286,7 +289,28 @@ trait ArrangeSteps {
 		// It also matches what the sentence CLAIMS. "The following mappings were
 		// made" means the mappings are usable, and a real instance reaches that
 		// state the same way: you map a team, then it syncs.
+		$this->arrangeProbe('before final pull');
 		$this->theAdminRunsAPull();
+		$this->arrangeProbe('mappings step END');
+	}
+
+	/** TEMPORARY diagnostic — reverted before merge. */
+	private function arrangeProbe(string $when): void {
+		$seen = [];
+		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			$pid = (string)($project['id'] ?? '');
+			$pname = (string)($project['name'] ?? '');
+			if ($pid === '' || $pname === 'Drafts') {
+				continue;
+			}
+			$files = [];
+			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $pid]) as $file) {
+				$files[] = (string)($file['name'] ?? '');
+			}
+			$seen[] = $pname . '[' . implode('|', $files) . ']';
+		}
+		sort($seen);
+		fwrite(STDERR, "ARRANGE [{$when}] " . implode(' ', $seen) . "\n");
 	}
 
 	/**
