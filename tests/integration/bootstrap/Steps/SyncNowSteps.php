@@ -33,7 +33,7 @@ trait SyncNowSteps {
 	 * Inside the mapping, because a design can only be born in one — and therefore
 	 * inside what both `exactly` assertions walk, which is why they skip it.
 	 */
-	private const FIXTURE_FOLDER = 'Penpot/Sync Now Source';
+	private const FIXTURE_FOLDER = 'All Sync/Sync Now Source';
 
 	/**
 	 * Rows the Background asked for, waiting for the mappings to be made.
@@ -238,13 +238,11 @@ trait SyncNowSteps {
 	 * SCOPED TO THE PROJECTS THE TABLE NAMES, and the scope is narrower than it
 	 * looks like it should be for a reason worth stating.
 	 *
-	 * Scoping to the TEAMS was the obvious reading of `exactly` and is wrong here:
-	 * `Design Team` is shared, and `mapping/sync-now.feature` — in this same leg —
-	 * seeds `Levers/Sprocket` into it. That design is in no table of this feature,
-	 * so a team-wide sweep reports it as `unexpected:` and the leg goes red on a
-	 * push that did exactly the right thing. It passes today only because Behat
-	 * happens to run this file first, which is ordering luck rather than a property
-	 * of the test.
+	 * Scoping to the TEAMS is a trap even now that this feature owns its nouns: the
+	 * archive fixture keeps a project of its own inside the mapping, and anything
+	 * else that ever shares a team would land in the sweep too. Naming the projects
+	 * says what the scenario means — these projects, exactly this — instead of
+	 * asserting that nothing anywhere else in the leg ever touches the team.
 	 *
 	 * Within a named project, though, `exactly` is fully enforced — which is what
 	 * the scenario is actually about. A push that invented a second `Hand Made`
