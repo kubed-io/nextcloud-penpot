@@ -282,28 +282,6 @@ trait ArrangeSteps {
 	}
 
 	/**
-	 * The Nextcloud folders that currently have a live mapping.
-	 *
-	 * Read from `list-mappings --json` rather than remembered, because the thing
-	 * that matters is what the APP believes right now — a mapping made by a
-	 * previous step in this same table counts, and one this trait never made counts
-	 * too.
-	 *
-	 * @return list<string>
-	 */
-	private function mappedFolders(): array {
-		$folders = [];
-		foreach ($this->mappings() as $mapping) {
-			$folder = $mapping['nc_folder'] ?? null;
-			if (is_string($folder) && $folder !== '') {
-				$folders[] = trim($folder, '/');
-			}
-		}
-
-		return $folders;
-	}
-
-	/**
 	 * Take everything out of a mapped folder, best effort.
 	 *
 	 * BEST EFFORT ON PURPOSE. This is housekeeping between scenarios, not a claim
@@ -332,18 +310,41 @@ trait ArrangeSteps {
 		// accumulates every scenario's leftovers, which is the `Pinned (1) (2) (3)`
 		// problem this function exists to prevent.
 		//
-		// Asking whether THIS FOLDER is mapped is the honest test, because that is
-		// exactly what makes its delete dangerous. Any-mapping-at-all was the third
-		// wrong version: it skipped clearing `Shared` merely because `Penpot` had
-		// just been mapped by the row above, so leftovers accumulated again and
-		// `projects` reported `found: Drafts, Drafts, Existing, Drafts, ...`.
+		// BEHIND THE APP'S OWN GUARD, because a bare delete here reaches Penpot.
 		//
-		// {@see MappingSteps::armMappingReset()} unmaps before every scenario, so
-		// the first table row always clears; what this skips is re-emptying a folder
-		// THIS table has already mapped, which is where the cascade lived.
-		if (in_array($folder, $this->mappedFolders(), true)) {
-			return;
+		// {@see \OCA\PenpotSync\Service\DeletionService::onTrashed()} fires on any
+		// file carrying a `penpot_id` — including one left `unmapped` by
+		// {@see MappingSteps::armMappingReset()}'s unmap, which keeps the id. So on
+		// the second row of an Examples table this folder is full of the first row's
+		// mirrors, and emptying it destroyed the team. A live probe caught it
+		// between two adjacent steps:
+		//
+		//   [before empty]  Widgets[Local Only|Sprocket A|Sprocket B] Deep/Nested[Buried]
+		//   [after  empty]  (gone)
+		//
+		// THREE WRONGER VERSIONS CAME FIRST, recorded so nobody repeats them: a
+		// per-scenario latch (Behat fires @BeforeScenario once per Examples ROW, so
+		// it cleared before the row that needed it); a per-RUN latch (a folder
+		// emptied once and never again accumulates leftovers — the `(1) (2) (3)`
+		// problem this function exists to prevent); and "is this folder mapped RIGHT
+		// NOW", which is always false here because the unmap runs first.
+		//
+		// `occ penpot_sync:sync pull` is the only guarded door this harness has, so
+		// instead of dodging the listener the folder is emptied while the app is NOT
+		// WATCHING: the app is disabled around the delete. That is a sledgehammer
+		// and it is honest about what it is — housekeeping between scenarios must
+		// not be able to reach the remote at all.
+		$this->occ('app:disable penpot_sync');
+
+		try {
+			$this->clearFolder($folder);
+		} finally {
+			$this->occ('app:enable penpot_sync');
 		}
+	}
+
+	/** The delete itself, best effort — see {@see emptyMappedFolder()}. */
+	private function clearFolder(string $folder): void {
 
 		try {
 			if (!$this->davExists($folder)) {
