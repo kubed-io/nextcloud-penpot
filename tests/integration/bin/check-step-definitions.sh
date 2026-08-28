@@ -28,6 +28,18 @@
 #      the spec-first style, not a defect. The tag list here MUST track the one the
 #      integration workflow filters on; check-suites.sh already pins that expression.
 #
+#   3. UNUSED STEP DEFINITIONS, which is check 2 read backwards and is this repo's
+#      rule stated as code: THE GHERKIN DICTATES THE CODE, NEVER THE OTHER WAY ROUND.
+#      A pattern no scenario names is not a harness waiting for a scenario — it is
+#      code claiming a sentence nobody writes, and the next person to write that
+#      sentence phrases it their own way and defines it again. 93 of them had
+#      accumulated across a spec rewrite before this existed: a third of the harness.
+#
+#      DELIBERATELY NOT SCOPED TO WHAT CI RUNS, unlike check 2, and the asymmetry is
+#      the whole point. A step used only by an @todo scenario is USED — that Gherkin
+#      exists and IS the specification. The tag says the code behind the scenario
+#      does not exist yet, which is the opposite claim about the opposite artifact.
+#
 # Runs in the PHP Quality job, which finishes in seconds. The integration matrix takes
 # minutes across seven legs and needs a live Nextcloud and Penpot to say the same thing.
 
@@ -54,9 +66,9 @@ fail = False
 # spectacularly unhelpful way to fail.
 regex_re = re.compile(r'@(?:Given|When|Then)\s+/\^(.+?)\$/')
 plain_re = re.compile(r'@(?:Given|When|Then)\s+(?!/)(\S.*?)\s*$')
-patterns, seen = [], {}
-for php in bootstrap.rglob('*.php'):
-    for line in php.read_text(encoding='utf-8').splitlines():
+patterns, seen, sites = [], {}, {}
+for php in sorted(bootstrap.rglob('*.php')):
+    for lineno, line in enumerate(php.read_text(encoding='utf-8').splitlines(), 1):
         m = regex_re.search(line)
         if m:
             body = m.group(1)
@@ -82,6 +94,7 @@ for php in bootstrap.rglob('*.php'):
             body = body.replace(r'\(s\)', 's?')
         patterns.append(body)
         seen.setdefault(body, []).append(php.name)
+        sites.setdefault(body, []).append(f'{php.name}:{lineno}')
 
 dupes = {p: f for p, f in seen.items() if len(f) > 1}
 if dupes:
@@ -150,6 +163,7 @@ def cells(line):
 
 
 undefined = []
+every_step = set()
 for feature in features:
     lines = feature.read_text(encoding='utf-8').splitlines()
     feature_tags, pending = set(), set()
@@ -203,6 +217,26 @@ for feature in features:
     # scenario, so in a file that is entirely specification it never runs at all —
     # demanding its steps be implemented would report false failures against a suite
     # CI is happily green on.
+    # EVERY scenario, whatever its tags, for the unused-definition check below: a
+    # step used only by an @todo scenario is USED. Its Gherkin exists and is the
+    # spec; the tag says the code behind it does not, which is the other direction.
+    for scenario in scenarios:
+        bindings = []
+        for block in scenario['rows']:
+            if len(block) < 2:
+                continue
+            header = block[0]
+            for row in block[1:]:
+                if len(row) == len(header):
+                    bindings.append(dict(zip(header, row)))
+        for step in background + scenario['steps']:
+            for resolved in ([step] if not bindings else [
+                re.sub(r'<([^>]*)>', lambda mm, b=b: b.get(mm.group(1), mm.group(0)), step)
+                for b in bindings
+            ]):
+                if '<' not in resolved:
+                    every_step.add(resolved)
+
     live = [s for s in scenarios if s['runs']]
     for scenario in live:
         steps = background + scenario['steps']
@@ -239,8 +273,37 @@ if undefined:
         print(f'    {u}')
     print('  Either add the definition, or tag the scenario as specification.')
 
+# ── the other direction: a definition no .feature file asks for ───────────────
+#
+# THE GHERKIN DICTATES THE CODE, NEVER THE OTHER WAY ROUND. A step definition no
+# scenario names is not a harness "waiting for" a scenario — it is code claiming a
+# sentence nobody writes, and the next person to write that sentence will phrase it
+# their own way and define it again. 93 of them had accumulated across a spec
+# rewrite before this check existed, a third of the whole harness.
+#
+# NOT scoped to what CI runs, unlike the check above, and the asymmetry is the
+# point: a step used only by an @todo scenario is USED. That Gherkin exists and is
+# the specification; the tag says the code behind the scenario does not exist yet,
+# which is the opposite claim.
+unused = []
+for body in dict.fromkeys(patterns):
+    try:
+        rx = re.compile('^' + body + '$')
+    except re.error:
+        continue
+    if not any(rx.match(step) for step in every_step):
+        unused.append((body, sites.get(body, [])))
+
+if unused:
+    fail = True
+    print('✘ STEP DEFINITIONS NO .feature FILE USES — the Gherkin dictates the code,')
+    print('  so a pattern no scenario names is dead, not pending:')
+    for body, where in unused:
+        print(f'    /^{body}$/  ({", ".join(where)})')
+    print('  Delete them. If a scenario should exist, write the scenario first.')
+
 if not fail:
-    print(f'✓ step definitions: {len(patterns)} patterns, no duplicates, '
+    print(f'✓ step definitions: {len(patterns)} patterns, no duplicates, none unused, '
           f'every runnable step defined across {len(features)} feature files')
 sys.exit(1 if fail else 0)
 PY

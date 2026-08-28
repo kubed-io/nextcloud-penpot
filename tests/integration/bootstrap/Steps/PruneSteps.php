@@ -37,18 +37,6 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  */
 trait PruneSteps {
 	/**
-	 * Deleting a design in Penpot, WITH THE SYNC FOLDED IN — nobody deletes a design
-	 * in order to run a reconciler. The bare `the design "X" is deleted in Penpot`
-	 * below stages the far side only, for scenarios that go on to do something else.
-	 *
-	 * @When /^someone deletes the design "([^"]*)" in Penpot$/
-	 */
-	public function someoneDeletesTheDesignInPenpot(string $name): void {
-		$this->theDesignIsDeletedInPenpot($name);
-		$this->theAdminRunsAPull();
-	}
-
-	/**
 	 * A PROJECT deleted in Penpot, with the sync folded in — the folder-shaped twin
 	 * of the step above, and the trigger for `projects/delete.feature`'s last rule.
 	 *
@@ -68,37 +56,6 @@ trait PruneSteps {
 	public function someoneDeletesTheProjectInPenpot(string $name): void {
 		$this->penpotRpc('delete-project', ['id' => $this->projectIdNamed($name)]);
 		$this->theAdminRunsAPull();
-	}
-
-	/** @When /^someone permanently deletes the design "([^"]*)" in Penpot$/ */
-	public function someonePermanentlyDeletesTheDesignInPenpot(string $name): void {
-		$this->theDesignIsPermanentlyDeletedInPenpot($name);
-		$this->theAdminRunsAPull();
-	}
-
-	/** @When /^the design "([^"]*)" is deleted in Penpot$/ */
-	public function theDesignIsDeletedInPenpot(string $name): void {
-		// `delete-file` is a SOFT delete — it moves the design into Penpot's own
-		// trash, which is exactly the state the rescue depends on. Its id param is
-		// the bare `id` (saga §6.54's spelling, not `file-id`).
-		$this->penpotRpc('delete-file', ['id' => $this->fileIdNamed($name)]);
-	}
-
-	/**
-	 * PAST THE GRACE WINDOW, WITHOUT WAITING A WEEK. `permanently-delete-team-files`
-	 * destroys the design outright (§C6.11 — it does not require the file to be in
-	 * the trash, and will happily destroy a live one), which puts the pull in
-	 * exactly the state a seven-day-old deletion would: the design is not listed,
-	 * not in Penpot's trash, and `export-binfile` can no longer rescue it.
-	 *
-	 * That state is otherwise untestable, and it is the one where the prune's
-	 * behaviour matters most — it is the case where the local mirror is genuinely
-	 * the last copy.
-	 *
-	 * @When /^the design "([^"]*)" is permanently deleted in Penpot$/
-	 */
-	public function theDesignIsPermanentlyDeletedInPenpot(string $name): void {
-		$this->permanentlyDeleteDesignById($this->fileIdNamed($name));
 	}
 
 	/**
@@ -158,37 +115,6 @@ trait PruneSteps {
 		);
 	}
 
-	/**
-	 * Destroy a design that is ALREADY in Penpot's trash — the state a mirror
-	 * reaches by being deleted in Nextcloud, since that delete passes through to
-	 * `delete-file`.
-	 *
-	 * Its id has to come off the TRASH listing, not the project listing: the
-	 * design is not in a project any more, and `get-team-deleted-files` is the
-	 * only sanctioned source of ids for the destroy command anyway (§C6.11 — it
-	 * has no safety of its own, and this suite holds itself to the rule it holds
-	 * the app to).
-	 *
-	 * @When /^the design "([^"]*)" is purged from Penpot's trash$/
-	 */
-	public function theDesignIsPurgedFromPenpotsTrash(string $name): void {
-		$fileId = null;
-		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $this->teamId()]) as $file) {
-			if (($file['name'] ?? null) === $name && is_string($file['id'] ?? null)) {
-				$fileId = $file['id'];
-				break;
-			}
-		}
-		if ($fileId === null) {
-			throw new \RuntimeException("no design named '{$name}' in Penpot's trash — was it actually deleted?");
-		}
-
-		$this->penpotRpc('permanently-delete-team-files', [
-			'team-id' => $this->teamId(),
-			'ids' => [$fileId],
-		]);
-	}
-
 	/** Whether this team's trash still lists that design. */
 	private function inTeamTrash(string $team, string $fileId): bool {
 		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $team]) as $file) {
@@ -200,35 +126,7 @@ trait PruneSteps {
 		return false;
 	}
 
-	/** @Then /^the pull pruned (\d+) mirrors?$/ */
-	public function thePullPrunedMirrors(int $count): void {
-		$this->mustReport(sprintf('%d design(s) no longer exist in Penpot', $count));
-	}
-
-	/** @Then /^the pull saved (\d+) final archives?$/ */
-	public function thePullSavedFinalArchives(int $count): void {
-		$this->mustReport(sprintf('%d saved as a final archive first', $count));
-	}
-
-	/**
-	 * ASSERTED BY ABSENCE, on purpose: the pull prints the prune line only when it
-	 * pruned something, so "nothing was pruned" is "the line never appeared".
-	 *
-	 * @Then /^the pull pruned nothing$/
-	 */
-	public function thePullPrunedNothing(): void {
-		if (str_contains($this->lastOutput, 'no longer exist in Penpot')) {
-			throw new \RuntimeException("expected the pull to prune nothing, but it reported a prune:\n{$this->lastOutput}");
-		}
-	}
-
 	// ── helpers ─────────────────────────────────────────────────────────────
-
-	private function mustReport(string $phrase): void {
-		if (!str_contains($this->lastOutput, $phrase)) {
-			throw new \RuntimeException("expected the pull to report '{$phrase}', got:\n{$this->lastOutput}");
-		}
-	}
 
 	/**
 	 * The Penpot id of a FILE by name, read back through the app's own probe so

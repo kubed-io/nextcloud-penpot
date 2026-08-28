@@ -110,13 +110,6 @@ trait GestureSteps {
 		// Nothing to wait for, which is what makes these assertions stable.
 	}
 
-	/** @When /^I move "([^"]*)" to "([^"]*)"$/ */
-	public function iMoveTo(string $from, string $to): void {
-		$this->captureIdBeforeGesture($from);
-		$this->davMove($from, $to);
-		$this->gestureTarget = $to;
-	}
-
 	/**
 	 * Move something INTO a folder, which is what a drag actually is.
 	 *
@@ -400,32 +393,6 @@ trait GestureSteps {
 	// ── create ──────────────────────────────────────────────────────────────
 
 	/**
-	 * What "+ New → Penpot design" does: write an EMPTY file and stop.
-	 *
-	 * Empty is the whole point — the server tells a CREATE from an UPLOAD by
-	 * exactly this, because a `.penpot` that already holds an archive is a design
-	 * someone dragged in, not one to invent.
-	 *
-	 * @When /^I create a new design file at "([^"]*)"$/
-	 */
-	public function iCreateANewDesignFileAt(string $path): void {
-		$this->davPut($path, '');
-		$this->gestureTarget = $path;
-	}
-
-	/**
-	 * Ordinary Nextcloud content in a mapped folder — a note, an export, whatever
-	 * the user likes. Written through the same PUT as a design so the same
-	 * listeners see it; the ONLY thing that makes it not ours is the extension.
-	 *
-	 * @When /^I create an unrelated file at "([^"]*)"$/
-	 */
-	public function iCreateAnUnrelatedFileAt(string $path): void {
-		$this->davPut($path, "not a design\n");
-		$this->gestureTarget = $path;
-	}
-
-	/**
 	 * The gesture, and its past tense for scenarios that merely need the file to
 	 * be there before the behaviour starts. See {@see iDelete()}.
 	 *
@@ -433,10 +400,7 @@ trait GestureSteps {
 	 * untracked archive here", not "I uploaded one" — putting it there is the
 	 * step's problem, not the scenario's.
 	 *
-	 * @Given /^an untracked "\.penpot" archive at "([^"]*)"$/
 	 * @Given /^an untracked design file at "([^"]*)"$/
-	 * @When /^I upload a ".penpot" archive at "([^"]*)"$/
-	 * @Given /^an uploaded ".penpot" archive at "([^"]*)"$/
 	 */
 	public function iUploadAnArchiveAt(string $path): void {
 		// THE FOLDER MAY NOT BE THERE YET. `an untracked design file at
@@ -458,41 +422,6 @@ trait GestureSteps {
 	}
 
 	// ── delete ──────────────────────────────────────────────────────────────
-
-	/**
-	 * The gesture — and, in the past tense, the PRE-STATE for anything that starts
-	 * from a trashed file.
-	 *
-	 * A scenario about restoring does not want "And I delete …" in its Given
-	 * block: the delete is not something the reader is being shown, it is how the
-	 * precondition came to be true. "… is in the trash" says what is true before
-	 * the behaviour and leaves the mechanism here, which is the same reason the
-	 * setup pull lives in {@see PullSteps} rather than in the Gherkin.
-	 *
-	 * @When /^I delete "([^"]*)"$/
-	 * @Given /^"([^"]*)" is in the trash$/
-	 */
-	public function iDelete(string $path): void {
-		$this->captureIdBeforeGesture($path);
-		$this->davDelete($path);
-		$this->gestureTarget = $path;
-	}
-
-	/**
-	 * The SECOND step: empty the Nextcloud trash for this file. Fires the same
-	 * event as the first delete, distinguished only by the node already living
-	 * under files_trashbin — which is what makes this the irreversible one.
-	 *
-	 * @When /^I purge "([^"]*)" from the Nextcloud trash$/
-	 */
-	public function iPurgeFromTheNextcloudTrash(string $path): void {
-		$entry = $this->trashbinPathFor($path);
-		if ($entry === null) {
-			throw new \RuntimeException("no trashbin entry found for '{$path}' — was it actually deleted?");
-		}
-		$res = $this->davClient()->request('DELETE', $this->trashHref($entry));
-		$this->assertStatus($res, [204, 200], "purge {$entry}");
-	}
 
 	/**
 	 * The OTHER second step, and the one that undoes the first: take the file back
@@ -527,96 +456,7 @@ trait GestureSteps {
 	private int $lastGestureStatus = 0;
 	private string $lastGestureBody = '';
 
-	/**
-	 * A gesture the app is expected to REFUSE.
-	 *
-	 * `MoveGuardListener` aborts the event before the move happens, which Sabre
-	 * turns into a 4xx — so unlike every other gesture here the interesting result
-	 * is the STATUS, not what ended up in Penpot. `davMoveStatus()` has existed
-	 * since the harness was written, for exactly this, and had never been called.
-	 *
-	 * @When /^I try to move "([^"]*)" to "([^"]*)"$/
-	 */
-	public function iTryToMove(string $from, string $to): void {
-		$result = $this->davMoveResult($from, $to);
-		$this->lastGestureStatus = $result['status'];
-		$this->lastGestureBody = $result['body'];
-		$this->gestureTarget = $from;
-	}
-
-	/**
-	 * THE GUARD IS THE ONLY THING IN THIS APP THAT SAYS NO, and until now nothing
-	 * proved it ever does. A guard that silently stopped refusing would let a
-	 * `link` leave its project — handing someone an empty husk that looks like a
-	 * design — and no test would have noticed.
-	 *
-	 * @Then /^the move is refused$/
-	 */
-	public function theMoveIsRefused(): void {
-		if ($this->lastGestureStatus < 400 || $this->lastGestureStatus >= 500) {
-			throw new \RuntimeException(
-				"expected the move to be refused, but Nextcloud answered {$this->lastGestureStatus}",
-			);
-		}
-	}
-
 	// ── Nextcloud's trash ───────────────────────────────────────────────────
-
-	/**
-	 * THE HALF THE PRUNE SCENARIOS WERE MISSING. They asserted the mirror was gone
-	 * from its folder and stopped there — which is equally true of a hard delete,
-	 * the one outcome the prune must never produce. "Trash, never destroy" was a
-	 * comment in a feature header for three courses and an assertion in none of
-	 * them, and the gap surfaced as a user report: *the file left the folder and I
-	 * cannot find it in the trash.*
-	 *
-	 * @Then /^the file "([^"]*)" is in the Nextcloud trash$/
-	 */
-	public function theFileIsInTheNextcloudTrash(string $path): void {
-		if ($this->trashbinPathFor($path) === null) {
-			throw new \RuntimeException(
-				"expected '{$path}' in the Nextcloud trash; it is not there — a prune that "
-				. 'hard-deletes looks exactly like this from the folder side',
-			);
-		}
-	}
-
-	/**
-	 * THE SNAPSHOT IS THE WHOLE POINT of pruning a vanished design (saga §6.46):
-	 * the archive is written into the mirror while the design is still readable, so
-	 * the bytes in the trash are the last thing that could bring it back at all. A
-	 * trashed file's own path no longer resolves, so this reads the trashbin entry.
-	 *
-	 * @Then /^the trashed file "([^"]*)" holds the design's final archive$/
-	 */
-	public function theTrashedFileHoldsItsFinalArchive(string $path): void {
-		$entry = $this->trashbinPathFor($path);
-		if ($entry === null) {
-			throw new \RuntimeException("'{$path}' is not in the Nextcloud trash");
-		}
-		$bytes = (string)$this->davClient()
-			->request('GET', $this->trashHref($entry))
-			->getBody();
-		if (substr($bytes, 0, 2) !== 'PK') {
-			throw new \RuntimeException(
-				'the trashed mirror holds ' . strlen($bytes) . ' bytes that are not a ZIP archive — '
-				. 'the final snapshot was never written',
-			);
-		}
-	}
-
-	/**
-	 * One check, two sentences, because a purge and a restore both leave no trashbin
-	 * entry and mean opposite things. "Gone from" reads for the destroyed case.
-	 *
-	 * @Then /^the file "([^"]*)" is gone from the Nextcloud trash$/
-	 * @Then /^the file "([^"]*)" is not in the Nextcloud trash$/
-	 */
-	public function theFileIsNotInTheNextcloudTrash(string $path): void {
-		if ($this->trashbinPathFor($path) !== null) {
-			throw new \RuntimeException("expected no trashbin entry for '{$path}', but one is there");
-		}
-	}
 
 	// ── Penpot's trash ──────────────────────────────────────────────────────
 
@@ -812,15 +652,6 @@ trait GestureSteps {
 
 	// ── what the APP believes ───────────────────────────────────────────────
 
-	/** @Then /^the file "([^"]*)" carries a Penpot id$/ */
-	public function theFileCarriesAPenpotId(string $path): void {
-		if (preg_match('/penpot_id: \S/', $this->status($path)) !== 1) {
-			throw new \RuntimeException(
-				"expected '{$path}' to carry a penpot_id, got:\n" . $this->status($path),
-			);
-		}
-	}
-
 	/**
 	 * The negative that the copy bug needed: a file that exists and is untracked
 	 * looks completely normal in the Files app, so only the stamp shows it.
@@ -835,59 +666,9 @@ trait GestureSteps {
 		}
 	}
 
-	/** @Then /^the files "([^"]*)" and "([^"]*)" carry different Penpot ids$/ */
-	public function theFilesCarryDifferentPenpotIds(string $a, string $b): void {
-		$idA = $this->penpotIdOfFile($a);
-		$idB = $this->penpotIdOfFile($b);
-		if ($idA === $idB) {
-			throw new \RuntimeException(
-				"expected '{$a}' and '{$b}' to be different designs, but both carry {$idA}. "
-				. 'Two files claiming one design is the ambiguity copy-design.feature exists to prevent.',
-			);
-		}
-	}
-
 	// ── what PENPOT actually holds ──────────────────────────────────────────
 
-	/** @Then /^Penpot project "([^"]*)" holds (\d+) designs?$/ */
-	public function penpotProjectHoldsDesigns(string $projectName, int $count): void {
-		$found = count($this->penpotFileNamesIn($projectName));
-		if ($found !== $count) {
-			throw new \RuntimeException(
-				sprintf("expected %d design(s) in Penpot project '%s', found %d: %s", $count, $projectName, $found, implode(', ', $this->penpotFileNamesIn($projectName))),
-			);
-		}
-	}
-
-	/** @Then /^Penpot project "([^"]*)" holds a design named "([^"]*)"$/ */
-	public function penpotProjectHoldsADesignNamed(string $projectName, string $designName): void {
-		$this->until(
-			fn (): bool => in_array($designName, $this->penpotFileNamesIn($projectName), true),
-			fn (): string => sprintf(
-				"expected a design named '%s' in Penpot project '%s'; found: %s",
-				$designName, $projectName, implode(', ', $this->penpotFileNamesIn($projectName)) ?: '(none)',
-			),
-		);
-	}
-
-	/** @Then /^Penpot project "([^"]*)" holds no design named "([^"]*)"$/ */
-	public function penpotProjectHoldsNoDesignNamed(string $projectName, string $designName): void {
-		$this->until(
-			fn (): bool => !in_array($designName, $this->penpotFileNamesIn($projectName), true),
-			fn (): string => sprintf("expected NO design named '%s' in Penpot project '%s', but it is there", $designName, $projectName),
-		);
-	}
-
 	// ── helpers ─────────────────────────────────────────────────────────────
-
-	/** The `penpot_id` the app has stamped on a file, or '' when untracked. */
-	private function penpotIdOfFile(string $path): string {
-		if (preg_match('/penpot_id: (\S+)/', $this->status($path), $m) === 1) {
-			return $m[1];
-		}
-
-		return '';
-	}
 
 	/**
 	 * Design names in a Penpot project, read through the app's own probe so the
