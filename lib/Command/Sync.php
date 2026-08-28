@@ -9,9 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Command;
 
+use OCA\PenpotSync\Service\BulkPushService;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\PullStatus;
-use OCA\PenpotSync\Service\BulkPushService;
 use OCA\PenpotSync\Service\PushStatus;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
