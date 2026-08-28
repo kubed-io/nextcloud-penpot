@@ -72,9 +72,6 @@ trait SyncNowSteps {
 
 			if ($design !== '' && !$this->projectHoldsDesign($projectId, $design)) {
 				$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => $design]);
-				fwrite(STDERR, "PROBE seeded {$team}/{$project}/{$design}\n");
-			} elseif ($design !== '') {
-				fwrite(STDERR, "PROBE already there {$team}/{$project}/{$design}\n");
 			}
 		}
 	}
@@ -163,9 +160,7 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
-		$this->syncNowProbe('before writePending');
 		$this->syncNowWritePending();
-		$this->syncNowProbe('after writePending, before sync');
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -277,7 +272,11 @@ trait SyncNowSteps {
 		$actual = [];
 		foreach ($wanted as $team => $projects) {
 			$teamId = $this->teamNamed((string)$team);
-			foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+			// `get-all-projects` + camelCase — see {@see projectIdInTeamOrNull()}.
+			foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+				if (($project['teamId'] ?? $project['team-id'] ?? null) !== $teamId) {
+					continue;
+				}
 				$projectId = (string)($project['id'] ?? '');
 				$projectName = (string)($project['name'] ?? '');
 				if ($projectId === '' || !isset($projects[$projectName])) {
@@ -351,8 +350,28 @@ trait SyncNowSteps {
 		return $id;
 	}
 
+	/**
+	 * A project by name inside a team, or null.
+	 *
+	 * ## `get-all-projects`, NEVER `get-projects` (saga §6.42)
+	 *
+	 * THIS WAS THE BUG that kept the leg red through three wrong diagnoses.
+	 * `get-projects` does NOT filter soft-deleted projects, so on the second
+	 * Examples row this found the DEAD `Cogs` left by the first, asked it for its
+	 * files, and reported the designs as "already there" — while the pull, which
+	 * reads `get-all-projects` like the rest of `lib/`, correctly ignored it. The
+	 * Background believed it had seeded a team that was in fact empty.
+	 *
+	 * CAMELCASE, NOT KEBAB. `penpotRpcRead()` sends `Accept: application/json`, so
+	 * Penpot answers plain JSON with camelCase keys rather than Transit. Both traps
+	 * are already documented on {@see ArrangeSteps}; this trait was the only place
+	 * that had not learned them.
+	 */
 	private function projectIdInTeamOrNull(string $teamId, string $name): ?string {
-		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			if (($project['teamId'] ?? $project['team-id'] ?? null) !== $teamId) {
+				continue;
+			}
 			if (($project['name'] ?? null) === $name) {
 				$id = (string)($project['id'] ?? '');
 
@@ -473,23 +492,5 @@ trait SyncNowSteps {
 	private function syncNowIsFixture(string $path): bool {
 		return $path === self::FIXTURE_FOLDER
 			|| str_starts_with($path, self::FIXTURE_FOLDER . '/');
-	}
-
-	/** TEMPORARY: what does Design Team actually hold right now? */
-	private function syncNowProbe(string $when): void {
-		$teamId = $this->teamNamed('Design Team');
-		$seen = [];
-		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
-			$pid = (string)($project['id'] ?? '');
-			$pname = (string)($project['name'] ?? '');
-			if ($pid === '') {
-				continue;
-			}
-			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $pid]) as $file) {
-				$seen[] = $pname . '/' . (string)($file['name'] ?? '');
-			}
-		}
-		sort($seen);
-		fwrite(STDERR, "PROBE [{$when}] Design Team = " . implode(', ', $seen) . "\n");
 	}
 }

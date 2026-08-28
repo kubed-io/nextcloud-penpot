@@ -4401,24 +4401,28 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
-### The Background is this feature's fixture, and that made it the canary
+### `get-projects` lies about deleted projects, and it cost four red runs
 
-Ten feature files use `the following mappings were made` inside a Scenario Outline
-and pass. This one did not, and the difference is where the content lives: their
-scenarios seed their own fixtures per row, while here the BACKGROUND holds
-everything the assertion checks.
+The Background seeds Penpot find-or-create, so the second Examples row of the
+outline should have found its designs already there. It did — and the team was in
+fact empty.
 
-`theFollowingMappingsWereMade()` empties each mapped folder, and that emptying was
-not latched the way its unmap already was — so on the SECOND Examples row it ran
-again with the first row's mappings still live, and a delete inside a live mapping
-is a gesture the app carries into Penpot. It emptied the folder and trashed the
-designs the folder mirrored: `Gizmo` and `Doohickey` vanished out of Design Team
-between one row and the next.
+`get-projects` does NOT filter soft-deleted projects (saga §6.42). The first row
+leaves a dead `Cogs` behind; the second row's find-or-create read that corpse,
+asked it for its files, saw `Gizmo` and `Doohickey`, and skipped seeding. The pull
+then read `get-all-projects` like the rest of `lib/` does, correctly ignored the
+dead project, and mirrored a team with nothing in it.
 
-Fixed at the source — the emptying is now once per scenario, like the unmap — so
-every outline gets it, not just this file. Grafana never hit this because its twin
-does not empty at all; the emptying is a penpot addition, and outlines are where
-it bit.
+`ArrangeSteps` already documents both halves of this — use `get-all-projects`, and
+expect camelCase keys because `penpotRpcRead()` sends `Accept: application/json`.
+The new trait was the only place that had not learned them.
+
+WORTH THE SPACE because it was diagnosed three times WRONGLY first — the mapping
+teardown, a fixture's own delete, then the per-row folder emptying. All three were
+plausible readings of "designs vanish between rows", none moved the count off
+30/32, and each cost a CI cycle. A probe printing Penpot's actual contents at each
+Background step found it in one run. Measure the state; do not reason from the
+symptom.
 
 ### RETIRED — six scenarios, and what happened to each
 
