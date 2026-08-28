@@ -74,6 +74,13 @@ trait ArrangeSteps {
 	private array $mappingModes = [];
 
 	/**
+	 * Mapped folders this scenario has already emptied — see {@see emptyMappedFolder()}.
+	 *
+	 * @var array<string, true>
+	 */
+	private array $emptiedFolders = [];
+
+	/**
 	 * The Penpot team id behind each mapped folder.
 	 *
 	 * NEEDED BECAUSE "THAT TEAM" IS AMBIGUOUS BY THE TIME AN ITEM IS SEEDED. The
@@ -166,6 +173,7 @@ trait ArrangeSteps {
 
 	/** @BeforeScenario */
 	public function armArrange(): void {
+		$this->emptiedFolders = [];
 		$this->mappingModes = [];
 		$this->mappingTeamIds = [];
 		$this->mappingTeamNames = [];
@@ -292,6 +300,27 @@ trait ArrangeSteps {
 	 * already visible there.
 	 */
 	private function emptyMappedFolder(string $folder): void {
+		// ONCE PER SCENARIO, LIKE THE UNMAP BESIDE IT — and this is measured, not
+		// reasoned. A probe printing Penpot's contents at each Background boundary
+		// caught it on the second Examples row of an outline:
+		//
+		//   [nextcloudHolds START]  Cogs[Hand Made|Doohickey|Gizmo] Drafts[Loose Idea]
+		//   [sync step START]       Drafts[]
+		//
+		// The unmap is latched by `$mappingsDeclared`; this was not, so it ran again
+		// with the FIRST row's mappings still live — and a delete inside a live
+		// mapping is a gesture {@see \OCA\PenpotSync\Listener\DeleteListener}
+		// carries into Penpot. It emptied the folder and destroyed the team.
+		//
+		// Ten feature files survive it because their scenarios seed per row; only
+		// `connection/sync-now.feature`, whose BACKGROUND holds what the assertion
+		// checks, could notice. Grafana never hit it — its twin does not empty at
+		// all, which is why the identical Gherkin passes there.
+		if (isset($this->emptiedFolders[$folder])) {
+			return;
+		}
+		$this->emptiedFolders[$folder] = true;
+
 		try {
 			if (!$this->davExists($folder)) {
 				return;

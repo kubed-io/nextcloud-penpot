@@ -4401,28 +4401,39 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
-### `get-projects` lies about deleted projects, and it cost four red runs
+### Two bugs, one symptom — and why that took five runs
 
-The Background seeds Penpot find-or-create, so the second Examples row of the
-outline should have found its designs already there. It did — and the team was in
-fact empty.
+The leg failed at 30/32 with `Gizmo` and `Doohickey` missing. TWO independent
+faults produced that same line, which is why fixing either one alone left the
+number unchanged and made each fix look wrong.
 
-`get-projects` does NOT filter soft-deleted projects (saga §6.42). The first row
-leaves a dead `Cogs` behind; the second row's find-or-create read that corpse,
-asked it for its files, saw `Gizmo` and `Doohickey`, and skipped seeding. The pull
-then read `get-all-projects` like the rest of `lib/` does, correctly ignored the
-dead project, and mirrored a team with nothing in it.
+**1. The mapping step emptied the folder on every Examples row.**
+`theFollowingMappingsWereMade()` empties each mapped folder before mapping it. The
+unmap beside it is latched by `$mappingsDeclared`; the emptying was not — so on the
+second row it ran again with the first row's mappings still LIVE, and a delete
+inside a live mapping is a gesture `DeleteListener` carries into Penpot. A probe
+caught it between two adjacent steps:
 
-`ArrangeSteps` already documents both halves of this — use `get-all-projects`, and
-expect camelCase keys because `penpotRpcRead()` sends `Accept: application/json`.
-The new trait was the only place that had not learned them.
+    [nextcloudHolds START]  Cogs[Hand Made|Doohickey|Gizmo] Drafts[Loose Idea]
+    [sync step START]       Drafts[]
 
-WORTH THE SPACE because it was diagnosed three times WRONGLY first — the mapping
-teardown, a fixture's own delete, then the per-row folder emptying. All three were
-plausible readings of "designs vanish between rows", none moved the count off
-30/32, and each cost a CI cycle. A probe printing Penpot's actual contents at each
-Background step found it in one run. Measure the state; do not reason from the
-symptom.
+Ten feature files survive it because their scenarios seed per row; only this one,
+whose BACKGROUND holds what the assertion checks, could notice. **Grafana and n8n
+pass the same Gherkin because their mapping step does not empty at all** — the
+emptying is a penpot addition for its reused folder names, and outlines are where
+it bites.
+
+**2. `get-projects` does not filter soft-deleted projects (§6.42).**
+Which meant the Background's find-or-create read the dead `Cogs` left by fault 1,
+saw the designs it still listed, and skipped re-seeding — hiding the damage. Use
+`get-all-projects`, and expect camelCase keys because `penpotRpcRead()` sends
+`Accept: application/json`. `ArrangeSteps` documents both; this trait had not
+learned them.
+
+MEASURE, DO NOT REASON. Three diagnoses were argued from the symptom and all three
+were wrong-or-partial; one probe printing Penpot's actual contents at each step
+boundary settled it in a single run. When a fix does not move the number, suspect a
+second fault before concluding the first was wrong.
 
 ### RETIRED — six scenarios, and what happened to each
 
