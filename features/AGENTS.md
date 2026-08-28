@@ -2308,6 +2308,27 @@ the history — and the `penpot_id` STAYS ON THE FILE, which is the whole trick.
 unmapped file is not a file that forgot; it is a file holding a claim on something
 parked.
 
+### A nested project folder and a plain subfolder look identical
+
+AND MEAN OPPOSITE THINGS, which is the cost §C6.38 charges for making a project's
+name a path. `Penpot/Move From/wip` and `Penpot/Clients/Traveller` are the same
+shape — a folder inside a folder inside a mapping — and a design dragged into the
+first stays in `Move From` while a design dragged into the second lands in a
+project called `Clients/Traveller`. Nothing about the path says which; the
+MARKERS do, and the nearest-ancestor walk is what reads them.
+
+The two Examples blocks sit next to each other for that reason. Read alone,
+either one teaches a rule that is false: "a subfolder is not a project" is wrong
+the moment a design lands in one, and "a folder inside a mapping is named by its
+path" is wrong of `wip`. Together they say the true thing — the folder's markers
+decide, and the path only ever says what it is CALLED once something has decided.
+
+THE CODE HAD THIS BEFORE THE SPEC DID. `MembershipResolver` has resolved nearest
+ancestor since §6.29 and `PushService` has named projects by path since §C6.38, so
+the `Clients/Traveller` row needed no new step definition and no new behaviour —
+it needed saying. Added on the round that taught the PULL to read those names back
+(#50), because until then the app could write a name it then refused to mirror.
+
 ### A cross-team move always crosses a storage boundary
 
 **NAMED FROM A MEASURED RUN, not reasoned about.** Two scenarios wanted a design to
@@ -2689,6 +2710,34 @@ A mode belongs to the TEAM, and a move may not change one. One Outline and two
 Examples blocks, the same shape `projects/copy` uses: the first block is the SOURCE
 rule and is total — a link project has nowhere to go, its own team included — and the
 second is the DESTINATION rule, which only needs a source the first has not refused.
+
+### A project moving into a folder named after itself
+
+THE ONE SHAPE THE OUTLINE ABOVE CANNOT REACH, and the one a user hits first.
+`Bubbles` becoming `Bubbles/foo` asks a folder to be moved INSIDE ITSELF; going
+back asks it to take the name its own parent is using. Every row of
+`Move/Rename a project in Penpot` changes the path to something disjoint, so none
+of them exercise either, and they cannot be rows of it in any case: its `Then`
+says `there is no folder at "<from>"`, and here `Penpot/Bubbles` survives — as the
+folder the project now sits in.
+
+Both are one Penpot rename away from any nested project, and both were broken in
+a way no test could see: the pull refused to read a name with a `/` in it at all,
+so the gesture produced nothing and — silently — switched the prune and the
+orphan reap off for the whole mapping. Found by hand, fixed in #50, and specified
+here afterwards because the scenarios are what stop it going quiet again.
+
+WHY THE SECOND SCENARIO IS NOT REDUNDANT. It looks like the first read backwards
+and it is not: the folder it must land on is occupied by the folder it is leaving,
+so the name has to be FREED before it lands. Get that wrong and everything still
+"works" — the project keeps its id, the designs keep theirs, the assertions on
+identity all pass — and the folder is called `Wrapper (2)` forever, one suffix
+higher every pull. That is why the scenario names the path rather than only the
+id.
+
+Neither says anything about the parking the implementation does to get there. A
+folder stepping aside under a temporary name for one step is mechanism; the
+scenario asks what is true afterwards.
 
 ### An emptied parent is reaped only when it holds nothing else
 
