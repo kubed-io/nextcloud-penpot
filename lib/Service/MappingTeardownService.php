@@ -105,7 +105,7 @@ final class MappingTeardownService {
 		// depth counter and re-entering it per node would cost nothing but say less
 		// — this is one operation, and a delete that escaped the fence would reach
 		// Penpot.
-		$this->guard->run(function () use ($root, $mapping, &$removed, &$unmapped): void {
+		$this->guard->run(function () use ($root, &$removed, &$unmapped): void {
 			foreach ($this->mirrorsBelow($root, 0) as $node) {
 				if ($this->archives->holdsArchive($node)) {
 					$unmapped += $this->unmap($node) ? 1 : 0;

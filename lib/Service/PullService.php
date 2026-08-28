@@ -1630,10 +1630,24 @@ final class PullService {
 	 * empty name, an empty segment (`a//b`, `foo/`), a `.` or `..` segment — which
 	 * would escape the mapping root or resolve to it — and a name nested past the
 	 * depth ceiling every other walk here obeys.
+	 *
+	 * ## STRICTLY INSIDE THAT CEILING, NOT LEVEL WITH IT
+	 *
+	 * `>=`, not `>`, and the margin is deliberate. {@see indexProjectFolders()} and
+	 * {@see orphanProjectFolders()} bail at `$depth >= MAX_DEPTH`, and a call at
+	 * depth `d` lists the nodes one below it — so they reach exactly `MAX_DEPTH`
+	 * levels down, and a name of exactly `MAX_DEPTH` segments landed on the last
+	 * rung either could see. It fitted, by an accident of where two independently
+	 * written guards sit rather than by anything either states.
+	 *
+	 * That is not a property to leave implicit, because being level with it is one
+	 * `+ 1` away from being past it — and past it the failure is silent and awful:
+	 * the folder is created, never found by id again, and re-created on every pull.
+	 * Raised by Copilot on #50.
 	 */
 	private function isLegalProjectName(string $name): bool {
 		$segments = explode('/', $name);
-		if (count($segments) > self::MAX_DEPTH) {
+		if (count($segments) >= self::MAX_DEPTH) {
 			return false;
 		}
 

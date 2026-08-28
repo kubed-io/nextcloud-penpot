@@ -3,11 +3,30 @@
 	SPDX-FileCopyrightText: 2026 kubed-io
 	SPDX-License-Identifier: AGPL-3.0-or-later
 -->
+<!--
+	MEASURED, NOT ASSUMED. Turned on once on #50 to see what it would say: 100
+	errors, and about 85 of them unavoidable. Psalm analyses `lib` only and
+	cannot see how a Nextcloud app is entered — so every `__construct` is
+	"never called" (the DI container calls them), every Command and Controller
+	is an "unused class" (info.xml and routes.php name them), every Sabre
+	handler has unused params and an unused return (the plugin interface fixes
+	both), and every value object read only by a unit test looks dead because
+	`tests` is not in projectFiles.
+
+	The real yield was ONE defect — an unused `$mapping` capture in
+	MappingTeardownService — which is not worth 85 false positives on every
+	run. TURNING IT ON FOR REAL means marking the ~25 framework entry points
+	`@psalm-api` and suppressing UnusedParam / PossiblyUnusedReturnValue for
+	lib/DAV. That is worth doing and is its own change, not a flag flip.
+
+	The gap it leaves is covered elsewhere: tests/integration/bin/check-step-definitions.sh
+	finds dead step definitions, which is where the dead code actually was.
+-->
 <psalm
 	errorLevel="6"
 	resolveFromConfigFile="true"
 	findUnusedBaselineEntry="false"
-	findUnusedCode="true"
+	findUnusedCode="false"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xmlns="https://getpsalm.org/schema/config"
 	xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
