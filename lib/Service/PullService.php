@@ -191,6 +191,11 @@ final class PullService {
 			// wall between the pull (Penpot → NC) and the writeback (NC → Penpot).
 			return $this->guard->run(function () use ($mapping): array {
 				$root = $this->storage->ensureRoot($mapping);
+				// REPAIR, NOT PROVISIONING. `ensureRoot()` marks the root itself now,
+				// so this writes a value that is normally already there — kept because
+				// the pull is the repair pass for a root whose marker was lost (cleared
+				// by hand, or a provisioning stamp that could not write), the same way
+				// it is the repair pass for a root that was deleted.
 				$this->metadata->writeFolder($root->getId(), [PenpotMetadata::KEY_TEAM_ID => $mapping->teamId]);
 
 				// Index the existing project folders ONCE (penpot_project_id -> folder)

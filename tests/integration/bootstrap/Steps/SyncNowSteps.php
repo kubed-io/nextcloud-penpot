@@ -28,6 +28,13 @@ use Behat\Gherkin\Node\TableNode;
  */
 trait SyncNowSteps {
 	/**
+	 * `.penpot` paths the Background asked for, waiting for a mapping to exist.
+	 *
+	 * @var list<string>
+	 */
+	private array $syncNowPendingArchives = [];
+
+	/**
 	 * Penpot's side of the picture, across SEVERAL teams.
 	 *
 	 * {@see PullSteps::thePenpotTeamAlreadyContains()} is the one-team form and is
@@ -70,6 +77,18 @@ trait SyncNowSteps {
 	 * there" is testing that the app skips an empty file. Everything else is a
 	 * plain folder (no extension) or an ordinary file.
 	 *
+	 * ## THE ARCHIVE IS DEFERRED, BECAUSE NOTHING IS MAPPED YET
+	 *
+	 * This step runs BEFORE `the following mappings were made` — the Background is
+	 * a picture of the pre-state, and both siblings order it the same way. But the
+	 * only way this harness can obtain real `.penpot` bytes is to make a design and
+	 * export it, and a design can only be born inside a mapped folder.
+	 *
+	 * So the file is recorded here and written at the START OF THE SYNC, by which
+	 * time the Background has finished and the mapping exists. The pre-state the
+	 * scenario describes is still true when the scenario acts, which is all the
+	 * Background is claiming.
+	 *
 	 * @Given /^Nextcloud holds these resources:$/
 	 */
 	public function nextcloudHoldsTheseResources(TableNode $table): void {
@@ -86,7 +105,7 @@ trait SyncNowSteps {
 			$this->syncNowAncestors($path);
 
 			if (str_ends_with($path, '.penpot')) {
-				$this->davPut($path, $this->syncNowArchive());
+				$this->syncNowPendingArchives[] = $path;
 				continue;
 			}
 			if (pathinfo($path, PATHINFO_EXTENSION) === '') {
@@ -108,6 +127,7 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
+		$this->syncNowWritePendingArchives();
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -122,6 +142,8 @@ trait SyncNowSteps {
 	 * @When /^the admin syncs every mapping to Penpot$/
 	 */
 	public function theAdminSyncsEveryMappingToPenpot(): void {
+		$this->syncNowWritePendingArchives();
+
 		$res = $this->occ('penpot_sync:sync push');
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("the push failed:\n{$res['output']}");
@@ -312,75 +334,44 @@ trait SyncNowSteps {
 	}
 
 	/**
-	 * Real `.penpot` bytes, produced inside the mapping and then swept up again.
+	 * Real `.penpot` bytes, made in the mapping this feature already declares.
 	 *
-	 * ## WHY IT CANNOT BE SEEDED SOMEWHERE OUT OF THE WAY
+	 * ## THE SOURCE HAS TO BE BORN INSIDE A MAPPING
 	 *
-	 * The obvious idea — put the source in a folder no table names — does not work,
-	 * and the app is right to stop it. An empty `.penpot` created where nothing
-	 * mirrors a Penpot team is refused by {@see \OCA\PenpotSync\Service\MoveRules}
-	 * with a 403: `create-file` needs a project, and outside a mapping there is none.
-	 * A design can only be born inside a mapped folder, so that is where the source
-	 * has to start.
+	 * An empty `.penpot` created where nothing mirrors a Penpot team is refused by
+	 * {@see \OCA\PenpotSync\Service\MoveRules::refusalForCreating()} with a 403 —
+	 * `create-file` needs a project, and outside a mapping there is none. So the
+	 * source cannot simply be seeded somewhere out of the way; it has to start in a
+	 * mapped folder and be cleaned up afterwards.
 	 *
-	 * ## AND WHY IT CANNOT SIMPLY STAY THERE
+	 * ## AND IT USES THE FEATURE'S OWN MAPPING, NOT ONE OF ITS OWN
 	 *
-	 * {@see GestureSteps::aRealPenpotArchive()} seeds exactly this way and LEAVES the
-	 * file standing, which is right for every other feature and wrong here: this one
-	 * asserts both sides with `exactly`, so a leftover `Penpot/Archive Source/` is an
-	 * `unexpected:` row in the tree table and its project is one in the Penpot table.
+	 * An earlier version mapped a donor team here and tore it down again, which was
+	 * quietly destructive: `remove-mapping` tears down a mapping's mirrors
+	 * ({@see \OCA\PenpotSync\Service\MappingTeardownService}), and the teardown
+	 * deleted the Background rows that had already been written — `notes.txt` and
+	 * `plan.txt` vanished out of a Background that had just created them.
 	 *
-	 * So the source is made, exported, read, and then DELETED — file and folder —
-	 * before the scenario proper begins. Deleting the mirror trashes the design in
-	 * Penpot, which is the point: it leaves neither a file in the tree nor a live
-	 * project in the team, and the cached bytes outlive both.
+	 * The mapping the Background declares is enough, and this is only reachable at
+	 * all because the caller defers until sync time: by then the mappings are made,
+	 * and {@see \OCA\PenpotSync\Service\StorageService::ensureRoot()} has marked
+	 * the root, so a design can be born in it straight away.
 	 *
-	 * ## THE MAPPING IS THE HELPER'S OWN, BECAUSE THE BACKGROUND HAS NOT MADE ONE YET
-	 *
-	 * The Background states the two sides BEFORE `the following mappings were made`
-	 * — as grafana's does, and as a picture of the pre-state should. Grafana gets
-	 * away with seeding files at that point because a `.grafana` is plain JSON;
-	 * a `.penpot` is not, and creating one outside a mapping is refused.
-	 *
-	 * Reordering the Background would fix it and would be the wrong fix: the order
-	 * is deliberate, shared with both siblings, and a `Given` that has to be
-	 * arranged in harness order is no longer a picture. So the helper maps a team
-	 * of its own, uses it, and tears it down — leaving the state the Background's
-	 * own mapping step then walks into unchanged.
-	 *
-	 * CACHED PER SCENARIO, because it costs a mapping, a create, a pull and an export.
+	 * CACHED PER SCENARIO, because it costs a create, a pull and an export.
 	 */
 	private function syncNowArchive(): string {
 		if ($this->syncNowArchiveBytes !== '') {
 			return $this->syncNowArchiveBytes;
 		}
 
-		// A TEAM NO TABLE NAMES, so nothing this feature asserts on can see it.
-		// `teamNamed()` is find-or-create, so the legs share one.
-		$this->aPenpotTeamNamedIsMappedToTheFolder('Archive Donor', 'Donor', 'sync');
-
-		// A FRESH NAME EVERY TIME. The helper runs once per scenario and the folder
-		// it makes is deleted at the end — but a delete leaves a TRASH entry, and a
-		// second scenario re-creating the same path is how a restore-happy suite
-		// ends up with `Source (2).penpot`. Uniqueness costs nothing and removes
-		// the whole question.
-		$folder = 'Donor/Sync Now Source ' . uniqid();
+		// A FRESH NAME EVERY TIME. The folder is deleted at the end of this helper,
+		// and a delete leaves a TRASH entry — a second scenario re-creating the same
+		// path is how a suite ends up with `Source (2).penpot`.
+		$folder = 'Penpot/Sync Now Source ' . uniqid();
 		$path = $folder . '/Source.penpot';
-
-		// A PULL FIRST, AND IT IS NOT OPTIONAL. `add-mapping` provisions the folder
-		// but does NOT mark it: `penpot_team_id` is stamped by the pull
-		// ({@see \OCA\PenpotSync\Service\PullService}, the only writer of it on a
-		// root). Until that has happened the folder resolves to `STATE_NONE`, and
-		// an empty `.penpot` created there is refused with a 403 by
-		// {@see \OCA\PenpotSync\Service\MoveRules::refusalForCreating()} — correctly,
-		// since there is no project for it to become real in.
-		$this->theAdminRunsAPull();
 
 		$this->syncNowAncestors($path);
 		$this->davPut($path, '');
-
-		// The SECOND pull is what exports the archive into the mirror; the first
-		// only made the folder a mapped one.
 		$this->theAdminRunsAPull();
 
 		$bytes = $this->davGet($path);
@@ -391,17 +382,46 @@ trait SyncNowSteps {
 			);
 		}
 
-		// SWEEP UP, in both places. The file goes so no tree walk sees it (and its
-		// delete trashes the design, so the donor team is left clean too), and the
-		// mapping goes so the Background's own mapping step starts from nothing —
-		// which is what it expects, since it is the first mapping sentence the
-		// scenario says.
+		// SWEEP UP. Both `exactly` assertions would otherwise report this fixture —
+		// the folder in the tree table, its project in the Penpot one. Deleting the
+		// mirror trashes the design, so the team is left clean too.
 		$this->davDelete($folder);
-		$this->noPenpotTeamsAreMapped();
 
 		return $this->syncNowArchiveBytes = $bytes;
 	}
 
 	/** The archive {@see syncNowArchive()} produced, for this scenario. */
 	private string $syncNowArchiveBytes = '';
+
+	/**
+	 * Both caches are per-scenario, and the pending list MUST be: a scenario that
+	 * never reaches a sync step would otherwise leave its rows for the next one to
+	 * write into a tree that had not asked for them.
+	 *
+	 * @BeforeScenario
+	 */
+	public function armSyncNow(): void {
+		$this->syncNowPendingArchives = [];
+		$this->syncNowArchiveBytes = '';
+	}
+
+	/**
+	 * Write the archives the Background deferred, now that the mappings are made.
+	 *
+	 * Called from BOTH sync steps rather than from one, because either direction
+	 * may be the first thing a scenario does and the pre-state has to be true for
+	 * both. Idempotent by construction — the list is emptied as it is drained.
+	 */
+	private function syncNowWritePendingArchives(): void {
+		$pending = $this->syncNowPendingArchives;
+		$this->syncNowPendingArchives = [];
+
+		foreach ($pending as $path) {
+			if ($this->davExists($path)) {
+				continue;
+			}
+			$this->syncNowAncestors($path);
+			$this->davPut($path, $this->syncNowArchive());
+		}
+	}
 }

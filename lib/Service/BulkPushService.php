@@ -153,31 +153,25 @@ final class BulkPushService {
 			return $nothing;
 		}
 
-		// STAMP THE ROOT FIRST, OR THE WHOLE RUN IS A SILENT NO-OP.
+		// THE ROOT IS ALREADY MARKED, and this used to stamp it here.
 		//
-		// `add-mapping` provisions the folder but does not MARK it — the only
-		// writer of `penpot_team_id` on a root is {@see PullService::pullOne()}. So
-		// on a mapping that has never been pulled, every file below resolves to
-		// `STATE_NONE` ({@see MembershipResolver}), `pushFile()` declines each one,
-		// and the push reports files processed and nothing pushed while doing
-		// exactly nothing. That is the FIRST thing a new mapping's admin would try:
-		// map a folder full of designs, press "Sync to Penpot".
+		// `penpot_team_id` on the root is what the nearest-ancestor walk starts
+		// from, so an unmarked root makes every file below resolve to no team and
+		// this whole run a silent no-op. That was true of a mapping nobody had
+		// pulled, because the pull was the only writer of it — which is a property
+		// of provisioning masquerading as a property of syncing.
 		//
-		// Written the same way and to the same value the pull writes it, so a pull
-		// afterwards is a no-op rather than a correction. INSIDE THE GUARD with
-		// everything else: a folder write fires the same events a person's would.
+		// Fixed where it belongs instead: {@see StorageService::ensureRoot()} marks
+		// the root, so the folder means something from the moment the mapping is
+		// saved. `findRoot()` above therefore answers an already-marked folder, and
+		// a push over a brand-new mapping works with no pull first.
 		$candidates = [];
 		$processed = 0;
 		$pushed = 0;
 		$failed = 0;
 		$errors = [];
 
-		$this->guard->run(function () use ($root, $mapping, &$candidates, &$processed, &$pushed, &$failed, &$errors): void {
-			$this->metadata->writeFolder(
-				$root->getId(),
-				[PenpotMetadata::KEY_TEAM_ID => $mapping->teamId],
-			);
-
+		$this->guard->run(function () use ($root, &$candidates, &$processed, &$pushed, &$failed, &$errors): void {
 			$this->collectPushable($root, $candidates, 0);
 
 			foreach ($candidates as $node) {

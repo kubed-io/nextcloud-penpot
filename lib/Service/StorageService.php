@@ -123,6 +123,7 @@ final class StorageService {
 		private readonly IGroupManager $groupManager,
 		private readonly IAppConfig $config,
 		private readonly IDBConnection $db,
+		private readonly PenpotMetadata $metadata,
 		private readonly LoggerInterface $logger,
 	) {
 	}
@@ -163,7 +164,8 @@ final class StorageService {
 			}
 			$name = $this->folderName($mapping);
 			$this->teamFolders->ensure($name, $wanted);
-			return $this->teamFolders->getWritableFolder($name);
+
+			return $this->marked($this->teamFolders->getWritableFolder($name), $mapping);
 		}
 
 		// Admin-owned backend.
@@ -182,6 +184,54 @@ final class StorageService {
 		if ($wanted !== null) {
 			$this->syncGroupShares($folder, $uid, $wanted);
 		}
+
+		return $this->marked($folder, $mapping);
+	}
+
+	/**
+	 * Stamp the root with the team it mirrors, and answer it.
+	 *
+	 * ## THE MARKER IS PART OF PROVISIONING, NOT PART OF SYNCING
+	 *
+	 * `penpot_team_id` on the root is what makes the folder MEAN something: it is
+	 * the top of the nearest-ancestor walk (§6.29), so until it is written every
+	 * node below resolves to no team at all. That is a property of the mapping
+	 * existing, not of a sync having happened — and it used to be written only by
+	 * {@see PullService::pullOne()}, which made it one.
+	 *
+	 * The consequences were real and both silent. A push over a mapping nobody had
+	 * pulled declined every file and reported "processed, nothing done"; and a
+	 * `.penpot` created in a freshly mapped folder was refused outright by
+	 * {@see MoveRules::refusalForCreating()}, because an unmarked folder is
+	 * indistinguishable from a folder outside every mapping. Both are the first
+	 * thing someone does with a new mapping.
+	 *
+	 * This is the same reasoning that already moved PROVISIONING here from the
+	 * first pull ({@see MappingService::add()}): a mapping is a folder that mirrors
+	 * a team, and it should be one the moment it is saved rather than the moment a
+	 * schedule next fires.
+	 *
+	 * IDEMPOTENT, like the rest of `ensureRoot()` — the pull still calls this every
+	 * run, where it now writes the value that is already there.
+	 */
+	private function marked(Folder $folder, Mapping $mapping): Folder {
+		try {
+			$this->metadata->writeFolder(
+				$folder->getId(),
+				[PenpotMetadata::KEY_TEAM_ID => $mapping->teamId],
+			);
+		} catch (\Throwable $e) {
+			// NEVER FATAL TO PROVISIONING. The folder is the thing the admin asked
+			// for and it exists; a marker that would not write is a degraded mapping
+			// the next pull repairs, not a reason to fail the save and leave them
+			// with nothing.
+			$this->logger->warning('penpot_sync: could not mark a mapping root with its team', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'exception' => $e,
+			]);
+		}
+
 		return $folder;
 	}
 
