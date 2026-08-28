@@ -156,10 +156,16 @@ trait WebDavTrait {
 		// suite is into free space, and a stray overwrite there would destroy the
 		// node it landed on without the scenario ever saying so.
 		//
-		// `T` is what the Files app sends by OMITTING the header, and it is the whole
-		// of the "keep the new version" answer to the conflict dialog — Sabre deletes
-		// the destination and then moves. Without it Sabre answers 412 Precondition
-		// Failed, which is what a MOVE onto an occupied path means.
+		// `T` IS WHAT THE ABSENCE OF THE HEADER MEANS, which is what the Files app
+		// relies on for the "keep the new version" answer: RFC 4918 defaults
+		// Overwrite to T, so a client that says nothing is asking for an overwrite.
+		// This sends it explicitly rather than omitting it — same request as far as
+		// Sabre is concerned, and it keeps the two answers symmetrical here instead
+		// of one being a header and the other being its absence.
+		//
+		// Either way Sabre deletes the destination and then moves. Without it the
+		// answer is 412 Precondition Failed, which is what a MOVE onto an occupied
+		// path means. Raised by Copilot on #52.
 		$res = $this->davClient()->request('MOVE', $this->davEncode($from), [
 			'headers' => ['Destination' => $dest, 'Overwrite' => $overwrite ? 'T' : 'F'],
 		]);

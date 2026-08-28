@@ -510,6 +510,30 @@ final class MotionServiceTest extends TestCase {
 	}
 
 	/**
+	 * A SOURCE INSIDE A MAPPING IS NOT AN ARRIVAL, even when its project cannot be
+	 * resolved. `sourceProject()` answers null for two unrelated reasons — the
+	 * source was outside every mapping, and the source was inside one whose Drafts
+	 * project the token could not see — and reading the second as an arrival would
+	 * IMPORT a file that never left, minting a new design and abandoning its
+	 * history because a lookup failed on our side. Raised by Copilot on #52.
+	 */
+	public function testAnUnresolvableSourceProjectIsNotTreatedAsAnArrival(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			// A team, but no project — and Drafts unreadable, so projectFor() is null.
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+		$this->client->method('getAllProjects')->willReturn([]);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_A, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
 	 * TWO FILES MAY NOT CLAIM ONE DESIGN — the "keep both versions" answer. The
 	 * Files app moves the arrival in under a free name, so both files land in the
 	 * mapping carrying one id. Reattaching would leave the state the pull's own

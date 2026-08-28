@@ -290,7 +290,15 @@ final class MotionService {
 		// park() writes, and it is right almost always — but a file that arrived in
 		// unmapped space some other way (copied there, uploaded with a stale id) may
 		// carry any mode at all, and it is the same arrival with the same question.
-		if ($from === null || $meta->isUnmapped()) {
+		//
+		// `sourceTeam()`, NOT `$from === null`. `sourceProject()` returns null for
+		// two unrelated reasons: the source was outside every mapping, and the source
+		// was inside one whose Drafts project the token could not see. Reading the
+		// second as an arrival would IMPORT a file that never left — minting a new
+		// design and abandoning the history — because a lookup failed on our side.
+		// The team is the honest question: no team above the source is the only thing
+		// that makes this an arrival. Raised by Copilot on #52.
+		if ($this->sourceTeam($source) === null || $meta->isUnmapped()) {
 			// The old design, if there ever was one, stays wherever it is. A parked
 			// one ages out of Penpot's trash on its own; a live one was never ours to
 			// touch. Either way this file is a new design from here on.
