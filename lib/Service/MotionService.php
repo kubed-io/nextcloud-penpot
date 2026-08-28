@@ -291,14 +291,24 @@ final class MotionService {
 		// unmapped space some other way (copied there, uploaded with a stale id) may
 		// carry any mode at all, and it is the same arrival with the same question.
 		//
-		// `sourceTeam()`, NOT `$from === null`. `sourceProject()` returns null for
-		// two unrelated reasons: the source was outside every mapping, and the source
-		// was inside one whose Drafts project the token could not see. Reading the
-		// second as an arrival would IMPORT a file that never left — minting a new
-		// design and abandoning the history — because a lookup failed on our side.
-		// The team is the honest question: no team above the source is the only thing
-		// that makes this an arrival. Raised by Copilot on #52.
-		if ($this->sourceTeam($source) === null || $meta->isUnmapped()) {
+		// THE SOURCE'S MEMBERSHIP STATE, and it took two goes to get right — both
+		// raised by Copilot on #52.
+		//
+		// `$from === null` was wrong because {@see DestinationResolver::projectFor()}
+		// answers null for two unrelated reasons: the source was outside every
+		// mapping, and the source was inside one whose Drafts project the token could
+		// not see. Reading the second as an arrival IMPORTS a file that never left —
+		// minting a design and abandoning its history — because a lookup failed on
+		// our side.
+		//
+		// `sourceTeam() === null` was wrong for a narrower reason: a PERSONAL project
+		// (§6.31) is a project id with NO team, so a file re-filed inside one has no
+		// team above it and had never left Penpot space at all.
+		//
+		// {@see Membership::belongsToPenpot()} is the question actually being asked —
+		// does the source resolve to any Penpot home, team or personal — and it is
+		// answered from folder markers alone, with no remote lookup that can fail.
+		if (!$this->sourceMembership($source)->belongsToPenpot() || $meta->isUnmapped()) {
 			// The old design, if there ever was one, stays wherever it is. A parked
 			// one ages out of Penpot's trash on its own; a live one was never ours to
 			// touch. Either way this file is a new design from here on.
@@ -739,13 +749,30 @@ final class MotionService {
 	 * the same reason {@see sourceProject()} is.
 	 */
 	private function sourceTeam(Node $source): ?string {
+		return $this->sourceMembership($source)->teamId;
+	}
+
+	/**
+	 * Where the node resolved BEFORE the move, from folder markers alone.
+	 *
+	 * NO REMOTE LOOKUP, which is the point: {@see sourceProject()} runs this through
+	 * {@see DestinationResolver::projectFor()} and can come back null because Penpot
+	 * could not be asked, while this can only come back {@see Membership::none()}
+	 * because the folders really say nothing. A question about what the tree says
+	 * must not be answerable by a network failure.
+	 *
+	 * An unreachable parent is `none()`, which reads as "outside every mapping" —
+	 * the same answer a deleted parent gives, and the conservative one for a source
+	 * that no longer exists.
+	 */
+	private function sourceMembership(Node $source): Membership {
 		try {
 			$parent = $source->getParent();
 		} catch (NotFoundException) {
-			return null;
+			return Membership::none();
 		}
 
-		return $this->resolver->resolve($parent)->teamId;
+		return $this->resolver->resolve($parent);
 	}
 
 	/**

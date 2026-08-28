@@ -534,6 +534,28 @@ final class MotionServiceTest extends TestCase {
 	}
 
 	/**
+	 * A PERSONAL PROJECT IS PENPOT SPACE TOO. §6.31's state is a project id with NO
+	 * team, so a file re-filed inside one has no team above it and never left — and
+	 * a check keyed on the team alone would import it, minting a design and
+	 * abandoning its history on an ordinary move. Raised by Copilot on #52, against
+	 * the fix for its own earlier finding.
+	 */
+	public function testAMoveOutOfAPersonalProjectIsNotTreatedAsAnArrival(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			// A project and no team: STATE_PERSONAL.
+			'oldParent' => new Membership(self::PROJECT_B, null),
+		]);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_A, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
 	 * TWO FILES MAY NOT CLAIM ONE DESIGN — the "keep both versions" answer. The
 	 * Files app moves the arrival in under a free name, so both files land in the
 	 * mapping carrying one id. Reattaching would leave the state the pull's own

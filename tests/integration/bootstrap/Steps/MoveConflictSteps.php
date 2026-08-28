@@ -138,10 +138,18 @@ trait MoveConflictSteps {
 		$name = basename($this->currentFilePath);
 		$dest = $this->conflictDestination . '/' . $name;
 
-		if ($answer !== 'both versions' && !$this->davExists($dest)) {
+		// EVERY ANSWER NEEDS THE COLLISION, including this one. `both versions` moves
+		// to a free name whether or not anything is in the way, so exempting it let a
+		// scenario that arranged no destination file take the branch anyway and land
+		// on ` (1)` — passing while modelling a dialog that would never have opened.
+		// The dialog appears only when the destination already exists; that is the
+		// premise of all three answers, not a property of two of them. Raised by
+		// Copilot on #52.
+		if (!$this->davExists($dest)) {
 			throw new \RuntimeException(
 				"there is no '{$name}' in {$this->conflictDestination} to collide with — "
-				. 'this scenario needs a conflict to answer',
+				. 'the conflict dialog only opens when the destination exists, so this '
+				. 'scenario is answering a question nobody was asked',
 			);
 		}
 
