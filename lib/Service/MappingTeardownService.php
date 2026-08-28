@@ -36,9 +36,9 @@ use Psr\Log\LoggerInterface;
  *     whose design left the mapping.
  *   - **an archive** — the design itself, and possibly the last copy of it in
  *     existence. It stays, and stops being a mirror: `penpot_mode` becomes
- *     `unmapped` and the team id is dropped, while the `penpot_id` stays so that
- *     re-mapping the team reattaches the same design rather than importing a
- *     second one.
+ *     `unmapped` and the team id is dropped. The `penpot_id` stays so a later
+ *     arrival can be told apart from a stranger's file — never to be reattached
+ *     to, since re-mapping imports what the file holds ({@see MotionService}).
  *
  * ## PENPOT IS NEVER CONTACTED, AND THAT IS A CONSTRAINT ON THE CODE
  *
@@ -217,10 +217,15 @@ final class MappingTeardownService {
 	/**
 	 * An archive with the mapping gone. Keep the file, drop the connection.
 	 *
-	 * THE `penpot_id` STAYS, and it is the whole reason this is an unmap rather
-	 * than a wipe: it is what lets re-mapping the team reattach this file to the
-	 * design it already holds, instead of importing a second copy of it
-	 * ({@see MotionService} does the same for a design that leaves by being moved).
+	 * THE `penpot_id` STAYS, but NOT as a claim on the design it names. Re-mapping
+	 * the team imports what this file holds and mints a fresh id, exactly as moving
+	 * one back into a mapping does ({@see MotionService::onMove()}) — the bytes here
+	 * are what the user has, so they are what must survive.
+	 *
+	 * It stays because a file carrying an id is distinguishable from one that was
+	 * never a mirror, which is what {@see MotionService::idIsSpokenFor()} reads to
+	 * stop two files claiming one design. An unmap is still not a wipe; the id
+	 * simply stopped meaning "reattach me".
 	 */
 	private function unmap(File $node): bool {
 		try {

@@ -158,9 +158,9 @@ Feature: Moving a design
     # A move is not a delete, and a trashed mirror would read as one. Nobody deleted
     # anything: Penpot still holds the design, in the team it was moved to.
 
-    # ── RULE: a duplicate arriving in a project keeps the id already there ────
-    # The person answers what the CONTENT should be; the identity is never theirs to pick.
-    # notes: ../AGENTS.md#a-duplicate-arriving-in-a-project-keeps-the-id-already-there
+    # ── RULE: a duplicate arriving in a project is answered by content ────────
+    # The person answers what the CONTENT should be; the identity follows from it.
+    # notes: ../AGENTS.md#a-duplicate-arriving-in-a-project-is-answered-by-content
 
   @in-nextcloud @gesture
   Scenario Outline: Keeping one version of a duplicate leaves one file and one design
