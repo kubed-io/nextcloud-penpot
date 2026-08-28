@@ -169,6 +169,38 @@ Feature: Moving a project
     # THE ID IS THE BEFORE AND AFTER. The new name says where the project belongs; the
     # id says which folder is already it. Ensure the destination, then move that folder.
 
+    # ── RULE: a project may move inside the folder it is named after ─────────
+    # notes: ../AGENTS.md#a-project-moving-into-a-folder-named-after-itself
+
+  @in-penpot @gesture
+  Scenario: Move a project in Penpot into a folder named after itself
+    Given the following items in the mappings:
+      | path                         |
+      | /Penpot/Bubbles/Alpha.penpot |
+    When someone renames that project to "Bubbles/foo" in Penpot
+    Then the mappings hold:
+      | path                             | identity        |
+      | /Penpot/Bubbles                  | absent          |
+      | /Penpot/Bubbles/foo              | the original id |
+      | /Penpot/Bubbles/foo/Alpha.penpot | the original id |
+
+    # "Bubbles" is still there and has stopped being the project — it is now the folder
+    # the project sits in, which is what its new name says.
+
+  @in-penpot @gesture
+  Scenario: Move a project in Penpot back out of the folder it is named after
+    Given the following items in the mappings:
+      | path                               |
+      | /Penpot/Wrapper/inner/Alpha.penpot |
+    When someone renames that project to "Wrapper" in Penpot
+    Then the mappings hold:
+      | path                         | identity        |
+      | /Penpot/Wrapper              | the original id |
+      | /Penpot/Wrapper/Alpha.penpot | the original id |
+
+    # The folder it leaves is the one it has to become, so the name has to be free by
+    # the time it lands on it — "Wrapper", never "Wrapper (2)".
+
     # ── RULE: what the old parent still holds decides whether it goes ─────────
     # notes: ../AGENTS.md#an-emptied-parent-is-reaped-only-when-it-holds-nothing-else
 
