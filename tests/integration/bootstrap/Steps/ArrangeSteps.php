@@ -282,6 +282,28 @@ trait ArrangeSteps {
 	}
 
 	/**
+	 * The Nextcloud folders that currently have a live mapping.
+	 *
+	 * Read from `list-mappings --json` rather than remembered, because the thing
+	 * that matters is what the APP believes right now — a mapping made by a
+	 * previous step in this same table counts, and one this trait never made counts
+	 * too.
+	 *
+	 * @return list<string>
+	 */
+	private function mappedFolders(): array {
+		$folders = [];
+		foreach ($this->mappings() as $mapping) {
+			$folder = $mapping['nc_folder'] ?? null;
+			if (is_string($folder) && $folder !== '') {
+				$folders[] = trim($folder, '/');
+			}
+		}
+
+		return $folders;
+	}
+
+	/**
 	 * Take everything out of a mapped folder, best effort.
 	 *
 	 * BEST EFFORT ON PURPOSE. This is housekeeping between scenarios, not a claim
@@ -310,12 +332,16 @@ trait ArrangeSteps {
 		// accumulates every scenario's leftovers, which is the `Pinned (1) (2) (3)`
 		// problem this function exists to prevent.
 		//
-		// Asking whether a mapping is live is the honest test, because that is
-		// exactly what makes the delete dangerous. {@see MappingSteps::armMappingReset()}
-		// unmaps before every scenario, so the first call in a scenario always
-		// clears; the ones that would cascade are the later rows of the same table,
-		// after this step has mapped something.
-		if ($this->mappingIds() !== []) {
+		// Asking whether THIS FOLDER is mapped is the honest test, because that is
+		// exactly what makes its delete dangerous. Any-mapping-at-all was the third
+		// wrong version: it skipped clearing `Shared` merely because `Penpot` had
+		// just been mapped by the row above, so leftovers accumulated again and
+		// `projects` reported `found: Drafts, Drafts, Existing, Drafts, ...`.
+		//
+		// {@see MappingSteps::armMappingReset()} unmaps before every scenario, so
+		// the first table row always clears; what this skips is re-emptying a folder
+		// THIS table has already mapped, which is where the cascade lived.
+		if (in_array($folder, $this->mappedFolders(), true)) {
 			return;
 		}
 
