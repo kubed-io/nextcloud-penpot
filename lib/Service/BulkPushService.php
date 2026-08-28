@@ -135,9 +135,14 @@ final class BulkPushService {
 	/**
 	 * One mapping's archives.
 	 *
+	 * PRIVATE, unlike the sibling's equivalent: every caller reaches the push
+	 * through {@see push()}, which is where the per-mapping filter lives. A public
+	 * second door would be a second answer to "what does a push do", and the two
+	 * would drift.
+	 *
 	 * @return array{processed:int, pushed:int, failed:int, skipped:int, error:?string}
 	 */
-	public function pushOne(Mapping $mapping): array {
+	private function pushOne(Mapping $mapping): array {
 		$nothing = ['processed' => 0, 'pushed' => 0, 'failed' => 0, 'skipped' => 0, 'error' => null];
 
 		// THE WHOLE POINT OF THE `skipped` COUNTER. A link mapping is not an error

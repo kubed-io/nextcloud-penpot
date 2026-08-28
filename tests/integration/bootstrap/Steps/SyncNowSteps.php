@@ -85,25 +85,24 @@ trait SyncNowSteps {
 	 * there" is testing that the app skips an empty file. Everything else is a
 	 * plain folder (no extension) or an ordinary file.
 	 *
-	 * ## EVERY ROW IS DEFERRED, NOT JUST THE ARCHIVES
+	 * ## THE ROWS ARE RECORDED HERE AND WRITTEN AT SYNC TIME
 	 *
 	 * This step runs BEFORE `the following mappings were made` — the Background is
-	 * a picture of the pre-state, and both siblings order it that way. Writing the
-	 * files here is what does not survive, for two separate reasons:
+	 * a picture of the pre-state, and both siblings order it that way. But nothing
+	 * is mapped yet when it runs, and the `.penpot` row cannot be written without a
+	 * mapping: real archive bytes can only be OBTAINED by exporting a design, and a
+	 * design can only be born inside a mapped folder (an empty one created anywhere
+	 * else is refused by {@see \OCA\PenpotSync\Service\MoveRules}, correctly —
+	 * `create-file` needs a project).
 	 *
-	 *   - {@see ArrangeSteps::theFollowingMappingsWereMade()} UNMAPS FIRST ("unmap
-	 *     before touching any content"), and since `remove-mapping` learned to tear
-	 *     down a mapping's mirrors, that teardown deletes whatever this step has
-	 *     already put inside the folder. `notes.txt` and `plan.txt` disappeared out
-	 *     of a Background that had just created them. Grafana's twin does not unmap,
-	 *     which is why the identical Gherkin is safe there and destructive here.
-	 *   - a real `.penpot` can only be OBTAINED by exporting a design, and a design
-	 *     can only be born inside a mapped folder.
+	 * {@see ArrangeSteps::theFollowingMappingsWereMade()} also EMPTIES each mapped
+	 * folder, which used to delete these rows out from under the Background. That
+	 * is fixed at the source now (the emptying is latched per scenario, as the
+	 * unmap already was), so this deferral carries only the archive's weight.
 	 *
-	 * So the whole table is recorded and replayed at the START OF THE SYNC, by which
-	 * time the mappings exist and nothing further will tear them down. The pre-state
-	 * the scenario describes is true when the scenario acts, which is all a
-	 * Background claims.
+	 * So the table is recorded and replayed at the START OF THE SYNC, by which time
+	 * the mappings exist. The pre-state the scenario describes is true when the
+	 * scenario acts, which is all a Background claims.
 	 *
 	 * @Given /^Nextcloud holds these resources:$/
 	 */

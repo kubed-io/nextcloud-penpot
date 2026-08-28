@@ -4401,6 +4401,25 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
+### The Background is this feature's fixture, and that made it the canary
+
+Ten feature files use `the following mappings were made` inside a Scenario Outline
+and pass. This one did not, and the difference is where the content lives: their
+scenarios seed their own fixtures per row, while here the BACKGROUND holds
+everything the assertion checks.
+
+`theFollowingMappingsWereMade()` empties each mapped folder, and that emptying was
+not latched the way its unmap already was — so on the SECOND Examples row it ran
+again with the first row's mappings still live, and a delete inside a live mapping
+is a gesture the app carries into Penpot. It emptied the folder and trashed the
+designs the folder mirrored: `Gizmo` and `Doohickey` vanished out of Design Team
+between one row and the next.
+
+Fixed at the source — the emptying is now once per scenario, like the unmap — so
+every outline gets it, not just this file. Grafana never hit this because its twin
+does not empty at all; the emptying is a penpot addition, and outlines are where
+it bit.
+
 ### RETIRED — six scenarios, and what happened to each
 
 | scenario | why it went |

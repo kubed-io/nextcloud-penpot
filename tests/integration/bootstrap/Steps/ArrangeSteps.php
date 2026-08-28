@@ -74,6 +74,13 @@ trait ArrangeSteps {
 	private array $mappingModes = [];
 
 	/**
+	 * Mapped folders this scenario has already emptied — see {@see emptyMappedFolder()}.
+	 *
+	 * @var array<string, true>
+	 */
+	private array $emptiedFolders = [];
+
+	/**
 	 * The Penpot team id behind each mapped folder.
 	 *
 	 * NEEDED BECAUSE "THAT TEAM" IS AMBIGUOUS BY THE TIME AN ITEM IS SEEDED. The
@@ -166,6 +173,7 @@ trait ArrangeSteps {
 
 	/** @BeforeScenario */
 	public function armArrange(): void {
+		$this->emptiedFolders = [];
 		$this->mappingModes = [];
 		$this->mappingTeamIds = [];
 		$this->mappingTeamNames = [];
@@ -290,8 +298,27 @@ trait ArrangeSteps {
 	 * which is the failure worth reading. The residue it removes is only ever a
 	 * problem for the NEXT scenario, so silence here costs nothing that is not
 	 * already visible there.
+	 *
+	 * ## ONCE PER SCENARIO, AND THAT IS LOAD-BEARING FOR EVERY OUTLINE
+	 *
+	 * The unmap above is latched by `$mappingsDeclared`; this was not, so it ran
+	 * again on the SECOND Examples row of an outline — by which time the mappings
+	 * from the first row are live, and a delete inside a live mapping is a gesture
+	 * {@see \OCA\PenpotSync\Listener\DeleteListener} carries into Penpot. It
+	 * emptied the folder AND trashed the designs the folder mirrored.
+	 *
+	 * Ten feature files survive that because their rows seed their own fixtures
+	 * per scenario; it only bites where the BACKGROUND holds the content the
+	 * assertion needs, which is `connection/sync-now.feature`. The cure is the
+	 * latch the unmap already has — housekeeping belongs to the scenario, not to
+	 * each row of its table.
 	 */
 	private function emptyMappedFolder(string $folder): void {
+		if (isset($this->emptiedFolders[$folder])) {
+			return;
+		}
+		$this->emptiedFolders[$folder] = true;
+
 		try {
 			if (!$this->davExists($folder)) {
 				return;
