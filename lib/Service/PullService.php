@@ -48,16 +48,42 @@ use Psr\Log\LoggerInterface;
  *
  * ## DELIBERATELY DEFERRED IN THIS INCREMENT (documented, not forgotten)
  *
- *   - **The project-folder visible tag** (§6.32) — the human pill. Metadata is
- *     written now; the systemtag lands with the Files-app surface.
+ *   - **The project-folder visible tag** (§6.32) — WITHDRAWN, not deferred. See
+ *     {@see ensureProjectFolder()}: the pull marks a project folder with metadata
+ *     and nothing else.
  *   - **Adopting a mirror out of the Nextcloud trash** (§6.37) — a design that
  *     comes back is still re-created beside its trashed mirror rather than matched
  *     to it by `penpot_id`. The trash is READABLE now ({@see TrashControl}), so
  *     this is a fork rather than a wall: the n8n sibling's reconcile restores as
  *     well as reaps, and no scenario asks for the other half yet. Untidy, not lossy.
- *   - **The `/` guard as a reported skip** (§6.51) — a project or file whose
- *     Penpot name contains `/` (illegal as a single Nextcloud node name) is
- *     skipped and logged here; Course 4 turns that into the user-facing report.
+ *   - **The `/` guard as a reported skip** (§6.51) — a FILE whose Penpot name
+ *     contains `/` is skipped and logged here, and Course 4 turns that into the
+ *     user-facing report. A file is ONE node and no amount of nesting can express
+ *     a slash inside its name, so that guard is permanent. A PROJECT's name is a
+ *     PATH and is no longer guarded at all — see below.
+ *
+ * ## A PROJECT'S NAME IS A PATH, IN BOTH DIRECTIONS (§C6.38)
+ *
+ * {@see PushService} has always renamed a Penpot project to its path below the
+ * mapping when its folder moves — dragging `Penpot/Traveller` into
+ * `Penpot/Clients` names the project `Clients/Traveller`, because the bare name
+ * cannot express where it went. The pull did not read that back: it rejected any
+ * name holding a `/` as an illegal node name and skipped the project entirely.
+ *
+ * So the app WROTE names it then REFUSED TO READ, and the cost was not just the
+ * unmirrored project. A skipped project clears `$complete`, which switches off
+ * the prune AND {@see reapOrphanProjects()} for the whole mapping — so a single
+ * nested project silently disabled every reconciliation that mapping had, for
+ * good. Measured live: a project renamed to `Bubbles/foo` in Penpot produced no
+ * folder, moved no design, and stopped its mapping pruning.
+ *
+ * A slash is therefore a LEVEL, not an illegal character. The path is provisioned
+ * ({@see ensureFolderPath()}), the project folder is moved to the end of it
+ * ({@see tryMoveProject()}), and the empty scaffolding a project moves out of is
+ * cleared behind it ({@see tidy()}). Only the LAST segment is the project folder;
+ * everything above it is an ordinary folder carrying no markers, which is exactly
+ * what a hand-made `Clients/` folder is and what {@see MembershipResolver}'s
+ * nearest-ancestor walk already expects.
  *
  * ## THE PRUNE, AND WHY IT IS GATED ON A COMPLETE LISTING (saga §6.25)
  *
@@ -66,9 +92,10 @@ use Psr\Log\LoggerInterface;
  * team, and **only when every project in that team listed cleanly** — a failed,
  * partial, or skipped listing is indistinguishable from "everything was deleted",
  * and reading a network blip as evidence that a user's files are gone is the one
- * mistake this app must never make. Skipping is therefore *not* free: a project
- * passed over for an illegal name takes the whole prune down with it, because its
- * files are exactly as unseen as deleted ones.
+ * mistake this app must never make. Skipping is therefore *not* free: anything
+ * passed over — a project Penpot named with no id, one whose folder would not
+ * provision, a file with no id — takes the whole prune down with it, because
+ * those files are exactly as unseen as deleted ones.
  *
  * ## THE FINAL SNAPSHOT (saga §6.42/§6.46)
  *
@@ -99,8 +126,10 @@ final class PullService {
 	public const EXTENSION = '.penpot';
 
 	/**
-	 * A ceiling on {@see orphanProjectFolders()}'s descent, mirroring the seatbelts
-	 * in {@see MembershipResolver}, {@see DeletionService} and {@see PushService}.
+	 * A ceiling on every descent and every nested path here — {@see indexProjectFolders()},
+	 * {@see orphanProjectFolders()}, {@see tidy()} and the segment count a project
+	 * name may have — mirroring the seatbelts in {@see MembershipResolver},
+	 * {@see DeletionService} and {@see PushService}.
 	 */
 	private const MAX_DEPTH = 100;
 
@@ -210,8 +239,8 @@ final class PullService {
 					$target = $root;
 					if (!$this->isDefaultProject($project)) {
 						$projectName = $this->str($project, 'name');
-						if (!$this->isLegalName($projectName)) {
-							$this->logger->warning('penpot_sync pull: skipping project with an illegal folder name', [
+						if (!$this->isLegalProjectName($projectName)) {
+							$this->logger->warning('penpot_sync pull: skipping project with an illegal folder path', [
 								'app' => Application::APP_ID,
 								'project' => $projectId,
 								'name' => $projectName,
@@ -220,11 +249,30 @@ final class PullService {
 							// A SKIPPED PROJECT IS AN INCOMPLETE LISTING. Its files were
 							// never enumerated, so they are indistinguishable from files
 							// Penpot no longer has — and pruning them would delete a whole
-							// project's mirrors over a slash in a name.
+							// project's mirrors over one unusable name.
 							$complete = false;
 							continue;
 						}
-						$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName, $project);
+
+						try {
+							$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName, $project);
+						} catch (\Throwable $e) {
+							// ONE PROJECT'S FOLDER FAILING IS ONE SKIPPED PROJECT, not a dead
+							// mapping. Provisioning a project now walks and creates a PATH, so
+							// it has more ways to fail than `newFolder()` did — a file standing
+							// where a parent belongs, a quota, a permission — and letting any
+							// of them out of this loop would abandon every project after it in
+							// the listing. Recorded as a skip, which is what it is.
+							$this->logger->warning('penpot_sync pull: could not provision a project folder', [
+								'app' => Application::APP_ID,
+								'project' => $projectId,
+								'name' => $projectName,
+								'exception' => $e,
+							]);
+							$skipped++;
+							$complete = false;
+							continue;
+						}
 						$folders++;
 					}
 
@@ -365,22 +413,23 @@ final class PullService {
 	 * Find (by `penpot_project_id`) or create the folder for a project under the
 	 * team root, and (re)stamp its markers. A rename upstream renames the folder.
 	 *
-	 * ## TWO MARKERS, ONE MACHINE-READABLE AND ONE HUMAN-READABLE
+	 * ## ONE MARKER, AND IT IS `penpot_project_id`
 	 *
-	 * `penpot_project_id` is authoritative — it is what {@see MembershipResolver}
-	 * reads and what every other feature defers to. The `penpot` TAG is the same
-	 * fact made visible in the Files app, and it is stamped here so that the two
-	 * directions share ONE marker (§C6.18):
+	 * The pull used to also stamp a `penpot` SYSTEM TAG on every folder it mirrored
+	 * — "the same fact made visible in the Files app". It no longer does, and the
+	 * tag was never what decided anything: {@see MembershipResolver} has only ever
+	 * read the id, and `ProjectTags::isTagged()` had no callers at all.
 	 *
-	 *   a project mirrored FROM Penpot   → tagged here
-	 *   a folder opted IN from Nextcloud → tagged by the user, which is the opt-in
+	 * It was the last remnant of a withdrawn design in which the tag was what MADE
+	 * a folder a project. §C6.38 replaced that with promotion by content, and once
+	 * the tag stopped being the opt-in there was no reason for the pull to keep
+	 * writing it — a second marker that some code has to remember to keep in step
+	 * with the first, saying nothing the first does not.
 	 *
-	 * A user cannot tell, and should not have to, which way round a given project
-	 * folder came about. Both carry the tag; both are projects.
-	 *
-	 * Tagging is idempotent and this runs on every pull, which is deliberate: a
-	 * folder whose tag someone removed gets it back on the next run, because the
-	 * project id — the thing that actually decides — never went anywhere.
+	 * `nextcloud-grafana` settles it. Grafana mirrors real folders exactly as this
+	 * does, syncs tags in `tag-sync.feature`, and puts NO marker tag on a mirrored
+	 * folder: *"there is no tagging scheme to maintain for placement"*. Same shape,
+	 * same answer.
 	 *
 	 * ## THE FOLDER GETS ITS CREATION TIME AND NOT ITS MTIME
 	 *
@@ -392,46 +441,322 @@ final class PullService {
 	 * this project changed", while Penpot's project `modified-at` only moves on a
 	 * rename. See {@see MirrorTimes} for the measurements.
 	 *
+	 * ## `$name` IS A PATH, AND ONLY ITS LAST SEGMENT IS THE PROJECT FOLDER
+	 *
+	 * `Bubbles/foo` means an ordinary folder `Bubbles` holding the project folder
+	 * `foo` — the exact shape {@see PushService} names when someone drags a project
+	 * folder into another folder. The parents are provisioned as bare folders and
+	 * carry no markers, because they are not projects and nothing may read them as
+	 * one; only the leaf is stamped.
+	 *
+	 * THE ID STILL DECIDES, which is what makes a re-name cheap. An existing folder
+	 * is found by `penpot_project_id` wherever it currently sits and MOVED to the
+	 * new path ({@see tryMoveProject()}) — never re-created, so its designs, its
+	 * user files and its history all travel with it.
+	 *
 	 * @param array<string, Folder> $folderIndex penpot_project_id -> folder, built once by the caller
 	 * @param array<string, mixed> $project the Penpot project record (carries `created-at`)
 	 */
 	private function ensureProjectFolder(Folder $root, array $folderIndex, string $projectId, string $name, array $project = []): Folder {
+		$segments = self::segments($name);
+		$leaf = array_pop($segments); // and what is left of $segments is the parents
+		if ($leaf === null) {
+			// Unreachable behind isLegalProjectName(), which is exactly why it is a
+			// throw and not a fallback: a nameless project silently mirrored to some
+			// invented folder is worse than one skipped and logged.
+			throw new \RuntimeException('A project name resolved to no path segments at all');
+		}
+
 		$existing = $folderIndex[$projectId] ?? null;
 		if ($existing !== null) {
-			$this->tryRename($existing, $root, $name);
+			$this->tryMoveProject($existing, $root, $segments, $leaf);
 			$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
-			$this->tagProject($existing);
 			$this->times->apply($existing, null, MirrorTimes::parse($project['created-at'] ?? null));
 			return $existing;
 		}
 
 		// No folder yet carries this project id. Adopt a same-named folder if one
 		// happens to sit there (a first pull over a hand-made tree), else create.
-		$adopt = $root->nodeExists($name) ? $root->get($name) : null;
-		$folder = $adopt instanceof Folder ? $adopt : $root->newFolder($this->freeName($root, $name));
+		//
+		// ONLY A **BARE** ONE. A folder already carrying markers belongs to something
+		// — another project, or the mapping root itself — and adopting it would
+		// re-stamp it with THIS project's id, quietly handing one project's folder,
+		// designs and history to another. Two Penpot projects are allowed to share a
+		// name (§31), so the answer there is a free name, not a theft. Raised by
+		// Copilot on #50.
+		$parent = $this->ensureFolderPath($root, $segments);
+		$adopt = $parent->nodeExists($leaf) ? $parent->get($leaf) : null;
+		$bare = $adopt instanceof Folder && $this->metadata->readFolder($adopt->getId())->isBare();
+		$folder = $bare && $adopt instanceof Folder ? $adopt : $parent->newFolder($this->freeName($parent, $leaf));
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
-		$this->tagProject($folder);
 		$this->times->apply($folder, null, MirrorTimes::parse($project['created-at'] ?? null));
 		return $folder;
 	}
 
 	/**
-	 * Mark a project folder with the `penpot` tag, never at the cost of the pull.
+	 * Every folder on the way down to a project, created as it goes.
 	 *
-	 * The tag is decoration over an authoritative id, so a tag backend that is
-	 * unhappy must not be able to fail a mirror run that has otherwise worked.
-	 * The folder is still a project; it is simply not wearing its badge yet, and
-	 * the next pull tries again.
+	 * THEY ARE NOT PROJECTS AND ARE NOT MARKED AS ANY. A parent segment is
+	 * scaffolding — the same thing a user's hand-made `Clients/` folder is — and
+	 * {@see MembershipResolver} walking up past it to find the real markers is the
+	 * behaviour that makes free nesting work at all. Stamping them would make every
+	 * intermediate folder claim a project it is not.
+	 *
+	 * ## A FILE IN THE WAY IS A REFUSAL, NOT A RENAME
+	 *
+	 * Everywhere else here a name collision takes {@see freeName()} and moves on.
+	 * Not here: mirroring the project under `foo (2)/` would put it at a path Penpot
+	 * never named, and the NEXT pull would find neither `foo` nor the project's
+	 * folder and do it again one suffix higher, forever. Throwing lands in the
+	 * caller's skip arm, which leaves the project unmirrored and visible in the log
+	 * — a fixable state instead of a growing pile.
+	 *
+	 * ## A FAILED PATH LEAVES NOTHING BEHIND
+	 *
+	 * `Clients/foo/bar` can create `Clients` and `foo` and only then discover that
+	 * `bar` is a file. Without a rollback the project is skipped — correctly — and
+	 * two empty folders nobody asked for stay in the user's tree, with nothing that
+	 * ever looks at them again: {@see tidy()} only runs behind a move that
+	 * happened, and the orphan reap only considers folders carrying a project id.
+	 * So this undoes exactly what it made, deepest first, and only while still
+	 * empty. Best-effort: a folder that will not go is left, which is no worse than
+	 * not trying. Raised by Copilot on #50.
+	 *
+	 * @param list<string> $segments
+	 *
+	 * @throws \RuntimeException when a file occupies one of the names
 	 */
-	private function tagProject(Folder $folder): void {
+	private function ensureFolderPath(Folder $root, array $segments): Folder {
+		$parent = $root;
+		/** @var list<Folder> $created */
+		$created = [];
+
 		try {
-			$this->tags->apply($folder->getId());
+			foreach ($segments as $segment) {
+				$node = $parent->nodeExists($segment) ? $parent->get($segment) : null;
+				if ($node instanceof Folder) {
+					$parent = $node;
+					continue;
+				}
+				if ($node !== null) {
+					throw new \RuntimeException(sprintf('"%s" is a file, so a project cannot be nested under it', $node->getPath()));
+				}
+				$parent = $parent->newFolder($segment);
+				$created[] = $parent;
+			}
 		} catch (\Throwable $e) {
-			$this->logger->warning('penpot_sync pull: could not tag a project folder', [
+			$this->rollBack($created);
+
+			throw $e;
+		}
+
+		return $parent;
+	}
+
+	/**
+	 * Undo the folders {@see ensureFolderPath()} made before it failed.
+	 *
+	 * DEEPEST FIRST, so each one is empty by the time it is reached, and ONLY while
+	 * still empty — a folder that somehow acquired contents between being made and
+	 * this running is no longer ours to remove. Nothing here throws: this is the
+	 * cleanup on a path that is already failing, and a second failure must not
+	 * replace the exception the caller needs to see.
+	 *
+	 * @param list<Folder> $created
+	 */
+	private function rollBack(array $created): void {
+		foreach (array_reverse($created) as $folder) {
+			try {
+				if ($folder->getDirectoryListing() !== []) {
+					return;
+				}
+				$folder->delete();
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync pull: could not remove a folder made for a project that could not be provisioned', [
+					'app' => Application::APP_ID,
+					'folder' => $folder->getPath(),
+					'exception' => $e,
+				]);
+
+				return;
+			}
+		}
+	}
+
+	/**
+	 * Put a project folder where its Penpot name says it belongs.
+	 *
+	 * SEPARATE FROM {@see tryRename()} BECAUSE THE TARGET IS A PATH. `tryRename()`
+	 * compares one name against one name and moves within a fixed parent; a project
+	 * can change parent, gain a level or lose one without its own last segment
+	 * changing at all, and none of that is expressible as a rename.
+	 *
+	 * ## THE TWO PATHS OVERLAP MORE OFTEN THAN THEY LOOK LIKE THEY WOULD
+	 *
+	 * `Bubbles` becoming `Bubbles/foo` asks a folder to be moved INSIDE ITSELF, and
+	 * `Bubbles/foo` going back to `Bubbles` asks it to take the name its own parent
+	 * is using. No filesystem will do either, and both are one Penpot rename away
+	 * from any nested project. So when the old path and the new one are
+	 * ancestor-and-descendant, the folder steps aside to a parked name under the
+	 * root first — which also lets {@see tidy()} clear the ground it just vacated,
+	 * so the second case does not collide with the empty shell of the first.
+	 *
+	 * A PARK THAT IS NEVER FOLLOWED BY ITS MOVE SELF-HEALS: the folder still carries
+	 * its project id, so the next pull finds it by id, sees a path that no longer
+	 * overlaps, and moves it home in one step.
+	 *
+	 * Best-effort like {@see tryRename()}: a move that will not go is logged and the
+	 * folder keeps its old place rather than the whole pull failing over it.
+	 *
+	 * @param list<string> $segments the folders ABOVE the project, without the leaf
+	 */
+	private function tryMoveProject(Folder $node, Folder $root, array $segments, string $leaf): void {
+		$base = rtrim($root->getPath(), '/');
+		$wanted = $base . '/' . implode('/', [...$segments, $leaf]);
+		$here = $node->getPath();
+
+		if ($here === $wanted) {
+			return;
+		}
+
+		$slash = strrpos($here, '/');
+		$hereParent = $slash === false ? '' : substr($here, 0, $slash);
+		$wantedParent = $segments === [] ? $base : $base . '/' . implode('/', $segments);
+
+		try {
+			$from = $node->getParent();
+
+			// THE NAME IS TAKEN AND THE FOLDER IS ALREADY ON A SETTLED FORM OF IT — IT STAYS.
+			//
+			// Two Penpot projects may share a name (§31), and a user's own file may sit
+			// on the one this project wants. Taking a free name here would rename
+			// `Cogs (2)` to `Cogs (3)` on this pull and `Cogs (4)` on the next, forever:
+			// the wanted name never frees up, and the suffix is computed against a
+			// listing that includes this very node. Staying put is stable, and the ID —
+			// never the name — is what anything reading this folder goes by.
+			//
+			// `isVariantOf()` IS WHAT KEEPS IT FROM STRANDING A PARKED FOLDER. Without
+			// it this arm fires on ANY name in the right parent, `.penpot-moving-21`
+			// included — so a park whose second move failed, and whose unpark failed
+			// too, would be answered with "you are already where you belong" on every
+			// pull afterwards and keep the temporary name for good. That is the exact
+			// opposite of the self-healing this class promises. Both halves raised by
+			// Copilot on #50.
+			if ($wantedParent === $hereParent && $from->nodeExists($leaf) && self::isVariantOf($node->getName(), $leaf)) {
+				return;
+			}
+
+			if (str_starts_with($wanted . '/', $here . '/') || str_starts_with($here . '/', $wanted . '/')) {
+				$node->move($base . '/' . $this->freeName($root, '.penpot-moving-' . $node->getId()));
+				$this->tidy($from, $root);
+				$from = $root;
+			}
+
+			$parent = $this->ensureFolderPath($root, $segments);
+			$node->move($parent->getPath() . '/' . ($parent->nodeExists($leaf) ? $this->freeName($parent, $leaf) : $leaf));
+			$this->tidy($from, $root);
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: could not move a project folder to follow its Penpot name', [
 				'app' => Application::APP_ID,
-				'folder' => $folder->getPath(),
+				'from' => $here,
+				'to' => $wanted,
 				'exception' => $e,
 			]);
+			$this->unpark($node, $here);
+
+			return;
+		}
+
+		$this->logger->info('penpot_sync pull: moved a project folder to follow its Penpot name', [
+			'app' => Application::APP_ID,
+			'from' => $here,
+			'to' => $node->getPath(),
+		]);
+	}
+
+	/**
+	 * Put a parked folder back when the move it stepped aside for did not happen.
+	 *
+	 * A PARK IS ONLY EVER HALF A MOVE, and the half that fails is the second one —
+	 * so without this a folder could be left sitting at `.penpot-moving-…` because
+	 * a quota or a permission stopped its real destination from being made. Moving
+	 * it back is the cheap, obvious repair.
+	 *
+	 * WHEN THE REPAIR ITSELF FAILS THE PARK IS STILL SURVIVABLE, which is why this
+	 * swallows too: the folder kept its `penpot_project_id`, so the next pull finds
+	 * it by id at its parked path, sees a path that no longer overlaps its
+	 * destination, and moves it home in one step with no park at all.
+	 */
+	private function unpark(Folder $node, string $here): void {
+		if ($node->getPath() === $here) {
+			return;
+		}
+
+		try {
+			$node->move($here);
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync pull: a project folder is parked mid-move; the next pull will place it', [
+				'app' => Application::APP_ID,
+				'parked' => $node->getPath(),
+				'was' => $here,
+				'exception' => $e,
+			]);
+		}
+	}
+
+	/**
+	 * Clear the empty scaffolding a project moved out of, walking up to the root.
+	 *
+	 * ONLY EMPTY, ONLY BARE, NEVER THE ROOT. A folder still holding anything is
+	 * somebody's — a user's spreadsheet is reason enough for it to exist — and one
+	 * carrying a project or team id is a mirror in its own right, which
+	 * {@see reapOrphanProjects()} decides the fate of and this must not pre-empt.
+	 * What is left is exactly the scaffolding {@see ensureFolderPath()} puts up,
+	 * which would otherwise leave one dead empty folder behind per nested rename.
+	 *
+	 * It goes to the TRASH, like every folder this app removes; a folder that will
+	 * not go is logged and left standing.
+	 *
+	 * ## NOTHING HERE THROWS, AND THE WHOLE BODY IS INSIDE THE TRY FOR THAT REASON
+	 *
+	 * The marker read used to sit outside it, which made the claim false in the one
+	 * way that mattered: this runs from {@see tryMoveProject()}'s try block AFTER a
+	 * move has already succeeded, so a Files-Metadata failure here would land in
+	 * that catch and {@see unpark()} would UNDO a good move — a storage hiccup while
+	 * sweeping up turning into a folder yanked back to where it no longer belongs.
+	 * Raised by Copilot on #50.
+	 */
+	private function tidy(Folder $folder, Folder $root): void {
+		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
+			$path = '';
+			try {
+				if ($folder->getId() === $root->getId()) {
+					return;
+				}
+				$path = $folder->getPath();
+				if (!$this->metadata->readFolder($folder->getId())->isBare()) {
+					return;
+				}
+				if ($folder->getDirectoryListing() !== []) {
+					return;
+				}
+				$parent = $folder->getParent();
+				$folder->delete();
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync pull: could not clear an empty folder a project moved out of', [
+					'app' => Application::APP_ID,
+					'folder' => $path,
+					'exception' => $e,
+				]);
+
+				return;
+			}
+
+			$this->logger->info('penpot_sync pull: cleared the empty folder a project moved out of', [
+				'app' => Application::APP_ID,
+				'folder' => $path,
+			]);
+			$folder = $parent;
 		}
 	}
 
@@ -880,19 +1205,18 @@ final class PullService {
 	 * DESCENDS PAST A PROJECT FOLDER, unlike {@see indexProjectFolders()} which
 	 * reads the root's direct children only.
 	 *
-	 * NOT because the pull nests them — it cannot: {@see isLegalName()} rejects a
-	 * `/`, so a project named `foo/bar` is skipped rather than mirrored two levels
-	 * down. (An earlier draft of this docblock said the opposite; caught by Copilot
-	 * on #47.) They arrive from the NEXTCLOUD side: a project folder made inside
-	 * another folder is a project whose Penpot name is its path (§C6.38), which
-	 * `projects/delete.feature` spells out as `/Penpot/foo/bar`. Deleted in Penpot,
-	 * one of those is as orphaned as any other, and a scan of the root's children
-	 * would never see it.
+	 * A nested project arrives from either side now. From NEXTCLOUD: a project
+	 * folder made inside another folder is a project whose Penpot name is its path
+	 * (§C6.38), which `projects/delete.feature` spells out as `/Penpot/foo/bar`.
+	 * And from PENPOT: {@see ensureProjectFolder()} provisions exactly that path
+	 * when a project is named `foo/bar` upstream. Deleted in Penpot, one of those
+	 * is as orphaned as any other, and a scan of the root's children would never
+	 * see it.
 	 *
-	 * WORTH KNOWING, AND NOT FIXED HERE: the same `isLegalName()` rule means a
-	 * mapping holding such a project has `$complete = false` on every pull, so the
-	 * prune and this reap are both switched off for it — a pre-existing hole this
-	 * change inherits rather than opens.
+	 * (An earlier draft of this docblock said the pull nests them, was corrected on
+	 * #47 to say it cannot, and is now back to the first answer — because the code
+	 * changed underneath it, not because the reading did. The skip that made the
+	 * correction true is gone.)
 	 *
 	 * @param array<string, true> $named
 	 *
@@ -972,10 +1296,10 @@ final class PullService {
 			}
 
 			$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => '']);
-			// THE TAG COMES OFF WITH THE ID, or the folder still reads as a project to
-			// every human looking at it — and worse, {@see ProjectFolderService} treats
-			// the tag as the opt-in that MAKES one, so a folder left wearing it is a
-			// folder waiting to be adopted back into a project it is not.
+			// AND ANY TAG COMES OFF WITH THE ID. The pull never puts one on, but a user
+			// may have — that is the opt-in {@see ProjectFolderService::onTagged()}
+			// answers — and a folder left wearing it after its project died is a folder
+			// waiting to be adopted back into a project that no longer exists.
 			$this->tags->remove($folder->getId());
 			$this->logger->info('penpot_sync pull: a project was deleted in Penpot; its folder kept the other files and stopped being a project', [
 				'app' => Application::APP_ID,
@@ -1094,11 +1418,29 @@ final class PullService {
 
 	/**
 	 * Index a team root's project folders by their `penpot_project_id` in a
-	 * single directory walk, so a pull is O(children) not O(projects × children).
+	 * single tree walk, so a pull is O(nodes) not O(projects × nodes).
+	 *
+	 * ## IT DESCENDS, AND IT HAS TO
+	 *
+	 * A project's name is a path, so a project folder can sit at any depth — and
+	 * this index is the ONLY thing that says "we already have a folder for this
+	 * project". Reading the root's direct children only, as this did, meant a
+	 * nested project was invisible here and a SECOND folder was created for it at
+	 * the root on every pull, each one stamped with the same project id.
+	 *
+	 * It does NOT stop at a project folder, unlike {@see indexFilesByPenpotId()}.
+	 * That one stops because a nearer project ancestor OWNS the files below it;
+	 * this one is asking a different question — where is the folder for each id —
+	 * and `Clients/Traveller` under a `Clients` that is itself a project is a
+	 * perfectly legal answer.
 	 *
 	 * @return array<string, Folder> penpot_project_id -> folder (last wins on the impossible dup)
 	 */
-	private function indexProjectFolders(Folder $root): array {
+	private function indexProjectFolders(Folder $root, int $depth = 0): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
 		$index = [];
 		foreach ($root->getDirectoryListing() as $node) {
 			if (!$node instanceof Folder) {
@@ -1108,6 +1450,7 @@ final class PullService {
 			if ($projectId !== '') {
 				$index[$projectId] = $node;
 			}
+			$index = array_replace($index, $this->indexProjectFolders($node, $depth + 1));
 		}
 		return $index;
 	}
@@ -1274,9 +1617,87 @@ final class PullService {
 		}
 	}
 
-	/** A Penpot object name is a single Nextcloud node name — `/` is illegal here. */
+	/** A Penpot FILE's name is a single Nextcloud node name — `/` is illegal here. */
 	private function isLegalName(string $name): bool {
 		return $name !== '' && !str_contains($name, '/');
+	}
+
+	/**
+	 * A Penpot PROJECT's name is a path below the mapping root (§C6.38), so a `/`
+	 * in it is a level of nesting rather than an illegal character.
+	 *
+	 * WHAT IS STILL REFUSED is anything that cannot become a folder path at all: an
+	 * empty name, an empty segment (`a//b`, `foo/`), a `.` or `..` segment — which
+	 * would escape the mapping root or resolve to it — and a name nested past the
+	 * depth ceiling every other walk here obeys.
+	 *
+	 * ## STRICTLY INSIDE THAT CEILING, NOT LEVEL WITH IT
+	 *
+	 * `>=`, not `>`, and the margin is deliberate. {@see indexProjectFolders()} and
+	 * {@see orphanProjectFolders()} bail at `$depth >= MAX_DEPTH`, and a call at
+	 * depth `d` lists the nodes one below it — so they reach exactly `MAX_DEPTH`
+	 * levels down, and a name of exactly `MAX_DEPTH` segments landed on the last
+	 * rung either could see. It fitted, by an accident of where two independently
+	 * written guards sit rather than by anything either states.
+	 *
+	 * That is not a property to leave implicit, because being level with it is one
+	 * `+ 1` away from being past it — and past it the failure is silent and awful:
+	 * the folder is created, never found by id again, and re-created on every pull.
+	 * Raised by Copilot on #50.
+	 */
+	private function isLegalProjectName(string $name): bool {
+		$segments = explode('/', $name);
+		if (count($segments) >= self::MAX_DEPTH) {
+			return false;
+		}
+
+		foreach ($segments as $segment) {
+			if (!$this->isLegalName($segment) || $segment === '.' || $segment === '..') {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Is $name the leaf itself, or a name {@see freeName()} would have made from it?
+	 *
+	 * The test is deliberately shaped by `freeName()` rather than guessed at: the
+	 * suffix goes before the extension, and the 1000th collision falls back to a
+	 * `uniqid()` instead of a number — hence `\w+` rather than `\d+`. Anything else
+	 * is a name that has nothing to do with this project's, which is the state a
+	 * parked folder is in.
+	 */
+	private static function isVariantOf(string $name, string $leaf): bool {
+		if ($name === $leaf) {
+			return true;
+		}
+
+		$dot = strrpos($leaf, '.');
+		$stem = $dot === false ? $leaf : substr($leaf, 0, $dot);
+		$ext = $dot === false ? '' : substr($leaf, $dot);
+
+		return preg_match(
+			'/^' . preg_quote($stem, '/') . ' \(\w+\)' . preg_quote($ext, '/') . '$/',
+			$name,
+		) === 1;
+	}
+
+	/**
+	 * A project name split into the Nextcloud path it denotes.
+	 *
+	 * Only ever called on a name {@see isLegalProjectName()} accepted, so the filter
+	 * removes nothing — it is there so a future caller cannot hand this an empty
+	 * segment and get a folder named `''`.
+	 *
+	 * @return list<string>
+	 */
+	private static function segments(string $name): array {
+		return array_values(array_filter(
+			explode('/', $name),
+			static fn (string $segment): bool => $segment !== '',
+		));
 	}
 
 	/** @param array<string, mixed> $record */

@@ -54,56 +54,11 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * from {@see PullSteps}.
  */
 trait ModeSteps {
-	/** @Given /^a Penpot file named "([^"]*)" exists in the project "([^"]*)"$/ */
 	public function aPenpotFileExistsInTheProject(string $name, string $project): void {
 		$this->penpotRpc('create-file', [
 			'project-id' => $this->projectIdNamed($project),
 			'name' => $name,
 		]);
-	}
-
-	/** @Then /^the file "([^"]*)" is in "([^"]*)" mode$/ */
-	public function theFileIsInMode(string $path, string $mode): void {
-		$this->mustContain($this->status($path), 'penpot_mode: ' . $mode, $path);
-	}
-
-	/**
-	 * The load-bearing assertion of this trait: real ZIP bytes on disk.
-	 *
-	 * @Then /^the file "([^"]*)" holds a real ".penpot" archive$/
-	 */
-	public function theFileHoldsARealArchive(string $path): void {
-		$this->mustContain($this->status($path), 'Content: archive', $path);
-	}
-
-	/**
-	 * The negative twin of the assertion above, and it got STRICTER at §C6.6.
-	 *
-	 * A `link` used to hold a small JSON body, so "not an archive" was the most
-	 * this could claim. A link is now zero bytes, so `status` reports `empty` and
-	 * this asserts the absence of content itself. `Content: pointer` still exists
-	 * as a third state — a legacy body not yet truncated by a pull — and this
-	 * step deliberately does NOT accept it: a demotion that left a body behind
-	 * would be a real regression.
-	 *
-	 * @Then /^the file "([^"]*)" holds no content at all$/
-	 */
-	public function theFileHoldsNoContentAtAll(string $path): void {
-		$this->mustContain($this->status($path), 'Content: empty', $path);
-	}
-
-	/** @Then /^the file "([^"]*)" still carries its Penpot id$/ */
-	public function theFileStillCarriesItsPenpotId(string $path): void {
-		if (preg_match('/penpot_id: \S/', $this->status($path)) !== 1) {
-			throw new \RuntimeException("expected '{$path}' to still carry a penpot_id after the mode change.");
-		}
-	}
-
-	/** @Then /^the pull exported (\d+) archives?$/ */
-	public function thePullExportedArchives(int $count): void {
-		if (!str_contains($this->lastOutput, sprintf('%d archive(s) exported', $count))) {
-			throw new \RuntimeException("expected the pull to report {$count} archive(s) exported, got:\n{$this->lastOutput}");
-		}
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────

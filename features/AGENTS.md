@@ -248,7 +248,7 @@ outcome.
 
 WHAT THIS FILE IS NOT ABOUT: what is INSIDE a mapped folder. A mapping
 guarantees exactly one thing — the Nextcloud folder it names. Project folders,
-their names, their `penpot` tags and the designs in them all arrive with the
+their names and the designs in them all arrive with the
 FIRST SYNC, and two scenarios that used to sit here ("Project folder names
 always match their Penpot projects", "Two Penpot projects in one team sharing a
 name") moved to sync-now.feature for that reason. They had been reading as
@@ -1100,9 +1100,22 @@ works without the other.
 REPLACES the tag mechanism. A `penpot` tag used to be what made a folder a project,
 and the app carried a whole vocabulary for tagging, un-tagging, tagging something
 already tagged, and tagging outside every mapping. None of it was behaviour anyone
-performed on purpose — it was a mechanism wearing a feature's clothes. The tag
-survives only as the visible pill `PullService::tagProject()` already describes it
-as: decoration over an authoritative id, never at the cost of the pull.
+performed on purpose — it was a mechanism wearing a feature's clothes.
+
+**AND THEN THE PILL WENT TOO.** For a while the tag survived as decoration: the
+pull stamped `penpot` on every folder it mirrored so a project folder was visible
+as one in the Files app. It no longer does. Nothing ever read that tag to decide
+anything — `MembershipResolver` has only ever read `penpot_project_id`, and
+`ProjectTags::isTagged()` had no callers at all — so it was a second marker some
+code had to remember to keep in step with the first, saying nothing the first did
+not. `nextcloud-grafana` settles it: same folder-mirroring shape, real tag support
+in `tag-sync.feature`, and no marker tag on a mirrored folder, because *"there is
+no tagging scheme to maintain for placement"*.
+
+What is left of the tag is the one thing a user does with it on purpose:
+`ProjectFolderService::onTagged()`, assigning it by hand to ask for a folder to
+become a project. That is a gesture, not a marker. **It has no scenario anywhere in
+this suite** — a leftover worth deciding about rather than inheriting.
 
 ### A folder is a project when a design is in it
 
@@ -1895,11 +1908,11 @@ which has been false since Course 3):
   lib/Migration/RegisterMimetype.php on every install/upgrade, reverted on
   uninstall (lifecycle.feature).
 
-  NOT BUILT — the project folder's visible system TAG (§6.32). The folder
-  metadata is written; the human-visible pill is still Course 6 work. No
-  scenario here asserts it: this file looks at a design FILE, and the tag is a
-  folder's — `connection/sync-now.feature` claims it, in the tags column of the
-  tree a pull leaves behind.
+  WITHDRAWN — the project folder's visible system TAG (§6.32). Not deferred:
+  the pull no longer writes one, and the tags column it used to be claimed in
+  (`connection/sync-now.feature`, `mapping/sync-now.feature`) is gone with it.
+  A project folder is one because it carries `penpot_project_id`. See
+  projects/create for why, and for what is left of the tag.
 
 @todo — the scenarios are all DAV/mimetype assertions and the integration
 harness is occ-only. The mimetype registration in particular is UNASSERTED IN
@@ -2710,6 +2723,29 @@ was and stands, with its id, where the new name and team put it — is identical
 Grafana states it the same way (`Move a folder in Grafana`, whose Examples caption is
 *"Grafana can move and rename in one call where a Files gesture cannot"*), and it has
 no separate cross-mapping scenario on the remote side either.
+
+**FOR A LONG TIME THE CODE DID THE OPPOSITE OF ALL OF THIS, and the scenarios were
+`@todo` so nothing said so.** `PullService` treated a `/` in a project's name as an
+illegal Nextcloud node name and SKIPPED the project — while `PushService` had always
+renamed a project to its path below the mapping when its folder moved. The app wrote
+names it then refused to read back, and the everyday gesture this whole section
+describes produced no folder at all.
+
+The second half of that cost was worse than the missing folder. A skipped project
+clears the pull's completeness flag, which switches off the prune AND the orphaned-
+project reap for the WHOLE mapping — so one nested project silently disabled every
+reconciliation that mapping had, permanently, with no error anywhere. Found by hand
+on a live instance: a project renamed to `Bubbles/foo` in Penpot moved nothing,
+created nothing, and stopped its mapping pruning.
+
+Fixed by making the pull read a name the way the push writes one: a `/` is a level,
+the path above the leaf is provisioned as ordinary unmarked folders, the folder is
+found by its id wherever it sits and MOVED, and an emptied bare parent is cleared
+behind it. The one case none of the scenarios here reach is a project moving INSIDE
+ITSELF (`Bubbles` → `Bubbles/foo`), which asks a folder to be moved into a folder
+that does not exist yet and whose name it is currently using — the folder parks
+under the mapping root for one step, which is also what lets the reverse
+(`Bubbles/foo` → `Bubbles`) land on the real name instead of `Bubbles (2)`.
 
 ---
 
@@ -4222,15 +4258,18 @@ having made them.
 One `Nextcloud holds exactly these resources:` table replaces five scenarios, because
 every one of them was a claim about the same tree:
 
-- **adoption** — `/Penpot/Cogs` was in the Background and is in the result, tagged.
-  No `Cogs (2)` appears, which is the whole of the old `A folder already named like a
-  Penpot project is adopted, not duplicated`;
+- **adoption** — `/Penpot/Cogs` was in the Background and is in the result. No
+  `Cogs (2)` appears, which is the whole of the old `A folder already named like a
+  Penpot project is adopted, not duplicated`. Adoption takes a BARE folder only: one
+  already carrying markers belongs to another project, and re-stamping it would hand
+  one project's designs to another;
 - **untouched content** — `notes.txt` and `plan.txt` go in and come out, which is the
   whole of `A sync leaves content it does not manage alone`;
 - **Drafts** — `Loose Idea.penpot` surfaces at the mapping root and no `Drafts` folder
   is created, because Drafts is a state rather than a place;
 - **the path model** — the project named `Region/Deep` arrives as two folders, and only
-  the deeper one is tagged. `/Penpot/Region` holds no design and is nobody's project;
+  the deeper one carries the project id. `/Penpot/Region` is scaffolding: it holds no
+  design and is nobody's project;
 - **every storage kind and mode at once** — an admin folder, a Team Folder and a link
   team, in one table.
 

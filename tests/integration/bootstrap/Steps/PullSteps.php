@@ -235,9 +235,6 @@ trait PullSteps {
 	 * The path is relative to the actor's root exactly as every other path in the
 	 * suite is, so a scenario names it the same way it later asserts on it.
 	 *
-	 * davMkcol(), not davMkdir(): the folder sits INSIDE the mapped folder, and
-	 * davMkdir only makes a top-level one.
-	 *
 	 * @Given /^a folder "([^"]*)" already exists$/
 	 */
 	public function aFolderAlreadyExists(string $path): void {
@@ -273,7 +270,6 @@ trait PullSteps {
 		return null;
 	}
 
-	/** @Given /^a Penpot project named "([^"]*)" exists in that team$/ */
 	public function aPenpotProjectExistsInThatTeam(string $name): void {
 		// "THAT TEAM" IS THE ONE MOST RECENTLY NAMED, which is what lets a scenario
 		// step outside the Background's default mapping by naming another team first.
@@ -320,9 +316,8 @@ trait PullSteps {
 	 * it already happened, elsewhere, possibly by someone else. The event this
 	 * app is responsible for is the sync seeing it.
 	 *
-	 * @When /^the admin runs a pull$/
-	 * @Given /^the team has been mirrored into Nextcloud$/
-	 * @When /^the team is mirrored again$/
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 22 other steps call.
 	 */
 	public function theAdminRunsAPull(): void {
 		$this->occ('penpot_sync:sync pull');
@@ -429,7 +424,8 @@ trait PullSteps {
 	 * Every Penpot-origin behaviour — a design created, renamed, restored — wants
 	 * to end by saying this, and now each can.
 	 *
-	 * @Then /^"([^"]*)" carries its Penpot dates$/
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
 	 */
 	public function carriesItsPenpotDates(string $path): void {
 		$this->theDesignIsDatedWhenItChanged($path);
@@ -452,22 +448,22 @@ trait PullSteps {
 	 *
 	 * ## A TREE IS ONE FACT TOO
 	 *
-	 * Every path a sync should have produced, and whether it wears a tag. It
-	 * replaces a column of "the folder X carries…" / "the file Y carries…" lines
-	 * that said one thing each and made a six-node tree into six assertions, none
-	 * of which showed the SHAPE the sync was supposed to build.
+	 * Every path a sync should have produced. It replaces a column of "the folder
+	 * X carries…" / "the file Y carries…" lines that said one thing each and made
+	 * a six-node tree into six assertions, none of which showed the SHAPE the sync
+	 * was supposed to build.
 	 *
-	 * `-` in the tagged column means "no tag expected" and is not checked; naming
-	 * a tag checks it is there. The tag lives here rather than in a scenario of
-	 * its own because it is a property of a node in the tree, the same as the
-	 * node existing at all.
+	 * IT USED TO CHECK A `tagged` COLUMN TOO, and the column is gone with the
+	 * behaviour: the pull no longer puts a `penpot` system tag on the folders it
+	 * mirrors. Nothing ever read that tag to decide anything — a project folder is
+	 * one because it carries `penpot_project_id` — and `nextcloud-grafana` puts no
+	 * marker tag on a mirrored folder either.
 	 *
 	 * @Then /^the mapped folder holds:$/
 	 */
 	public function theMappedFolderHolds(TableNode $tree): void {
 		foreach ($tree->getHash() as $row) {
 			$path = trim((string)($row['path'] ?? ''));
-			$tag = trim((string)($row['tagged'] ?? ''));
 
 			if ($path === '') {
 				continue;
@@ -475,20 +471,6 @@ trait PullSteps {
 
 			if (!$this->davExists($path)) {
 				throw new \RuntimeException("the sync did not produce \"{$path}\"");
-			}
-
-			if ($tag === '' || $tag === '-') {
-				continue;
-			}
-
-			$tags = $this->davSystemTags($path);
-			if (!in_array($tag, $tags, true)) {
-				throw new \RuntimeException(sprintf(
-					'"%s" should carry the "%s" tag, carries: %s',
-					$path,
-					$tag,
-					$tags === [] ? '(none)' : implode(', ', $tags),
-				));
 			}
 		}
 	}
@@ -521,61 +503,6 @@ trait PullSteps {
 		$this->theAdminRunsAPull();
 	}
 
-	/**
-	 * The same, for a project with no design in it yet — "+ New" scenarios need
-	 * the folder to exist but must create the design themselves.
-	 *
-	 * @Given /^a mirrored project "([^"]*)"$/
-	 */
-	public function aMirroredProject(string $project): void {
-		$this->aPenpotProjectExistsInThatTeam($project);
-		$this->theAdminRunsAPull();
-	}
-
-	/**
-	 * A finished run leaves a record of itself.
-	 *
-	 * AN END STATE OF SYNCING, which is why it rides the outline rather than
-	 * having a scenario. It came from a retired `admin-section.feature` scenario
-	 * — "the panel reports the outcome of the last run" — which described a panel
-	 * rather than an outcome. The panel and the API read the same stored status
-	 * ({@see \OCA\PenpotSync\Service\PullStatus}); `show-config` is simply the
-	 * surface this harness can reach.
-	 *
-	 * The timestamp and the counts are asserted as PRESENT, not as values: a
-	 * clock and a tally are the run's own bookkeeping, and pinning either would
-	 * assert the engine's internals instead of the fact that it kept a record.
-	 *
-	 * @Then /^the run is recorded with when it ran and what it did$/
-	 */
-	public function theRunIsRecorded(): void {
-		$res = $this->occ('penpot_sync:show-config');
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("show-config failed:\n{$res['output']}");
-		}
-		if (preg_match('/last run: ok at \S+ \(\d+ processed, \d+ exported\)/', $res['output']) !== 1) {
-			throw new \RuntimeException(
-				"the sync left no usable record of itself. `show-config` said:\n{$res['output']}\n"
-				. 'Expected a "last run:" line naming the outcome, when it finished, and what it processed.',
-			);
-		}
-	}
-
-	/**
-	 * TWO PHRASINGS, ONE FUNCTION. "The sync succeeds" is the word the product
-	 * uses — the button says Sync, the command is `penpot_sync:sync`, the file is
-	 * sync-now.feature. "The pull succeeds" is the mechanism's word and is kept
-	 * because a dozen other feature files say it; new scenarios should say sync.
-	 *
-	 * @Then /^the pull succeeds$/
-	 * @Then /^the sync succeeds$/
-	 */
-	public function thePullSucceeds(): void {
-		if ($this->lastExit !== 0 || !str_contains($this->lastOutput, 'Pull complete')) {
-			throw new \RuntimeException("the pull did not complete cleanly (exit {$this->lastExit}):\n{$this->lastOutput}");
-		}
-	}
-
 	/** @Then /^the folder "([^"]*)" carries the team's Penpot id$/ */
 	public function theFolderCarriesTheTeamId(string $path): void {
 		$out = $this->status($path);
@@ -590,7 +517,8 @@ trait PullSteps {
 	 * children, so the app deliberately does not set it (§C6.24). Asserting one here
 	 * would be asserting core's propagation, not our behaviour.
 	 *
-	 * @Then /^the folder "([^"]*)" was created when its Penpot project was$/
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
 	 */
 	public function theFolderWasCreatedWhenItsProjectWas(string $path): void {
 		$name = basename($path);
@@ -607,13 +535,11 @@ trait PullSteps {
 		$this->assertClock($path, 'creation_time', $expected, "the project folder's creation time");
 	}
 
-	/** @Then /^"([^"]*)" is dated when the design changed in Penpot$/ */
 	public function theDesignIsDatedWhenItChanged(string $path): void {
 		$file = $this->penpotFileRecordFor($path);
 		$this->assertClock($path, 'getlastmodified', self::penpotSecond($file['modifiedAt'] ?? null), "the design's modified-at");
 	}
 
-	/** @Then /^"([^"]*)" was created when the design was created in Penpot$/ */
 	public function theDesignWasCreatedWhenItWasCreated(string $path): void {
 		$file = $this->penpotFileRecordFor($path);
 		$this->assertClock($path, 'creation_time', self::penpotSecond($file['createdAt'] ?? null), "the design's created-at");
@@ -698,25 +624,6 @@ trait PullSteps {
 		}
 	}
 
-	/** @Then /^the folder "([^"]*)" carries a Penpot project id$/ */
-	public function theFolderCarriesAProjectId(string $path): void {
-		$out = $this->status($path);
-		$this->mustContain($out, 'Type: folder', $path);
-		if (preg_match('/penpot_project_id: \S/', $out) !== 1) {
-			throw new \RuntimeException("expected '{$path}' to carry a Penpot project id, got:\n{$out}");
-		}
-	}
-
-	/** @Then /^resolving "([^"]*)" reports the team$/ */
-	public function resolvingReportsTheTeam(string $path): void {
-		$this->mustContain($this->status($path), 'team=' . $this->pulledTeamId, $path);
-	}
-
-	/** @Then /^resolving "([^"]*)" reports it is inside a Penpot project$/ */
-	public function resolvingReportsInProject(string $path): void {
-		$this->mustContain($this->status($path), 'Membership: in_project', $path);
-	}
-
 	/**
 	 * Nothing is there — the same claim whether the scenario calls it a node or a
 	 * folder.
@@ -759,165 +666,7 @@ trait PullSteps {
 
 	// ── resolution: what the folder walk says a node belongs to ──────────────
 
-	/**
-	 * The resolver's answer for a node, as `penpot_sync:status` reports it.
-	 *
-	 * ASSERTED ON THE PROJECT'S REAL PENPOT ID, not on a folder name. The whole
-	 * claim of `mapping-membership.feature` is that membership comes from
-	 * METADATA rather than from position or naming, so an assertion that only
-	 * compared paths would pass for a resolver that had never read a marker.
-	 * Resolving the name through Penpot's own listing first is what makes this
-	 * test the rule rather than a restatement of the folder tree.
-	 *
-	 * @Then /^"([^"]*)" resolves to the project "([^"]*)"$/
-	 */
-	public function resolvesToTheProject(string $path, string $project): void {
-		$this->mustContain($this->status($path), 'project=' . $this->penpotProjectId($project), $path);
-	}
-
-	/**
-	 * In a team, in no project — which is Penpot's Drafts (§6.35), and NOT an
-	 * error state. The distinction this asserts is the one three separate bugs
-	 * lived in (§C6.8/§C6.9/§C6.10): "no project ancestor" means Drafts, not
-	 * "outside every mapping".
-	 *
-	 * @Then /^"([^"]*)" is in the team's Drafts$/
-	 */
-	public function isInTheTeamsDrafts(string $path): void {
-		$out = $this->status($path);
-		$this->mustContain($out, 'Membership: drafts', $path);
-		$this->mustContain($out, 'team=' . $this->pulledTeamId, $path);
-		// `project=)` — the CLOSING PAREN is the assertion. The line is
-		// "Membership: drafts (team=<id> project=)", so an empty project is
-		// `project=` immediately followed by `)`. Matching `project=\S` instead
-		// matched that paren and failed on correct output.
-		$this->mustContain($out, 'project=)', $path);
-	}
-
-	/** @Then /^"([^"]*)" resolves to no Penpot mapping at all$/ */
-	public function resolvesToNoMapping(string $path): void {
-		$out = $this->status($path);
-		$this->mustContain($out, 'Membership: none', $path);
-		// Both ids empty: "(team= project=)" exactly. See the paren note above.
-		$this->mustContain($out, '(team= project=)', $path);
-	}
-
-	/**
-	 * Membership is DERIVED, never stored (§6.29). There is no `penpot_mapping`
-	 * key, and a file must not carry a copy of its project — a copy would have to
-	 * be rewritten on every move, which is the drift the derived design exists to
-	 * avoid. Asserted by checking the file's own stamp list, not the resolved
-	 * line below it.
-	 *
-	 * @Then /^the file "([^"]*)" stores no copy of its project$/
-	 */
-	public function storesNoCopyOfItsProject(string $path): void {
-		$out = $this->status($path);
-		$this->mustContain($out, 'Type: file', $path);
-		if (preg_match('/^penpot_project_id: \S/m', $out) === 1) {
-			throw new \RuntimeException(
-				"'{$path}' carries a penpot_project_id of its own. Membership is derived from "
-				. "the folder walk; a copy on the file would go stale on the first move:\n{$out}",
-			);
-		}
-	}
-
-	/** @Then /^no folder named "([^"]*)" exists under the mapped folder$/ */
-	public function noFolderNamedExists(string $name): void {
-		$this->mustNotExist('Penpot/' . $name);
-	}
-
-	/** @Then /^the file "([^"]*)" is still there and untouched$/ */
-	public function isStillThereAndUntouched(string $path): void {
-		if (!$this->davExists($path)) {
-			throw new \RuntimeException("'{$path}' is gone — the pull pruned a file it does not manage");
-		}
-	}
-
-	/**
-	 * A project's Penpot id, looked up by name through the app's own probe.
-	 *
-	 * The probe prints `  <name>  <uuid>  [<team>]` per project — the same
-	 * listing {@see GestureSteps::penpotFileNamesIn()} parses for designs.
-	 */
-	private function penpotProjectId(string $name): string {
-		$res = $this->occ('penpot_sync:probe --files');
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("probe failed while resolving project '{$name}':\n{$res['output']}");
-		}
-		foreach (explode("\n", $res['output']) as $line) {
-			if (preg_match('/^  (\S.*?)\s{2,}([0-9a-f-]{36})\s+\[/', $line, $m) === 1 && trim($m[1]) === $name) {
-				return $m[2];
-			}
-		}
-
-		throw new \RuntimeException("Penpot has no project named '{$name}':\n{$res['output']}");
-	}
-
 	// ── the DAV surface: what a client actually sees ─────────────────────────
-
-	/**
-	 * A Penpot metadata property, read over PROPFIND (`view-design.feature`).
-	 *
-	 * READ THROUGH DAV, NOT THROUGH THE APP, and that is the whole point of these
-	 * scenarios: the README promises these keys are visible to any WebDAV client,
-	 * and `occ penpot_sync:status` cannot answer whether DAV advertises them. The
-	 * keys are registered in `Application::boot()` precisely so they ride the
-	 * directory PROPFIND, and nothing had ever checked that they do.
-	 *
-	 * @Then /^the DAV property "nc:metadata-([^"]*)" of "([^"]*)" is set$/
-	 */
-	public function theDavPropertyIsSet(string $key, string $path): void {
-		if (($this->davReadMetadata($path, $key) ?? '') === '') {
-			throw new \RuntimeException(
-				"PROPFIND on '{$path}' returned no nc:metadata-{$key}. The key is registered in "
-				. 'Application::boot() so DAV advertises it; a client that cannot read it has no '
-				. 'way to tell a mirror from an ordinary file.',
-			);
-		}
-	}
-
-	/** @Then /^the DAV property "nc:metadata-([^"]*)" of "([^"]*)" is "([^"]*)"$/ */
-	public function theDavPropertyEquals(string $key, string $path, string $expected): void {
-		$actual = $this->davReadMetadata($path, $key) ?? '';
-		if ($actual !== $expected) {
-			throw new \RuntimeException(
-				"expected nc:metadata-{$key} of '{$path}' to be '{$expected}', got '{$actual}'",
-			);
-		}
-	}
-
-	/** @Then /^the DAV property "nc:metadata-([^"]*)" of "([^"]*)" is absent$/ */
-	public function theDavPropertyIsAbsent(string $key, string $path): void {
-		$actual = $this->davReadMetadata($path, $key) ?? '';
-		if ($actual !== '') {
-			throw new \RuntimeException(
-				"expected '{$path}' to carry NO nc:metadata-{$key}, got '{$actual}'",
-			);
-		}
-	}
-
-	/**
-	 * The custom mimetype, read off the same PROPFIND a Files client uses.
-	 *
-	 * NOT `application/zip`, which is what a `.penpot` archive would otherwise be
-	 * sniffed as — the whole reason the app registers a mimetype and ships a
-	 * repair step for it (§C6.1). Asserted over DAV because that is where the
-	 * Files app reads it from; the mapping file on disk being right proves
-	 * nothing about what a client is told.
-	 *
-	 * @Then /^the DAV content type of "([^"]*)" is "([^"]*)"$/
-	 */
-	public function theDavContentTypeIs(string $path, string $expected): void {
-		$actual = $this->davContentType($path);
-		if ($actual !== $expected) {
-			throw new \RuntimeException(
-				"expected '{$path}' to be served as '{$expected}', got '{$actual}'. "
-				. 'A generic type means the mimetype repair step did not run, and the Files app '
-				. 'shows a zip icon with no Open in Penpot action.',
-			);
-		}
-	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────
 

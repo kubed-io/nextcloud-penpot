@@ -42,7 +42,6 @@ trait MappingSteps {
 	 */
 	private const UNREACHABLE_TEAM_ID = '11111111-2222-3333-4444-555555555555';
 
-	/** @Given no Penpot teams are mapped */
 	public function noPenpotTeamsAreMapped(): void {
 		foreach ($this->mappingIds() as $id) {
 			$this->occ('penpot_sync:remove-mapping ' . escapeshellarg($id));
@@ -564,7 +563,6 @@ trait MappingSteps {
 		};
 	}
 
-	/** @Then /^the mapping's Nextcloud folder is "([^"]*)"$/ */
 	public function theMappingsFolderIs(string $expected): void {
 		$actual = (string)($this->firstMapping()['nc_folder'] ?? '');
 
@@ -629,15 +627,6 @@ trait MappingSteps {
 		return implode(',', $out);
 	}
 
-	/** @Then the mapping's default mode is "link" */
-	public function theMappingsDefaultModeIsLink(): void {
-		$mappings = $this->mappings();
-
-		if ($mappings === [] || ($mappings[0]['mode'] ?? null) !== 'link') {
-			throw new \RuntimeException("expected a mapping with mode=link, got:\n" . $this->lastOutput);
-		}
-	}
-
 	/**
 	 * Held across steps because `$this->lastOutput` is shared and every later
 	 * step clobbers it — the assertion below runs after a `list-mappings` call
@@ -646,23 +635,6 @@ trait MappingSteps {
 	 * happens, not read back later.
 	 */
 	private string $removalOutput = '';
-
-	/** @When the admin removes that mapping */
-	public function theAdminRemovesThatMapping(): void {
-		$ids = $this->mappingIds();
-
-		if ($ids === []) {
-			throw new \RuntimeException('there is no mapping to remove');
-		}
-
-		$res = $this->occ('penpot_sync:remove-mapping ' . escapeshellarg($ids[0]));
-
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("remove-mapping failed:\n{$res['output']}");
-		}
-
-		$this->removalOutput = $res['output'];
-	}
 
 	/**
 	 * Remove one NAMED mapping, which is what a scenario with more than one needs.
@@ -778,22 +750,6 @@ trait MappingSteps {
 		return null;
 	}
 
-	/**
-	 * @Then removing it reported that nothing was deleted in Penpot
-	 *
-	 * NARROWED WHEN THE TEARDOWN LANDED. It used to look for "Nothing was deleted",
-	 * which was the whole truth then and is half of it now: removing a mapping does
-	 * remove the pointers it left in Nextcloud. Penpot is the half that stays true,
-	 * and the half worth a step.
-	 */
-	public function removingReportedNothingDeleted(): void {
-		if (!str_contains($this->removalOutput, 'Nothing was deleted in Penpot')) {
-			throw new \RuntimeException(
-				"expected the removal to state that nothing was deleted in Penpot, got:\n" . $this->removalOutput,
-			);
-		}
-	}
-
 	// ── helpers ─────────────────────────────────────────────────────────────
 
 	/**
@@ -836,20 +792,6 @@ trait MappingSteps {
 		}
 
 		return $mappings[0];
-	}
-
-	/** @return list<string> */
-	private function visibleTeamIds(): array {
-		$res = $this->occ('penpot_sync:list-teams');
-		$ids = [];
-
-		foreach (explode("\n", $res['output']) as $line) {
-			if (preg_match('/^([0-9a-f-]{36})\s/i', trim($line), $m) === 1) {
-				$ids[] = $m[1];
-			}
-		}
-
-		return $ids;
 	}
 
 	/** @return list<array<string, mixed>> */

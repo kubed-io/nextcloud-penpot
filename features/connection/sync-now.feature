@@ -37,21 +37,21 @@ Feature: Syncing every mapping
   Scenario Outline: A sync from Penpot mounts every mapped folder, however it was started
     When <actor> syncs every mapping from Penpot
     Then Nextcloud holds exactly these resources:
-      | path                                | tags   |
-      | /Penpot/notes.txt                   |        |
-      | /Penpot/Cogs                        | penpot |
-      | /Penpot/Cogs/plan.txt               |        |
-      | /Penpot/Cogs/Hand Made.penpot       |        |
-      | /Penpot/Cogs/Gizmo.penpot           |        |
-      | /Penpot/Cogs/Doohickey.penpot       |        |
-      | /Penpot/Region                      |        |
-      | /Penpot/Region/Deep                 | penpot |
-      | /Penpot/Region/Deep/Traffic.penpot  |        |
-      | /Penpot/Loose Idea.penpot           |        |
-      | /Shared/Coast                       | penpot |
-      | /Shared/Coast/Tides.penpot          |        |
-      | /Pointers/Pinned                    | penpot |
-      | /Pointers/Pinned/Fixed.penpot       |        |
+      | path                               |
+      | /Penpot/notes.txt                  |
+      | /Penpot/Cogs                       |
+      | /Penpot/Cogs/plan.txt              |
+      | /Penpot/Cogs/Hand Made.penpot      |
+      | /Penpot/Cogs/Gizmo.penpot          |
+      | /Penpot/Cogs/Doohickey.penpot      |
+      | /Penpot/Region                     |
+      | /Penpot/Region/Deep                |
+      | /Penpot/Region/Deep/Traffic.penpot |
+      | /Penpot/Loose Idea.penpot          |
+      | /Shared/Coast                      |
+      | /Shared/Coast/Tides.penpot         |
+      | /Pointers/Pinned                   |
+      | /Pointers/Pinned/Fixed.penpot      |
     And "Penpot" holds:
       | penpot_team_id | the mapping's team |
 

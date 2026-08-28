@@ -68,18 +68,12 @@ trait WebDavTrait {
 		}
 	}
 
-	/** Create a top-level folder in the admin's files root (idempotent). */
-	private function davMkdir(string $folder): void {
-		// 201 created, 405 already exists — both are fine for our purposes.
-		$this->assertStatus($this->davClient()->request('MKCOL', rawurlencode($folder)), [201, 405], "MKCOL $folder");
-		if (!in_array($folder, $this->createdFolders, true)) {
-			$this->createdFolders[] = $folder;
-		}
-	}
-
 	/**
-	 * MKCOL at any depth under the user's files root, unlike {@see davMkdir()}
-	 * which only makes a top-level folder and registers it for teardown.
+	 * MKCOL at any depth under the user's files root.
+	 *
+	 * The only folder-maker the harness has. A `davMkdir()` sat beside it for
+	 * top-level folders, registering each for teardown; nothing called it once the
+	 * steps that did were removed, so it went with them.
 	 *
 	 * This is the folder half of "+ New": a user making a subfolder inside a
 	 * mapped folder, which `create-project.feature` requires to stay an ORDINARY
@@ -162,11 +156,6 @@ trait WebDavTrait {
 			'headers' => ['Destination' => $dest, 'Overwrite' => 'F'],
 		]);
 		$this->assertStatus($res, [201, 204], "MOVE $from → $to");
-	}
-
-	/** MOVE a file, returning the raw status (so move-refused scenarios can inspect it). */
-	private function davMoveStatus(string $from, string $to): int {
-		return $this->davMoveResult($from, $to)['status'];
 	}
 
 	/**
@@ -361,47 +350,6 @@ trait WebDavTrait {
 			}
 		}
 		return null;
-	}
-
-	/**
-	 * The system tags on a node, by name, via PROPFIND of `{nc}system-tags`.
-	 *
-	 * READ THROUGH CORE, NOT THROUGH THIS APP. The claim under test is that the
-	 * `penpot` marker is a real, user-visible Nextcloud tag — the same object the
-	 * Files app shows and a user can assign by hand — rather than a private
-	 * marker the app draws for itself. Asking the app would only prove the app
-	 * agrees with the app.
-	 *
-	 * `occ info:file` was the obvious first try and it does not print tags at all
-	 * (checked live on 33.0.4). This property does, and it is the same one the
-	 * Files sidebar reads. Each tag serialises as
-	 * `<nc:system-tag …>Name</nc:system-tag>` (see `OCA\DAV\SystemTag\SystemTagList`).
-	 *
-	 * @return list<string>
-	 */
-	private function davSystemTags(string $path): array {
-		$ns = 'http://nextcloud.org/ns';
-		$reqBody = '<?xml version="1.0"?>'
-			. '<d:propfind xmlns:d="DAV:" xmlns:nc="' . $ns . '">'
-			. '<d:prop><nc:system-tags/></d:prop></d:propfind>';
-		$res = $this->davClient()->request('PROPFIND', $this->davEncode($path), [
-			'headers' => ['Depth' => '0', 'Content-Type' => 'application/xml'],
-			'body' => $reqBody,
-		]);
-		$this->assertStatus($res, [207], "PROPFIND $path");
-
-		$doc = new \SimpleXMLElement((string)$res->getBody());
-		$doc->registerXPathNamespace('nc', $ns);
-
-		$names = [];
-		foreach ($doc->xpath('//nc:system-tag') ?: [] as $tag) {
-			$name = trim((string)$tag);
-			if ($name !== '') {
-				$names[] = $name;
-			}
-		}
-
-		return $names;
 	}
 
 	/**

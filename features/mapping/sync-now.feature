@@ -21,13 +21,13 @@ Feature: Syncing one mapping from its card
     When the admin syncs one mapping
     Then the folder "One Mapping" carries the team's Penpot id
     And the mapped folder holds:
-      | path                            | tagged |
-      | One Mapping/Cogs                   | penpot |
-      | One Mapping/Cogs/Gizmo.penpot      | -      |
-      | One Mapping/Cogs/Doohickey.penpot  | -      |
-      | One Mapping/Levers                 | penpot |
-      | One Mapping/Levers/Sprocket.penpot | -      |
-      | One Mapping/Loose Idea.penpot      | -      |
+      | path                               |
+      | One Mapping/Cogs                   |
+      | One Mapping/Cogs/Gizmo.penpot      |
+      | One Mapping/Cogs/Doohickey.penpot  |
+      | One Mapping/Levers                 |
+      | One Mapping/Levers/Sprocket.penpot |
+      | One Mapping/Loose Idea.penpot      |
     And there is no node at "One Mapping/Drafts"
     And the folder "One Mapping/Cogs" carries its Penpot dates
     And "One Mapping/Cogs/Gizmo.penpot" holds:

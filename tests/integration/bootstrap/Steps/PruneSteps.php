@@ -37,18 +37,6 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  */
 trait PruneSteps {
 	/**
-	 * Deleting a design in Penpot, WITH THE SYNC FOLDED IN — nobody deletes a design
-	 * in order to run a reconciler. The bare `the design "X" is deleted in Penpot`
-	 * below stages the far side only, for scenarios that go on to do something else.
-	 *
-	 * @When /^someone deletes the design "([^"]*)" in Penpot$/
-	 */
-	public function someoneDeletesTheDesignInPenpot(string $name): void {
-		$this->theDesignIsDeletedInPenpot($name);
-		$this->theAdminRunsAPull();
-	}
-
-	/**
 	 * A PROJECT deleted in Penpot, with the sync folded in — the folder-shaped twin
 	 * of the step above, and the trigger for `projects/delete.feature`'s last rule.
 	 *
@@ -70,13 +58,6 @@ trait PruneSteps {
 		$this->theAdminRunsAPull();
 	}
 
-	/** @When /^someone permanently deletes the design "([^"]*)" in Penpot$/ */
-	public function someonePermanentlyDeletesTheDesignInPenpot(string $name): void {
-		$this->theDesignIsPermanentlyDeletedInPenpot($name);
-		$this->theAdminRunsAPull();
-	}
-
-	/** @When /^the design "([^"]*)" is deleted in Penpot$/ */
 	public function theDesignIsDeletedInPenpot(string $name): void {
 		// `delete-file` is a SOFT delete — it moves the design into Penpot's own
 		// trash, which is exactly the state the rescue depends on. Its id param is
@@ -95,7 +76,8 @@ trait PruneSteps {
 	 * behaviour matters most — it is the case where the local mirror is genuinely
 	 * the last copy.
 	 *
-	 * @When /^the design "([^"]*)" is permanently deleted in Penpot$/
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
 	 */
 	public function theDesignIsPermanentlyDeletedInPenpot(string $name): void {
 		$this->permanentlyDeleteDesignById($this->fileIdNamed($name));
@@ -169,7 +151,8 @@ trait PruneSteps {
 	 * has no safety of its own, and this suite holds itself to the rule it holds
 	 * the app to).
 	 *
-	 * @When /^the design "([^"]*)" is purged from Penpot's trash$/
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
 	 */
 	public function theDesignIsPurgedFromPenpotsTrash(string $name): void {
 		$fileId = null;
@@ -200,35 +183,7 @@ trait PruneSteps {
 		return false;
 	}
 
-	/** @Then /^the pull pruned (\d+) mirrors?$/ */
-	public function thePullPrunedMirrors(int $count): void {
-		$this->mustReport(sprintf('%d design(s) no longer exist in Penpot', $count));
-	}
-
-	/** @Then /^the pull saved (\d+) final archives?$/ */
-	public function thePullSavedFinalArchives(int $count): void {
-		$this->mustReport(sprintf('%d saved as a final archive first', $count));
-	}
-
-	/**
-	 * ASSERTED BY ABSENCE, on purpose: the pull prints the prune line only when it
-	 * pruned something, so "nothing was pruned" is "the line never appeared".
-	 *
-	 * @Then /^the pull pruned nothing$/
-	 */
-	public function thePullPrunedNothing(): void {
-		if (str_contains($this->lastOutput, 'no longer exist in Penpot')) {
-			throw new \RuntimeException("expected the pull to prune nothing, but it reported a prune:\n{$this->lastOutput}");
-		}
-	}
-
 	// ── helpers ─────────────────────────────────────────────────────────────
-
-	private function mustReport(string $phrase): void {
-		if (!str_contains($this->lastOutput, $phrase)) {
-			throw new \RuntimeException("expected the pull to report '{$phrase}', got:\n{$this->lastOutput}");
-		}
-	}
 
 	/**
 	 * The Penpot id of a FILE by name, read back through the app's own probe so

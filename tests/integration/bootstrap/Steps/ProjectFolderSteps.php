@@ -55,10 +55,8 @@ trait ProjectFolderSteps {
 	 * separately and lets `Penpot holds no project named` speak for Penpot.
 	 *
 	 * @Given /^a folder at "([^"]*)"$/
-	 * @Given /^a folder at "([^"]*)" that is not a project$/
 	 * @Given /^a folder at "([^"]*)" that is not mapped$/
 	 * @Given /^a folder at "([^"]*)" in the user's home that is not a project$/
-	 * @When /^I create a folder at "([^"]*)"$/
 	 * @When /^I create the folder "([^"]*)"$/
 	 */
 	public function iCreateAFolderAt(string $path): void {
@@ -66,8 +64,9 @@ trait ProjectFolderSteps {
 	}
 
 	/**
-	 * @When /^I assign the "penpot" tag to "([^"]*)"$/
-	 * @Given /^the folder "([^"]*)" has been tagged "penpot"$/
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
 	 */
 	public function iAssignThePenpotTagTo(string $path): void {
 		$res = $this->occ(sprintf('tag:files:add %s penpot public', escapeshellarg($this->rootPath($path))));
@@ -76,51 +75,7 @@ trait ProjectFolderSteps {
 		}
 	}
 
-	/** @When /^I remove the "penpot" tag from "([^"]*)"$/ */
-	public function iRemoveThePenpotTagFrom(string $path): void {
-		// `tag:files:delete` takes the access level too, exactly like its `add`
-		// twin — it is how the tag is LOOKED UP, not just how it would be made.
-		$res = $this->occ(sprintf('tag:files:delete %s penpot public', escapeshellarg($this->rootPath($path))));
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not untag '{$path}':\n{$res['output']}");
-		}
-	}
-
 	// ── what the APP believes ───────────────────────────────────────────────
-
-	/**
-	 * The negative the permissive half needs: an ordinary folder inside a mapped
-	 * folder must carry NO project id, or every subfolder a user makes has
-	 * quietly become a Penpot project.
-	 *
-	 * @Then /^the folder "([^"]*)" carries no Penpot project id$/
-	 */
-	public function theFolderCarriesNoProjectId(string $path): void {
-		$out = $this->status($path);
-		$this->mustContain($out, 'Type: folder', $path);
-		if (preg_match('/penpot_project_id: \S/', $out) === 1) {
-			throw new \RuntimeException("expected '{$path}' to carry NO Penpot project id, got:\n{$out}");
-		}
-	}
-
-	/** @Then /^the folder "([^"]*)" carries the "penpot" tag$/ */
-	public function theFolderCarriesThePenpotTag(string $path): void {
-		$tags = $this->davSystemTags($path);
-		if (!in_array('penpot', $tags, true)) {
-			throw new \RuntimeException(sprintf(
-				"expected '%s' to carry the 'penpot' tag; it carries: %s",
-				$path,
-				implode(', ', $tags) ?: '(none)',
-			));
-		}
-	}
-
-	/** @Then /^the folder "([^"]*)" does not carry the "penpot" tag$/ */
-	public function theFolderDoesNotCarryThePenpotTag(string $path): void {
-		if (in_array('penpot', $this->davSystemTags($path), true)) {
-			throw new \RuntimeException("expected '{$path}' NOT to carry the 'penpot' tag, but it does");
-		}
-	}
 
 	// ── what PENPOT actually holds ──────────────────────────────────────────
 

@@ -45,8 +45,14 @@ use Psr\Log\LoggerInterface;
  * raising it throws, the outcome must not change.
  *
  * Keyed on the FILE ID so repeated failures on one file collapse onto a single
- * entry rather than filling the bell, and so {@see cleared()} can retract one when
- * a later attempt succeeds.
+ * entry rather than filling the bell.
+ *
+ * NOTHING RETRACTS AN ENTRY, and that is a gap rather than a design. A `cleared()`
+ * lived here to mark a file's notification processed once a later attempt
+ * succeeded — and no caller was ever written, so a fixed file kept its stale error
+ * in the bell exactly as if the method did not exist. It did not, in every sense
+ * that mattered; removed in the #50 sweep. Wiring it is a behaviour to spec, not a
+ * method to restore.
  */
 final class SyncNotifier {
 	/** The notification object type — one per file, whatever went wrong with it. */
@@ -136,24 +142,6 @@ final class SyncNotifier {
 			null,
 			'penpot_sync: could not raise a restored-without-design notification',
 		);
-	}
-
-	/**
-	 * Retract any pending failure for this file — called when a later attempt
-	 * succeeds, so a fixed file does not keep a stale error in the bell.
-	 */
-	public function cleared(int $fileId): void {
-		try {
-			$notification = $this->manager->createNotification();
-			$notification->setApp(Application::APP_ID)
-				->setObject(self::OBJECT_TYPE, (string)$fileId);
-			$this->manager->markProcessed($notification);
-		} catch (\Throwable $e) {
-			$this->logger->debug('penpot_sync: could not clear a failure notification', [
-				'app' => Application::APP_ID,
-				'exception' => $e,
-			]);
-		}
 	}
 
 	/**

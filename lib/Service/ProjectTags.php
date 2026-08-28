@@ -78,22 +78,6 @@ final class ProjectTags {
 	}
 
 	/**
-	 * True when the folder carries the tag.
-	 *
-	 * A missing tag object means nobody has ever created it, so nothing can be
-	 * carrying it — false, not an error.
-	 */
-	public function isTagged(int $folderId): bool {
-		try {
-			$tag = $this->tagManager->getTag(self::TAG_PROJECT, true, true);
-		} catch (TagNotFoundException) {
-			return false;
-		}
-
-		return $this->tagMapper->haveTag([(string)$folderId], 'files', $tag->getId());
-	}
-
-	/**
 	 * True when the tag is among the given tag ids.
 	 *
 	 * `TagAssignedEvent::getTags()` yields tag *ids*; the listener needs names.
