@@ -74,11 +74,15 @@ trait ArrangeSteps {
 	private array $mappingModes = [];
 
 	/**
-	 * Mapped folders this scenario has already emptied — see {@see emptyMappedFolder()}.
+	 * Mapped folders this RUN has already emptied — see {@see emptyMappedFolder()}.
+	 *
+	 * STATIC, so it outlives the per-row context rebuild: Behat constructs a fresh
+	 * FeatureContext for every scenario AND every Examples row, so an instance
+	 * property here would reset exactly when it must not.
 	 *
 	 * @var array<string, true>
 	 */
-	private array $emptiedFolders = [];
+	private static array $emptiedFolders = [];
 
 	/**
 	 * The Penpot team id behind each mapped folder.
@@ -173,7 +177,9 @@ trait ArrangeSteps {
 
 	/** @BeforeScenario */
 	public function armArrange(): void {
-		$this->emptiedFolders = [];
+		// NOT $emptiedFolders — see {@see emptyMappedFolder()}. Behat fires
+		// @BeforeScenario once per EXAMPLES ROW, so resetting it here made the
+		// latch a no-op and the wipe kept happening on row two.
 		$this->mappingModes = [];
 		$this->mappingTeamIds = [];
 		$this->mappingTeamNames = [];
@@ -220,7 +226,6 @@ trait ArrangeSteps {
 	 * @Given /^the following mappings were made:$/
 	 */
 	public function theFollowingMappingsWereMade(TableNode $table): void {
-		$this->arrangeProbe('mappings step START');
 		if (!$this->mappingsDeclared) {
 			// UNMAP BEFORE TOUCHING ANY CONTENT — see the trait docblock. While a
 			// mapping is live, deleting inside it is a gesture that reaches Penpot.
@@ -239,9 +244,7 @@ trait ArrangeSteps {
 				$this->theNextcloudGroupsExist($groups);
 			}
 
-			$this->arrangeProbe("before empty {$folder}");
 			$this->emptyMappedFolder($folder);
-			$this->arrangeProbe("after empty {$folder}");
 
 			$team = trim($row['team'] ?? '');
 			if ($team === '') {
@@ -289,28 +292,7 @@ trait ArrangeSteps {
 		// It also matches what the sentence CLAIMS. "The following mappings were
 		// made" means the mappings are usable, and a real instance reaches that
 		// state the same way: you map a team, then it syncs.
-		$this->arrangeProbe('before final pull');
 		$this->theAdminRunsAPull();
-		$this->arrangeProbe('mappings step END');
-	}
-
-	/** TEMPORARY diagnostic — reverted before merge. */
-	private function arrangeProbe(string $when): void {
-		$seen = [];
-		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
-			$pid = (string)($project['id'] ?? '');
-			$pname = (string)($project['name'] ?? '');
-			if ($pid === '' || $pname === 'Drafts') {
-				continue;
-			}
-			$files = [];
-			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $pid]) as $file) {
-				$files[] = (string)($file['name'] ?? '');
-			}
-			$seen[] = $pname . '[' . implode('|', $files) . ']';
-		}
-		sort($seen);
-		fwrite(STDERR, "ARRANGE [{$when}] " . implode(' ', $seen) . "\n");
 	}
 
 	/**
@@ -324,26 +306,31 @@ trait ArrangeSteps {
 	 * already visible there.
 	 */
 	private function emptyMappedFolder(string $folder): void {
-		// ONCE PER SCENARIO, LIKE THE UNMAP BESIDE IT — and this is measured, not
-		// reasoned. A probe printing Penpot's contents at each Background boundary
-		// caught it on the second Examples row of an outline:
+		// ONCE PER RUN PER FOLDER, and every word of that is load-bearing.
 		//
-		//   [nextcloudHolds START]  Cogs[Hand Made|Doohickey|Gizmo] Drafts[Loose Idea]
-		//   [sync step START]       Drafts[]
+		// A delete inside a LIVE mapping is a gesture
+		// {@see \OCA\PenpotSync\Listener\DeleteListener} carries into Penpot. On
+		// the first scenario there is no live mapping and this is ordinary
+		// housekeeping; on every one after, the previous scenario's mapping is
+		// still attached and emptying the folder DESTROYS THE TEAM. Measured:
 		//
-		// The unmap is latched by `$mappingsDeclared`; this was not, so it ran again
-		// with the FIRST row's mappings still live — and a delete inside a live
-		// mapping is a gesture {@see \OCA\PenpotSync\Listener\DeleteListener}
-		// carries into Penpot. It emptied the folder and destroyed the team.
+		//   [before empty Penpot]  Cogs[Hand Made|Doohickey|Gizmo] Region/Deep[Traffic]
+		//   [after  empty Penpot]  (gone)
 		//
-		// Ten feature files survive it because their scenarios seed per row; only
-		// `connection/sync-now.feature`, whose BACKGROUND holds what the assertion
-		// checks, could notice. Grafana never hit it — its twin does not empty at
-		// all, which is why the identical Gherkin passes there.
-		if (isset($this->emptiedFolders[$folder])) {
+		// NOT LATCHED PER SCENARIO, which was the first attempt and did nothing:
+		// Behat fires @BeforeScenario once per EXAMPLES ROW, so a latch reset there
+		// is reset before the row that needed it. The state lives for the whole
+		// run instead — the folder only ever needs clearing once, since after that
+		// this suite is the only thing writing into it.
+		//
+		// Ten feature files survive the bug because their scenarios seed per row;
+		// only `connection/sync-now.feature`, whose BACKGROUND holds what the
+		// assertion checks, could notice. Grafana never hit it — its twin does not
+		// empty at all, which is why the identical Gherkin passes there.
+		if (isset(self::$emptiedFolders[$folder])) {
 			return;
 		}
-		$this->emptiedFolders[$folder] = true;
+		self::$emptiedFolders[$folder] = true;
 
 		try {
 			if (!$this->davExists($folder)) {
