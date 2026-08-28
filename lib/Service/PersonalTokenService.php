@@ -116,14 +116,6 @@ final class PersonalTokenService {
 		return $token !== '' ? $token : null;
 	}
 
-	public function hasToken(string $userId): bool {
-		return $this->config->getUserValue(
-			$userId,
-			Application::APP_ID,
-			PersonalSettings::KEY_PERSONAL_TOKEN,
-			'',
-		) !== '';
-	}
 
 	/**
 	 * Store a user's personal token, encrypted — the `occ` twin's write path.

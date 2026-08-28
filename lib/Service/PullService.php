@@ -708,20 +708,28 @@ final class PullService {
 	 * which would otherwise leave one dead empty folder behind per nested rename.
 	 *
 	 * It goes to the TRASH, like every folder this app removes; a folder that will
-	 * not go is logged and left standing, and nothing here throws — a tidy failing
-	 * must never undo a move that succeeded.
+	 * not go is logged and left standing.
+	 *
+	 * ## NOTHING HERE THROWS, AND THE WHOLE BODY IS INSIDE THE TRY FOR THAT REASON
+	 *
+	 * The marker read used to sit outside it, which made the claim false in the one
+	 * way that mattered: this runs from {@see tryMoveProject()}'s try block AFTER a
+	 * move has already succeeded, so a Files-Metadata failure here would land in
+	 * that catch and {@see unpark()} would UNDO a good move — a storage hiccup while
+	 * sweeping up turning into a folder yanked back to where it no longer belongs.
+	 * Raised by Copilot on #50.
 	 */
 	private function tidy(Folder $folder, Folder $root): void {
 		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
-			if ($folder->getId() === $root->getId()) {
-				return;
-			}
-			if (!$this->metadata->readFolder($folder->getId())->isBare()) {
-				return;
-			}
-
-			$path = $folder->getPath();
+			$path = '';
 			try {
+				if ($folder->getId() === $root->getId()) {
+					return;
+				}
+				$path = $folder->getPath();
+				if (!$this->metadata->readFolder($folder->getId())->isBare()) {
+					return;
+				}
 				if ($folder->getDirectoryListing() !== []) {
 					return;
 				}

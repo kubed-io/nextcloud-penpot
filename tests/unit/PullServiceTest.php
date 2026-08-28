@@ -243,7 +243,6 @@ final class PullServiceTest extends TestCase {
 	public function testASlashedProjectNameBecomesNestedFolders(): void {
 		$bubbles = $this->emptyFolder(20);
 		$foo = $this->emptyFolder(21);
-		$bubbles->method('newFolder')->willReturn($foo);
 		$bubbles->method('getPath')->willReturn('/admin/files/Penpot/Bubbles');
 
 		$root = $this->createMock(Folder::class);
@@ -260,7 +259,7 @@ final class PullServiceTest extends TestCase {
 		]);
 		$this->client->method('getProjectFiles')->willReturn([]);
 
-		$bubbles->expects($this->once())->method('newFolder')->with('foo');
+		$bubbles->expects($this->once())->method('newFolder')->with('foo')->willReturn($foo);
 		// NO TAG, on either of them. The id is the only marker a project folder gets.
 		$this->tags->expects($this->never())->method('apply');
 

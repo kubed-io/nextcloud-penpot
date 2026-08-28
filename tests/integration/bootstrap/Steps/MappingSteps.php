@@ -838,19 +838,6 @@ trait MappingSteps {
 		return $mappings[0];
 	}
 
-	/** @return list<string> */
-	private function visibleTeamIds(): array {
-		$res = $this->occ('penpot_sync:list-teams');
-		$ids = [];
-
-		foreach (explode("\n", $res['output']) as $line) {
-			if (preg_match('/^([0-9a-f-]{36})\s/i', trim($line), $m) === 1) {
-				$ids[] = $m[1];
-			}
-		}
-
-		return $ids;
-	}
 
 	/** @return list<array<string, mixed>> */
 	private function mappings(): array {
