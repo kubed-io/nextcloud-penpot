@@ -4407,7 +4407,7 @@ The leg failed at 30/32 with `Gizmo` and `Doohickey` missing. TWO independent
 faults produced that same line, which is why fixing either one alone left the
 number unchanged and made each fix look wrong.
 
-**1. The mapping step emptied the folder on every Examples row.**
+**1. The mapping step emptied the folder while a mapping was live.**
 `theFollowingMappingsWereMade()` empties each mapped folder before mapping it. The
 unmap beside it is latched by `$mappingsDeclared`; the emptying was not — so on the
 second row it ran again with the first row's mappings still LIVE, and a delete
@@ -4416,6 +4416,14 @@ caught it between two adjacent steps:
 
     [nextcloudHolds START]  Cogs[Hand Made|Doohickey|Gizmo] Drafts[Loose Idea]
     [sync step START]       Drafts[]
+
+The cure is to empty only while NOTHING is mapped, which is exactly the condition
+that makes the delete safe. Two blunter versions came first and both were worse: a
+per-scenario latch does nothing (Behat fires `@BeforeScenario` once per Examples
+ROW, so it clears before the row that needs it), and a per-RUN latch fixed this leg
+while breaking four others — a folder emptied once and never again accumulates
+every later scenario's leftovers, which is the `Pinned (1) (2) (3)` problem the
+function exists to prevent.
 
 Ten feature files survive it because their scenarios seed per row; only this one,
 whose BACKGROUND holds what the assertion checks, could notice. **Grafana and n8n

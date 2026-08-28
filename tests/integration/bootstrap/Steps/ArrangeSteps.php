@@ -74,17 +74,6 @@ trait ArrangeSteps {
 	private array $mappingModes = [];
 
 	/**
-	 * Mapped folders this RUN has already emptied — see {@see emptyMappedFolder()}.
-	 *
-	 * STATIC, so it outlives the per-row context rebuild: Behat constructs a fresh
-	 * FeatureContext for every scenario AND every Examples row, so an instance
-	 * property here would reset exactly when it must not.
-	 *
-	 * @var array<string, true>
-	 */
-	private static array $emptiedFolders = [];
-
-	/**
 	 * The Penpot team id behind each mapped folder.
 	 *
 	 * NEEDED BECAUSE "THAT TEAM" IS AMBIGUOUS BY THE TIME AN ITEM IS SEEDED. The
@@ -177,9 +166,6 @@ trait ArrangeSteps {
 
 	/** @BeforeScenario */
 	public function armArrange(): void {
-		// NOT $emptiedFolders — see {@see emptyMappedFolder()}. Behat fires
-		// @BeforeScenario once per EXAMPLES ROW, so resetting it here made the
-		// latch a no-op and the wipe kept happening on row two.
 		$this->mappingModes = [];
 		$this->mappingTeamIds = [];
 		$this->mappingTeamNames = [];
@@ -306,31 +292,32 @@ trait ArrangeSteps {
 	 * already visible there.
 	 */
 	private function emptyMappedFolder(string $folder): void {
-		// ONCE PER RUN PER FOLDER, and every word of that is load-bearing.
+		// ONLY WHILE NOTHING IS MAPPED, and that condition is the whole of it.
 		//
 		// A delete inside a LIVE mapping is a gesture
-		// {@see \OCA\PenpotSync\Listener\DeleteListener} carries into Penpot. On
-		// the first scenario there is no live mapping and this is ordinary
-		// housekeeping; on every one after, the previous scenario's mapping is
-		// still attached and emptying the folder DESTROYS THE TEAM. Measured:
+		// {@see \OCA\PenpotSync\Listener\DeleteListener} carries into Penpot — so
+		// this clears a folder when it is ordinary housekeeping and steps aside when
+		// it would destroy the team. Measured, on the second Examples row of an
+		// outline, where the first row's mappings are still attached:
 		//
 		//   [before empty Penpot]  Cogs[Hand Made|Doohickey|Gizmo] Region/Deep[Traffic]
 		//   [after  empty Penpot]  (gone)
 		//
-		// NOT LATCHED PER SCENARIO, which was the first attempt and did nothing:
-		// Behat fires @BeforeScenario once per EXAMPLES ROW, so a latch reset there
-		// is reset before the row that needed it. The state lives for the whole
-		// run instead — the folder only ever needs clearing once, since after that
-		// this suite is the only thing writing into it.
+		// TWO WRONGER VERSIONS CAME FIRST, both worth naming. Latching per scenario
+		// did nothing: Behat fires @BeforeScenario once per EXAMPLES ROW, so the
+		// latch cleared itself before the row that needed it. Latching per RUN fixed
+		// that and broke four other legs — a folder emptied once and never again
+		// accumulates every scenario's leftovers, which is the `Pinned (1) (2) (3)`
+		// problem this function exists to prevent.
 		//
-		// Ten feature files survive the bug because their scenarios seed per row;
-		// only `connection/sync-now.feature`, whose BACKGROUND holds what the
-		// assertion checks, could notice. Grafana never hit it — its twin does not
-		// empty at all, which is why the identical Gherkin passes there.
-		if (isset(self::$emptiedFolders[$folder])) {
+		// Asking whether a mapping is live is the honest test, because that is
+		// exactly what makes the delete dangerous. {@see MappingSteps::armMappingReset()}
+		// unmaps before every scenario, so the first call in a scenario always
+		// clears; the ones that would cascade are the later rows of the same table,
+		// after this step has mapped something.
+		if ($this->mappingIds() !== []) {
 			return;
 		}
-		self::$emptiedFolders[$folder] = true;
 
 		try {
 			if (!$this->davExists($folder)) {
