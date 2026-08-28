@@ -72,6 +72,9 @@ trait SyncNowSteps {
 
 			if ($design !== '' && !$this->projectHoldsDesign($projectId, $design)) {
 				$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => $design]);
+				fwrite(STDERR, "PROBE seeded {$team}/{$project}/{$design}\n");
+			} elseif ($design !== '') {
+				fwrite(STDERR, "PROBE already there {$team}/{$project}/{$design}\n");
 			}
 		}
 	}
@@ -160,7 +163,9 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
+		$this->syncNowProbe('before writePending');
 		$this->syncNowWritePending();
+		$this->syncNowProbe('after writePending, before sync');
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -468,5 +473,23 @@ trait SyncNowSteps {
 	private function syncNowIsFixture(string $path): bool {
 		return $path === self::FIXTURE_FOLDER
 			|| str_starts_with($path, self::FIXTURE_FOLDER . '/');
+	}
+
+	/** TEMPORARY: what does Design Team actually hold right now? */
+	private function syncNowProbe(string $when): void {
+		$teamId = $this->teamNamed('Design Team');
+		$seen = [];
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+			$pid = (string)($project['id'] ?? '');
+			$pname = (string)($project['name'] ?? '');
+			if ($pid === '') {
+				continue;
+			}
+			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $pid]) as $file) {
+				$seen[] = $pname . '/' . (string)($file['name'] ?? '');
+			}
+		}
+		sort($seen);
+		fwrite(STDERR, "PROBE [{$when}] Design Team = " . implode(', ', $seen) . "\n");
 	}
 }
