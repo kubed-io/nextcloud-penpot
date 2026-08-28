@@ -4326,9 +4326,10 @@ it is doing exactly what a person would do: mapping the team the other way.
 
 `features/connection/sync-now.feature`
 
-THREE SCENARIOS, DOWN FROM ELEVEN, and the shape came from the siblings: grafana and
+TWO SCENARIOS, DOWN FROM ELEVEN, and the shape came from the siblings: grafana and
 n8n both carry two, because the whole tree is the assertion and everything else is a
-row of the Background.
+row of the Background. (An earlier cut of this line said three; the file has carried
+two since the pull and the push became one each.)
 
 ### Sync-now scope
 
@@ -4379,6 +4380,21 @@ new design — the app does all of these, and the gesture features are full of t
 So sync-now has two buttons, as both siblings do. The push takes a `.penpot` sitting
 in a mapped folder that Penpot has never seen and makes a design of it, in the project
 the folder spells. It never touches a design Penpot already holds.
+
+BUILT, AND IT GOES THROUGH THE IMPORT DOOR. `BulkPushService` walks each `sync`
+mapping and hands every archive that is not already a mirror to the same
+`ImportService::adopt()` a dragged-in file uses, with the destination resolved by the
+same `DestinationResolver::projectForContentIn()` — so the project a folder spells,
+Drafts at the mapping root (§6.35), and the path model (§C6.38) all come for free
+rather than being answered a second time.
+
+AN `unmapped` FILE IS PUSHED, and this is where the siblings stop being the bar.
+Grafana skips unmapped files in its push because one KEEPS ITS UID and reattaches to
+the same dashboard, so a re-arrival needs no decision. Penpot cannot reattach at all
+(§6.20, and `import-binfile` always mints a new id) — which is why *"an arrival
+becomes its own design, whatever it arrived carrying"* exists in `designs/move.feature`.
+Skipping them would strand real bytes in a mapped folder that nothing in Penpot
+answers to, which is the state this button clears.
 
 A link team is deliberately absent from the push's fixtures. Its contents come from
 Penpot and from nowhere else, so there is nothing for a push to do there — and putting

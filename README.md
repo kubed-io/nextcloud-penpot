@@ -92,11 +92,15 @@ Every mirrored file is one of two things, and you choose per file:
 | **`link`** *(default)* | An empty file that points at the live design. Opens in Penpot. | Nothing — never exports, stores no bytes |
 | **`sync`** *(opt-in)* | A real, downloaded `.penpot` archive you can open offline | One export whenever the design changes |
 
-**Neither mode ever pushes design content to Penpot.** In the sibling apps for
-[n8n](https://github.com/kubed-io/nextcloud-n8n) and
+**Neither mode ever overwrites a design Penpot already has.** In the sibling apps
+for [n8n](https://github.com/kubed-io/nextcloud-n8n) and
 [Grafana](https://github.com/kubed-io/nextcloud-grafana), `sync` means "edits flow
-back." Here the axis decides only **whether we store the bytes** — a `sync` file
-is still a read-only mirror.
+back." Here the axis decides only **whether we store the bytes** — editing a
+`sync` file does not push your changes into the live design.
+
+The one thing that does travel upward is a `.penpot` Penpot has *never seen*:
+drop one into a mapped folder, or press **Sync to Penpot**, and it becomes a new
+design. Nothing existing is touched.
 
 Why: a `.penpot` export is a full archive with embedded images and fonts, not a
 small JSON document. Backing up every design in a large team would be expensive
