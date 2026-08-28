@@ -75,17 +75,19 @@ trait MoveSteps {
 	 * for provenance it never asserts: `mapping/create.feature` purges the file
 	 * either way, so whether it once had an id changes nothing about its fate.
 	 *
-	 * PLAUSIBLE ARCHIVE BYTES rather than a real export. The fixture that produces
-	 * a genuine one needs a `Penpot` mapping to export through, which this scenario
-	 * has not got — and it would be wasted anyway, since nothing imports these
-	 * bytes. They exist so the file reads as a design rather than an empty create,
-	 * which is a different gesture with a different rule (§6.44).
+	 * A REAL EXPORT, because an arriving archive is now IMPORTED. This wrote
+	 * `PK\x03\x04` and padding on the reasoning that "nothing imports these bytes",
+	 * which was true while a design arriving in a mapping was ignored and stopped
+	 * being true when it stopped being ignored: Penpot answers `import-binfile` with
+	 * a 500 io-exception for anything that is not a genuine archive, the app catches
+	 * it and leaves the file untracked, and the scenario then fails saying no design
+	 * is on stage — which describes the fixture rather than the app.
 	 *
 	 * @Given /^an unmapped design file at "([^"]*)"$/
 	 */
 	public function anUnmappedDesignFileAt(string $path): void {
 		$this->makeAncestors($path);
-		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+		$this->davPut($path, $this->aRealPenpotArchive());
 
 		// ON STAGE, so `the file` and `that file` mean this one. Without it a
 		// scenario whose only Given is this step has no cursor at all, and the first

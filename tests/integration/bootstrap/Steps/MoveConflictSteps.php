@@ -301,7 +301,12 @@ trait MoveConflictSteps {
 	 * would have to be searched by the very thing under test.
 	 */
 	private function penpotFileName(string $id): string {
-		$summary = $this->penpotRpcRead('get-file-summary', ['file-id' => $id]);
+		// `id` IS THE WIRE KEY, not `file-id`. PenpotClient::PARAMS translates
+		// `file` to `id` for this command; a raw RPC call bypasses that and Penpot
+		// answers a params-validation error naming a missing `:id`. The same trap
+		// `rename-project` and `rename-file` set, and the reason both are written out
+		// at their call sites.
+		$summary = $this->penpotRpcRead('get-file-summary', ['id' => $id]);
 		$name = $summary['name'] ?? null;
 
 		return is_string($name) ? $name : '';
