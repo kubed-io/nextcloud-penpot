@@ -51,8 +51,8 @@ Feature: Moving a design
   # notes: ../AGENTS.md#a-nested-project-folder-and-a-plain-subfolder-look-identical
 
     Examples: while a nested project folder names its project by the path to it
-      | source           | destination              | lands in          |
-      | Penpot/Move From | Penpot/Clients/Traveller | Clients/Traveller |
+      | source           | destination             | lands in         |
+      | Penpot/Move From | Penpot/Nesting/Move To  | Nesting/Move To  |
 
   # notes: ../AGENTS.md#a-design-moved-to-another-project-in-penpot-relocates-its-mirror
   @in-penpot @gesture
@@ -66,13 +66,13 @@ Feature: Moving a design
       | penpot_mode    | the mapping's mode |
 
     Examples: Drafts is a state, so its mirror surfaces at the team root
-      | project           | lands at                                  |
-      | Upstream To       | Penpot/Upstream To/Relocated.penpot       |
-      | Drafts            | Penpot/Relocated.penpot                   |
-      | Clients/Traveller | Penpot/Clients/Traveller/Relocated.penpot |
+      | project             | lands at                                    |
+      | Upstream To         | Penpot/Upstream To/Relocated.penpot         |
+      | Drafts              | Penpot/Relocated.penpot                     |
+      | Nesting/Upstream To | Penpot/Nesting/Upstream To/Relocated.penpot |
 
     # The third row is the first one level down: a project's name is a path, so the
-    # mirror surfaces at that path, and `Clients` exists only to hold it.
+    # mirror surfaces at that path, and `Nesting` exists only to hold it.
 
     # ── RULE: a design carries its team as well as its project ────────────────
     # notes: ../AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project

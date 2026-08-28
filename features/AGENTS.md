@@ -2325,9 +2325,19 @@ decide, and the path only ever says what it is CALLED once something has decided
 
 THE CODE HAD THIS BEFORE THE SPEC DID. `MembershipResolver` has resolved nearest
 ancestor since §6.29 and `PushService` has named projects by path since §C6.38, so
-the `Clients/Traveller` row needed no new step definition and no new behaviour —
-it needed saying. Added on the round that taught the PULL to read those names back
-(#50), because until then the app could write a name it then refused to mirror.
+these rows needed no new step definition and no new behaviour — they needed saying.
+Added on the round that taught the PULL to read those names back (#50), because
+until then the app could write a name it then refused to mirror.
+
+**THE PROJECT NAME HAS TO BE UNIQUE ACROSS THE WHOLE SUITE, and a nested one makes
+that easy to forget.** The legs get a fresh Nextcloud each and share ONE Penpot, so
+a project name is effectively global: `projects/move.feature` already produces
+`Clients/Traveller`, and reusing it here had the destination resolve to that
+project — a real one, in the right team, holding another feature's files. The row
+failed on a path, which reads like a bug in the nesting and is a fixture collision.
+`Nesting/…` belongs to this file alone. Proven separately on a live instance in
+both shapes (team root -> nested project, and project folder -> nested project), so
+the code was never in question.
 
 ### A cross-team move always crosses a storage boundary
 
