@@ -54,6 +54,9 @@ trait MoveConflictSteps {
 	/** The bytes the arriving file carried. */
 	private string $arrivedArchive = '';
 
+	/** The path the last `holds the archive of` named, for the step that follows it. */
+	private string $lastArchivePath = '';
+
 	/**
 	 * @BeforeScenario
 	 *
@@ -69,6 +72,7 @@ trait MoveConflictSteps {
 		$this->destinationIdBefore = '';
 		$this->existingArchive = '';
 		$this->arrivedArchive = '';
+		$this->lastArchivePath = '';
 	}
 
 	/**
@@ -171,6 +175,7 @@ trait MoveConflictSteps {
 	 * theirs to pick.
 	 */
 	public function holdsTheArchiveOf(string $path, string $whose): void {
+		$this->lastArchivePath = trim($path, '/');
 		$want = match (trim($whose)) {
 			'the file already there' => $this->existingArchive,
 			'the file that arrived' => $this->arrivedArchive,
@@ -201,7 +206,11 @@ trait MoveConflictSteps {
 	 * mirror describing a design that still holds the other body.
 	 */
 	public function itsDesignInPenpotHoldsThatSameArchive(): void {
-		$path = $this->currentFilePath;
+		// THE PATH THE SENTENCE BEFORE IT NAMED, not the cursor. Under "the existing
+		// version" nothing moved, so the cursor is still the untouched arrival out in
+		// Scratch — and asking about THAT design would be asking about a file the
+		// answer deliberately left alone.
+		$path = $this->lastArchivePath;
 		$id = (string)$this->davReadMetadata($path, 'penpot_id');
 		if ($id === '') {
 			throw new \RuntimeException("'{$path}' carries no penpot_id, so there is no design to ask about");
@@ -258,7 +267,12 @@ trait MoveConflictSteps {
 			return $this->secondArchive;
 		}
 
-		$path = 'Penpot/Archive Source/Second.penpot';
+		// ITS OWN FOLDER, not `Archive Source`. That one belongs to
+		// {@see GestureSteps::aRealPenpotArchive()}, whose mirror is deliberately
+		// left standing — and a scenario elsewhere in the leg deletes the folder,
+		// which takes the Penpot project with it. Sharing it made this fixture's
+		// design disappear halfway through a run, and took `Stay Put` with it.
+		$path = 'Penpot/Second Source/Second.penpot';
 		if (!$this->davExists($path)) {
 			$this->makeAncestors($path);
 			$this->davPut($path, '');

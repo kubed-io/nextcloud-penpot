@@ -150,10 +150,18 @@ trait WebDavTrait {
 	}
 
 	/** MOVE (rename) a file within the user's files root. */
-	private function davMove(string $from, string $to): void {
+	private function davMove(string $from, string $to, bool $overwrite = false): void {
 		$dest = $this->ncBaseUrl . '/remote.php/dav/files/' . rawurlencode($this->ncUser) . '/' . $this->davEncode($to);
+		// `Overwrite: F` DEFAULTS, and stays the default: nearly every move in the
+		// suite is into free space, and a stray overwrite there would destroy the
+		// node it landed on without the scenario ever saying so.
+		//
+		// `T` is what the Files app sends by OMITTING the header, and it is the whole
+		// of the "keep the new version" answer to the conflict dialog — Sabre deletes
+		// the destination and then moves. Without it Sabre answers 412 Precondition
+		// Failed, which is what a MOVE onto an occupied path means.
 		$res = $this->davClient()->request('MOVE', $this->davEncode($from), [
-			'headers' => ['Destination' => $dest, 'Overwrite' => 'F'],
+			'headers' => ['Destination' => $dest, 'Overwrite' => $overwrite ? 'T' : 'F'],
 		]);
 		$this->assertStatus($res, [201, 204], "MOVE $from → $to");
 	}
