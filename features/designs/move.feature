@@ -113,7 +113,7 @@ Feature: Moving a design
       | content        | an archive      |
 
     # The id stays on the file so a later arrival can be told apart from a stranger,
-    # never to be reattached to — moving back in is an import (§C6.52).
+    # never to be reattached to — moving back in is an import.
 
   # notes: ../AGENTS.md#an-arrival-becomes-its-own-design-whatever-it-arrived-carrying
   @in-nextcloud @gesture
