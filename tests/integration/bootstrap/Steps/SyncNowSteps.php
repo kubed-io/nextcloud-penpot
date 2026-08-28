@@ -269,11 +269,16 @@ trait SyncNowSteps {
 		}
 		sort($expected);
 
+		// READ ONCE, NOT PER TEAM. `get-all-projects` takes no team argument and
+		// answers the whole instance, so calling it inside the loop was one HTTP
+		// round trip per team for identical data. Raised in review.
+		$allProjects = $this->penpotRpcRead('get-all-projects', []);
+
 		$actual = [];
 		foreach ($wanted as $team => $projects) {
 			$teamId = $this->teamNamed((string)$team);
-			// `get-all-projects` + camelCase — see {@see projectIdInTeamOrNull()}.
-			foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			// camelCase keys — see {@see projectIdInTeamOrNull()}.
+			foreach ($allProjects as $project) {
 				if (($project['teamId'] ?? $project['team-id'] ?? null) !== $teamId) {
 					continue;
 				}
@@ -362,10 +367,13 @@ trait SyncNowSteps {
 	 * reads `get-all-projects` like the rest of `lib/`, correctly ignored it. The
 	 * Background believed it had seeded a team that was in fact empty.
 	 *
-	 * CAMELCASE, NOT KEBAB. `penpotRpcRead()` sends `Accept: application/json`, so
-	 * Penpot answers plain JSON with camelCase keys rather than Transit. Both traps
-	 * are already documented on {@see ArrangeSteps}; this trait was the only place
-	 * that had not learned them.
+	 * CAMELCASE FIRST, KEBAB AS A FALLBACK. `penpotRpcRead()` sends
+	 * `Accept: application/json`, so Penpot answers plain JSON with camelCase keys
+	 * rather than Transit — `teamId`, not `team-id`. The kebab form is read too
+	 * because `lib/` sends no such header and sees the other shape, and a helper
+	 * that works for both cannot be broken by a caller changing its Accept header.
+	 * Both traps are documented on {@see ArrangeSteps}; this trait had not learned
+	 * them.
 	 */
 	private function projectIdInTeamOrNull(string $teamId, string $name): ?string {
 		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
