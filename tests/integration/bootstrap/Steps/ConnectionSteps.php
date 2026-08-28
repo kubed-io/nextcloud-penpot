@@ -196,4 +196,21 @@ trait ConnectionSteps {
 		$this->occ('penpot_sync:test-connection');
 	}
 
+	public function theConnectionTestReportsAFailure(): void {
+		if ($this->lastExit === 0) {
+			throw new \RuntimeException("expected the connection test to fail:\n{$this->lastOutput}");
+		}
+	}
+
+	public function theConnectionTestReportsSuccess(): void {
+		if ($this->lastExit !== 0) {
+			throw new \RuntimeException("expected the connection test to succeed:\n{$this->lastOutput}");
+		}
+	}
+
+	public function theConnectionTestListsATeam(): void {
+		if (!str_contains($this->lastOutput, 'Visible team')) {
+			throw new \RuntimeException("expected the visible teams to be listed, got:\n{$this->lastOutput}");
+		}
+	}
 }

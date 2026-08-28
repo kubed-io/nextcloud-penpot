@@ -424,6 +424,23 @@ trait GestureSteps {
 	// ── delete ──────────────────────────────────────────────────────────────
 
 	/**
+	 * The SECOND step: empty the Nextcloud trash for this file. Fires the same
+	 * event as the first delete, distinguished only by the node already living
+	 * under files_trashbin — which is what makes this the irreversible one.
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
+	 */
+	public function iPurgeFromTheNextcloudTrash(string $path): void {
+		$entry = $this->trashbinPathFor($path);
+		if ($entry === null) {
+			throw new \RuntimeException("no trashbin entry found for '{$path}' — was it actually deleted?");
+		}
+		$res = $this->davClient()->request('DELETE', $this->trashHref($entry));
+		$this->assertStatus($res, [204, 200], "purge {$entry}");
+	}
+
+	/**
 	 * The OTHER second step, and the one that undoes the first: take the file back
 	 * out of the Nextcloud trash.
 	 *
@@ -457,6 +474,19 @@ trait GestureSteps {
 	private string $lastGestureBody = '';
 
 	// ── Nextcloud's trash ───────────────────────────────────────────────────
+
+	/**
+	 * One check, two sentences, because a purge and a restore both leave no trashbin
+	 * entry and mean opposite things. "Gone from" reads for the destroyed case.
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 3 other steps call.
+	 */
+	public function theFileIsNotInTheNextcloudTrash(string $path): void {
+		if ($this->trashbinPathFor($path) !== null) {
+			throw new \RuntimeException("expected no trashbin entry for '{$path}', but one is there");
+		}
+	}
 
 	// ── Penpot's trash ──────────────────────────────────────────────────────
 

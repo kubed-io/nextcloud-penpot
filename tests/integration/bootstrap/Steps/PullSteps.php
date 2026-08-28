@@ -273,6 +273,59 @@ trait PullSteps {
 		return null;
 	}
 
+	public function aPenpotProjectExistsInThatTeam(string $name): void {
+		// "THAT TEAM" IS THE ONE MOST RECENTLY NAMED, which is what lets a scenario
+		// step outside the Background's default mapping by naming another team first.
+		$teamId = $this->namedTeamId !== ''
+			? $this->namedTeamId
+			: ($this->pulledTeamId !== '' ? $this->pulledTeamId : $this->firstVisibleTeamId());
+		$this->penpotRpc('create-project', ['team-id' => $teamId, 'name' => $name]);
+	}
+
+	/**
+	 * The sync run, as an ACTION — an admin clicking the button or running the
+	 * command, which is what `reconcile.feature` is about.
+	 *
+	 * ## TWO PHRASINGS, ONE FUNCTION — AND THAT IS THE POINT
+	 *
+	 * Cucumber and Behat ignore the KEYWORD when matching a step, so the same
+	 * text can be a Given in one scenario and a When in another. What they do not
+	 * ignore is the text, and the text is what a reader believes.
+	 *
+	 * "The admin runs a pull" as setup made it read as though an admin were
+	 * permanently on call, standing by to run a sync before every gesture a user
+	 * makes. That is not the system being described — it is scaffolding wearing a
+	 * behaviour's clothes. Setup says what IS TRUE ("the team has been mirrored"),
+	 * not who did what to make it true.
+	 *
+	 * So: use the ACTION phrasing where the run is the behaviour under test
+	 * (reconcile.feature), and the STATE phrasing everywhere the mirror merely has
+	 * to exist first. One implementation, because it is one operation.
+	 *
+	 * THREE PHRASINGS, ONE OPERATION:
+	 *
+	 *   "the admin runs a pull"                  the run IS the behaviour under
+	 *                                            test — reconcile.feature only
+	 *   "the team has been mirrored into
+	 *    Nextcloud"                              setup: a mirror has to exist
+	 *                                            before a gesture can touch it
+	 *   "the team is mirrored again"             the EVENT in a Penpot-origin
+	 *                                            scenario: someone changed
+	 *                                            something upstream, and nothing
+	 *                                            happens in Nextcloud until the
+	 *                                            next sync notices
+	 *
+	 * That last one matters more than it looks. A Penpot-side change is context —
+	 * it already happened, elsewhere, possibly by someone else. The event this
+	 * app is responsible for is the sync seeing it.
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 22 other steps call.
+	 */
+	public function theAdminRunsAPull(): void {
+		$this->occ('penpot_sync:sync pull');
+	}
+
 	/**
 	 * A sync, named by its ACTOR and its SCOPE — the two things that actually
 	 * differ between the four ways one starts.
@@ -366,6 +419,23 @@ trait PullSteps {
 	}
 
 	/**
+	 * A mirror's dates are PENPOT'S, and that is an end state rather than a
+	 * behaviour — so it is a sentence any feature can end with, not a scenario.
+	 *
+	 * It had a scenario of its own here, which made "the dates are right" look
+	 * like something syncing does rather than something every mirror is true of.
+	 * Every Penpot-origin behaviour — a design created, renamed, restored — wants
+	 * to end by saying this, and now each can.
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
+	 */
+	public function carriesItsPenpotDates(string $path): void {
+		$this->theDesignIsDatedWhenItChanged($path);
+		$this->theDesignWasCreatedWhenItWasCreated($path);
+	}
+
+	/**
 	 * The folder twin. A project folder gets its project's CREATION time only —
 	 * its mtime is propagated from its children by core, so asserting one would be
 	 * asserting core's propagation rather than this app's behaviour (§C6.24).
@@ -443,38 +513,89 @@ trait PullSteps {
 		$this->mustContain($out, 'penpot_team_id: ' . $this->pulledTeamId, $path);
 	}
 
+	/**
+	 * A project folder's creation date is its Penpot project's.
+	 *
+	 * Only the creation time — a folder's mtime is propagated by Nextcloud from its
+	 * children, so the app deliberately does not set it (§C6.24). Asserting one here
+	 * would be asserting core's propagation, not our behaviour.
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
+	 */
+	public function theFolderWasCreatedWhenItsProjectWas(string $path): void {
+		$name = basename($path);
+		$expected = null;
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			if (($project['name'] ?? null) === $name) {
+				$expected = self::penpotSecond($project['createdAt'] ?? null);
+				break;
+			}
+		}
+		if ($expected === null) {
+			throw new \RuntimeException("no Penpot project named '{$name}' with a usable created-at");
+		}
+		$this->assertClock($path, 'creation_time', $expected, "the project folder's creation time");
+	}
+
+	public function theDesignIsDatedWhenItChanged(string $path): void {
+		$file = $this->penpotFileRecordFor($path);
+		$this->assertClock($path, 'getlastmodified', self::penpotSecond($file['modifiedAt'] ?? null), "the design's modified-at");
+	}
+
+	public function theDesignWasCreatedWhenItWasCreated(string $path): void {
+		$file = $this->penpotFileRecordFor($path);
+		$this->assertClock($path, 'creation_time', self::penpotSecond($file['createdAt'] ?? null), "the design's created-at");
+	}
+
 	/** The team this scenario's mapping points at — set by the pull, else resolved. */
 	private function pullTeamId(): string {
 		return $this->pulledTeamId !== '' ? $this->pulledTeamId : $this->firstVisibleTeamId();
 	}
 
 	/**
-	 * A Penpot timestamp from the RAW RPC channel, as a Unix second.
+	 * The Penpot file record behind a mirrored path, matched on the design name —
+	 * the mirror's basename minus `.penpot`.
 	 *
-	 * ## THE SAME FIELD HAS TWO WIRE FORMATS, AND WHICH ONE YOU GET IS NEGOTIATED
-	 *
-	 * Confirmed by dumping both responses rather than reasoning about them, because
-	 * two successive guesses here were wrong:
-	 *
-	 *   the app  (Transit)  `modified-at`  "1785467414002"              epoch millis
-	 *   this test (JSON)    `modifiedAt`   "2026-08-01T01:55:42.434Z"   ISO-8601
-	 *
-	 * {@see penpotRpcRead} asks for `application/json`, so Penpot answers in camelCase
-	 * with ISO strings; {@see \OCA\PenpotSync\Service\PenpotClient} asks for Transit
-	 * and gets kebab-case with epoch millis. Neither is more correct — but a test that
-	 * assumes the app's shape reads absent keys and reports "no timestamp" for records
-	 * it actually found, which is exactly how this failed twice.
-	 *
-	 * So the app parses millis ({@see \OCA\PenpotSync\Service\MirrorTimes::parse})
-	 * and this parses ISO, and the duplication is load-bearing rather than sloppy: a
-	 * test sharing the app's parser could not have caught the app using the wrong one.
+	 * @return array<string, mixed>
 	 */
-	private static function penpotSecond(mixed $value): ?int {
-		if (!is_string($value) || trim($value) === '') {
-			return null;
+	private function penpotFileRecordFor(string $path): array {
+		$design = preg_replace('/\.penpot$/', '', basename($path));
+		// SCOPED TO THE PROJECT, not just the design name. A mirror's path is
+		// `<mapped folder>/<project>/<design>.penpot`, so the project is right there —
+		// and two projects in one team may hold designs with the same name. Matching on
+		// the name alone could read the wrong record and then either fail for a reason
+		// that has nothing to do with the mirror, or pass while validating a different
+		// design entirely.
+		$projectName = basename(dirname($path));
+		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $this->pullTeamId()]) as $project) {
+			if (($project['name'] ?? null) !== $projectName) {
+				continue;
+			}
+			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => (string)($project['id'] ?? '')]) as $file) {
+				if (($file['name'] ?? null) === $design) {
+					return $file;
+				}
+			}
+			throw new \RuntimeException("Penpot project '{$projectName}' holds no design named '{$design}' (from '{$path}')");
 		}
-		$ts = strtotime(trim($value));
-		return $ts === false ? null : $ts;
+		throw new \RuntimeException("no Penpot project named '{$projectName}' behind '{$path}'");
+	}
+
+	/** Compare one DAV clock on $path against $expected, or explain what it read. */
+	private function assertClock(string $path, string $property, ?int $expected, string $what): void {
+		if ($expected === null) {
+			throw new \RuntimeException("Penpot reported no usable timestamp for {$what} on '{$path}'");
+		}
+		$actual = $this->davTime($path, $property);
+		if ($actual !== $expected) {
+			throw new \RuntimeException(
+				"'{$path}' does not carry {$what}.\n"
+				. '  expected: ' . gmdate('c', $expected) . "\n"
+				. '  actual:   ' . ($actual === null ? 'unset' : gmdate('c', $actual)) . "\n"
+				. 'A mirror whose dates are the sync run\'s tells a user nothing about the design.',
+			);
+		}
 	}
 
 	/**

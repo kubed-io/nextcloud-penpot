@@ -54,6 +54,13 @@ namespace OCA\PenpotSync\Tests\Integration\Steps;
  * from {@see PullSteps}.
  */
 trait ModeSteps {
+	public function aPenpotFileExistsInTheProject(string $name, string $project): void {
+		$this->penpotRpc('create-file', [
+			'project-id' => $this->projectIdNamed($project),
+			'name' => $name,
+		]);
+	}
+
 	// ── helpers ─────────────────────────────────────────────────────────────
 
 	/**

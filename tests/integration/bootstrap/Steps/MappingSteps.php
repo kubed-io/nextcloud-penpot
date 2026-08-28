@@ -42,6 +42,16 @@ trait MappingSteps {
 	 */
 	private const UNREACHABLE_TEAM_ID = '11111111-2222-3333-4444-555555555555';
 
+	public function noPenpotTeamsAreMapped(): void {
+		foreach ($this->mappingIds() as $id) {
+			$this->occ('penpot_sync:remove-mapping ' . escapeshellarg($id));
+		}
+
+		if ($this->mappingIds() !== []) {
+			throw new \RuntimeException("could not clear the existing mappings:\n" . $this->lastOutput);
+		}
+	}
+
 	/**
 	 * The admin accepts the warning, and the submission goes through.
 	 *
@@ -553,6 +563,14 @@ trait MappingSteps {
 		};
 	}
 
+	public function theMappingsFolderIs(string $expected): void {
+		$actual = (string)($this->firstMapping()['nc_folder'] ?? '');
+
+		if ($actual !== $expected) {
+			throw new \RuntimeException("expected the folder to be '{$expected}', got '{$actual}'");
+		}
+	}
+
 	/** @Then /^the mapping's Nextcloud folder is still "([^"]*)"$/ */
 	public function theMappingsFolderIsStill(string $expected): void {
 		$this->theMappingsFolderIs($expected);
@@ -579,34 +597,6 @@ trait MappingSteps {
 		if ($actual !== $want) {
 			throw new \RuntimeException("expected the groups to be '{$want}', got '{$actual}'");
 		}
-	}
-
-	/**
-	 * A comparable rendering of a group list: sorted, comma-joined.
-	 *
-	 * SORTED, BECAUSE GROUPS ARE A SET. Since §C6.35 these are read back out of the
-	 * folder — a groupfolders assignment table or the share table — and neither
-	 * query orders its rows. What comes back is insertion order if the database
-	 * feels like it, which would make an assertion pass or fail on the order the
-	 * scenario happened to list its groups in. That is not a fact about the app.
-	 *
-	 * @param mixed $groups a list from JSON, or a comma-separated string
-	 */
-	private static function canonicalGroups(mixed $groups): string {
-		if (is_string($groups)) {
-			$groups = $groups === '' ? [] : explode(',', $groups);
-		}
-		if (!is_array($groups)) {
-			return '';
-		}
-
-		$out = array_values(array_filter(array_map(
-			static fn (mixed $g): string => trim((string)$g),
-			$groups,
-		), static fn (string $g): bool => $g !== ''));
-		sort($out);
-
-		return implode(',', $out);
 	}
 
 	/**

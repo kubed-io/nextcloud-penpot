@@ -63,6 +63,18 @@ trait ProjectFolderSteps {
 		$this->davMkcol($path);
 	}
 
+	/**
+	 *
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
+	 */
+	public function iAssignThePenpotTagTo(string $path): void {
+		$res = $this->occ(sprintf('tag:files:add %s penpot public', escapeshellarg($this->rootPath($path))));
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException("could not tag '{$path}':\n{$res['output']}");
+		}
+	}
+
 	// ── what the APP believes ───────────────────────────────────────────────
 
 	// ── what PENPOT actually holds ──────────────────────────────────────────
@@ -178,6 +190,18 @@ trait ProjectFolderSteps {
 	 * split across two lines, and the second one carries no path of its own.
 	 */
 	private string $assertedFolder = '';
+
+	/**
+	 * A path in the acting user's files, as the ROOT-relative form `occ` wants.
+	 *
+	 * `FileUtils::getNode()` takes either a numeric fileid or an absolute path
+	 * through the storage root — not the DAV-relative path every other step in
+	 * this suite speaks. One place to translate, so the Gherkin stays in the one
+	 * vocabulary a reader already knows.
+	 */
+	private function rootPath(string $path): string {
+		return '/' . $this->ncUser . '/files/' . ltrim($path, '/');
+	}
 
 	/**
 	 * Project names Penpot actually holds, read through the app's own probe so
