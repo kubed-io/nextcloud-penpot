@@ -95,7 +95,8 @@ trait MoveSteps {
 	 * dragged out. After that drag the file holds its archive, its `penpot_id`,
 	 * `penpot_mode | unmapped` and no team — and its design is in Penpot's trash.
 	 *
-	 * @Given /^an unmapped design file at "([^"]*)" carrying its Penpot id$/
+	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
+	 * stays as the plain helper 1 other step calls.
 	 */
 	public function anUnmappedDesignFileCarryingItsPenpotId(string $path): void {
 		$folder = dirname($path);
@@ -204,63 +205,6 @@ trait MoveSteps {
 				'ids' => [$id],
 			]);
 		}
-	}
-
-	/**
-	 * The far side of the arrival question, as the two states that reach the same
-	 * outcome.
-	 *
-	 * `trashed` is where {@see anUnmappedDesignFileCarryingItsPenpotId()} already
-	 * left it, so that row is a no-op — stated rather than skipped, because a step
-	 * that silently means nothing is worse than one that says it means nothing.
-	 * `live` is somebody restoring the design in Penpot's own UI in the meantime.
-	 *
-	 * @Given /^its design is (trashed|live) in Penpot$/
-	 */
-	public function itsDesignIsInPenpot(string $where): void {
-		if ($where === 'trashed') {
-			return;
-		}
-
-		$this->penpotRpc('restore-deleted-team-files', [
-			'team-id' => $this->parkedTeamId,
-			'ids' => [$this->idArrivedWith],
-		]);
-	}
-
-	/**
-	 * A design file outside every mapping whose id names nothing — or which never
-	 * had one.
-	 *
-	 * TWO STORED STATES, ONE QUESTION. Penpot has no design for this file either
-	 * way, so the app imports the archive and mints a fresh id; the row that
-	 * carries a stale id is the one that proves the stale id is REPLACED rather
-	 * than pushed at Penpot and failing.
-	 *
-	 * @Given /^a design file at "([^"]*)" carrying (an id no design answers to|no Penpot id at all)$/
-	 */
-	public function aDesignFileCarrying(string $path, string $what): void {
-		if ($what === 'no Penpot id at all') {
-			// An ordinary upload: real archive bytes, none of this app's keys.
-			$this->iUploadAnArchiveAt($path);
-			$this->idArrivedWith = '';
-
-			return;
-		}
-
-		// PARK IT, THEN DESTROY WHAT THE PARKING PARKED.
-		//
-		// Stamping a dead uuid on the file would be simpler and is NOT AVAILABLE:
-		// this app's metadata is app-owned, and a PROPPATCH from a client is refused
-		// with *"you do not have enough rights to update 'penpot_id' on this node"*.
-		// That is correct of the app — a client that could forge a design's identity
-		// could re-point any mirror at any design — so the fixture has to reach the
-		// state the same way a person would.
-		//
-		// Purging is the only thing that makes an id unresolvable: Penpot's trash
-		// keeps a design both restorable and exportable, so a delete is not enough.
-		$this->anUnmappedDesignFileCarryingItsPenpotId($path);
-		$this->theDesignIsPurgedFromPenpotsTrash(basename($path, '.penpot'));
 	}
 
 	/**

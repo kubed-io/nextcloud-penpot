@@ -19,6 +19,7 @@ use OCA\PenpotSync\Tests\Integration\Steps\GestureSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MappingSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MetadataSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ModeSteps;
+use OCA\PenpotSync\Tests\Integration\Steps\MoveConflictSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\MoveSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\ProjectFolderSteps;
 use OCA\PenpotSync\Tests\Integration\Steps\PruneSteps;
@@ -76,6 +77,7 @@ final class FeatureContext implements Context {
 	use GestureSteps;
 	use ProjectFolderSteps;
 	use CopySteps;
+	use MoveConflictSteps;
 	use MoveSteps;
 	use TrashSteps;
 	use MetadataSteps;

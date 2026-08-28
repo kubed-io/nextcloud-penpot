@@ -195,11 +195,11 @@ Feature: Moving a design
     Then "Penpot/Crowded/Turnbuckle.penpot" holds:
       | penpot_id   | the id the destination already had |
       | penpot_mode | the mapping's mode                 |
-    And its design in Penpot is named "Turnbuckle" and holds the archive it always had
+    And the design behind "Penpot/Crowded/Turnbuckle.penpot" is named "Turnbuckle" and holds the archive it always had
     And "Penpot/Crowded/Turnbuckle (1).penpot" holds:
       | penpot_id   | its own, not the destination's |
       | penpot_mode | the mapping's mode             |
-    And its design in Penpot is named "Turnbuckle (1)" and holds the archive that arrived
+    And the design behind "Penpot/Crowded/Turnbuckle (1).penpot" is named "Turnbuckle (1)" and holds the archive that arrived
 
     # ── RULE: a link is not movable, and a link mapping is not a destination ──
     # notes: ../AGENTS.md#a-link-cannot-be-moved-out-of-the-project-it-points-into
