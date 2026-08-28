@@ -75,19 +75,32 @@ trait MoveSteps {
 	 * for provenance it never asserts: `mapping/create.feature` purges the file
 	 * either way, so whether it once had an id changes nothing about its fate.
 	 *
-	 * A REAL EXPORT, because an arriving archive is now IMPORTED. This wrote
-	 * `PK\x03\x04` and padding on the reasoning that "nothing imports these bytes",
-	 * which was true while a design arriving in a mapping was ignored and stopped
-	 * being true when it stopped being ignored: Penpot answers `import-binfile` with
-	 * a 500 io-exception for anything that is not a genuine archive, the app catches
-	 * it and leaves the file untracked, and the scenario then fails saying no design
-	 * is on stage — which describes the fixture rather than the app.
+	 * A REAL EXPORT WHERE ONE CAN BE MADE, because an arriving archive is now
+	 * IMPORTED. This wrote `PK\x03\x04` and padding on the reasoning that "nothing
+	 * imports these bytes" — true while a design arriving in a mapping was ignored,
+	 * and false the moment it stopped being. Penpot answers `import-binfile` with a
+	 * 500 for anything that is not a genuine archive, the app catches it and leaves
+	 * the file untracked, and the scenario then fails saying no design is on stage:
+	 * a description of the fixture rather than of the app.
+	 *
+	 * ## BUT A REAL EXPORT NEEDS A MAPPING TO COME FROM
+	 *
+	 * {@see GestureSteps::aRealPenpotArchive()} makes one by writing a design into
+	 * `Penpot/Archive Source` and letting the pull mirror it, which needs the
+	 * `Penpot` mapping this feature's Background declares. `mapping/create.feature`
+	 * has no mapping at all — it is the file that MAKES them — so there the export
+	 * cannot be produced and the PUT lands wherever `Penpot` happens to be, which in
+	 * that feature is nothing, or a `link` folder that refuses writes.
+	 *
+	 * Nothing imports the bytes there either: that scenario purges the file. So the
+	 * plausible header is still the right fixture when no mapping can produce a real
+	 * one, and the difference is invisible to every scenario that does not import.
 	 *
 	 * @Given /^an unmapped design file at "([^"]*)"$/
 	 */
 	public function anUnmappedDesignFileAt(string $path): void {
 		$this->makeAncestors($path);
-		$this->davPut($path, $this->aRealPenpotArchive());
+		$this->davPut($path, $this->anImportableArchiveOrAPlausibleOne());
 
 		// ON STAGE, so `the file` and `that file` mean this one. Without it a
 		// scenario whose only Given is this step has no cursor at all, and the first
@@ -102,6 +115,21 @@ trait MoveSteps {
 		$this->currentFilePath = $path;
 		$this->currentFolder = dirname($path);
 		$this->currentFileId = '';
+	}
+
+	/**
+	 * Real bytes when a mapping can export them; a plausible header otherwise.
+	 *
+	 * Never fails the arrange over it: a scenario that imports needs the real thing
+	 * and will say so loudly when it does not get it, and one that does not import
+	 * cannot tell the difference.
+	 */
+	private function anImportableArchiveOrAPlausibleOne(): string {
+		try {
+			return $this->aRealPenpotArchive();
+		} catch (\Throwable) {
+			return "PK\x03\x04" . str_repeat("\0", 64);
+		}
 	}
 
 	/**
