@@ -339,14 +339,40 @@ trait TrashSteps {
 	/**
 	 * Somebody restores the cursor's design in Penpot, and the sync carries the news.
 	 *
+	 * ## CONFIRMED BEFORE THE PULL, OR THE PULL HAS NOTHING TO CARRY
+	 *
+	 * §6.49's gotcha, which this step was the last call site not to hold itself to:
+	 * `restore-deleted-team-files` answers 200 with an `end` event while
+	 * `deleted_at` is STILL SET, and a pull run in that window reads a design that
+	 * is still trashed and — correctly — brings nothing back. The assertion that
+	 * follows then polls WebDAV for ten seconds, which can never turn true: the
+	 * pull is one `occ` invocation that has already finished and decided. So the
+	 * wait is dead time and the leg goes red on an app that did the right thing.
+	 *
+	 * The fix is the shape {@see someonePermanentlyDeletesTheCursoredDesignInPenpot()}
+	 * already uses on the delete twin — ask again until a RE-READ of the trash
+	 * agrees, never the `end` event — and only then pull. {@see itsDesignIsNotInPenpotsTrash()}
+	 * confirms the same way; this step was the odd one out.
+	 *
 	 * @When /^someone restores the design in Penpot$/
 	 */
 	public function someoneRestoresTheDesignInPenpot(): void {
-		$this->penpotRpc('restore-deleted-team-files', [
-			'team-id' => $this->cursorTeamId(),
-			'ids' => [$this->cursorDesignId()],
-		]);
-		$this->theAdminRunsAPull();
+		$team = $this->cursorTeamId();
+		$id = $this->cursorDesignId();
+
+		for ($attempt = 0; $attempt < 3; $attempt++) {
+			$this->penpotRpc('restore-deleted-team-files', ['team-id' => $team, 'ids' => [$id]]);
+			if (!in_array($id, $this->penpotTrashIds($team), true)) {
+				// The design is live again. NOW the pull has something to find.
+				$this->theAdminRunsAPull();
+
+				return;
+			}
+		}
+
+		throw new \RuntimeException(
+			"Penpot accepted restore-deleted-team-files for {$id} three times and it is still in team {$team}'s trash",
+		);
 	}
 
 	/**

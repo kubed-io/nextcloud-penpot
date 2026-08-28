@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **"Sync to Penpot" — designs made out of the files you already have.** Map a folder that is already full of `.penpot` files and press the new button: each one Penpot has never seen becomes a real design, in the project its folder spells. Designs that already exist are never touched, and `link` mappings are skipped entirely. Also available as `occ penpot_sync:sync push`.
+
 - **Mapping a folder that already holds designs in link mode now asks first.** A linked folder holds pointers, so a real design cannot survive in one — the app used to map over them anyway and leave files that looked like designs and were not. It now tells you how many are there and that deleting them is permanent, and does nothing until you say so. Sync mappings are unaffected: they adopt what they find.
 
 - **Removing a mapping now cleans up after itself.** The empty pointer files a `link` mapping left behind are removed — they held nothing and meant nothing once the mapping went. Designs that hold a real copy are kept exactly where they are and simply stop being mirrors, so nothing you could lose is ever deleted. Penpot is still never contacted.

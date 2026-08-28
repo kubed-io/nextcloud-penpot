@@ -2,8 +2,9 @@
 
 Feature: Syncing every mapping
   As a Nextcloud admin
-  I want one sync to bring every mapped team up to date
-  So that the mirror stays true without anyone tending it
+  I want one sync, in either direction, across every mapping at once
+  So that the mirror stays true without anyone tending it — and so I can declare
+  Nextcloud the source of truth on the day something has gone wrong in Penpot
 
   Background:
     Given the app is connected to Penpot
@@ -17,9 +18,9 @@ Feature: Syncing every mapping
       | Reference Team | Pinned      | Fixed      |
     And Nextcloud holds these resources:
       | path                          |
-      | /Penpot/notes.txt          |
-      | /Penpot/Cogs               |
-      | /Penpot/Cogs/plan.txt      |
+      | /Penpot/notes.txt             |
+      | /Penpot/Cogs                  |
+      | /Penpot/Cogs/plan.txt         |
       | /Penpot/Cogs/Hand Made.penpot |
     And the following mappings were made:
       | team           | folder   | mode | storage      | groups |
@@ -33,7 +34,7 @@ Feature: Syncing every mapping
   # ── one behaviour, two ways to start it across every mapping ───────────────
   # notes: ../AGENTS.md#sync-now-scope
 
-  @admin @occ @ui @todo
+  @admin @occ @ui
   Scenario Outline: A sync from Penpot mounts every mapped folder, however it was started
     When <actor> syncs every mapping from Penpot
     Then Nextcloud holds exactly these resources:
@@ -60,13 +61,13 @@ Feature: Syncing every mapping
       | the admin    |
       | the schedule |
 
-  # notes: ../AGENTS.md#the-tree-is-the-assertion
+    # notes: ../AGENTS.md#the-tree-is-the-assertion
 
     # ── RULE: the other direction — Nextcloud is declared the source of truth ──
-    # notes: ../AGENTS.md#the-first-sync-to-penpot-makes-designs-of-the-files-already-there
 
-  @admin @occ @ui @todo
-  Scenario: The first sync to Penpot makes designs of the files already there
+  # notes: ../AGENTS.md#the-first-sync-to-penpot-makes-designs-of-the-files-already-there
+  @admin @occ @ui
+  Scenario: A sync to Penpot pushes archived designs into penpot if they are not there yet 
     When the admin syncs every mapping to Penpot
     Then Penpot holds exactly these resources:
       | team           | project     | design     |
@@ -84,4 +85,3 @@ Feature: Syncing every mapping
 
     # A ".penpot" sitting in a mapped folder is not a design yet, and the button that
     # declares Nextcloud the source of truth is where it becomes one.
-

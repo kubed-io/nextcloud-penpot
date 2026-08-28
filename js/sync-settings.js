@@ -4,16 +4,20 @@
  *
  * "Sync Actions" panel handlers.
  *
- * Test connection and "Sync from Penpot" are wired, and they are now the only two
- * buttons here — the disabled "Purge" that used to sit between them went with the
- * feature it was waiting for (features/AGENTS.md#retired--the-admin-purge).
+ * Three buttons: "Sync to Penpot", "Sync from Penpot", and Test connection.
  *
- * "Sync from Penpot" is ASYNC: the click queues a job and returns, then this
+ * BOTH SYNC DIRECTIONS ARE ASYNC: the click queues a job and returns, then this
  * polls for the outcome. A bulk pull walks every mapped team and exports an
- * archive per drifted file, which outlives a request — so there is nothing to
- * wait for synchronously, and a request that died half way would leave the admin
- * unable to tell slow from broken. The per-mapping "Sync now" on a mapping card
- * is the opposite shape, for the opposite reason (bounded work, admin waiting).
+ * archive per drifted file; a bulk push uploads an archive per file that has
+ * never been a design. Either outlives a request, and a request that died half
+ * way would leave the admin unable to tell slow from broken. The per-mapping
+ * "Sync now" on a mapping card is the opposite shape, for the opposite reason
+ * (bounded work, admin waiting).
+ *
+ * THE DIRECTION IS DATA, NOT A SECOND CODE PATH. Each row carries a
+ * `data-direction`, and every function below takes one — the alternative was two
+ * near-identical copies of the poller, which is how the two directions would
+ * drift apart on the next change.
  */
 (function () {
 	'use strict';
@@ -39,8 +43,9 @@
 		root.dataset.bound = '1';
 
 		root.addEventListener('click', function (e) {
-			if (e.target.closest('.js-run')) {
-				startPull(e.target.closest('.js-run'));
+			var btn = e.target.closest('.js-run');
+			if (btn) {
+				startSync(btn);
 			}
 		});
 
@@ -59,8 +64,19 @@
 		return document.getElementById('penpot-sync-manual-status');
 	}
 
+	/** The row for a direction, and the per-row "last run" line inside it. */
+	function rowFor(direction) {
+		return document.querySelector('#penpot-sync-manual [data-direction="' + direction + '"]');
+	}
+
+	/** Which direction a button belongs to, read off its row. */
+	function directionOf(btn) {
+		var row = btn && btn.closest('[data-direction]');
+		return (row && row.dataset.direction) === 'push' ? 'push' : 'pull';
+	}
+
 	/**
-	 * Paint the status line. `busy` adds Nextcloud's own inline spinner.
+	 * Paint the shared status line. `busy` adds Nextcloud's own inline spinner.
 	 *
 	 * THE BUTTON KEEPS ITS LABEL. Swapping it to "Queued…" (which is what the
 	 * sibling does) makes the button change width mid-click and briefly stops it
@@ -74,13 +90,33 @@
 		out.textContent = text;
 	}
 
-	/** One line describing a finished run, whichever trigger produced it. */
-	function describe(rec) {
+	/** Paint the per-row "last: …" line, which persists between runs. */
+	function paintLast(direction, text) {
+		var row = rowFor(direction);
+		var last = row && row.querySelector('.js-last');
+		if (last) { last.textContent = text; }
+	}
+
+	/**
+	 * One line describing a finished run, whichever trigger produced it.
+	 *
+	 * THE TWO DIRECTIONS COUNT DIFFERENT THINGS and so cannot share a sentence: a
+	 * pull reports files written and archives exported, a push reports designs
+	 * made out of files that had none. Saying "12 files" for a push that created
+	 * three designs would be counting the candidates it considered.
+	 */
+	function describe(direction, rec) {
 		if (!rec || !rec.finished_at) {
 			return t('penpot_sync', 'Never run.');
 		}
 		if (rec.status === 'error') {
 			return t('penpot_sync', 'Last sync failed: {message}', { message: rec.message || '?' });
+		}
+		if (direction === 'push') {
+			return t('penpot_sync', 'Last sync: {pushed} design(s) created from {processed} file(s).', {
+				pushed: rec.pushed == null ? 0 : rec.pushed,
+				processed: rec.processed == null ? 0 : rec.processed,
+			});
 		}
 		return t('penpot_sync', 'Last sync: {files} file(s), {exported} archive(s) exported.', {
 			files: rec.files == null ? '?' : rec.files,
@@ -88,40 +124,45 @@
 		});
 	}
 
-	function getStatus() {
-		return fetch(url('/sync/status'), {
+	function statusUrl(direction) {
+		return direction === 'push' ? '/sync/push-status' : '/sync/status';
+	}
+
+	function getStatus(direction) {
+		return fetch(url(statusUrl(direction)), {
 			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
 		}).then(function (r) { return r.ok ? r.json() : null; });
 	}
 
-	/** Paint the current state on load, without polling an idle page. */
+	/** Paint the current state of BOTH directions on load, without polling an idle page. */
 	function refreshStatus() {
-		return getStatus().then(function (rec) {
-			if (!rec) { return; }
-			if (rec.status === 'queued' || rec.status === 'running') {
-				// A run is already in flight — probably the schedule. Follow it.
-				pollUntilDone(document.querySelector('#penpot-sync-manual .js-run'));
-				return;
-			}
-			flash(rec.status === 'error' ? 'error' : '', describe(rec));
-		}).catch(function () { /* an idle panel is not worth an error */ });
+		['push', 'pull'].forEach(function (direction) {
+			getStatus(direction).then(function (rec) {
+				if (!rec) { return; }
+				if (rec.status === 'queued' || rec.status === 'running') {
+					// A run is already in flight — probably the schedule. Follow it.
+					var row = rowFor(direction);
+					pollUntilDone(row && row.querySelector('.js-run'), direction);
+					return;
+				}
+				paintLast(direction, describe(direction, rec));
+			}).catch(function () { /* an idle panel is not worth an error */ });
+		});
 	}
 
 	/**
 	 * The bulk sync is ASYNC: this POST enqueues a job and returns. The visible
-	 * feedback is the BUTTON'S OWN LABEL — "Queued…" then "Running…" — because a
-	 * status line below the fold is not something a person notices when they have
-	 * just pressed a button and are looking straight at it.
+	 * feedback starts BEFORE the round trip, because a click that looks like it
+	 * did nothing is the thing people click twice.
 	 */
-	function startPull(btn) {
-		// Feedback BEFORE the round trip. The click must look like it landed even
-		// if the POST takes a moment; waiting for the response is what made the
-		// first version feel like nothing happened.
+	function startSync(btn) {
+		var direction = directionOf(btn);
+
 		btn.disabled = true;
 		btn.setAttribute('aria-busy', 'true');
 		flash('', t('penpot_sync', 'Queued…'), true);
 
-		fetch(url('/sync/pull'), {
+		fetch(url(direction === 'push' ? '/sync/push' : '/sync/pull'), {
 			method: 'POST',
 			headers: { requesttoken: OC.requestToken, Accept: 'application/json' },
 		})
@@ -129,13 +170,13 @@
 				if (res.status === 409) {
 					// Not an error: a sync was asked for and a sync is happening.
 					flash('', t('penpot_sync', 'A sync is already running.'), true);
-					pollUntilDone(btn);
+					pollUntilDone(btn, direction);
 					return;
 				}
 				if (!res.ok) {
 					throw new Error(t('penpot_sync', 'Could not start the sync ({status}).', { status: res.status }));
 				}
-				pollUntilDone(btn);
+				pollUntilDone(btn, direction);
 			})
 			.catch(function (err) {
 				flash('error', err.message || t('penpot_sync', 'Could not start the sync.'));
@@ -164,12 +205,12 @@
 	 *    means up to two seconds of dead air before "Running…" appears — which is
 	 *    the exact window where a button feels broken.
 	 */
-	function pollUntilDone(btn) {
+	function pollUntilDone(btn, direction) {
 		var waited = 0;
 		var delay = 400;
 
 		function tick() {
-			getStatus()
+			getStatus(direction)
 				.then(function (rec) {
 					if (!rec) { return schedule(); }
 
@@ -177,7 +218,9 @@
 						flash('', t('penpot_sync', 'Syncing…'), true);
 					}
 					if (rec.status === 'ok' || rec.status === 'error') {
-						flash(rec.status === 'error' ? 'error' : 'success', describe(rec));
+						var line = describe(direction, rec);
+						flash(rec.status === 'error' ? 'error' : 'success', line);
+						paintLast(direction, line);
 						release(btn);
 						return;
 					}

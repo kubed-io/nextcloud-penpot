@@ -7,7 +7,7 @@
  * rendered last (below Team mappings), laid out to match the sibling apps'
  * sync_settings.php so the three look the same:
  *
- *   • Manual bulk sync — "Sync from Penpot"
+ *   • Manual bulk sync — ⭱ "Sync to Penpot" / ⭳ "Sync from Penpot"
  *   • Connection test — "Test connection"
  *
  * EVERY BUTTON IN HERE WORKS. That was not true while "Purge Nextcloud files" sat
@@ -17,11 +17,16 @@
  * someone still intends to enable it; past that it is a promise nobody is keeping,
  * and it had been making the panel lie for two courses.
  *
- * THERE IS NO "Sync to Penpot", and there never will be: this app is read-only
- * for file content (§6.1). That is the spine of the design, not a phase-ordering
- * gap — a disabled push button would promise a feature that is never coming.
- * This is the one place the family's layout deliberately differs, and the
- * difference is load-bearing.
+ * THE PUSH BUTTON IS NEW, AND THIS FILE USED TO ARGUE IT NEVER COULD BE. The old
+ * comment said "there is no Sync to Penpot, and there never will be: this app is
+ * read-only for file content (§6.1)". That over-read §6.1, which forbids pushing
+ * shape data into a design Penpot ALREADY HAS — not making a design out of an
+ * archive it has never seen. The push does only the latter, so the family's layout
+ * no longer differs here at all.
+ *
+ * THE ORDER IS PUSH THEN PULL, copied from n8n rather than invented: the
+ * destructive-sounding direction sits first, where it is read before it is
+ * clicked, and both siblings put it there.
  *
  * @var \OCP\IL10N $l
  */
@@ -31,11 +36,18 @@
 	<h3><?php p($l->t('Sync Actions')); ?></h3>
 
 	<p class="settings-hint">
-		<?php p($l->t('Run a one-shot bulk sync at any time. Sync from Penpot mirrors every mapped team\'s designs into Nextcloud. Nothing is ever written back to Penpot — this app mirrors designs, it does not edit them.')); ?>
+		<?php p($l->t('Run a one-shot bulk sync at any time, whatever Sync Settings says above.')); ?>
 	</p>
+
+	<div class="penpot-sync-manual__row" data-direction="push">
+		<button type="button" class="button js-run"><?php p($l->t('Sync to Penpot')); ?></button>
+		<span class="penpot-sync-manual__last js-last"></span>
+		<span class="penpot-sync-manual__hint"><?php p($l->t('(sync mappings only)')); ?></span>
+	</div>
 
 	<div class="penpot-sync-manual__row" data-direction="pull">
 		<button type="button" class="button primary js-run"><?php p($l->t('Sync from Penpot')); ?></button>
+		<span class="penpot-sync-manual__last js-last"></span>
 	</div>
 
 	<div class="penpot-sync-manual__footer">

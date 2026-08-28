@@ -31,5 +31,7 @@ return [
 		// schedule.
 		['name' => 'sync#pull', 'url' => '/sync/pull', 'verb' => 'POST'],
 		['name' => 'sync#status', 'url' => '/sync/status', 'verb' => 'GET'],
+		['name' => 'sync#push', 'url' => '/sync/push', 'verb' => 'POST'],
+		['name' => 'sync#pushStatus', 'url' => '/sync/push-status', 'verb' => 'GET'],
 	],
 ];

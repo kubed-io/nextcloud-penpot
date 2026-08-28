@@ -11,6 +11,8 @@ namespace OCA\PenpotSync\Command;
 
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\PullStatus;
+use OCA\PenpotSync\Service\BulkPushService;
+use OCA\PenpotSync\Service\PushStatus;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -25,19 +27,25 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * ## WHY `pull` IS AN ARGUMENT AND NOT THE COMMAND NAME
  *
- * The saga names this `penpot_sync:sync pull` (Ch2 Course 3): the same command
- * grows a `push` direction in Course 4. Keeping `sync` as the verb and the
- * direction as an argument means that later course adds a branch, not a new
- * command — and the muscle memory (`occ penpot_sync:sync …`) never changes.
- * Only `pull` is implemented today; anything else is refused with a clear
- * message rather than silently doing a pull.
+ * The saga names this `penpot_sync:sync pull` (Ch2 Course 3), anticipating the
+ * `push` direction that has now landed. Keeping `sync` as the verb and the
+ * direction as an argument meant that arrival was a branch rather than a new
+ * command, and the muscle memory (`occ penpot_sync:sync …`) never changed.
+ *
+ * The two directions are NOT symmetric and the asymmetry is the point: a pull
+ * mirrors everything Penpot has, while a push only makes designs of archives
+ * Penpot has never seen ({@see BulkPushService}). Neither ever overwrites a design
+ * that already exists (§6.1).
  */
 final class Sync extends Command {
 	private const DIR_PULL = 'pull';
+	private const DIR_PUSH = 'push';
 
 	public function __construct(
 		private PullService $pull,
 		private PullStatus $status,
+		private BulkPushService $push,
+		private PushStatus $pushStatus,
 	) {
 		parent::__construct();
 	}
@@ -46,11 +54,11 @@ final class Sync extends Command {
 	protected function configure(): void {
 		$this
 			->setName('penpot_sync:sync')
-			->setDescription('Mirror Penpot into Nextcloud (pull). The CLI twin of the scheduled job.')
+			->setDescription('Sync between Penpot and Nextcloud in either direction. The CLI twin of the two admin buttons.')
 			->addArgument(
 				'direction',
 				InputArgument::OPTIONAL,
-				'Sync direction. Only "pull" is implemented; "push" lands in a later course.',
+				'Sync direction: "pull" (Penpot into Nextcloud) or "push" (make designs of the archives already here).',
 				self::DIR_PULL,
 			)
 			->addOption(
@@ -71,13 +79,17 @@ final class Sync extends Command {
 	#[\Override]
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$direction = (string)$input->getArgument('direction');
-		if ($direction !== self::DIR_PULL) {
-			$output->writeln('<error>Only "pull" is implemented. Push lands in a later course.</error>');
+		if ($direction !== self::DIR_PULL && $direction !== self::DIR_PUSH) {
+			$output->writeln('<error>Direction must be "pull" or "push".</error>');
 
 			return 1;
 		}
 
 		$mappingId = (string)$input->getOption('mapping');
+
+		if ($direction === self::DIR_PUSH) {
+			return $this->runPush($input, $output, $mappingId === '' ? null : $mappingId);
+		}
 
 		// ONE PULLER AT A TIME: two runs over one folder tree race on the same
 		// files. The section's button and the scheduled job already refuse; so
@@ -193,5 +205,55 @@ final class Sync extends Command {
 		$output->writeln('<info>Pull complete.</info>');
 
 		return 0;
+	}
+
+	/**
+	 * `occ penpot_sync:sync push` — the CLI twin of "Sync to Penpot".
+	 *
+	 * SYNCHRONOUS, UNLIKE THE BUTTON. The panel queues a job because a request
+	 * that dies half way leaves no record of how far it got; a CLI invocation has
+	 * an operator watching it and an exit code to answer with, so it runs inline
+	 * and reports. Both stamp {@see PushStatus} for the same reason the pull does:
+	 * "when did this last sync?" must have one answer per direction, whatever
+	 * started it.
+	 */
+	private function runPush(InputInterface $input, OutputInterface $output, ?string $mappingId): int {
+		if (!$input->getOption('force') && $this->pushStatus->isBusy()) {
+			$output->writeln(
+				'<error>A push is already running. Wait for it to finish, or re-run with '
+				. '--force if a previous run was killed and left this stuck.</error>',
+			);
+
+			return 1;
+		}
+
+		$this->pushStatus->markStarted();
+
+		// EVERY EXIT CLEARS `running`, exactly as the pull branch does — a status
+		// stuck at `running` makes `isBusy()` true forever and wedges the panel.
+		try {
+			$result = $this->push->push($mappingId);
+		} catch (\Throwable $e) {
+			$this->pushStatus->markFailed($e->getMessage());
+			$output->writeln('<error>The push failed: ' . $e->getMessage() . '</error>');
+
+			return 1;
+		}
+
+		$this->pushStatus->markFinished($result);
+
+		$output->writeln(sprintf(
+			'Pushed %d design(s) from %d candidate file(s); %d failed, %d link mapping(s) skipped.',
+			$result['pushed'],
+			$result['processed'],
+			$result['failed'],
+			$result['skipped'],
+		));
+
+		if ($result['message'] !== null) {
+			$output->writeln('<comment>' . $result['message'] . '</comment>');
+		}
+
+		return $result['failed'] === 0 ? 0 : 1;
 	}
 }

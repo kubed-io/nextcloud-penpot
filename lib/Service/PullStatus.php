@@ -27,12 +27,18 @@ use OCP\IAppConfig;
  * started this slice: an interval was configured, nothing consumed it, and there
  * was no way to tell.
  *
- * ## ONE DIRECTION, UNLIKE BOTH SIBLINGS
+ * ## TWO DIRECTIONS, KEYED SEPARATELY — AS BOTH SIBLINGS DO
  *
- * Theirs key this by `pull`/`push` because they push content. This app never
- * will (§6.1), so there is no direction to key on — a deliberate simplification
- * rather than an omission, and the reason this class is named for the pull
- * rather than for syncing in general.
+ * This class used to say there was only ever one direction, because §6.1 made
+ * the app read-only for design content. That over-read the rule: §6.1 forbids
+ * pushing shape data into a design Penpot ALREADY HAS, and says nothing about an
+ * archive Penpot has never seen. {@see BulkPushService} makes designs of those, so
+ * there is a second direction and it gets its own record ({@see PushStatus}) —
+ * one press of "Sync to Penpot" must not erase what the last pull reported.
+ *
+ * The rule above still holds, per direction: every trigger of a PULL writes the
+ * one pull record, and the class stays named for the pull because that is the
+ * record it keys.
  *
  * ## THE PREVIOUS RESULT SURVIVES A NEW RUN
  *
@@ -41,7 +47,7 @@ use OCP\IAppConfig;
  * minutes ago, 12 files)" instead of going blank the moment someone clicks —
  * which would read as "the previous run was lost".
  */
-final class PullStatus {
+class PullStatus {
 	private const KEY = 'pull_status';
 
 	/** Queued but not yet picked up by a cron worker. */
@@ -57,10 +63,24 @@ final class PullStatus {
 	) {
 	}
 
+	/**
+	 * The app-config key this record lives under.
+	 *
+	 * OVERRIDABLE BECAUSE THERE ARE NOW TWO DIRECTIONS, and they must not share a
+	 * record: "Sync to Penpot" and "Sync from Penpot" are separate runs with
+	 * separate outcomes, and a single record would have each button erasing the
+	 * other's result — which is exactly the confusion the class docblock's "one
+	 * record, whichever trigger" rule exists to prevent WITHIN a direction.
+	 * {@see PushStatus} is the other one.
+	 */
+	protected function key(): string {
+		return self::KEY;
+	}
+
 	/** @return array<string, mixed> the whole record, `[]` if nothing ever ran */
 	public function get(): array {
 		$decoded = json_decode(
-			$this->config->getValueString(Application::APP_ID, self::KEY, '{}'),
+			$this->config->getValueString(Application::APP_ID, $this->key(), '{}'),
 			true,
 		);
 
@@ -120,7 +140,7 @@ final class PullStatus {
 	private function save(array $patch): void {
 		$this->config->setValueString(
 			Application::APP_ID,
-			self::KEY,
+			$this->key(),
 			(string)json_encode(array_merge($this->get(), $patch)),
 		);
 	}
