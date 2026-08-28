@@ -58,6 +58,7 @@ trait SyncNowSteps {
 	 * @Given /^Penpot holds these resources:$/
 	 */
 	public function penpotHoldsTheseResources(TableNode $table): void {
+		$this->syncNowProbe('Background START');
 		foreach ($table->getHash() as $row) {
 			$team = trim((string)($row['team'] ?? ''));
 			$project = trim((string)($row['project'] ?? ''));
@@ -74,6 +75,7 @@ trait SyncNowSteps {
 				$this->penpotRpc('create-file', ['project-id' => $projectId, 'name' => $design]);
 			}
 		}
+		$this->syncNowProbe('Background END');
 	}
 
 	/**
@@ -107,6 +109,7 @@ trait SyncNowSteps {
 	 * @Given /^Nextcloud holds these resources:$/
 	 */
 	public function nextcloudHoldsTheseResources(TableNode $table): void {
+		$this->syncNowProbe('nextcloudHolds START');
 		foreach ($table->getHash() as $row) {
 			$path = ltrim(trim((string)($row['path'] ?? '')), '/');
 			if ($path === '') {
@@ -160,7 +163,9 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
+		$this->syncNowProbe('sync step START (mappings done)');
 		$this->syncNowWritePending();
+		$this->syncNowProbe('after writePending');
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -492,5 +497,28 @@ trait SyncNowSteps {
 	private function syncNowIsFixture(string $path): bool {
 		return $path === self::FIXTURE_FOLDER
 			|| str_starts_with($path, self::FIXTURE_FOLDER . '/');
+	}
+
+	/** TEMPORARY diagnostic — reverted before merge. */
+	private function syncNowProbe(string $when): void {
+		$teamId = $this->teamNamed('Design Team');
+		$seen = [];
+		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			if (($project['teamId'] ?? $project['team-id'] ?? null) !== $teamId) {
+				continue;
+			}
+			$pid = (string)($project['id'] ?? '');
+			$pname = (string)($project['name'] ?? '');
+			if ($pid === '') {
+				continue;
+			}
+			$files = [];
+			foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $pid]) as $file) {
+				$files[] = (string)($file['name'] ?? '');
+			}
+			$seen[] = $pname . '[' . implode('|', $files) . ']';
+		}
+		sort($seen);
+		fwrite(STDERR, "PROBE [{$when}] " . implode(' ', $seen) . "\n");
 	}
 }
