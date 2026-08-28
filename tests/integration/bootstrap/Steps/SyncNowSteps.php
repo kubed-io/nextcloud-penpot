@@ -312,68 +312,80 @@ trait SyncNowSteps {
 	}
 
 	/**
-	 * Real `.penpot` bytes, produced where NEITHER assertion in this feature looks.
+	 * Real `.penpot` bytes, produced inside the mapping and then swept up again.
 	 *
-	 * ## THIS IS THE HARDEST FIXTURE IN THE FEATURE, AND WHY
+	 * ## WHY IT CANNOT BE SEEDED SOMEWHERE OUT OF THE WAY
 	 *
-	 * The archive has to come from Penpot — only a real export is importable, and
-	 * `Hand Made.penpot` holding a fake ZIP would make the push scenario prove
-	 * nothing. But producing one means creating a design SOMEWHERE, and this feature
-	 * asserts both sides with `exactly`:
+	 * The obvious idea — put the source in a folder no table names — does not work,
+	 * and the app is right to stop it. An empty `.penpot` created where nothing
+	 * mirrors a Penpot team is refused by {@see \OCA\PenpotSync\Service\MoveRules}
+	 * with a 403: `create-file` needs a project, and outside a mapping there is none.
+	 * A design can only be born inside a mapped folder, so that is where the source
+	 * has to start.
 	 *
-	 *   - seeded in a mapped folder, the source appears in the pull's tree table;
-	 *   - seeded in a mapped TEAM, its project appears in the push's Penpot table.
+	 * ## AND WHY IT CANNOT SIMPLY STAY THERE
 	 *
-	 * {@see GestureSteps::aRealPenpotArchive()} does the first — it leaves
-	 * `Penpot/Archive Source/Source.penpot` standing on purpose, since removing it
-	 * would delete the design in Penpot. Harmless in every other feature, fatal here.
+	 * {@see GestureSteps::aRealPenpotArchive()} seeds exactly this way and LEAVES the
+	 * file standing, which is right for every other feature and wrong here: this one
+	 * asserts both sides with `exactly`, so a leftover `Penpot/Archive Source/` is an
+	 * `unexpected:` row in the tree table and its project is one in the Penpot table.
 	 *
-	 * So the source lives in a team this feature never maps and never names. Its
-	 * projects are nobody's business and its designs are in no table, so both
-	 * `exactly` assertions stay blind to it.
+	 * So the source is made, exported, read, and then DELETED — file and folder —
+	 * before the scenario proper begins. Deleting the mirror trashes the design in
+	 * Penpot, which is the point: it leaves neither a file in the tree nor a live
+	 * project in the team, and the cached bytes outlive both.
 	 *
-	 * ## AND THE DONOR MAPPING IS TORN DOWN AGAIN
+	 * ## THE MAPPING IS THE HELPER'S OWN, BECAUSE THE BACKGROUND HAS NOT MADE ONE YET
 	 *
-	 * The bytes have to be read back through a mapping — that is the only way an
-	 * export reaches Nextcloud — but a mapping left standing is a FOURTH mapping
-	 * the push would walk, whose archive would then be imported into the donor
-	 * team and appear in nothing. So it is removed as soon as the bytes are in
-	 * hand. The file survives the removal holding its archive (a `sync` mapping's
-	 * designs are kept and unmapped, `mapping/delete.feature`), which is exactly
-	 * what makes the cached bytes readable on a later scenario.
+	 * The Background states the two sides BEFORE `the following mappings were made`
+	 * — as grafana's does, and as a picture of the pre-state should. Grafana gets
+	 * away with seeding files at that point because a `.grafana` is plain JSON;
+	 * a `.penpot` is not, and creating one outside a mapping is refused.
 	 *
-	 * ORDER MATTERS AND IS NOT LEFT TO LUCK: this runs inside `Nextcloud holds
-	 * these resources`, which the Background states BEFORE `the following mappings
-	 * were made`. It is called out because
-	 * {@see PullSteps::aPenpotTeamNamedIsMappedToTheFolder()} clears every existing
-	 * mapping first — harmless here, and destructive if this ever ran later.
+	 * Reordering the Background would fix it and would be the wrong fix: the order
+	 * is deliberate, shared with both siblings, and a `Given` that has to be
+	 * arranged in harness order is no longer a picture. So the helper maps a team
+	 * of its own, uses it, and tears it down — leaving the state the Background's
+	 * own mapping step then walks into unchanged.
 	 *
-	 * CACHED PER SCENARIO, because it costs a team, a design, a pull and an export.
+	 * CACHED PER SCENARIO, because it costs a mapping, a create, a pull and an export.
 	 */
 	private function syncNowArchive(): string {
 		if ($this->syncNowArchiveBytes !== '') {
 			return $this->syncNowArchiveBytes;
 		}
 
-		$path = 'Sync Now Source/Source.penpot';
-		if (!$this->davExists($path)) {
-			// A TEAM NO TABLE NAMES. `teamNamed()` is find-or-create, so the legs
-			// share one of these rather than accumulating them.
-			$this->aPenpotTeamNamedIsMappedToTheFolder('Archive Donor', 'Sync Now Source', 'sync');
-			$this->davPut($path, '');
-			$this->theAdminRunsAPull();
-		}
+		// A TEAM NO TABLE NAMES, so nothing this feature asserts on can see it.
+		// `teamNamed()` is find-or-create, so the legs share one.
+		$this->aPenpotTeamNamedIsMappedToTheFolder('Archive Donor', 'Donor', 'sync');
+
+		// A FRESH NAME EVERY TIME. The helper runs once per scenario and the folder
+		// it makes is deleted at the end — but a delete leaves a TRASH entry, and a
+		// second scenario re-creating the same path is how a restore-happy suite
+		// ends up with `Source (2).penpot`. Uniqueness costs nothing and removes
+		// the whole question.
+		$folder = 'Donor/Sync Now Source ' . uniqid();
+		$path = $folder . '/Source.penpot';
+
+		$this->syncNowAncestors($path);
+		$this->davPut($path, '');
+		$this->theAdminRunsAPull();
 
 		$bytes = $this->davGet($path);
-
-		// The mapping has served its purpose; the bytes outlive it.
-		$this->noPenpotTeamsAreMapped();
 		if (!str_starts_with($bytes, "PK\x03\x04")) {
 			throw new \RuntimeException(
 				"the harness could not produce a real .penpot archive: '{$path}' holds "
 				. strlen($bytes) . ' bytes that are not a ZIP.',
 			);
 		}
+
+		// SWEEP UP, in both places. The file goes so no tree walk sees it (and its
+		// delete trashes the design, so the donor team is left clean too), and the
+		// mapping goes so the Background's own mapping step starts from nothing —
+		// which is what it expects, since it is the first mapping sentence the
+		// scenario says.
+		$this->davDelete($folder);
+		$this->noPenpotTeamsAreMapped();
 
 		return $this->syncNowArchiveBytes = $bytes;
 	}
