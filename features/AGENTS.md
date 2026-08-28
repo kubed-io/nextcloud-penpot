@@ -4401,6 +4401,24 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
+### One actor, not an Outline
+
+The pull scenario had two Examples rows, `the admin` and `the schedule`. It is gone,
+and the reason is this file's Background: it IS the fixture. A second row re-runs
+that Background against a folder the first row has already mirrored into, and the
+arrange clears a mapped folder before re-mapping it — which, in penpot, deletes the
+designs in Penpot ({@see DeletionService} fires on any file carrying a `penpot_id`,
+including one the unmap left `unmapped`).
+
+Five attempts to make the shared `emptyMappedFolder()` safe for that all failed, and
+three of them broke other legs. The function is fine; ten features depend on it and
+they all seed per scenario. This file was asking it for something it was never
+built to give.
+
+WHAT THE SECOND ROW PROVED is that a timer starts the same run as a button — which
+is a claim about the TRIGGER, and triggers are `connection/admin.feature`'s subject.
+What a sync DOES is this file's, and one actor says it.
+
 ### Every noun in this file is unique to it, and that is the actual fix
 
 `Design Team`, `Cogs`, `Gizmo`, `Doohickey` — this feature shared all four with

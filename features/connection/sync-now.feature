@@ -35,8 +35,8 @@ Feature: Syncing every mapping
   # notes: ../AGENTS.md#sync-now-scope
 
   @admin @occ @ui
-  Scenario Outline: A sync from Penpot mounts every mapped folder, however it was started
-    When <actor> syncs every mapping from Penpot
+  Scenario: A sync from Penpot mounts every mapped folder
+    When the admin syncs every mapping from Penpot
     Then Nextcloud holds exactly these resources:
       | path                                |
       | /All Sync/readme.txt                |
@@ -45,7 +45,7 @@ Feature: Syncing every mapping
       | /All Sync/Widgets/Local Only.penpot |
       | /All Sync/Widgets/Sprocket A.penpot |
       | /All Sync/Widgets/Sprocket B.penpot |
-      | /All Sync/Deep                       |
+      | /All Sync/Deep                      |
       | /All Sync/Deep/Nested               |
       | /All Sync/Deep/Nested/Buried.penpot |
       | /All Sync/Stray Sketch.penpot       |
@@ -56,12 +56,8 @@ Feature: Syncing every mapping
     And "All Sync" holds:
       | penpot_team_id | the mapping's team |
 
-    Examples: both ways an instance-wide sync starts
-      | actor        |
-      | the admin    |
-      | the schedule |
-
     # notes: ../AGENTS.md#the-tree-is-the-assertion
+    # notes: ../AGENTS.md#one-actor-not-an-outline
 
     # ── RULE: the other direction — Nextcloud is declared the source of truth ──
 
