@@ -26,10 +26,25 @@ namespace OCA\PenpotSync\Service;
  * is the parent's and is deliberately not restated here.
  */
 final class PushStatus extends PullStatus {
-	private const KEY = 'push_status';
+	/**
+	 * NOT NAMED `KEY`, and the name is the whole reason.
+	 *
+	 * The parent's own constant is `private const KEY`, which PHP resolves
+	 * lexically — two unrelated privates never collide at runtime. Psalm reads it
+	 * differently: it infers the parent's as the LITERAL type `'pull_status'` and
+	 * then reports a same-named child constant as failing to satisfy it
+	 * (InvalidClassConstantType), because a redeclared constant is expected to
+	 * narrow rather than diverge.
+	 *
+	 * Suppressing that would be arguing with a checker that has a point. A
+	 * different name says what is true — this is a second key, not a narrower
+	 * version of the first — and leaves the parent's constant private, which is
+	 * where it belongs.
+	 */
+	private const PUSH_KEY = 'push_status';
 
 	#[\Override]
 	protected function key(): string {
-		return self::KEY;
+		return self::PUSH_KEY;
 	}
 }
