@@ -367,8 +367,20 @@ trait SyncNowSteps {
 		$folder = 'Donor/Sync Now Source ' . uniqid();
 		$path = $folder . '/Source.penpot';
 
+		// A PULL FIRST, AND IT IS NOT OPTIONAL. `add-mapping` provisions the folder
+		// but does NOT mark it: `penpot_team_id` is stamped by the pull
+		// ({@see \OCA\PenpotSync\Service\PullService}, the only writer of it on a
+		// root). Until that has happened the folder resolves to `STATE_NONE`, and
+		// an empty `.penpot` created there is refused with a 403 by
+		// {@see \OCA\PenpotSync\Service\MoveRules::refusalForCreating()} — correctly,
+		// since there is no project for it to become real in.
+		$this->theAdminRunsAPull();
+
 		$this->syncNowAncestors($path);
 		$this->davPut($path, '');
+
+		// The SECOND pull is what exports the archive into the mirror; the first
+		// only made the folder a mapped one.
 		$this->theAdminRunsAPull();
 
 		$bytes = $this->davGet($path);

@@ -153,18 +153,33 @@ final class BulkPushService {
 			return $nothing;
 		}
 
+		// STAMP THE ROOT FIRST, OR THE WHOLE RUN IS A SILENT NO-OP.
+		//
+		// `add-mapping` provisions the folder but does not MARK it — the only
+		// writer of `penpot_team_id` on a root is {@see PullService::pullOne()}. So
+		// on a mapping that has never been pulled, every file below resolves to
+		// `STATE_NONE` ({@see MembershipResolver}), `pushFile()` declines each one,
+		// and the push reports files processed and nothing pushed while doing
+		// exactly nothing. That is the FIRST thing a new mapping's admin would try:
+		// map a folder full of designs, press "Sync to Penpot".
+		//
+		// Written the same way and to the same value the pull writes it, so a pull
+		// afterwards is a no-op rather than a correction. INSIDE THE GUARD with
+		// everything else: a folder write fires the same events a person's would.
 		$candidates = [];
-		$this->collectPushable($root, $candidates, 0);
-		if ($candidates === []) {
-			return $nothing;
-		}
-
 		$processed = 0;
 		$pushed = 0;
 		$failed = 0;
 		$errors = [];
 
-		$this->guard->run(function () use ($candidates, &$processed, &$pushed, &$failed, &$errors): void {
+		$this->guard->run(function () use ($root, $mapping, &$candidates, &$processed, &$pushed, &$failed, &$errors): void {
+			$this->metadata->writeFolder(
+				$root->getId(),
+				[PenpotMetadata::KEY_TEAM_ID => $mapping->teamId],
+			);
+
+			$this->collectPushable($root, $candidates, 0);
+
 			foreach ($candidates as $node) {
 				$processed++;
 				try {

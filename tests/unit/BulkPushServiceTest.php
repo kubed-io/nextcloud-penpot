@@ -64,6 +64,7 @@ final class BulkPushServiceTest extends TestCase {
 		$this->guardedAtImport = [];
 		$this->unmappedFiles = [];
 		$this->stubbornFiles = [];
+		$this->stampedFolders = [];
 	}
 
 	// ── what a push picks up ────────────────────────────────────────────────
@@ -186,6 +187,25 @@ final class BulkPushServiceTest extends TestCase {
 		self::assertSame('error', $result['status']);
 	}
 
+	/**
+	 * THE ROOT IS MARKED BEFORE THE WALK, or a first push does nothing at all.
+	 *
+	 * `add-mapping` provisions the folder without marking it — the only writer of
+	 * `penpot_team_id` on a root is the pull. So on a mapping nobody has pulled,
+	 * every file below resolves to no team, every candidate is declined, and the
+	 * push reports files processed and nothing done. That is exactly what a new
+	 * mapping's admin does first: map a folder full of designs, press the button.
+	 */
+	public function testTheMappingRootIsStampedSoAFirstPushIsNotANoOp(): void {
+		$this->pushOver([$this->design(1, holdsArchive: true, penpotId: '')]);
+
+		self::assertSame(
+			[900 => [PenpotMetadata::KEY_TEAM_ID => self::TEAM]],
+			$this->stampedFolders,
+			'the push must mark the root itself rather than depending on a prior pull',
+		);
+	}
+
 	/** A mapping whose folder was never provisioned is not an error on the way out. */
 	public function testAMappingWithNoFolderPushesNothing(): void {
 		$storage = $this->createStub(StorageService::class);
@@ -219,7 +239,12 @@ final class BulkPushServiceTest extends TestCase {
 			new Mapping('m1', self::TEAM, 'Northwind', 'Penpot', false, $mode),
 		]);
 
-		$metadata = $this->createStub(PenpotMetadata::class);
+		$metadata = $this->createMock(PenpotMetadata::class);
+		$metadata->method('writeFolder')->willReturnCallback(
+			function (int $id, array $patch): void {
+				$this->stampedFolders[$id] = $patch;
+			},
+		);
 		$metadata->method('readFile')->willReturnCallback(
 			fn (int $id): ?PenpotFileMetadata => ($this->idByFile[$id] ?? '') === ''
 				? null
@@ -272,9 +297,13 @@ final class BulkPushServiceTest extends TestCase {
 	/** @var array<int, bool> fileId => should the import throw */
 	private array $stubbornFiles = [];
 
+	/** @var array<int, array<string,string>> folderId => the marker patch written to it */
+	private array $stampedFolders = [];
+
 	/** @param list<\OCP\Files\Node> $children */
-	private function folder(array $children): Folder {
+	private function folder(array $children, int $id = 900): Folder {
 		$folder = $this->createStub(Folder::class);
+		$folder->method('getId')->willReturn($id);
 		$folder->method('getPath')->willReturn('/admin/files/Penpot');
 		$folder->method('getDirectoryListing')->willReturn($children);
 
