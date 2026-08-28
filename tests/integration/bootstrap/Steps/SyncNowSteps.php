@@ -177,17 +177,26 @@ trait SyncNowSteps {
 	/**
 	 * Penpot's whole shape, and nothing besides — the push's twin of the tree table.
 	 *
-	 * SCOPED TO THE TEAMS THE TABLE NAMES, for the same reason the tree walk is
-	 * scoped to its roots: the teams are shared across every leg, and a design some
-	 * other feature created is not this scenario's business. Within a named team,
-	 * though, `exactly` is enforced — a push that invented a second `Hand Made`
-	 * beside the real one is precisely the failure worth catching.
+	 * SCOPED TO THE PROJECTS THE TABLE NAMES, and the scope is narrower than it
+	 * looks like it should be for a reason worth stating.
+	 *
+	 * Scoping to the TEAMS was the obvious reading of `exactly` and is wrong here:
+	 * `Design Team` is shared, and `mapping/sync-now.feature` — in this same leg —
+	 * seeds `Levers/Sprocket` into it. That design is in no table of this feature,
+	 * so a team-wide sweep reports it as `unexpected:` and the leg goes red on a
+	 * push that did exactly the right thing. It passes today only because Behat
+	 * happens to run this file first, which is ordering luck rather than a property
+	 * of the test.
+	 *
+	 * Within a named project, though, `exactly` is fully enforced — which is what
+	 * the scenario is actually about. A push that invented a second `Hand Made`
+	 * beside the real one, or filed one into the wrong project, still fails.
 	 *
 	 * @Then /^Penpot holds exactly these resources:$/
 	 */
 	public function penpotHoldsExactlyTheseResources(TableNode $table): void {
 		$expected = [];
-		$teams = [];
+		$wanted = [];
 		foreach ($table->getHash() as $row) {
 			$team = trim((string)($row['team'] ?? ''));
 			$project = trim((string)($row['project'] ?? ''));
@@ -195,7 +204,7 @@ trait SyncNowSteps {
 			if ($team === '' || $project === '') {
 				continue;
 			}
-			$teams[$team] = true;
+			$wanted[$team][$project] = true;
 			if ($design !== '') {
 				$expected[] = $team . ' / ' . $project . ' / ' . $design;
 			}
@@ -203,12 +212,12 @@ trait SyncNowSteps {
 		sort($expected);
 
 		$actual = [];
-		foreach (array_keys($teams) as $team) {
-			$teamId = $this->teamNamed($team);
+		foreach ($wanted as $team => $projects) {
+			$teamId = $this->teamNamed((string)$team);
 			foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
 				$projectId = (string)($project['id'] ?? '');
 				$projectName = (string)($project['name'] ?? '');
-				if ($projectId === '') {
+				if ($projectId === '' || !isset($projects[$projectName])) {
 					continue;
 				}
 				foreach ($this->penpotRpcRead('get-project-files', ['project-id' => $projectId]) as $file) {
