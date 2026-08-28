@@ -607,8 +607,6 @@ final class MotionServiceTest extends TestCase {
 		$this->mappingRoot = $root;
 	}
 
-
-
 	/**
 	 * Program the resolver: the moved NODE resolves to `target`, and the source's
 	 * old parent folder to `oldParent`. They are told apart by node id — 30 is the

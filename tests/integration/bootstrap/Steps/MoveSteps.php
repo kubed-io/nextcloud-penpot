@@ -86,6 +86,20 @@ trait MoveSteps {
 	public function anUnmappedDesignFileAt(string $path): void {
 		$this->makeAncestors($path);
 		$this->davPut($path, "PK\x03\x04" . str_repeat("\0", 64));
+
+		// ON STAGE, so `the file` and `that file` mean this one. Without it a
+		// scenario whose only Given is this step has no cursor at all, and the first
+		// `When I move the file` fails with "no file is on stage" — which reads like
+		// a missing arrange rather than an arrange that forgot to point at itself.
+		//
+		// The design a collision scenario is duplicating is whatever was named
+		// BEFORE this, so the cursor is captured first: {@see MoveConflictSteps}
+		// reads it as the destination, and it is the only moment both files are
+		// identified.
+		$this->collisionDestinationPath = $this->currentFilePath;
+		$this->currentFilePath = $path;
+		$this->currentFolder = dirname($path);
+		$this->currentFileId = '';
 	}
 
 	/**

@@ -81,9 +81,10 @@ trait MoveConflictSteps {
 	 * @Given /^that file's archive differs from the design's$/
 	 */
 	public function thatFilesArchiveDiffersFromTheDesigns(): void {
-		if ($this->collisionDestinationPath === '') {
+		if ($this->collisionDestinationPath === '' || !$this->davExists($this->collisionDestinationPath)) {
 			throw new \RuntimeException(
-				'no design is standing in the mapping — a scenario must name one before it can be duplicated',
+				'no design is standing in the mapping — a scenario must name one, then the unmapped '
+				. 'duplicate of it, before this step can tell their bodies apart',
 			);
 		}
 
@@ -327,7 +328,7 @@ trait MoveConflictSteps {
 		}
 
 		throw new \RuntimeException(sprintf(
-			"the design behind this file is %s; the destination held %s before the gesture, "
+			'the design behind this file is %s; the destination held %s before the gesture, '
 			. 'so the wrong body is behind it',
 			$id === '' ? '(nothing)' : $id,
 			$this->destinationIdBefore === '' ? '(nothing)' : $this->destinationIdBefore,
