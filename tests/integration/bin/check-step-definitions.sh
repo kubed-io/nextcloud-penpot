@@ -40,6 +40,15 @@
 #      exists and IS the specification. The tag says the code behind the scenario
 #      does not exist yet, which is the opposite claim about the opposite artifact.
 #
+#   4. A CALL TO A METHOD THAT DOES NOT EXIST, which is what check 3 costs if it is
+#      acted on carelessly. Deleting dead step definitions removed methods that
+#      hooks and other steps still CALLED — once from an @BeforeScenario, once as
+#      `self::`. `php -l` is happy with a call to a method that is not there; PHP
+#      only finds out when it runs it, and because the context is composed from
+#      traits the fatal lands while Behat is still LOADING it. Every leg then
+#      reports "29 scenarios (29 skipped)" with no JUnit, which reads as a suite
+#      that matched nothing rather than as a missing method. Two full CI cycles.
+#
 # Runs in the PHP Quality job, which finishes in seconds. The integration matrix takes
 # minutes across seven legs and needs a live Nextcloud and Penpot to say the same thing.
 
@@ -272,6 +281,44 @@ if undefined:
     for u in undefined:
         print(f'    {u}')
     print('  Either add the definition, or tag the scenario as specification.')
+
+# ── a method call that resolves to nothing ────────────────────────────────────
+#
+# THE FAILURE THIS EXISTS FOR COST TWO FULL CI CYCLES. Deleting dead step
+# definitions removed methods that other steps and @BeforeScenario hooks still
+# CALLED — `noPenpotTeamsAreMapped()` from a hook, `canonicalGroups()` from four
+# places as `self::`. `php -l` is perfectly happy with a call to a method that does
+# not exist; PHP only finds out when it runs it. And because the context is
+# composed from traits, the fatal lands while Behat is still loading it — so every
+# leg reports "29 scenarios (29 skipped)" with no JUnit, which reads as a suite
+# that matched nothing rather than as a missing method.
+#
+# A step's own method is exempt: Behat calls those by annotation, and this file's
+# other checks already decide whether the annotation should exist.
+call_re = re.compile(r'(?:\$this->|self::|static::|parent::)(\w+)\s*\(')
+callable_re = re.compile(r'\[\s*\$this\s*,\s*[\'"](\w+)[\'"]\s*\]')
+defined = set()
+corpus = []
+for php in sorted(bootstrap.rglob('*.php')):
+    text = php.read_text(encoding='utf-8')
+    stripped = re.sub(r'^\s*//.*$', '', re.sub(r'/\*.*?\*/', '', text, flags=re.S), flags=re.M)
+    defined |= set(re.findall(r'function\s+(\w+)\s*\(', stripped))
+    corpus.append((php.name, stripped))
+
+unresolved = []
+for name, stripped in corpus:
+    for m in list(call_re.finditer(stripped)) + list(callable_re.finditer(stripped)):
+        if m.group(1) not in defined:
+            entry = f'{name}: {m.group(1)}()'
+            if entry not in unresolved:
+                unresolved.append(entry)
+
+if unresolved:
+    fail = True
+    print('✘ CALLS TO METHODS THAT DO NOT EXIST — php -l cannot see these, and PHP')
+    print('  fatals composing the context, so every leg reports an empty run instead:')
+    for u in unresolved:
+        print(f'    {u}')
 
 # ── the other direction: a definition no .feature file asks for ───────────────
 #

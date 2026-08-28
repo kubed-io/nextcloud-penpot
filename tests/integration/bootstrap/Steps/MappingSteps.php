@@ -600,6 +600,34 @@ trait MappingSteps {
 	}
 
 	/**
+	 * A comparable rendering of a group list: sorted, comma-joined.
+	 *
+	 * SORTED, BECAUSE GROUPS ARE A SET. Since §C6.35 these are read back out of the
+	 * folder — a groupfolders assignment table or the share table — and neither
+	 * query orders its rows. What comes back is insertion order if the database
+	 * feels like it, which would make an assertion pass or fail on the order the
+	 * scenario happened to list its groups in. That is not a fact about the app.
+	 *
+	 * @param mixed $groups a list from JSON, or a comma-separated string
+	 */
+	private static function canonicalGroups(mixed $groups): string {
+		if (is_string($groups)) {
+			$groups = $groups === '' ? [] : explode(',', $groups);
+		}
+		if (!is_array($groups)) {
+			return '';
+		}
+
+		$out = array_values(array_filter(array_map(
+			static fn (mixed $g): string => trim((string)$g),
+			$groups,
+		), static fn (string $g): bool => $g !== ''));
+		sort($out);
+
+		return implode(',', $out);
+	}
+
+	/**
 	 * Held across steps because `$this->lastOutput` is shared and every later
 	 * step clobbers it — the assertion below runs after a `list-mappings` call
 	 * that would otherwise leave it holding `[]`. Anything asserted about a

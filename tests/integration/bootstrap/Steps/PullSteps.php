@@ -582,6 +582,35 @@ trait PullSteps {
 		throw new \RuntimeException("no Penpot project named '{$projectName}' behind '{$path}'");
 	}
 
+	/**
+	 * A Penpot timestamp from the RAW RPC channel, as a Unix second.
+	 *
+	 * ## THE SAME FIELD HAS TWO WIRE FORMATS, AND WHICH ONE YOU GET IS NEGOTIATED
+	 *
+	 * Confirmed by dumping both responses rather than reasoning about them, because
+	 * two successive guesses here were wrong:
+	 *
+	 *   the app  (Transit)  `modified-at`  "1785467414002"              epoch millis
+	 *   this test (JSON)    `modifiedAt`   "2026-08-01T01:55:42.434Z"   ISO-8601
+	 *
+	 * {@see penpotRpcRead} asks for `application/json`, so Penpot answers in camelCase
+	 * with ISO strings; {@see \OCA\PenpotSync\Service\PenpotClient} asks for Transit
+	 * and gets kebab-case with epoch millis. Neither is more correct — but a test that
+	 * assumes the app's shape reads absent keys and reports "no timestamp" for records
+	 * it actually found, which is exactly how this failed twice.
+	 *
+	 * So the app parses millis ({@see \OCA\PenpotSync\Service\MirrorTimes::parse})
+	 * and this parses ISO, and the duplication is load-bearing rather than sloppy: a
+	 * test sharing the app's parser could not have caught the app using the wrong one.
+	 */
+	private static function penpotSecond(mixed $value): ?int {
+		if (!is_string($value) || trim($value) === '') {
+			return null;
+		}
+		$ts = strtotime(trim($value));
+		return $ts === false ? null : $ts;
+	}
+
 	/** Compare one DAV clock on $path against $expected, or explain what it read. */
 	private function assertClock(string $path, string $property, ?int $expected, string $what): void {
 		if ($expected === null) {
