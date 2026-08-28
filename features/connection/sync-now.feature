@@ -9,24 +9,24 @@ Feature: Syncing every mapping
   Background:
     Given the app is connected to Penpot
     And Penpot holds these resources:
-      | team           | project     | design     |
-      | Design Team    | Cogs        | Gizmo      |
-      | Design Team    | Cogs        | Doohickey  |
-      | Design Team    | Region/Deep | Traffic    |
-      | Design Team    | Drafts      | Loose Idea |
-      | Second Team    | Coast       | Tides      |
-      | Reference Team | Pinned      | Fixed      |
+      | team              | project     | design       |
+      | Everything Team   | Widgets     | Sprocket A   |
+      | Everything Team   | Widgets     | Sprocket B   |
+      | Everything Team   | Deep/Nested | Buried       |
+      | Everything Team   | Drafts      | Stray Sketch |
+      | Everything Shared | Tideline    | Ebb          |
+      | Everything Linked | Anchored    | Riveted      |
     And Nextcloud holds these resources:
-      | path                          |
-      | /Penpot/notes.txt             |
-      | /Penpot/Cogs                  |
-      | /Penpot/Cogs/plan.txt         |
-      | /Penpot/Cogs/Hand Made.penpot |
+      | path                                |
+      | /All Sync/readme.txt                |
+      | /All Sync/Widgets                   |
+      | /All Sync/Widgets/outline.txt       |
+      | /All Sync/Widgets/Local Only.penpot |
     And the following mappings were made:
-      | team           | folder   | mode | storage      | groups |
-      | Design Team    | Penpot   | sync | admin folder |        |
-      | Second Team    | Shared   | sync | team folder  | admin  |
-      | Reference Team | Pointers | link | admin folder |        |
+      | team              | folder   | mode | storage      | groups |
+      | Everything Team   | All Sync | sync | admin folder |        |
+      | Everything Shared | All Team | sync | team folder  | admin  |
+      | Everything Linked | All Link | link | admin folder |        |
 
   # notes: ../AGENTS.md#a-background-is-a-picture-not-a-story
   # The two sides do not agree yet, and the Background never says why they don't.
@@ -38,22 +38,22 @@ Feature: Syncing every mapping
   Scenario Outline: A sync from Penpot mounts every mapped folder, however it was started
     When <actor> syncs every mapping from Penpot
     Then Nextcloud holds exactly these resources:
-      | path                               |
-      | /Penpot/notes.txt                  |
-      | /Penpot/Cogs                       |
-      | /Penpot/Cogs/plan.txt              |
-      | /Penpot/Cogs/Hand Made.penpot      |
-      | /Penpot/Cogs/Gizmo.penpot          |
-      | /Penpot/Cogs/Doohickey.penpot      |
-      | /Penpot/Region                     |
-      | /Penpot/Region/Deep                |
-      | /Penpot/Region/Deep/Traffic.penpot |
-      | /Penpot/Loose Idea.penpot          |
-      | /Shared/Coast                      |
-      | /Shared/Coast/Tides.penpot         |
-      | /Pointers/Pinned                   |
-      | /Pointers/Pinned/Fixed.penpot      |
-    And "Penpot" holds:
+      | path                                |
+      | /All Sync/readme.txt                |
+      | /All Sync/Widgets                   |
+      | /All Sync/Widgets/outline.txt       |
+      | /All Sync/Widgets/Local Only.penpot |
+      | /All Sync/Widgets/Sprocket A.penpot |
+      | /All Sync/Widgets/Sprocket B.penpot |
+      | /All Sync/Deep                       |
+      | /All Sync/Deep/Nested               |
+      | /All Sync/Deep/Nested/Buried.penpot |
+      | /All Sync/Stray Sketch.penpot       |
+      | /All Team/Tideline                  |
+      | /All Team/Tideline/Ebb.penpot       |
+      | /All Link/Anchored                  |
+      | /All Link/Anchored/Riveted.penpot   |
+    And "All Sync" holds:
       | penpot_team_id | the mapping's team |
 
     Examples: both ways an instance-wide sync starts
@@ -70,15 +70,15 @@ Feature: Syncing every mapping
   Scenario: A sync to Penpot pushes archived designs into penpot if they are not there yet 
     When the admin syncs every mapping to Penpot
     Then Penpot holds exactly these resources:
-      | team           | project     | design     |
-      | Design Team    | Cogs        | Gizmo      |
-      | Design Team    | Cogs        | Doohickey  |
-      | Design Team    | Cogs        | Hand Made  |
-      | Design Team    | Region/Deep | Traffic    |
-      | Design Team    | Drafts      | Loose Idea |
-      | Second Team    | Coast       | Tides      |
-      | Reference Team | Pinned      | Fixed      |
-    And "Penpot/Cogs/Hand Made.penpot" holds:
+      | team              | project     | design       |
+      | Everything Team   | Widgets     | Sprocket A   |
+      | Everything Team   | Widgets     | Sprocket B   |
+      | Everything Team   | Widgets     | Local Only   |
+      | Everything Team   | Deep/Nested | Buried       |
+      | Everything Team   | Drafts      | Stray Sketch |
+      | Everything Shared | Tideline    | Ebb          |
+      | Everything Linked | Anchored    | Riveted      |
+    And "All Sync/Widgets/Local Only.penpot" holds:
       | penpot_id      | set                |
       | penpot_team_id | the mapping's team |
       | penpot_mode    | the mapping's mode |

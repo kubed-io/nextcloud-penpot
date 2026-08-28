@@ -4401,6 +4401,28 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
+### Every noun in this file is unique to it, and that is the actual fix
+
+`Design Team`, `Cogs`, `Gizmo`, `Doohickey` — this feature shared all four with
+`mapping/sync-now.feature`, which sits in the SAME LEG and maps that team to its own
+folder. One Penpot, one Nextcloud, two features legitimately doing different things
+to the same objects.
+
+Everything below is real and was worth fixing, but none of it could ever have made
+this file pass on its own: the other feature was entitled to reshape the team, and
+this one asserts `exactly`.
+
+So the nouns are now this file's alone — `Everything Team` / `Everything Shared` /
+`Everything Linked`, folders `All Sync` / `All Team` / `All Link`, projects
+`Widgets` and `Deep/Nested`, designs `Sprocket A`, `Sprocket B`, `Buried`,
+`Stray Sketch`, `Ebb`, `Riveted`, `Local Only`. Before adding a fixture here, grep
+the suite for its name; a leg shares one instance, and `exactly` cannot survive a
+neighbour.
+
+THE GENERAL RULE: reused names are safe for a feature that asserts only its own
+rows, and unsafe for one that asserts a whole tree. This is the only file in the
+suite doing the latter.
+
 ### Two bugs, one symptom — and why that took five runs
 
 The leg failed at 30/32 with `Gizmo` and `Doohickey` missing. TWO independent
