@@ -254,6 +254,117 @@ mean what Keep a Changelog says they mean.
 
 ---
 
+### §D4.9 — Decision (locked): the store steps are restored, not reinvented
+
+**The call:** `publish.yml` gets n8n's sign-and-upload steps back, substituted for
+this app id and otherwise unchanged.
+
+They were never absent for a technical reason. The workflow was forked from
+nextcloud-n8n with the two store steps cut out and a note in their place saying
+to restore them *"once it's ready — the app is pre-code and must not be listed
+on the store until it's feature-complete."* Chapter 3 closed complete. The
+condition the deferral named has been met, so the deferral comes out.
+
+Restoring beats rewriting because the n8n pipeline is **proven, not merely
+plausible**: run `32099721227` on 2026-08-18 posted `n8n_sync` 1.0.0 to
+apps.nextcloud.com and got back **HTTP 201**. A rewrite would be a second way of
+doing a thing that already works, and its first real test would be a release.
+
+---
+
+### §D4.10 — Decision (locked): one signing identity, and no local certificate
+
+**The call:** mint the key and the CSR, and stop. No self-signed stand-in
+certificate.
+
+Nothing in the release path needs one. Signing a tarball needs the **private key
+alone** — `openssl dgst -sha512 -sign` never reads a certificate — and the store
+verifies against the copy *it* holds. The countersigned certificate is a public
+file that Nextcloud commits into their own repository beside our CSR, so it has
+an authoritative home that cannot drift.
+
+**This is a lesson taken off the sibling rather than learned again.** n8n minted
+a stand-in self-signed cert so its pipeline had something to point at. That
+worked. But the real countersigned certificate has existed since 2026-07-22, and
+`nextcloud-n8n/.signing/n8n_sync.crt` **is still the stand-in** — same `CN`,
+issuer `CN=n8n_sync` instead of `Nextcloud Code Signing Intermediate Authority`,
+and nothing on disk says which is which. A file that had one job, kept past the
+day it was needed, became a decoy.
+
+> **The rule:** if a file has an authoritative remote home, do not keep a local
+> copy that can rot. Fetch it when you need it.
+
+**One key, forever.** Re-registering a certificate for an app id **deletes every
+previous release** — their signatures no longer verify. So the keypair minted
+this round is the app's identity for as long as the app id lives, and the only
+reason to replace it is a leak. Its public key is `41722eef…`; the CSR and any
+certificate that ever comes back must match it.
+
+---
+
+### §D4.11 — Decision (locked): a guard for an impossible condition is a test that cannot fail
+
+**The call:** every "not built yet" guard comes out of the workflows.
+
+The CI here was forked from n8n while this repository was an empty skeleton, and
+each borrowed step was wrapped in a check for the thing that did not exist yet:
+`if [[ -d lib ]]`, `if [[ -f src/files.js ]]`, `if: hashFiles('lib/**') != ''`,
+and headers announcing a *"FIRST SLICE"*. All of them describe a repository that
+stopped existing several chapters ago.
+
+Stale guards are not dead weight, they are **inverted**. The one that matters:
+
+```yaml
+    - name: Upload JS bundle
+      with:
+        path: dist/penpot_sync-files.js
+        if-no-files-found: ignore     # was: error
+```
+
+`ignore` was correct when there was no bundle to build. Now there is one, and the
+line says: *if the build produced nothing, say nothing.* A bundle that silently
+stopped being built would upload nothing, report green, and ship a release
+missing its frontend. The guard against a vanished absence had become a hole
+under the thing it was copied from.
+
+> **The rule:** a guard for a condition that can no longer occur is not
+> harmless. It is a check that has stopped being able to fail, and the only
+> notice you get is that everything is green.
+
+---
+
+### §D4.12 — Decision (locked): the maintainer is **Dr K**, and no real name appears anywhere
+
+**The call:** no first name, surname, family nickname, personal email, personal
+domain or personal GitHub handle in any tracked file. `Dr K` in prose, `drk` in
+fixtures, `kubed-io` in SPDX headers.
+
+The convention already existed; it had simply never been **written down** in
+either this repository or the sibling. A rule that lives only in the
+maintainer's head is a rule an agent rediscovers by breaking it, which is
+exactly what happened over the week before this round. It is now in `AGENTS.md`,
+which is where the cascade (§D4.2) says the current rules live.
+
+**What the scrub actually found is the useful part**, because none of it was
+someone typing a name into prose. Every leak came in attached to something else:
+
+- **Two SPDX headers** carrying a personal copyright line, against 184 files
+  saying `kubed-io` — editor template drift, invisible in review.
+- **A live hostname** pasted into a Chapter 2 transcript as evidence for a
+  timing claim.
+- **A username inside a database dump**, copied verbatim into a code block
+  because it was evidence and evidence gets pasted whole.
+- **A test fixture's user id**, where a real name reads as a neutral
+  placeholder.
+
+> **The rule:** personal details do not arrive in sentences. They arrive inside
+> pasted evidence, generated headers, and fixtures — the three places nobody
+> proofreads.
+
+**What a scrub cannot reach:** git authorship. See Round 6.
+
+---
+
 ## The rounds
 
 ### Round 1 — the README stops being a design doc
@@ -337,13 +448,166 @@ confirmed absent. A green repository proves nothing about a running Nextcloud.
 207 lines of build history became a short `Added` list of what the app does.
 The history is not lost; it is in this saga, which is where §D4.2 says it goes.
 
+### Round 5 — the release path, wired for the store
+
+Three things happened, in the order they had to.
+
+**The pipeline was un-deferred** (§D4.9). `publish.yml` got the `nextcloud-store`
+environment, the `Sign tarball` step and the `Publish to Nextcloud App Store`
+step, ported from the sibling that has already used them successfully. The
+release notes now lead with `occ app:install penpot_sync` and keep the tarball as
+the fallback, instead of announcing that the app is *"pre-code / early
+development."*
+
+**The identity was minted** (§D4.10). A 4096-bit RSA keypair and a
+`CN=penpot_sync` CSR, written to the gitignored `.signing/`. Verified three ways
+before being trusted: the CSR self-signature checks out, its public key matches
+the private key, and `git status` sees none of it.
+
+**The fiction came out of the rest of the CI** (§D4.11). `tests.yml`, `quality.yml`
+and `package.yml` all still described an empty repository. `package.yml` was
+building the frontend only `if [[ -f src/files.js ]]` and copying the bundle only
+if it appeared — in a release workflow, for a file that has existed for months.
+
+Two things were **kept** against the n8n baseline rather than converged away,
+because on inspection this repository's version is the better one: the top-level
+`permissions: contents: read` block in `publish.yml` (a CodeQL finding n8n has
+not fixed), and the richer step comments in `quality.yml`, which explain the
+Behat guards in terms of this app's own eleven-leg matrix. Convergence is for
+drift, not for deleting improvements. One thing was **taken** from n8n that this
+repository had dropped: the Psalm baseline seed steps, which matter here because
+`psalm.xml` names `errorBaseline` and would abort if the file were ever reset.
+
+**Proven locally as far as a pod can prove it:** the packaging step was run by
+hand and produced a 334 KB tarball with exactly one top-level directory,
+`penpot_sync/appinfo/info.xml` in place, and a valid SHA-512 signature from the
+new key. That is every store precondition except the two that need Nextcloud.
+
+
+### Round 6 — the scrub, before the doors actually open
+
+A public repository about to become a listed app is a different exposure from a
+public repository nobody visits. The maintainer's name came out of every tracked
+file (§D4.12): two SPDX headers, a live hostname in a Chapter 2 transcript, a
+username inside a pasted database dump, a test fixture id, and four cells of the
+gate table in this chapter. All five screenshots were checked frame by frame and
+carry no name; they also carry no PNG text metadata.
+
+**The fork moved orgs.** `app-certificate-requests` had been forked to a personal
+account. It is now forked from the upstream into
+[kubed-io/app-certificate-requests](https://github.com/kubed-io/app-certificate-requests)
+so the CSR is filed by the organisation that owns the app. No certificate PR was
+opened — gate 4 is still deliberately unfiled.
+
+**And the part a scrub cannot reach: git authorship.** Every commit in this
+repository names a real person, and about half carry a personal email address.
+That is not in a file, so no edit removes it — only a full history rewrite and a
+force-push would, and that is a decision with real costs (every existing commit
+link and review comment breaks) that belongs to the maintainer, not to an agent
+doing a docs pass. It is recorded here rather than quietly left out.
+
+---
+
+## The plan — reaching the store
+
+The store's requirement is that **every release is signed by a certificate
+Nextcloud themselves countersigned**. That countersign is the only step in this
+chapter that is not ours to pace, so it is filed first and everything else
+overlaps the wait.
+
+```
+  mint key + CSR ──▶ file CSR PR ──▶ (Nextcloud countersigns — the wait)
+       │                                        │
+       ▼                                        ▼
+  key ──▶ NEXTCLOUD_STORE_KEY          fetch .crt from their repo
+                                                │
+                                                ▼
+                                        register the app id
+                                                │
+                                                ▼
+                                   publish.yml push=true ──▶ 🎬
+```
+
+| # | Gate | Owner | State |
+|---|------|-------|-------|
+| 1 | App id `penpot_sync` locked across `info.xml`, `package.json`, namespace | — | ✅ done, long since |
+| 2 | Signing keypair + CSR minted, gitignored, verified | agent | ✅ done this round |
+| 3 | Release pipeline carries sign + upload | agent | ✅ done this round |
+| 4 | **CSR filed** with `nextcloud/app-certificate-requests` | **Dr K** | ⬜ blocked on a human |
+| 5 | **Countersigned `.crt` committed back** to that repo | Nextcloud | ⬜ the wait (~2 days for n8n) |
+| 6 | **Private key into `NEXTCLOUD_STORE_KEY`** | **Dr K** | ⬜ secret exists, value empty |
+| 7 | Durable backup of the private key | **Dr K** | ⬜ see below |
+| 8 | `NEXTCLOUD_STORE_TOKEN` is a valid apps.nextcloud.com token | **Dr K** | ◑ set 2026-08-29, never exercised |
+| 9 | **Register the app id** on the store (cert + ownership signature) | either | ⬜ needs gate 5 |
+| 10 | Dry run, then cut the release | either | ⬜ needs 6 + 9 |
+
+### Gate 4 — what filing the CSR involves
+
+Fork [nextcloud/app-certificate-requests](https://github.com/nextcloud/app-certificate-requests),
+add **`penpot_sync/penpot_sync.csr`** — that exact directory and filename, their
+tooling asserts the structure — and open a PR linking to this repository as the
+public source. Two things their process needs that are easy to miss: the GitHub
+account must **show an email address on its public profile**, and n8n's CSR
+commit landed unsigned because the local signing setup was broken at the time,
+which had to be amended and force-pushed afterwards. Check `git config
+commit.gpgsign` before committing.
+
+### Gate 7 — why a backup is a gate and not a nicety
+
+`NEXTCLOUD_STORE_KEY` **cannot be read back** once set; GitHub environment
+secrets are write-only. `.signing/` is a working copy in a container. If both are
+lost the recovery is a new keypair, a new CSR, a second countersign, and
+re-registering the app id — which **deletes every published release**. n8n keeps
+its key in GCP Secret Manager as the retrievable copy; the same arrangement
+works here.
+
+### Gate 9 — registering the app id
+
+One call, and it can only be made after the certificate exists:
+
+```sh
+curl -X POST https://apps.nextcloud.com/api/v1/apps \
+  -H "Authorization: Token $NEXTCLOUD_STORE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+        --arg c "$(cat penpot_sync.crt)" \
+        --arg s "$(echo -n penpot_sync | openssl dgst -sha512 \
+                    -sign .signing/penpot_sync.key | openssl base64 -A)" \
+        '{certificate:$c, signature:$s}')"
+```
+
+`201` means registered. The signature proves possession of the private key behind
+the certificate; both must come from the keypair in §D4.10.
+
+### What is deliberately still not done
+
+**`appinfo/signature.json`** — Nextcloud's *in-tarball* integrity manifest, which
+is a different thing from the tarball signature the store checks. It is optional
+for store acceptance, and generating it faithfully needs `occ integrity:sign-app`
+against a real Nextcloud, so it stays deferred exactly as it is in n8n. Worth
+naming so nobody discovers the distinction during a failing release.
+
+### The two store rules this app should be looked at against
+
+Both are inherited from the sibling's review and neither is a blocker:
+
+- **Public APIs only.** `Migration\RegisterMimetype` writes into the core tree —
+  `core/img/filetypes/`, `core/js/mimetypelist.js`, `config/mimetype*.json`. This
+  is the supported way to register a mimetype and every app that does it does it
+  this way, but it is the most likely question from a reviewer.
+- **Clean uninstall.** Stronger here than in n8n: there is a real
+  `UnregisterMimetype` uninstall repair step, it is the mirror image of the
+  install step, and `lifecycle.feature` covers it. This one is answered.
+
 ---
 
 ## What this chapter is not
 
 - **Not a rewrite of the app.** No behaviour changes. If a round here changes
   `lib/`, it is because a comment was false.
-- **Not a release.** Publishing is its own decision and has not been taken.
+- **Not a release yet.** The decision to publish has been taken and the
+  pipeline is wired for it (§D4.9), but nothing has been submitted. The plan
+  above names what is still outstanding and who holds it.
 - **Not the end of the queue.** Chapter 3 left a named backlog of `@todo`,
   `@unbuilt` and `@blocked` scenarios; its close is the inventory. This chapter
   does not touch them, and does not pretend they are gone.
@@ -352,9 +616,10 @@ The history is not lost; it is in this saga, which is where §D4.2 says it goes.
 
 ## Open questions
 
-1. **When does this publish?** The publish workflow stops at a GitHub Release
-   deliberately. The app-store submission is a separate decision, and the
-   `info.xml` work is a prerequisite for it rather than a commitment to it.
+1. ~~**When does this publish?**~~ **Answered in Round 5.** The submission is
+   committed to and the pipeline carries it. The remaining question is not
+   *whether* but *when the countersign lands* — gate 5, and the only one nobody
+   here controls.
 2. **Does the tag gesture come out?** Chapter 3 left it dated and queued: live
    code for a mechanism §C6.18 retired, kept because the harness arranges 27
    `kind: project` rows with it. It is still a second answer to a settled

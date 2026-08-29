@@ -102,9 +102,18 @@ code. They never live in the repo:
 - **GitHub App private key** — used by the release workflow to bypass branch
   protection on the version-bump commit. Stored as the `GH_APP_KEY` repo secret.
   Never echoed.
-- **Future Nextcloud app store signing key** — when a packaging chapter lands,
-  the signing key for app-store releases will be a repo secret. The
-  corresponding `.csr`/`.crt` files may be committed; the `.key` never is.
+- **Nextcloud app store signing key** — the private key that signs release
+  tarballs for apps.nextcloud.com. It is the value of `NEXTCLOUD_STORE_KEY` in
+  the **`nextcloud-store` GitHub Environment** (not a plain repo secret), is
+  written to a temp file by the release job and deleted in the same step, and is
+  never echoed. The local working copy lives in `.signing/`, which is
+  gitignored in full — **no part of `.signing/` is ever committed**, key, CSR or
+  certificate. The countersigned certificate is public and lives in
+  [nextcloud/app-certificate-requests](https://github.com/nextcloud/app-certificate-requests);
+  that is its authoritative copy (saga §D4.10).
+- **Nextcloud app store API token** — `NEXTCLOUD_STORE_TOKEN`, in the same
+  environment. It authorises *uploads*; it is not the signing key and the two
+  are not interchangeable.
 
 If you spot a secret committed to the repo (current or historical), treat it as
 a vulnerability and report it via the private channel above. It will be
