@@ -222,8 +222,9 @@ Feature: Moving a project
       | path                              |
       | /Penpot/foo/Upstream/Alpha.penpot |
     When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
-    Then "Penpot/Clients/Upstream" holds:
-      | penpot_project_id | the original id |
+    Then the mappings hold:
+      | path                     | identity        |
+      | /Penpot/Clients/Upstream | the original id |
     And there is no folder at "Penpot/foo"
     And Penpot holds no project named "foo"
 
@@ -238,8 +239,9 @@ Feature: Moving a project
       | /Penpot/foo/Notes.txt             |
     And Penpot holds a project named "foo/Upstream"
     When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
-    Then "Penpot/Clients/Upstream" holds:
-      | penpot_project_id | the original id |
+    Then the mappings hold:
+      | path                     | identity        |
+      | /Penpot/Clients/Upstream | the original id |
     And "Penpot/foo" still exists in Nextcloud, holding "Notes.txt"
     And Penpot holds no project named "foo"
 
