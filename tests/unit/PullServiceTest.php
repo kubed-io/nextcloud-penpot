@@ -1393,6 +1393,118 @@ final class PullServiceTest extends TestCase {
 		$this->pull->pullOne($mapping);
 	}
 
+	// ── a project that changed team in Penpot ───────────────────────────────
+
+	/**
+	 * THE FOLDER IS RELOCATED, NOT RE-CREATED.
+	 *
+	 * A project sent to another team leaves its folder standing under the mapping
+	 * it left, where the receiving mapping's own index cannot see it. Before
+	 * `foreignProjectFolder()` that miss meant `newFolder()`, which re-mirrored
+	 * the designs into a fresh folder and stranded every ordinary file in the old
+	 * one — the `Budget.xlsx` that `projects/move.feature` asserts on.
+	 */
+	public function testAProjectArrivingFromAnotherTeamRelocatesItsExistingFolder(): void {
+		$current = $this->mapping(false, Mapping::MODE_SYNC);
+		$donor = Mapping::fromArray([
+			'team_id' => self::OTHER_TEAM_ID,
+			'team_name' => 'South Wind',
+			'nc_folder' => 'Shared',
+			'use_team_folder' => false,
+			'mode' => Mapping::MODE_SYNC,
+		]);
+
+		// The folder that already IS the project, still under the donor's root.
+		$existing = $this->emptyFolder(70);
+		$existing->method('getPath')->willReturn('/dana/files/Shared/Upstream');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/dana/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$donorRoot = $this->createMock(Folder::class);
+		$donorRoot->method('getId')->willReturn(11);
+		$donorRoot->method('getPath')->willReturn('/dana/files/Shared');
+		$donorRoot->method('getDirectoryListing')->willReturn([$existing]);
+
+		$this->mappings->method('list')->willReturn([$current, $donor]);
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturnCallback(
+			fn (Mapping $m): Folder => $m->id === $current->id ? $root : $donorRoot,
+		);
+		$this->folderMarkersById[70] = new FolderMarkers('proj-acme', '');
+
+		// The project now belongs to THIS mapping's team.
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-acme', 'name' => 'Upstream', 'team-id' => self::TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		// THE ASSERTION: the folder that ALREADY EXISTS is the one stamped with the
+		// project. Asserted on the stamp rather than on `newFolder` never being
+		// called, because the root is also stamped with its team marker in the same
+		// pull and the two are only told apart by which node id they name.
+		$stamped = [];
+		$this->metadata->method('writeFolder')->willReturnCallback(
+			function (int $folderId) use (&$stamped): void {
+				$stamped[] = $folderId;
+			},
+		);
+
+		$this->pull->pullOne($current);
+
+		self::assertContains(70, $stamped, 'the existing folder was adopted, not replaced');
+	}
+
+	/**
+	 * AND THE DONOR MUST NOT DESTROY IT FIRST.
+	 *
+	 * `reapOrphanProjects()` reads "not named by this team" as "deleted in
+	 * Penpot", which is also what a migrating project looks like. Without
+	 * `movedToAnotherMappedTeam()` the outcome depended on which mapping happened
+	 * to pull first, and donor-first stripped the id irreversibly — nothing can
+	 * find a bare folder again.
+	 */
+	public function testAProjectThatMovedToAnotherMappedTeamIsNotReaped(): void {
+		$current = $this->mapping(false, Mapping::MODE_SYNC);
+		$receiver = Mapping::fromArray([
+			'team_id' => self::OTHER_TEAM_ID,
+			'team_name' => 'South Wind',
+			'nc_folder' => 'Shared',
+			'use_team_folder' => false,
+			'mode' => Mapping::MODE_SYNC,
+		]);
+
+		$leaving = $this->emptyFolder(70);
+		$leaving->method('getPath')->willReturn('/dana/files/Penpot/Upstream');
+
+		$root = $this->createMock(Folder::class);
+		$root->method('getId')->willReturn(10);
+		$root->method('getPath')->willReturn('/dana/files/Penpot');
+		$root->method('getDirectoryListing')->willReturn([$leaving]);
+		$root->method('nodeExists')->willReturn(false);
+
+		$this->mappings->method('list')->willReturn([$current, $receiver]);
+		$this->storage->method('isAvailable')->willReturn(true);
+		$this->storage->method('ensureRoot')->willReturn($root);
+		$this->folderMarkersById[70] = new FolderMarkers('proj-acme', '');
+
+		// This team no longer has it; the OTHER mapped team does.
+		$this->client->method('getAllProjects')->willReturn([
+			['id' => 'proj-acme', 'name' => 'Upstream', 'team-id' => self::OTHER_TEAM_ID, 'is-default' => false],
+		]);
+		$this->client->method('getProjectFiles')->willReturn([]);
+
+		// THE ASSERTION: the folder keeps its identity and is not trashed.
+		$leaving->expects($this->never())->method('delete');
+
+		$result = $this->pull->pullOne($current);
+
+		self::assertSame(0, $result['orphaned'], 'a migrating project is not an orphan');
+	}
+
 	private function mapping(bool $useTeamFolder, string $mode = Mapping::MODE_LINK): Mapping {
 		return Mapping::fromArray([
 			'team_id' => self::TEAM_ID,

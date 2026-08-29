@@ -17,6 +17,7 @@ use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\File;
+use OCP\Files\Folder;
 
 /**
  * Reads a moving `.penpot` file's metadata while it still HAS any, and hands it
@@ -66,6 +67,22 @@ final class MoveMemoryListener implements IEventListener {
 		}
 
 		$source = $event->getSource();
+
+		// A PROJECT FOLDER LOSES ITS MARKER TO A CROSSING TOO, and for a while the
+		// spec said otherwise: `projects/move.feature` carried an @unbuilt note
+		// claiming a folder move across a storage boundary fires no rename event
+		// at all. It fires. What a live instance actually showed is the same thing
+		// this listener already existed for — the event arrives and the METADATA
+		// is gone — so the folder took the identical fix (saga §D5.1).
+		if ($source instanceof Folder) {
+			$markers = $this->metadata->readFolder($source->getId());
+			if ($markers->hasProject()) {
+				$this->memory->rememberFolder($source->getId(), $markers);
+			}
+
+			return;
+		}
+
 		if (!$source instanceof File) {
 			return;
 		}

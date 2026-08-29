@@ -63,6 +63,19 @@ final class MoveMemory {
 	/** @var array<int, PenpotFileMetadata> file id => what it carried before the move */
 	private array $remembered = [];
 
+	/**
+	 * The same note, for FOLDERS.
+	 *
+	 * A project folder loses `penpot_project_id` to a crossing exactly as a design
+	 * loses `penpot_id` — the mechanism is core's `MetadataDelete` listener, which
+	 * does not care what kind of node the row belonged to. It is a separate map
+	 * rather than a shared one because file ids and folder ids come from the same
+	 * sequence: one array would let a folder's note answer a file's recall.
+	 *
+	 * @var array<int, FolderMarkers> folder id => what it carried before the move
+	 */
+	private array $rememberedFolders = [];
+
 	/** Note what $fileId was carrying, replacing any earlier note for it. */
 	public function remember(int $fileId, PenpotFileMetadata $meta): void {
 		// Re-inserting moves the key to the end, so the eviction below stays
@@ -91,5 +104,29 @@ final class MoveMemory {
 	/** Drop the note for $fileId — the move it belonged to is over. */
 	public function forget(int $fileId): void {
 		unset($this->remembered[$fileId]);
+	}
+
+	/** Note what $folderId was carrying, replacing any earlier note for it. */
+	public function rememberFolder(int $folderId, FolderMarkers $markers): void {
+		unset($this->rememberedFolders[$folderId]);
+		$this->rememberedFolders[$folderId] = $markers;
+
+		while (count($this->rememberedFolders) > self::MAX_ENTRIES) {
+			$oldest = array_key_first($this->rememberedFolders);
+			if ($oldest === null) {
+				break;
+			}
+			unset($this->rememberedFolders[$oldest]);
+		}
+	}
+
+	/** What $folderId was carrying, or null when nothing noted it. */
+	public function recallFolder(int $folderId): ?FolderMarkers {
+		return $this->rememberedFolders[$folderId] ?? null;
+	}
+
+	/** Drop the note for $folderId — the move it belonged to is over. */
+	public function forgetFolder(int $folderId): void {
+		unset($this->rememberedFolders[$folderId]);
 	}
 }

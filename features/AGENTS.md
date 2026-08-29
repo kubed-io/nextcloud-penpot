@@ -2599,6 +2599,39 @@ ITSELF (`Bubbles` → `Bubbles/foo`), which asks a folder to be moved into a fol
 that does not exist yet and whose name it is currently using — the folder parks
 under the mapping root for one step, which is also what lets the reverse
 (`Bubbles/foo` → `Bubbles`) land on the real name instead of `Bubbles (2)`.
+### A project sent to another team takes its folder with it
+
+The mirror of `Move a project folder into another team`. One project has one
+folder, whichever side moved it: when a project leaves for another team, the
+folder that already IS that project arrives in the receiving mapping — with
+everything in it, designs and ordinary files alike. `Budget.xlsx` is the
+assertion, because a design would be re-mirrored either way and would not
+notice the difference.
+
+**TWO HALVES, AND THE SECOND ONE IS THE ORDERING.** The receiving mapping has to
+find a folder standing under a root that is not its own, and the donor mapping
+must not destroy that folder's identity first.
+
+- **Finding it.** `$folderIndex` is built per mapping root, so a project
+  arriving from another team always MISSED it and a miss means "make a new
+  folder". `foreignProjectFolder()` answers the miss by indexing the other
+  mapped roots — at most once per pull, and only when something actually misses,
+  since a miss is otherwise just a genuinely new project. The relocation itself
+  needed nothing new: `ensureProjectFolder()` already hands whatever it finds to
+  `tryMoveProject()`, which moves the folder whole.
+
+- **Not reaping it.** `reapOrphanProjects()` reads "not named by this team" as
+  "deleted in Penpot", which a migrating project also looks like. Whether the
+  folder survived therefore depended on which mapping happened to pull first —
+  donor first and the id was stripped before anyone could relocate it,
+  irreversibly, since nothing can find a bare folder again.
+  `movedToAnotherMappedTeam()` asks the other mapped teams before reaping, and
+  answers **true on failure**: an unreachable Penpot defers the reap to a later
+  pull rather than destroying an identity on a guess.
+
+<!-- The Nextcloud-side twin and this one landed together; the Penpot side was
+     split out mid-PR when it turned out to be a different mechanism, then built
+     rather than left @todo. -->
 
 ---
 

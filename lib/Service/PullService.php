@@ -148,6 +148,17 @@ final class PullService {
 	}
 
 	/**
+	 * Cross-mapping project-folder index, built at most once per pull.
+	 *
+	 * Null means "not built yet" — distinct from an empty array, which means
+	 * "built, and no other mapping holds a project folder". {@see pullOne()}
+	 * resets it so one pull never answers with a tree another pull walked.
+	 *
+	 * @var array<string, Folder>|null
+	 */
+	private ?array $foreignIndex = null;
+
+	/**
 	 * Pull one mapping, or every mapping when `$mappingId` is null/empty.
 	 *
 	 * @return array{processed:int, folders:int, files:int, exported:int, failed:int, skipped:int, pruned:int, rescued:int, lost:int, reaped:int, orphaned:int, status:string, message:?string}
@@ -189,6 +200,10 @@ final class PullService {
 			// corrections instead of pushing them straight back to Penpot — the
 			// wall between the pull (Penpot → NC) and the writeback (NC → Penpot).
 			return $this->guard->run(function () use ($mapping): array {
+				// Per-pull, not per-service: the tree it indexes is edited by the very
+				// relocations it enables, so carrying one pull's answers into the next
+				// would hand out folders that have since moved.
+				$this->foreignIndex = null;
 				$root = $this->storage->ensureRoot($mapping);
 				// REPAIR, NOT PROVISIONING. `ensureRoot()` marks the root itself now,
 				// so this writes a value that is normally already there — kept because
@@ -259,7 +274,7 @@ final class PullService {
 						}
 
 						try {
-							$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName, $project);
+							$target = $this->ensureProjectFolder($root, $folderIndex, $projectId, $projectName, $mapping, $project);
 						} catch (\Throwable $e) {
 							// ONE PROJECT'S FOLDER FAILING IS ONE SKIPPED PROJECT, not a dead
 							// mapping. Provisioning a project now walks and creates a PATH, so
@@ -303,7 +318,7 @@ final class PullService {
 					// gathers FILES, so a project deleted in Penpot had its designs
 					// pruned and left its folder standing, still claiming an id nothing
 					// answers to — see {@see reapOrphanProjects}.
-					$orphaned = $this->reapOrphanProjects($root, $named);
+					$orphaned = $this->reapOrphanProjects($root, $named, $mapping);
 				}
 
 				return $this->tally([
@@ -455,7 +470,7 @@ final class PullService {
 	 * @param array<string, Folder> $folderIndex penpot_project_id -> folder, built once by the caller
 	 * @param array<string, mixed> $project the Penpot project record (carries `created-at`)
 	 */
-	private function ensureProjectFolder(Folder $root, array $folderIndex, string $projectId, string $name, array $project = []): Folder {
+	private function ensureProjectFolder(Folder $root, array $folderIndex, string $projectId, string $name, Mapping $mapping, array $project = []): Folder {
 		$segments = self::segments($name);
 		$leaf = array_pop($segments); // and what is left of $segments is the parents
 		if ($leaf === null) {
@@ -465,7 +480,15 @@ final class PullService {
 			throw new \RuntimeException('A project name resolved to no path segments at all');
 		}
 
-		$existing = $folderIndex[$projectId] ?? null;
+		// A PROJECT THAT ARRIVED FROM ANOTHER TEAM ALREADY HAS A FOLDER, and it is
+		// standing under the mapping it just left. `$folderIndex` cannot see it —
+		// it is built for THIS root — so a miss here used to mean "make a new
+		// folder", which re-created the project and stranded everything in the old
+		// folder that was not a design.
+		//
+		// Looked up only on a miss, and built at most once per pull, because a miss
+		// is otherwise the ordinary "a genuinely new project" path.
+		$existing = $folderIndex[$projectId] ?? $this->foreignProjectFolder($projectId, $mapping);
 		if ($existing !== null) {
 			$this->tryMoveProject($existing, $root, $segments, $leaf);
 			$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
@@ -1184,13 +1207,25 @@ final class PullService {
 	 *
 	 * @return int how many folders stopped claiming a project
 	 */
-	private function reapOrphanProjects(Folder $root, array $named): int {
+	private function reapOrphanProjects(Folder $root, array $named, Mapping $mapping): int {
 		$orphaned = 0;
 
 		// COLLECTED BEFORE ANYTHING CHANGES. The walk reads folder metadata and the
 		// endings below delete folders, so listing and mutating in one pass would
 		// have the descent stepping through a tree it is editing.
 		foreach ($this->orphanProjectFolders($root, $named, 0) as $folder) {
+			$projectId = $this->metadata->readFolder($folder->getId())->projectId;
+			if ($projectId !== '' && $this->movedToAnotherMappedTeam($projectId, $mapping)) {
+				// NOT DELETED — MIGRATED. The receiving mapping relocates this folder
+				// on its own pull; stripping its id here would make that impossible.
+				$this->logger->info('penpot_sync pull: a project moved to another mapped team; its folder is left for that mapping to relocate', [
+					'app' => Application::APP_ID,
+					'projectId' => $projectId,
+					'folder' => $folder->getPath(),
+				]);
+
+				continue;
+			}
 			$orphaned += $this->stopBeingAProject($folder) ? 1 : 0;
 		}
 
@@ -1429,6 +1464,103 @@ final class PullService {
 	 *
 	 * @return array<string, Folder> penpot_project_id -> folder (last wins on the impossible dup)
 	 */
+	/**
+	 * A folder carrying $projectId that lives under some OTHER mapping's root.
+	 *
+	 * ## THE OTHER HALF OF A CROSS-TEAM MOVE
+	 *
+	 * When a project is sent to another team in Penpot, its folder does not move
+	 * itself: it is still standing under the mapping it left. The receiving
+	 * mapping names the project on its next pull, misses it in its own index, and
+	 * without this would CREATE a folder — re-mirroring the designs into it and
+	 * leaving every ordinary file behind in the abandoned one. That is what
+	 * `Move a project to another team in Penpot` asserts with `Budget.xlsx`.
+	 *
+	 * The relocation itself needs nothing new: {@see ensureProjectFolder()} hands
+	 * whatever it finds to {@see tryMoveProject()}, which moves the folder whole
+	 * into this root — the same call that re-paths a project renamed in place.
+	 *
+	 * ## BUILT AT MOST ONCE, AND ONLY WHEN SOMETHING MISSES
+	 *
+	 * A miss is normally just "a genuinely new project", so paying a walk of every
+	 * other mapped tree per project would be a real cost for a rare answer. The
+	 * index is therefore built on the first miss of a pull and reused after that;
+	 * {@see pullOne()} clears it so one pull never answers with another's tree.
+	 */
+	private function foreignProjectFolder(string $projectId, Mapping $current): ?Folder {
+		if ($this->foreignIndex === null) {
+			$this->foreignIndex = [];
+			foreach ($this->mappings->list() as $mapping) {
+				if ($mapping->id === $current->id) {
+					continue;
+				}
+				try {
+					$root = $this->storage->ensureRoot($mapping);
+				} catch (\Throwable $e) {
+					// A mapping whose storage is not available cannot be searched, and
+					// that must not fail the pull that is merely asking a question about
+					// it. Logged rather than swallowed: a folder that should have been
+					// relocated will be re-created instead, and this is the only trace.
+					$this->logger->warning('penpot_sync pull: could not search a mapping for a relocated project folder', [
+						'app' => Application::APP_ID,
+						'mapping' => $mapping->id,
+						'exception' => $e,
+					]);
+					continue;
+				}
+				$this->foreignIndex = array_replace($this->foreignIndex, $this->indexProjectFolders($root));
+			}
+		}
+
+		return $this->foreignIndex[$projectId] ?? null;
+	}
+
+	/**
+	 * True when $projectId still exists in a mapped team that is NOT $current.
+	 *
+	 * ## WHY THE REAP HAS TO ASK THIS
+	 *
+	 * `reapOrphanProjects()` means "Penpot no longer has this project", and it
+	 * infers that from the project not being named by THIS mapping's team. A
+	 * project that moved to another mapped team is not named here either, and is
+	 * very much still alive.
+	 *
+	 * Without this, the outcome depended on the order the mappings happen to pull
+	 * in: donor first and the folder is stripped of its id before the receiving
+	 * mapping can relocate it — permanently, since nothing can find it again.
+	 * That is not a race worth leaving in a reconciler.
+	 *
+	 * ASKED ONLY ABOUT FOLDERS ABOUT TO BE REAPED, which is normally none, so the
+	 * team listings this costs are paid exactly when the answer matters.
+	 */
+	private function movedToAnotherMappedTeam(string $projectId, Mapping $current): bool {
+		foreach ($this->mappings->list() as $mapping) {
+			if ($mapping->id === $current->id) {
+				continue;
+			}
+			try {
+				foreach ($this->teamProjects($mapping->teamId) as $project) {
+					if ($this->str($project, 'id') === $projectId) {
+						return true;
+					}
+				}
+			} catch (\Throwable $e) {
+				// UNREACHABLE PENPOT MEANS "DO NOT REAP", not "reap anyway". The whole
+				// point of this question is to avoid destroying an identity on a
+				// guess, so a failure to answer it defers the reap to a later pull.
+				$this->logger->warning('penpot_sync pull: could not check another team before reaping a project folder; leaving it alone', [
+					'app' => Application::APP_ID,
+					'mapping' => $mapping->id,
+					'exception' => $e,
+				]);
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private function indexProjectFolders(Folder $root, int $depth = 0): array {
 		if ($depth >= self::MAX_DEPTH) {
 			return [];

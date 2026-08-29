@@ -125,9 +125,7 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  # @unbuilt — the app never sees this gesture: "Shared" is a Team Folder, so the
-  # move crosses a storage boundary and fires no NodeRenamedEvent. Measured in CI.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |
@@ -142,16 +140,31 @@ Feature: Moving a project
     # One move changing team and name together, keeping the id, the designs and
     # their history. A project is never re-created to cross a team boundary.
 
+  @in-penpot @gesture
+  Scenario: Move a project to another team in Penpot
+    Given the following items in the mappings:
+      | path                          |
+      | /Penpot/Upstream/Alpha.penpot |
+      | /Penpot/Upstream/Budget.xlsx  |
+    When someone moves that project to "Crossing" in the "Second Team" Penpot team
+    Then the mappings hold:
+      | path                          | identity        |
+      | /Shared/Crossing              | the original id |
+      | /Shared/Crossing/Alpha.penpot | the original id |
+    And "Shared/Crossing" holds "Budget.xlsx"
+    And there is no folder at "Penpot/Upstream"
+    # notes: ../AGENTS.md#a-project-sent-to-another-team-takes-its-folder-with-it
+
     # ── RULE: a project changed in Penpot moves its folder ────────────────────
     # notes: ../AGENTS.md#a-project-renamed-in-penpot-moves-its-folder
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Move/Rename a project in Penpot
     Given the following items in the mappings:
       | path                  |
       | /<from>/Alpha.penpot  |
       | /<from>/Budget.xlsx   |
-    When someone moves that project to "<name>" in the "<team>" Penpot team
+    When someone renames that project to "<name>" in Penpot
     Then the mappings hold:
       | path                | identity        |
       | /<to>               | the original id |
@@ -159,12 +172,11 @@ Feature: Moving a project
     And "<to>" holds "Budget.xlsx"
     And there is no folder at "<from>"
 
-    Examples: Penpot can re-path and change team in one call, where a drag cannot
-      | from                | team        | name             | to                      |
-      | Penpot/Upstream     | Design Team | Clients/Upstream | Penpot/Clients/Upstream |
-      | Penpot/foo/Upstream | Design Team | Upstream         | Penpot/Upstream         |
-      | Penpot/Upstream     | Design Team | Deep/Down/Low    | Penpot/Deep/Down/Low    |
-      | Penpot/Upstream     | Second Team | Crossing         | Shared/Crossing         |
+    Examples: a project's name is its path, so Penpot can re-path it in one call
+      | from                | name             | to                      |
+      | Penpot/Upstream     | Clients/Upstream | Penpot/Clients/Upstream |
+      | Penpot/foo/Upstream | Upstream         | Penpot/Upstream         |
+      | Penpot/Upstream     | Deep/Down/Low    | Penpot/Deep/Down/Low    |
 
     # THE ID IS THE BEFORE AND AFTER. The new name says where the project belongs; the
     # id says which folder is already it. Ensure the destination, then move that folder.
@@ -205,7 +217,7 @@ Feature: Moving a project
     # notes: ../AGENTS.md#an-emptied-parent-is-reaped-only-when-it-holds-nothing-else
 
   @in-penpot @gesture @todo
-  Scenario: Move a project in Penpot out of a folder holding nothing else
+  Scenario: Move a project in Penpot out of a parent folder which had nothing inside of it
     Given the following items in the mappings:
       | path                          |
       | /Penpot/foo/Upstream/Alpha.penpot |
@@ -213,20 +225,23 @@ Feature: Moving a project
     Then "Penpot/Clients/Upstream" holds:
       | penpot_project_id | the original id |
     And there is no folder at "Penpot/foo"
+    And penpot does not hold a project named "foo"
 
     # "foo" only ever existed because "foo/Upstream" needed somewhere to sit. With
     # nothing left in it and no id of its own, it has stopped meaning anything.
 
   @in-penpot @gesture @todo
-  Scenario: Move a project in Penpot out of a folder holding other files
+  Scenario: Move a project in Penpot out of a parent folder holding other files
     Given the following items in the mappings:
       | path                              |
       | /Penpot/foo/Upstream/Alpha.penpot |
       | /Penpot/foo/Notes.txt             |
+    And penpot has a project named "foo/upstream"
     When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
     Then "Penpot/Clients/Upstream" holds:
       | penpot_project_id | the original id |
     And "Penpot/foo" still exists in Nextcloud, holding "Notes.txt"
+    And penpot does not hold a project named "foo"
 
     # Deleting a user's notes because a Penpot project moved out from under them is
     # not this app's call — the same line Grafana draws for a folder losing its last.
