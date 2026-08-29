@@ -82,12 +82,10 @@ use JsonSerializable;
  * therefore read from the folder on demand ({@see StorageService::groupsOf()})
  * and written straight through ({@see MappingService::updateGroups()}).
  *
- * **No folder mode** (§C6.36). `nested`/`keyed` was a designed-but-unbuilt fork
- * that this object carried, the CLI took, the admin card rendered as "(fixed)",
- * and `add()` refused half the values of. One unimplemented value on a field
- * with one implemented value is not a choice, so the field is gone. The design
- * question it stood for is still open in the saga (§6.53, open question #47),
- * which is where an unbuilt design belongs.
+ * **No folder mode** (§C6.36). A `nested`/`keyed` fork was carried here, taken by
+ * the CLI and rendered on the admin card while only one of its values did
+ * anything. One value on a two-value field is not a choice, so the field is gone;
+ * the design question it stood for is open in the saga (§6.53).
  *
  * @see MappingService for storage, uniqueness, and the immutability rule.
  */

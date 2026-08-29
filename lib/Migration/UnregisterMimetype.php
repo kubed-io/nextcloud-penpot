@@ -19,7 +19,7 @@ use Psr\Log\LoggerInterface;
 /**
  * Reverses {@see RegisterMimetype} on app removal (the `<uninstall>` repair
  * step), so removing the app leaves the Nextcloud core tree as it found it —
- * the store's clean-uninstall rule (uninstall.feature). The mirror image of
+ * the store's clean-uninstall rule (lifecycle.feature). The mirror image of
  * install:
  *   1. Drop our `penpot` / `application/vnd.penpot` keys from the live config
  *      files (`config/mimetypemapping.json`, `config/mimetypealiases.json`).

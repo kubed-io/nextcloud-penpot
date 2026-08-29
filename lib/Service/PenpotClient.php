@@ -301,7 +301,7 @@ final class PenpotClient {
 	 * `name` is required by the schema — Penpot has no nameless design — and the
 	 * project is mandatory too: there is no team-level or rootless create, which
 	 * is exactly why the New-menu action is only offered where a project can be
-	 * resolved (create-design.feature).
+	 * resolved (designs/create.feature).
 	 *
 	 * @return array<string, mixed> the new file record, incl. `id`
 	 *
@@ -336,11 +336,12 @@ final class PenpotClient {
 	 *
 	 * ## WHY THE ANSWER HAS THREE VALUES AND NOT TWO
 	 *
-	 * The only caller is {@see \OCA\PenpotSync\Service\PullService}'s prune, which
-	 * uses it to tell a design that was MOVED out of a mapped team (alive, just
-	 * somewhere we no longer mirror — the local mirror goes with no trash entry)
-	 * from one that was DELETED or PURGED (the local file may be the last copy in
-	 * existence — it must land in the Nextcloud trash).
+	 * {@see \OCA\PenpotSync\Service\PullService}'s prune uses it to tell a design
+	 * that was MOVED out of a mapped team (alive, just somewhere we no longer mirror
+	 * — the local mirror goes with no trash entry) from one that was DELETED or
+	 * PURGED (the local file may be the last copy in existence — it must land in the
+	 * Nextcloud trash). {@see \OCA\PenpotSync\Service\TrashReconcileService} asks
+	 * the same question of an id in neither listing.
 	 *
 	 * Those two branches are not equally safe. Getting "moved" wrong costs a
 	 * recoverable file sitting in the trash; getting "purged" wrong DESTROYS the
@@ -510,11 +511,11 @@ final class PenpotClient {
 	 * one feature, disagreeing about whether a response has content; the param
 	 * table above exists for the same reason.
 	 *
-	 * ONLY EVER CALLED ON AN EXPLICIT OPT-IN (`project-folder.feature`). Every
-	 * Penpot project becomes a Nextcloud folder automatically, but a Nextcloud
-	 * folder becomes a project only when someone tags it — so this method has
-	 * exactly one caller, {@see ProjectFolderService::onTagged()}, and no path
-	 * from the pull.
+	 * NEVER CALLED FROM THE PULL (`projects/create.feature`). Every Penpot project
+	 * becomes a Nextcloud folder automatically; the reverse only happens on a
+	 * gesture, so both callers are in {@see ProjectFolderService} — a design
+	 * landing in the folder ({@see ProjectFolderService::adoptForContent()}), or
+	 * the folder being tagged ({@see ProjectFolderService::onTagged()}).
 	 *
 	 * `$actorToken` attributes the creation exactly as {@see renameProject()}: the
 	 * project should be owned by the person who asked for it, not by the service

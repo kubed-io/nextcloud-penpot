@@ -182,7 +182,7 @@ final class RestoreService {
 		if ($stamped === null || $stamped->penpotId === '') {
 			// Untracked, or a mirror whose stamp was cleared. Nothing in Penpot
 			// answers to this file, and inventing something for it to answer to is
-			// team-import.feature's still-open fork, not a restore.
+			// mapping/sync-now.feature's still-open fork, not a restore.
 			return;
 		}
 		$penpotId = $stamped->penpotId;
@@ -328,7 +328,7 @@ final class RestoreService {
 	 * {@see isListedAgain()} answers "is it back *now*", and the pull one second
 	 * later kept disagreeing with it: two `get-project-files` calls for the same
 	 * project, seconds apart, returning different answers. That was recorded as an
-	 * unexplained defect and tagged `@todo` in `restore-design.feature`.
+	 * unexplained defect and tagged `@todo` in `designs/restore.feature`.
 	 *
 	 * The RPC trace explains it. `delete-file` does not finish when it answers —
 	 * Penpot lands the deletion asynchronously, a beat later. A restore issued

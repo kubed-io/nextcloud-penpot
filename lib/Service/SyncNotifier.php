@@ -15,21 +15,14 @@ use OCP\Notification\IManager;
 use Psr\Log\LoggerInterface;
 
 /**
- * The channel a failure travels on, which this app did not have.
+ * The channel a failure travels on.
  *
- * ## WHY TWO SCENARIOS WERE `@unbuilt` FOR WANT OF THIS CLASS
+ * ## WHY A LOG LINE IS NOT ENOUGH
  *
- * `designs/move.feature` asks twice for *"the failure is reported to the user"* —
- * once for an archive Penpot will not accept, once for a move made while Penpot is
- * unreachable — and `features/AGENTS.md` recorded the reason neither could run as
- * *"there is nowhere for a failure to be reported to"*. That was true: every
- * failure in this app ends in `$this->logger->warning()`, which reaches an admin
- * reading `nextcloud.log` and nobody else.
- *
- * The user who dragged the file is the person who can do something about it, and
- * they never heard. Both siblings solved this the same way and it is the native
- * channel for exactly this shape of problem — work that happens after the gesture
- * has already committed.
+ * A failure written only to `$this->logger` reaches an admin reading
+ * `nextcloud.log` and nobody else. The user who dragged the file is the person who
+ * can do something about it, and a bell entry is the native channel for this shape
+ * of problem — work that happens after the gesture has already committed.
  *
  * ## THE GESTURE IS NEVER UNDONE TO REPORT ON IT (§6.18 rule 3)
  *

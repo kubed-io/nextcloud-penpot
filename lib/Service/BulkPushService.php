@@ -26,14 +26,12 @@ use Psr\Log\LoggerInterface;
  * seen. Neither touches the shape data of an existing design, which is the line
  * §6.1 actually draws.
  *
- * ## THE ABSENCE THIS REPLACES WAS A MISREADING, NOT A BOUNDARY
+ * ## WHERE §6.1 ACTUALLY DRAWS THE LINE
  *
- * Three files used to say, in almost identical words, that this app is read-only
- * for design content (§6.1) and that a push was therefore never coming. That
- * over-read the rule. What §6.1 forbids is pushing SHAPE DATA into a design
- * Penpot already holds — editing someone's file underneath them. It says nothing
- * about a `.penpot` Penpot has never seen, and the app already creates projects,
- * renames them, and imports whole archives as new designs on every drag-and-drop.
+ * §6.1 forbids pushing SHAPE DATA into a design Penpot already holds — editing
+ * someone's file underneath them. It says nothing about a `.penpot` Penpot has
+ * never seen, which the app already imports as a new design on every
+ * drag-and-drop.
  *
  * So the boundary is real and this is on the safe side of it: an archive that
  * names no design becomes one; a file that already names a design is LEFT ALONE.

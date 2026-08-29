@@ -90,17 +90,12 @@ final class PersonalSettings implements IDeclarativeSettingsFormWithHandlers {
 			// scheduled-sync checkbox.
 			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_EXTERNAL,
 			'title' => 'Penpot',
-			'description' => 'Optional. Your own Penpot access token, used only to attribute changes '
-				. 'you make from Nextcloud to you in Penpot\'s history — instead of to the shared '
-				. 'service account. Everything works without it; mirroring never uses your token. '
-				. 'This assumes one Penpot account per Nextcloud user.',
+			'description' => 'Optional. Your own Penpot access token, so changes you make from Nextcloud are attributed to you in Penpot\'s history rather than to the service account. Everything works without it.',
 			'fields' => [
 				[
 					'id' => self::KEY_PERSONAL_TOKEN,
 					'title' => 'Your Penpot access token',
-					'description' => 'Create one in Penpot under Profile → Access tokens. '
-						. 'Stored encrypted, visible only to you, and never shown again after saving. '
-						. 'Clear the field and save to remove it — your mirrored files keep working.',
+					'description' => 'Create one in Penpot under Profile → Access tokens. Stored encrypted and never shown again after saving. Clear the field and save to remove it.',
 					'type' => DeclarativeSettingsTypes::PASSWORD,
 					'placeholder' => 'Paste your personal Penpot access token',
 					'default' => '',

@@ -120,12 +120,9 @@ final class Application extends App implements IBootstrap {
 		// type — see PersonalSettings.
 		$context->registerDeclarativeSettings(PersonalSettings::class);
 
-		// THE CHANNEL A FAILURE TRAVELS ON. Until this existed every failure in
-		// this app ended in the log, which reaches an admin reading nextcloud.log
-		// and nobody else — while the person who can actually act on it is the one
-		// who dragged the file. `designs/move.feature` asks twice for "the failure
-		// is reported to the user" and both asks were @unbuilt for want of this
-		// one line. Both siblings register the same pair the same way.
+		// THE CHANNEL A FAILURE TRAVELS ON. A failure that only logs reaches an
+		// admin reading nextcloud.log and nobody else — while the person who can
+		// act on it is the one who dragged the file.
 		$context->registerNotifierService(Notifier::class);
 
 		// The write paths (saga Ch2 Course 4). NodeRenamedEvent fires for both a
@@ -170,7 +167,7 @@ final class Application extends App implements IBootstrap {
 		// a `move-files` when it lands anywhere else.
 		$context->registerEventListener(NodeCopiedEvent::class, CopyListener::class);
 
-		// A NEW .penpot FILE BECOMES A DESIGN (§6.33, create-design.feature). The
+		// A NEW .penpot FILE BECOMES A DESIGN (§6.33, designs/create.feature). The
 		// "+ New" menu writes a file and nothing more — that is the whole
 		// Nextcloud-sanctioned pattern — so the server notices it here. The
 		// SyncGuard is load-bearing: the pull writes .penpot files constantly.
@@ -188,10 +185,10 @@ final class Application extends App implements IBootstrap {
 		// pull pruned the file a second time (the gap delete.feature used to name).
 		$context->registerEventListener(NodeRestoredEvent::class, RestoreFromTrashListener::class);
 
-		// A FOLDER BECOMES A PROJECT — BY OPT-IN (project-folder.feature, §C6.18).
-		// The only inbound direction that is NOT automatic: every Penpot project
-		// arrives as a folder, but a Nextcloud folder becomes a project only when
-		// someone puts the `penpot` tag on it. Note what is deliberately absent —
+		// A FOLDER BECOMES A PROJECT (projects/create.feature). Normally that
+		// happens when a design lands in it; this listener is the second, explicit
+		// route — tagging the folder — which the test harness relies on to make a
+		// project that holds no design yet. Note what is deliberately absent:
 		// there is no TagUnassignedEvent listener, so "removing the tag never
 		// deletes the project" is true by construction, not by a branch.
 		$context->registerEventListener(TagAssignedEvent::class, ProjectTagListener::class);
@@ -217,13 +214,7 @@ final class Application extends App implements IBootstrap {
 		// accessor both siblings use to register their metadata keys.
 		$context->getAppContainer()->get(PenpotMetadata::class)->register();
 
-		// THE SCHEDULED PULL, at last. The interval has been configurable since
-		// Course 2 and was read by NOTHING — `occ penpot_sync:show-config` said so
-		// out loud ("not running — the pull job is not built yet"), but from the
-		// admin surface it looked like a working setting, so a design renamed in
-		// Penpot stayed renamed only in Penpot until someone ran occ by hand.
-		//
-		// IJobList::add is idempotent, so calling it on every boot just ensures
+		// THE SCHEDULED PULL. IJobList::add is idempotent, so calling it on every boot just ensures
 		// the TimedJob exists. The job self-gates on the schedule being enabled
 		// and re-reads its interval every time it is instantiated, so changing
 		// either setting takes effect on the next tick with no re-registration.

@@ -292,7 +292,7 @@ final class MotionService {
 				//
 				// So it becomes an ordinary untracked `.penpot` — the same shape any
 				// file the app never adopted has, and one a later gesture can still
-				// import. Raised by Copilot on #52.
+				// import.
 				$this->metadata->clear($target->getId());
 				$this->logger->warning('penpot_sync writeback: could not import a duplicate arrival; cleared its stale id', [
 					'app' => Application::APP_ID,

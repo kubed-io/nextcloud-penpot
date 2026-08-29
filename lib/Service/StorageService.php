@@ -84,29 +84,17 @@ final class StorageService {
 	 * Content-group rights on a managed Penpot folder: the same surface Nextcloud
 	 * gives any ordinary folder, and for the same reason.
 	 *
-	 * ## THIS USED TO BE READ + UPDATE, AND THAT BROKE THE APP'S OWN DESIGN
+	 * ## WHY CREATE AND DELETE ARE GRANTED
 	 *
-	 * The grant was READ|UPDATE — "read-only for content (§6.1), plus rename" —
-	 * with create and delete deferred to §6.33 / Course 5. The deferral read as
-	 * conservative. It was not: withholding CREATE removed the **+ New button
-	 * entirely** from every mapped folder, so the folders behaved unlike every
-	 * other folder in Nextcloud, and it made three built features unreachable:
+	 * READ|UPDATE alone would read as the conservative choice and is not. Without
+	 * CREATE the **+ New button disappears** from every mapped folder, free nesting
+	 * (§6.29) is impossible because a user cannot make a subfolder, and without
+	 * DELETE on the source a cross-folder move never reaches {@see MotionService}.
 	 *
-	 *   - **§6.29 free nesting**, the most load-bearing rule in the app. The whole
-	 *     nearest-ancestor resolver exists so a user can group mirrors into plain
-	 *     subfolders of their own. You cannot create a subfolder without CREATE.
-	 *   - **Course 4's move writeback.** A cross-folder move needs DELETE on the
-	 *     source, so `MotionService` and `move-files` could not be reached by a
-	 *     drag at all.
-	 *   - **"a mapped folder stays usable as an ordinary folder"** — asserted in
-	 *     the prune's own docblock as the reason unstamped files are left alone,
-	 *     while nothing could be put there in the first place.
-	 *
-	 * §6.1 is about CONTENT never flowing back to Penpot, and it still holds
-	 * absolutely: it is enforced by the listeners and by there being no content
-	 * push, not by making the folder awkward. A permission bit was the wrong
-	 * place to express it — it did not stop a single write to Penpot, it only
-	 * stopped the user from using their own files.
+	 * §6.1 is about CONTENT never flowing back to Penpot, and it holds absolutely —
+	 * enforced by the listeners and by there being no content push. A permission bit
+	 * was the wrong place to express it: it stops no write to Penpot, only the user
+	 * from using their own files.
 	 *
 	 * Kept identical to {@see TeamFolderService} so both backends grant the same
 	 * surface, and identical to both sibling apps.

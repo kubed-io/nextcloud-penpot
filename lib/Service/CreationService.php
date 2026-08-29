@@ -14,7 +14,7 @@ use OCP\Files\File;
 use Psr\Log\LoggerInterface;
 
 /**
- * A new `.penpot` file becomes a real design in Penpot (`create-design.feature`,
+ * A new `.penpot` file becomes a real design in Penpot (`designs/create.feature`,
  * saga §6.33/§C6.11).
  *
  * ## THE SECOND DELIBERATE CARVE-OUT OF §6.1

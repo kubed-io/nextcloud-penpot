@@ -15,7 +15,7 @@ use OCP\IAppConfig;
 
 /**
  * The record of the last pull — **one record, whichever trigger caused it**
- * (`admin-section.feature`).
+ * (`connection/admin.feature`).
  *
  * ## WHY IT IS ONE RECORD AND NOT THREE
  *

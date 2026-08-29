@@ -22,7 +22,7 @@ namespace OCA\PenpotSync\Service;
  * is represented by {@see PenpotMetadata::readFile()} returning `null`, not by a
  * view with empty fields.
  *
- * ## THE KEY SET IS DELIBERATELY SMALLER THAN THE SIBLINGS' (saga §6.22, file-type.feature)
+ * ## THE KEY SET IS DELIBERATELY SMALLER THAN THE SIBLINGS' (saga §6.22, designs/view.feature)
  *
  *   penpot_id       — the Penpot file id (the master's `n8n_id` / apprentice's
  *                     `grafana_uid`). The stable thread; survives renames and

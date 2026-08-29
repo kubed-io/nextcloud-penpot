@@ -143,7 +143,7 @@ final class ProjectFolderService {
 			// Already a project — either mirrored from Penpot (the pull stamps the
 			// tag itself) or opted in earlier. Re-tagging is a no-op, not a second
 			// create: two folders claiming one project is the exact failure
-			// `project-folder.feature` refuses copies to avoid.
+			// `projects/create.feature` refuses copies to avoid.
 			return;
 		}
 

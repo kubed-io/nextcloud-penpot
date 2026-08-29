@@ -31,8 +31,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * Validation is deliberately shallow: the URL must parse and carry an http(s)
  * scheme and a host. Whether Penpot is actually *there* is a different question,
- * answered by a connection test once the client lands — this command must work
- * before the instance exists (helm/occ config injection ordering).
+ * answered by `penpot_sync:test-connection` — this command must work before the
+ * instance is reachable, because config is often injected before it comes up.
  */
 final class SetUrl extends Command {
 	public function __construct(

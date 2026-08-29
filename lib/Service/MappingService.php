@@ -210,7 +210,7 @@ final class MappingService {
 			// they may have typed nothing at all and taken the team's name as the
 			// default, which is settled a few lines above this. The panel puts this
 			// in the confirmation, and `"" already holds 3 designs` is a poor sentence
-			// to read before destroying something. Raised by Copilot on #48.
+			// to read before destroying something.
 			throw new ExistingDesignsException(sprintf(
 				'"%s" already holds %d design%s. A link mapping holds pointers rather than '
 				. 'designs, so they would be permanently deleted — not moved to the trash, and '
@@ -281,12 +281,12 @@ final class MappingService {
 	 *
 	 * ## IMMUTABILITY IS THE SIGNATURE, NOT A GUARD
 	 *
-	 * This used to be `update(string $id, Mapping $mapping)` — a whole mapping in,
-	 * and five checks refusing every field that must not move. Those checks were
-	 * unreachable: the one caller is {@see MappingController::update()}, which
-	 * accepts `ncGroups` and rebuilds every other field FROM STORAGE, so it could
-	 * not have tripped one if it tried. Defensive code guarding a door with no
-	 * handle.
+	 * Taking `update(string $id, Mapping $mapping)` — a whole mapping in, and five
+	 * checks refusing every field that must not move — makes those checks
+	 * unreachable. Both callers ({@see MappingController::update()} and
+	 * {@see \OCA\PenpotSync\Command\SetGroups}) can only supply groups, and the
+	 * controller rebuilds every other field FROM STORAGE, so neither could trip one
+	 * if it tried. Defensive code guarding a door with no handle.
 	 *
 	 * Taking an array of groups says the same thing better: there is no way to
 	 * express a change to anything else, so nothing has to refuse one. A field is
@@ -302,10 +302,9 @@ final class MappingService {
 	 *   - **the Team Folder flag** — switching backend would migrate the
 	 *     provisioned folder and all of its shares.
 	 *   - **`mode`** — link ⇄ sync decides whether we HOLD THE BYTES (§6.22), not
-	 *     which way edits flow as it does in Grafana. sync→link would delete every
-	 *     downloaded archive under the mapping; link→sync would export every file
-	 *     at once. Per-FILE promotion is the supported path (sync-mode.feature)
-	 *     precisely because it can ask before destroying an archive.
+	 *     which way edits flow. sync→link would delete every downloaded archive
+	 *     under the mapping; link→sync would export every file at once. Mode is a
+	 *     property of the mapping, so remapping the team is how it changes.
 	 *
 	 * Re-sharing a folder is the one change that moves no content, which is why it
 	 * is the one that stayed.
@@ -377,7 +376,7 @@ final class MappingService {
 	 *
 	 * NOTHING IS DELETED FROM PENPOT, EVER, and nothing local is deleted here
 	 * either — removing a mapping only stops the pull. What happens to already-
-	 * mirrored files is Course 5's decision (remove-mapping.feature), and it is
+	 * mirrored files is Course 5's decision (mapping/delete.feature), and it is
 	 * not this method's to make quietly.
 	 */
 	public function remove(string $id): bool {
@@ -461,7 +460,7 @@ final class MappingService {
 				// carried two arguments. Rewording it to say which SIDE the clash is
 				// on left one placeholder and two arguments, and sprintf silently
 				// filled it with the first — announcing the folder's own name as the
-				// team that holds it. Raised by Copilot on #48.
+				// team that holds it.
 				throw new \InvalidArgumentException(sprintf(
 					'The folder is already mapped to another team (%s). Pick another name.',
 					$existing->teamName !== '' ? $existing->teamName : $existing->teamId,

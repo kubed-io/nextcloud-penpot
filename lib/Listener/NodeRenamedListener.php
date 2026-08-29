@@ -57,12 +57,10 @@ use Psr\Log\LoggerInterface;
  *
  * The NC rename/move has already committed by the time this runs, so a Penpot
  * failure is logged, not raised: the local state stands and the next pull
- * reconciles it. It is ALSO reported to the acting user now, through
- * {@see SyncNotifier} — the log alone reached an admin tailing `nextcloud.log`
- * and never the person who made the gesture, which is what left
- * `designs/move.feature`'s "the failure is reported to the user" @unbuilt. The
- * two pushes are attempted independently for the same reason as ever: a failed
- * rename must not swallow the move.
+ * reconciles it. It is also reported to the acting user through
+ * {@see SyncNotifier}, because the log alone never reaches the person who made
+ * the gesture. The two pushes are attempted independently so that a failed rename
+ * cannot swallow the move.
  *
  * @implements IEventListener<NodeRenamedEvent>
  */

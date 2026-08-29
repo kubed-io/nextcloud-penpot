@@ -28,7 +28,7 @@ use OCA\PenpotSync\Exception\PenpotApiException;
  * zero teams is a real, ordinary state, and it is exactly the state that blocks
  * every mapping. "Connection OK" would hide the one fact an admin needs.
  *
- * ## THE THREE FAILURES IT MUST TELL APART (admin-connection.feature)
+ * ## THE THREE FAILURES IT MUST TELL APART (connection/admin.feature)
  *
  * | State | What the admin must do |
  * |---|---|

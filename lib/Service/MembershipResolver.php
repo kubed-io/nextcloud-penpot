@@ -17,7 +17,7 @@ use OCP\Files\NotFoundException;
  * reading folder metadata (saga §6.29 — *the single most load-bearing rule in
  * the app*). Almost every other feature defers to this.
  *
- * ## THE RULE (mapping-membership.feature, locked)
+ * ## THE RULE (designs/move.feature, locked)
  *
  *   A `.penpot` file belongs to the Penpot PROJECT recorded on the NEAREST
  *   ANCESTOR folder carrying a project id. A project folder belongs to the TEAM

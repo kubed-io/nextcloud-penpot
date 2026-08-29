@@ -431,11 +431,6 @@ final class PullService {
 	 * writing it — a second marker that some code has to remember to keep in step
 	 * with the first, saying nothing the first does not.
 	 *
-	 * `nextcloud-grafana` settles it. Grafana mirrors real folders exactly as this
-	 * does, syncs tags in `tag-sync.feature`, and puts NO marker tag on a mirrored
-	 * folder: *"there is no tagging scheme to maintain for placement"*. Same shape,
-	 * same answer.
-	 *
 	 * ## THE FOLDER GETS ITS CREATION TIME AND NOT ITS MTIME
 	 *
 	 * When the project was created in Penpot is a fact Nextcloud can never work out
@@ -525,7 +520,7 @@ final class PullService {
 	 * happened, and the orphan reap only considers folders carrying a project id.
 	 * So this undoes exactly what it made, deepest first, and only while still
 	 * empty. Best-effort: a folder that will not go is left, which is no worse than
-	 * not trying. Raised by Copilot on #50.
+	 * not trying.
 	 *
 	 * @param list<string> $segments
 	 *
@@ -729,7 +724,7 @@ final class PullService {
 	 * move has already succeeded, so a Files-Metadata failure here would land in
 	 * that catch and {@see unpark()} would UNDO a good move — a storage hiccup while
 	 * sweeping up turning into a folder yanked back to where it no longer belongs.
-	 * Raised by Copilot on #50.
+	 *
 	 */
 	private function tidy(Folder $folder, Folder $root): void {
 		for ($depth = 0; $depth < self::MAX_DEPTH; $depth++) {
@@ -961,8 +956,8 @@ final class PullService {
 			// rescue below, which — because a link is exactly the file that holds no
 			// archive — meant every departing link was exported and RE-STAMPED
 			// `sync`. That was the last surviving link→sync promotion in the app,
-			// and per-file mode changes were retired courses ago (`sync-mode.feature`
-			// no longer exists). A link is a link for as long as it exists.
+			// and mode is a property of the mapping, never of one file. A link is
+			// a link for as long as it exists.
 			if ($this->isLink($node)) {
 				$pruned += $this->discard($node, $penpotId, 'a link whose design left the mapping') ? 1 : 0;
 				continue;
@@ -1648,7 +1643,7 @@ final class PullService {
 	 * That is not a property to leave implicit, because being level with it is one
 	 * `+ 1` away from being past it — and past it the failure is silent and awful:
 	 * the folder is created, never found by id again, and re-created on every pull.
-	 * Raised by Copilot on #50.
+	 *
 	 */
 	private function isLegalProjectName(string $name): bool {
 		$segments = explode('/', $name);
