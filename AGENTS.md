@@ -213,9 +213,8 @@ forks* listed right after, which are explicitly NOT decided.
   tagging system at all (confirmed by grepping the full 149-command `/api/doc`
   RPC surface — zero real hits). There is no Penpot equivalent to n8n's
   `TagSyncService` quartet or even Grafana's simpler folder-based tag mirror
-  (saga §6.3). **Note:** this app does put one Nextcloud-side system tag on folders — the
-  project marker (§6.32) — which is unrelated: a local UI affordance, not a
-  two-system tag sync.
+  (saga §6.3). This app puts **no tags on anything**, on either side — the one it
+  once put on project folders is gone (saga §D4.14).
 - **Files-Metadata API is the file↔resource link**, keyed on Penpot's file
   `id` — same pattern as n8n's `n8n_id` / Grafana's `grafana_uid`. The key is
   `penpot_id`, and it is indexed alongside `penpot_mode`.

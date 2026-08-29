@@ -388,7 +388,7 @@ keeps being compiled, analysed and unit-tested; only the doors are locked.
 **Four lines are the whole switch**, and they are named in the comment at
 `Application.php::register()` so nobody has to rediscover them:
 
-| | |
+| file | what comes out |
 |---|---|
 | `lib/AppInfo/Application.php` | the `use` import, and `registerDeclarativeSettings(PersonalSettings::class)` |
 | `appinfo/info.xml` | `<personal-section>`, and the `SetPersonalToken` `<command>` |
@@ -629,6 +629,53 @@ described it as a feature: *"A folder you promote from this side is tagged
 tag a folder and check the stamp appeared; it now creates the project in Penpot
 and runs a pull. `kind: project` no longer MKCOLs the folder first — the pull
 makes it, which is the only route there is.
+
+### Round 8, continued — what the clearing actually swept up
+
+Chapter 3 built the colony by trying things. Most worked. This round is the bill
+for the ones that did not, and it is worth reading as a set rather than as four
+separate deletions, because they failed the same way.
+
+**The tag, three times.** It was invented in §C6.18 as the thing that *made* a
+folder a project — a real answer to a real question, and the wrong one, because
+it required teaching a gesture nobody performs. §C6.38 replaced it with
+promotion by content and the tag became decoration the pull stamped: harmless,
+and now describing something that was no longer true. Chapter 3 Round 10 removed
+the decoration, and what survived was the third form — an explicit opt-in with
+no scenario, kept because the harness used it. Each removal was correct and each
+left a smaller version of the same thing behind.
+
+**The carve-out that shipped.** "Only a folder with no project above it gets
+promoted" was a reasonable-sounding rule that made two folders a user cannot
+tell apart behave differently on a marker nobody can see. It shipped, and a live
+instance reported it. §C6.38 reversed it.
+
+**The pinning rule.** Project folders were once required to sit inside their
+team folder. Reversing that nearly doubled the project leg of the suite, because
+a pile of scenarios had been written `@unbuilt` against a rule that was about to
+stop existing.
+
+> **What they have in common:** every one of them was a mechanism invented to
+> answer a question the metadata could already answer. The `penpot_project_id`
+> stamp was there the whole time. The tag, the carve-out and the pinning rule
+> were all attempts to make the *shape of the folder tree* carry meaning that
+> was already recorded on the folder itself.
+
+**Why it took four passes to finish.** Not because anyone was careless — because
+each pass removed the part that was clearly dead and left the part that still
+had a caller. The last caller was a test. That is the one that matters:
+
+> **A mechanism with no user and one test is not "nearly gone". It is a
+> mechanism, and it will be found by whoever reads the code next and reasonably
+> assume it is supported.** Removing it means finding the test another way to
+> arrange what it needs — which here meant asking, for the first time, how a
+> *user* gets an empty project folder. The answer was that they make it in
+> Penpot, which is what the harness now does.
+
+**The grounds are clear.** A folder is a project because it carries
+`penpot_project_id`. There is no second marker, no badge, no opt-in gesture and
+no shape rule. That sentence is now true in the code, in the spec, in the notes
+and in the README, which is the first time it has been true in all four at once.
 
 ---
 

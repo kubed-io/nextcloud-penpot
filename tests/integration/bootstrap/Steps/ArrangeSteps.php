@@ -816,12 +816,27 @@ trait ArrangeSteps {
 		}
 
 		$this->penpotProjectIn($root, $name);
-		$this->theAdminRunsAPull();
+
+		// MKCOL FIRST so the pull has a folder to stamp rather than one to create.
+		// `PullService::ensureProjectFolder()` walks and provisions a PATH, reusing
+		// what is already there, so this is the cheaper half of the same result and
+		// it removes folder CREATION from the list of things that can go wrong here.
+		$this->davMkcol($folder);
+
+		// The pull's exit code is checked, unlike the bare helper: a pull that fails
+		// here leaves the arrange silently short of a project folder, and the
+		// scenario then fails several steps later on something unrelated.
+		$res = $this->occ('penpot_sync:sync pull');
+		if ($res['exit'] !== 0) {
+			throw new \RuntimeException(
+				"the pull failed while arranging the project '{$name}':\n{$res['output']}",
+			);
+		}
 
 		if ($this->projectIdOf($folder) === '') {
 			throw new \RuntimeException(
-				"created the project '{$name}' in Penpot but the pull did not mirror it "
-				. "to '{$folder}':\n" . $this->status($folder),
+				"created the project '{$name}' in the team mapped to '{$root}', pulled, "
+				. "but '{$folder}' carries no penpot_project_id.\nPull said:\n{$res['output']}",
 			);
 		}
 	}

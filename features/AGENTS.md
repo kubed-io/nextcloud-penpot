@@ -1769,10 +1769,9 @@ fixed-level check (saga §6.29).
 FOLDERS CARRY METADATA TOO (saga §6.21, §6.32):
   penpot_project_id — on a project folder. The authoritative machine record.
   penpot_team_id    — on a Team Folder.
-A folder promoted from the Nextcloud side also gets a visible `penpot` system tag,
-so the ones a user made are searchable among their own folders. The tag is a
-receipt, never the record: a project folder mirrored FROM Penpot carries the id and
-no tag, and nothing reads the tag to decide anything.
+`penpot_project_id` is the whole record. There is no tag, no badge and no second
+marker — a folder is a project because of its metadata and nothing else
+(saga §D4.14).
 
 BUILD STATE, corrected at C6.1 (the old note read "no lib/Service/ exists yet",
 which has been false since Course 3):
@@ -1789,11 +1788,6 @@ which has been false since Course 3):
   because it invites a client to unpack a pointer. Registered by
   lib/Migration/RegisterMimetype.php on every install/upgrade, reverted on
   uninstall (lifecycle.feature).
-
-  NOT ASSERTED — the project folder's visible system tag (§6.32). A project
-  folder is one because it carries `penpot_project_id`; the tag is a marker on
-  top of that, and no scenario claims it. See projects/create for what the tag
-  is still for.
 
 @todo — the scenarios are all DAV/mimetype assertions and the integration
 harness is occ-only. The mimetype registration in particular is UNASSERTED IN
@@ -2766,9 +2760,6 @@ mappings, and:
     guard, saga §6.1);
   - leaves the mappings configured;
   - leaves the custom mimetype registration alone (that is uninstall's job).
-
-**Penpot having no tags (§6.3) says nothing about Nextcloud-side system tags**,
-which are ours and exist regardless. Do not reason from one to the other.
 
 WHAT PURGE MUST REASON ABOUT: mirrored (delete), unmapped (keep), untracked
 (keep), ignored (keep). And within "mirrored", the MODE matters for what the
