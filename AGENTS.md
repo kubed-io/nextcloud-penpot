@@ -91,9 +91,10 @@ state of the task.
    section of [`features/AGENTS.md`](features/AGENTS.md), which names the saga
    decision behind it. Stop at the depth your question needs — that is what the
    cascade is for.
-4. **Before anything design-relevant, read the saga.** [Chapter 3](saga/Chapter_3_Building_To_Plan.md)
+4. **Before anything design-relevant, read the saga.** [Chapter 4](saga/Chapter_4_Open_For_Business.md)
    first, because it is the only chapter that can still be wrong about today; then
-   Chapter 1 from §6.18, which carries the architecture. It is long and written in
+   [Chapter 3's close](saga/Chapter_3_Building_To_Plan.md#chapter-3--where-it-stands-closed)
+   for the state of the app, and Chapter 1 from §6.18 for the architecture. It is long and written in
    an alien-survey narrative (deliberate, per the project owner) — don't skim it.
 
 This repo is a deliberate third member of a family started by
@@ -247,7 +248,8 @@ current one.
 |---|---|---|
 | [1 — First Contact](saga/Chapter_1_First_Contact.md) · CLOSED | The API survey and §6.1–§6.54, the architecture. Several sections are superseded **in place** and say so inline. | You need to know what Penpot's API actually does, or why a rule exists. Start at §6.18. |
 | [2 — The Colony](saga/Chapter_2_The_Colony.md) · CLOSED | §C6.1–§C6.38, the build. Ends by reorganising the spec around behaviour. | You want to know how a mechanism came out the way it did. |
-| [3 — Building to Plan](saga/Chapter_3_Building_To_Plan.md) · **open** | Rounds 1–11: one behaviour per PR, and what running it found. **The current chapter.** | Always. It is the only chapter that can still be wrong about today. |
+| [3 — Building to Plan](saga/Chapter_3_Building_To_Plan.md) · CLOSED | Rounds 1–11: one behaviour per PR, and what running it found. Its close is the honest inventory of what is built and what is owed. | You want to know whether something works, or what the queue still holds. |
+| [4 — Open for Business](saga/Chapter_4_Open_For_Business.md) · **open** | §D4.1–§D4.8: the outward-facing surfaces — the README, the admin copy, the store listing, and the documentation cascade. **The current chapter.** | Always. It is the only chapter that can still be wrong about today. |
 
 **Two rules reversed during Chapter 3, and code written against the older one is
 still the likeliest thing you will meet.** Check both before reasoning from an

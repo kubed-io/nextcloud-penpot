@@ -35,6 +35,36 @@
 
 ---
 
+## Status: **CLOSED** — 2026-08-29
+
+> **Closed by Dr K.** The chapter opened with 116 claims about this colony and
+> zero of them witnessed. It closes with the colony standing, occupied, and in
+> daily use by the people who built it.
+>
+> **Every major feature is a go.** Both directions of sync, the two buttons and
+> their `occ` twins, the whole design verb set — create, rename, move, copy,
+> delete, restore, purge — the project verb set beside it, mappings in both
+> storage kinds and both modes, and the Files-app surface people actually touch.
+> Nothing load-bearing is a drawing any more.
+>
+> **And it is relatively bug free**, which is a more careful claim than *bug
+> free* and the honest one. Every defect this chapter found is fixed. The last
+> three were found by living in the colony rather than by testing it — a folder
+> shared with five groups that nobody could see, a design that duplicated itself
+> crossing between storages, and a rule that behaved differently in two folders
+> a person cannot tell apart. That is what a chapter of building buys: the bugs
+> left are the ones only occupancy finds.
+>
+> **The queue that remains is written down and honest**: 24 `@todo`, 9
+> `@unbuilt`, 4 `@blocked`, each naming what it wants. None of them is a
+> surprise, and none of them is load-bearing.
+>
+> Chapter 1 asked *can we dock?* Chapter 2 asked *what do we build, and in what
+> order?* Chapter 3 asked *is it actually there?* — and the answer is yes, one
+> room at a time, with somebody standing in each of them.
+
+---
+
 ## The doctrine — a drawing is not a building
 
 Chapter 2 has one recurring failure and one recurring cure, and they are the whole
@@ -162,7 +192,7 @@ count nobody states is a count nobody can check.
 
 ---
 
-## Where we are — 2026-08-23 · **THE SPINE IS IN, AND A RULE HAS REVERSED**
+## Where we stood — 2026-08-23 · **THE SPINE IS IN, AND A RULE HAS REVERSED**
 
 > **Opening state.** 116 scenarios, all `@todo`. Zero running. Four integration
 > legs reporting `tests="0"`.
@@ -1648,3 +1678,172 @@ names all eight. Do not re-derive them from the spec.
 runs it. Promote it to live when it passes, or move it to its true status with the
 reason written down — never by re-reading the spec and deciding what it probably
 is. The build order is in the saga's Chapter 3.
+
+---
+
+## Chapter 3 — where it stands (CLOSED)
+
+What this chapter built, what it corrected about itself, and what it leaves to
+Chapter 4.
+
+### The arithmetic the chapter opened with
+
+**116 claims, zero witnessed.** That was the opening line, and it was the whole
+problem: §C6.38 had redrawn the plan around behaviour, which moved the survey
+marks out from under 46 sections that had been signed off. Every drawing came
+back unstamped.
+
+Eleven rounds later:
+
+| | |
+|---|---|
+| **73 scenarios live** | witnessed, in CI, every push |
+| 24 `@todo` | specified, not built, each naming what it wants |
+| 9 `@unbuilt` | built wrong or half-built, each naming the code owed |
+| 4 `@blocked` | real behaviour this harness cannot reach |
+| 0 `@decision` | nothing is waiting on someone to make up their mind |
+
+**110 scenario blocks, not 116**, and the difference is not attrition. Scenarios
+merged as rules turned out to be one rule — three collapsed into one when the id
+stopped deciding anything (Round 7) — and Round 11 retired seven feature files
+whose contents had been folded elsewhere. The plan got smaller because it got
+truer.
+
+Those 73 blocks expand to **141 executed scenarios** per Nextcloud version, run
+across **11 parallel legs** on **three Nextclouds — 32, 33 and 34** — so a green
+push is 423 scenario runs against a real Nextcloud talking to a real Penpot.
+Underneath them, **564 unit tests and 1,233 assertions**.
+
+### What it produced
+
+- **Both directions of sync, and the buttons that drive them.** The pull was
+  Chapter 2's; this chapter built the push — *"Sync to Penpot"* — and the rule
+  underneath it, which turned out not to be the one everyone had been quoting.
+  §6.1 never said *read-only*; it said **never overwrite a design Penpot already
+  has**, and an archive Penpot has never seen is not that (Round 8).
+- **The design verbs, complete.** Create, rename, move, copy, delete, restore,
+  purge — in both storage kinds, in both mapping modes, at any depth, including
+  the gestures that leave a mapping and the gestures that come back.
+- **The project verbs beside them**, and the rule that makes them possible: a
+  project's name is its **path** below the mapping (§C6.38), so a folder move is
+  a rename of every project spelled through it.
+- **Cross-team moves**, which needed nothing from Penpot and everything from
+  Nextcloud (Round 9).
+- **A folder is a project when a design is in it** — and, after Round 10, that
+  means *every* folder, with no edge.
+- **A documentation cascade** (Round 11): the feature files specify, `AGENTS.md`
+  explains the present tense, the saga holds the history. One hop per level, each
+  pointing at the next.
+
+### The bugs that only building found
+
+This is the chapter's thesis, so it gets the list. Not one of these was
+discoverable by reading the code that contained it.
+
+- **A freshly mapped folder was never stamped with its team.** `PullService` was
+  the only writer of `penpot_team_id` on a root, so a mapping made and used
+  before the first pull resolved to nothing: the push did nothing and `MoveRules`
+  403'd every design created there. Found by building the push (Round 8).
+- **A mapped folder shared with groups was invisible to every member.**
+  Nextcloud creates every group share `PENDING`, and a pending group share does
+  not mount — with no prompt to click, because group shares raise none. Correct
+  node, correct permissions, correct groups, seen by nobody. **This had been
+  shipping**, and no test in eleven legs could have caught it: the suite asserts
+  as the folder's owner, and an owner sees their own folder whatever the
+  recipients' shares say (Round 9).
+- **A cross-storage move destroyed a design's identity, and the file id survived
+  it.** Everyone's assumption — including this repository's own docblocks — was
+  copy-and-delete with a new id and orphaned metadata. The truth is the opposite:
+  the id is preserved and the metadata is deliberately dropped, because removing
+  the source cache entries raises `CacheEntriesRemovedEvent` and core's own
+  listener deletes the rows. Four CI rounds established *that* it broke; two
+  minutes against a live instance, with a same-storage rename as the control,
+  established *what* broke it (Round 9).
+- **A folder inside a project folder became nothing.** Reported from the live
+  colony: `Bubbles/pustice` held a design and Penpot never heard about it. The
+  app was correct and the *rule* was the defect — two folders a user cannot tell
+  apart behaved differently, decided by the accident of which one received a
+  design first (Round 10).
+- **A personal project stopped receiving writes.** Introduced by that fix and
+  caught in review: collapsing *no team* into *outside every mapping* meant every
+  design arriving in someone's personal project silently stopped reaching Penpot,
+  with a usable project id sitting right there in the membership. **564 unit
+  tests and eleven integration legs did not notice.**
+- **`check-notes-anchors.sh` had the bug it was written to prevent.** Its slug
+  rule did not match GitHub's, so three breadcrumbs passed CI and 404ed for
+  anyone who clicked them. Nobody clicks a breadcrumb in CI, which is the entire
+  reason the script exists (Round 11).
+
+### What it corrected about itself
+
+The method lessons, in the order they were paid for.
+
+- **When a fix does not move the number, suspect a second fault before concluding
+  the first was wrong.** Eleven CI runs went into one test because two independent
+  faults produced one symptom, and each correct fix looked wrong alone. One was
+  reverted for that reason (Round 8).
+- **Measure the state; do not reason from the symptom.** Printing Penpot's actual
+  contents at each step boundary named a deleting call between two adjacent lines
+  that five arguments had missed. The larger version of the same lesson:
+  **the running instance is a primary source, and it is cheaper than the argument
+  about it** (Rounds 8–9).
+- **A retired rule with live code behind it is not dead code. It is a second
+  answer, and it will get proposed.** The `penpot`-tag opt-in was retired in
+  Chapter 2 and kept its listener, its service method, its unit tests and a README
+  paragraph — and was duly offered as a solution to a problem the rule that
+  replaced it already owned. The right time to delete a mechanism is the round
+  that replaces it (Round 10).
+- **A fixture that cannot fail the way production fails will certify the bug.**
+  Twice: a mocked source node that answered `getId()` when the real one throws,
+  and file fixtures with no parent folder because the old resolver never asked for
+  one. Both passed while production broke (Rounds 9–10).
+- **A guard is code, and gets the same class of bug as the thing it guards**
+  (Round 11).
+- **A negative assertion can go green because the thing it denies stopped
+  existing.** Worth remembering whenever a rule changes underneath a suite
+  (Round 6).
+- **Every mutate-then-read assertion polls.** The trash flake was never flaky
+  behaviour; it was an assertion looking once at a second storage that took
+  longer to settle.
+- **A design name is a scenario's own.** Penpot's trash accumulates across a whole
+  feature file and nothing empties it, so any assertion phrased by name is really
+  an assertion about the entire run.
+
+### What it leaves
+
+Named, not hidden.
+
+- **The 24 `@todo`** are mostly two families: the Penpot→Nextcloud project verbs
+  (create, rename, move, purge, restore, seen from the far side) and the
+  *"while Penpot is unreachable"* failure paths. Neither is load-bearing; both are
+  specified and waiting on a round that runs them.
+- **The 9 `@unbuilt`** each name the code they want. Three of them —
+  `projects/copy`'s set — are the same missing capability: **noticing a folder
+  that has arrived inside a mapping**, which core reports as one event for the
+  folder and nothing per child.
+- **The 4 `@blocked`** are harness walls, not app walls: no browser, no app
+  removal, no way to author a design's contents.
+- **The tag gesture's code.** `ArrangeSteps::ensureProjectFolder()` tags a folder
+  to arrange every `kind: project` row — 27 of them, 10 needing a project folder
+  that holds no design — so removing it is a harness change first and a deletion
+  second. Dated and queued rather than left to be rediscovered.
+- **Push and pull can still run concurrently**, recorded in `SyncController`'s
+  docblock as a known gap rather than fixed on a green PR.
+- **A cross-storage move of a FOLDER** is still unhandled, and still for the
+  original reason: neither half of core routes it.
+
+### The state of the colony
+
+It is deployed. Not in a test rig — on the author's own Nextcloud, mapped to two
+Penpot teams across two storage kinds, holding real designs that real people
+opened this week. Three of the bugs above were found there, by using it.
+
+That is the whole argument of this chapter, and it took eleven rounds to earn the
+right to say it plainly: **a drawing is not a building, and a building is not
+finished until somebody lives in it.**
+
+Chapter 2 handed over a master design with nothing built to it. Chapter 3 hands
+over a colony that works, a queue that is honest about itself, and a method that
+has now been wrong often enough, in public, to be trusted.
+
+The doors open in Chapter 4.
