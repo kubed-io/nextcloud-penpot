@@ -136,13 +136,20 @@ written, not to bureaucratize a typo fix. Steps 3 onward are the actual gates.
    non-trivial. This is where scope is agreed and dead-end PRs are avoided. A
    short comment or a label (e.g. `approved`, `enhancement`) is enough — there's
    no formal sign-off ceremony.
-3. **Branch from `main`**, work, push, **open a PR** targeting `main`. Link the
+3. **Branch from `main`**, work, push. **Opening the PR is a separate step and it
+   needs the maintainer's word for it** — see below. Target `main` and link the
    issue if there is one.
+
+   > 🚨 **Agents: never open a PR you were not explicitly told to open**, and never
+   > open a second one while work is already in flight on an open branch. Push to
+   > the branch instead. [AGENTS.md](AGENTS.md#-never-open-a-pull-request-without-being-told-to-not-once-not-ever)
+   > carries the full rule and what does *not* count as approval.
 4. **Update [`CHANGELOG.md`](CHANGELOG.md)** with an entry under `## [Unreleased]`
    for any user-visible change. This is enforced in CI by
    [`tarides/changelog-check-action`](https://github.com/tarides/changelog-check-action)
    — a PR with no `[Unreleased]` diff fails the check. Internal-only refactors can
-   use a one-line entry under `Changed` saying what was refactored.
+   use a one-line entry under `Changed` saying what was refactored, and a change
+   with nothing user-visible in it at all takes the **`no changelog`** label.
 5. **CI must pass.** All required workflows green (see
    [What CI expects](#what-ci-expects)). This is a hard gate.
 6. **Get at least one approval** from a maintainer. This is a hard gate enforced

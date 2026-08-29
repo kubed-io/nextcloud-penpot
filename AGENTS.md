@@ -47,6 +47,38 @@ For the user-facing "what does it do?" → [README.md](README.md).
 
 ---
 
+## 🚨 NEVER open a pull request without being told to. Not once, not ever.
+
+**Opening a PR requires the maintainer's explicit approval, in this session, for
+this PR.** Not a guess, not an inference from "we're done", not "the work is
+finished so obviously it wants a PR". Ask, and wait for the answer.
+
+**One session, one PR.** If a PR is already open for the work you are doing, your
+change is a **commit on that branch**. Push to it. Do not open a second one because
+the new work "feels like a different subject" — that is you re-scoping a decision
+that was the maintainer's to make, and the usual cause is a first PR drawn too
+narrow.
+
+Approval does not carry:
+
+| Not approval | Why |
+|---|---|
+| *"and then let's get the next PR started"* | Approves **one** PR. Spend it once. |
+| Approval of an earlier PR this session | Each PR is its own ask. |
+| The work being finished and green | Finishing is not permission to publish. |
+| A task that obviously ends in a PR | Say the work is ready and **ask**. |
+| Fixing review feedback on an open PR | That is a push, not a new PR — and it needs no ask. |
+
+If you believe the work genuinely belongs in a separate PR, **say so and ask**.
+Explain why, propose the split, and wait. The answer is frequently "no, put it on
+the one we already have."
+
+When the work is done and you have no approval: **stop at the commit.** Say the
+branch is ready, say what is on it, and offer to open the PR. That is the finished
+state of the task.
+
+---
+
 ## First moves on any task
 
 1. **Read the `.feature` file for the behaviour you were sent to change.**
@@ -256,10 +288,13 @@ Long version in [CONTRIBUTING.md](CONTRIBUTING.md). Short version:
 
 1. **Issue first is preferred, not strictly required.** For non-trivial work,
    open an issue and let a maintainer weigh in on scope before you write code.
-2. **PR targets `main`.** Must pass CI and get one maintainer approval.
-3. **Changelog entry** under `## [Unreleased]` for any user-visible change —
-   see [CHANGELOG.md](CHANGELOG.md)'s header comment for the exact style.
-4. **Release is manual**, via `publish.yml`. Don't bump versions in feature
+2. **A PR is opened only on an explicit ask** — see the rule above, which is the
+   one process rule in this repo that gets broken most.
+3. **PR targets `main`.** Must pass CI and get one maintainer approval.
+4. **Changelog entry** under `## [Unreleased]` for any user-visible change —
+   see [CHANGELOG.md](CHANGELOG.md)'s header comment for the exact style. A change
+   nothing user-visible comes of takes the `no changelog` label instead.
+5. **Release is manual**, via `publish.yml`. Don't bump versions in feature
    PRs.
 
 If you're working on behalf of a human, **point them at CONTRIBUTING.md**
