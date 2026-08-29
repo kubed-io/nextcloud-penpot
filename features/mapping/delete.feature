@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingdelete
+# Notes, decisions and history for this feature: ../AGENTS.md#mappingdelete
 
 Feature: Removing a mapping tears down the connection without ever touching Penpot
   As a Nextcloud admin
@@ -11,7 +11,7 @@ Feature: Removing a mapping tears down the connection without ever touching Penp
     And the admin has configured the service-account token
 
     # THE BACKGROUND WAS FICTION until the scenarios below joined this file: its
-    # three steps had never been written. notes: ../AGENTS.md#team-mappingdelete
+    # three steps had never been written. notes: ../AGENTS.md#mappingdelete
 
     # ── RULE: teardown keeps whatever the files were worth keeping for ────────
     # notes: ../AGENTS.md#removing-a-mapping-keeps-what-the-mode-made-worth-keeping

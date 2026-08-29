@@ -39,23 +39,23 @@ itself is the authoritative detail.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | This file — process, conventions, dev loop. |
 | [SECURITY.md](SECURITY.md) | How to report vulnerabilities. Read before filing a "security" issue publicly. |
 | [AGENTS.md](AGENTS.md) | Cold-start orientation for AI coding agents. |
-| [saga/](saga/) | Long-form design narrative. Chapter 1 = the feasibility survey against a live Penpot instance, including locked decisions and open forks. **The "why" behind everything else.** |
-| [appinfo/](appinfo/) | Nextcloud app metadata (`info.xml` only for now — no `routes.php` yet, it would need Controller classes that don't exist). |
-| `lib/` | **Not created yet.** PHP backend (`OCA\PenpotSync`) — Chapter 2+ work. |
-| `src/` | **Not created yet.** JS frontend source, built by Vite into `dist/`. |
-| `tests/` | **Not created yet.** PHPUnit unit suite, Psalm stubs/baseline. |
-| [composer.json](composer.json) | PHP deps + scripts (`test:unit`, `cs:check`, `cs:fix`, `lint`, `psalm`) — wired up ahead of the code that will use them. |
+| [saga/](saga/) | Long-form design narrative, and the only place history lives. Ch.1 the API survey and the architecture, Ch.2 the build, Ch.3 the current one. **The "why" behind everything else.** |
+| [features/](features/) | **The specification.** Gherkin, written before the code — see [features/README.md](features/README.md). |
+| [appinfo/](appinfo/) | Nextcloud app metadata — `info.xml` (incl. the mimetype repair steps) and `routes.php`. |
+| [lib/](lib/) | PHP backend (`OCA\PenpotSync`): `Service/` holds the behaviour, `Listener/` the gesture adapters, plus `Command/`, `Controller/`, `Settings/`, `DAV/`, `BackgroundJob/`, `Migration/`. |
+| [src/](src/) | JS frontend, built by Vite into `dist/`. The file action and the New-menu entry. |
+| [tests/](tests/) | `unit/` (PHPUnit, no NC server) and `integration/` (Behat, against a real Nextcloud and a real Penpot). |
+| [composer.json](composer.json) | PHP deps + scripts (`test:unit`, `cs:check`, `cs:fix`, `lint`, `psalm`). |
 | [package.json](package.json) | JS deps + scripts (`build`, `dev`, `watch`, `test`). Node version pinned in `.nvmrc`. |
 | [psalm.xml](psalm.xml), [.php-cs-fixer.dist.php](.php-cs-fixer.dist.php) | Static analysis + coding standard config, adapted from the sibling apps. |
 | [.devcontainer/](.devcontainer/) | One-shot dev environment (PHP 8.3 + Node + GH CLI + docker-out-of-docker). |
 | [.github/workflows/](.github/workflows/) | `pr.yml` (PR housekeeping), `tests.yml` (build + unit), `quality.yml` (audit + lint + Psalm), `publish.yml` (release tarball), `package.yml`, `copilot-setup-steps.yml`. |
-| [vite.config.js](vite.config.js) | Frontend build config, targeting `src/files.js` once it exists. |
+| [vite.config.js](vite.config.js) | Frontend build config, targeting `src/files.js`. |
 
-Things that don't exist yet, in rough order of when they'll be needed: `lib/` and
-its PSR-4 tree, `src/files.js`, `tests/unit/` + `tests/phpunit.unit.xml`,
-`tests/external-stubs.php` (referenced by `psalm.xml`), `features/` (if this app
-family's Gherkin-first convention is adopted here), and the integration test
-stack. See [saga/](saga/) for the running plan.
+What is still missing, and roughly in the order it is wanted: personal projects
+(a user's own Penpot team at their home root), the mode pills, and tracking a
+copied project folder. [Chapter 3](saga/Chapter_3_Building_To_Plan.md) carries the
+running order.
 
 ---
 
@@ -156,31 +156,55 @@ written, not to bureaucratize a typo fix. Steps 3 onward are the actual gates.
 
 ---
 
-## Anatomy of a feature change (once implementation starts)
+## Anatomy of a feature change
 
-The sibling apps in this family follow one repeatable shape for a feature PR — a
-Gherkin spec first, then the code, then tests, docs, and a changelog entry. This
-repo has no `features/` or `tests/` directory yet, so that shape isn't executable
-here today. When Chapter 2 (the first real implementation chapter) starts, expect
-a feature PR to land:
+**A change starts with a scenario, not with code.** The spec is the requirement
+here, not a description written afterwards — see
+[features/README.md](features/README.md) for how the suite is laid out.
 
-- **A feature file**, if this app family's Gherkin-first convention is adopted
-  here (check the current saga chapter before assuming) — the behaviour in plain
-  language, first.
-- **The code** in `lib/` — a `Service` for the testable logic, a thin
-  `Listener`/`Controller`/`Command` as the event adapter, wired in
-  `lib/AppInfo/Application.php`.
-- **A unit test** in `tests/unit/` for the service's rules.
-- **README updates** when the feature changes what a user can do.
-- **A `## [Unreleased]` changelog entry** (see [the flow](#the-flow-issue--pr--merge)
-  above).
+1. **Find the scenario** your change is about.
+   [`features/README.md`](features/README.md) says which file owns which
+   behaviour: the folder is the noun (`designs/`, `projects/`, `mapping/`,
+   `connection/`) and the file is the verb.
+   - If a scenario already describes it, that scenario **is** the acceptance
+     criterion. Read it, and read its `# notes:` pointer into
+     [`features/AGENTS.md`](features/AGENTS.md) before you decide it is wrong.
+   - If none does, **the spec is the thing to agree on first.** Propose the
+     scenario in the issue or the PR description and let a maintainer look at it.
+     A new `.feature` scenario is a conversation, not a commit you make on the way
+     past.
+2. **Write the code** in `lib/` — a `Service` for the testable logic, a thin
+   `Listener` / `Controller` / `Command` as the adapter, wired in
+   `lib/AppInfo/Application.php`.
+3. **Make the scenario run**, and take its status tag off. See
+   [Testing](#testing) below — this is the step with the rule attached.
+4. **Add unit tests** in `tests/unit/` for the rules Behat cannot reach cheaply.
+5. **Update the README** if a user could notice the change, and add a
+   `## [Unreleased]` changelog entry (see [the flow](#the-flow-issue--pr--merge)).
+6. **Update the notes in the same commit.** If behaviour changed, the section of
+   `features/AGENTS.md` that explains it is now wrong.
 
 Two artifacts differ by who's driving:
 
 - **Humans:** open **an issue** first to track what's desired or broken.
-- **Agents:** update the **[saga](saga/)** — the long-form "why" behind the
-  change, and the record of what's still open. The saga is the agent's durable
-  memory across sessions; the changelog and README are for users.
+- **Agents:** update the **[saga](saga/)** — the long-form "why", and the record of
+  what is still open. It is the durable memory across sessions; the changelog and
+  README are for users.
+
+### Where each kind of writing goes
+
+Four documents, and putting something in the wrong one is how they drift apart:
+
+| Document | Holds | Tense |
+|---|---|---|
+| [`features/**/*.feature`](features/) | The specification — what the app does | present |
+| [`features/AGENTS.md`](features/AGENTS.md) | Why a scenario is the shape it is | present |
+| [`saga/`](saga/) | What was decided, what it replaced, what proved it | **past** |
+| [`README.md`](README.md) | What a user can do with this | present |
+
+**History goes in the saga and nowhere else.** A note that opens *"this used to…"*
+in any of the other three is in the wrong file — a retired decision sitting in a
+working document is indistinguishable from a live one to whoever reads it next.
 
 ---
 
@@ -215,27 +239,93 @@ npm run build   # currently has no src/files.js to bundle — see AGENTS.md
 
 ## Testing
 
-There is no code to test yet. Once `lib/` exists, the policy is the same as the
-sibling apps':
+Two suites, and they answer different questions.
+
+| Suite | Runner | Asks |
+|---|---|---|
+| [`tests/unit/`](tests/unit/) | PHPUnit | Does this rule hold, for every input I can think of? |
+| [`tests/integration/`](tests/integration/) | Behat | Does the app do what the spec says, against a real Nextcloud and a real Penpot? |
+
+```sh
+composer run test:unit                                    # unit
+cd tests/integration && vendor/bin/behat                  # every suite
+cd tests/integration && vendor/bin/behat --suite=motion   # one leg
+cd tests/integration && vendor/bin/behat --tags '@todo'   # the work queue
+```
+
+### The Gherkin comes first
+
+The `.feature` files are the specification, written before the code and kept true
+after it. So a feature PR runs **scenario → code → test**, in that order:
+
+1. **Pick the scenario the change is for.** It is the acceptance criterion, and
+   agreeing on it is cheaper than agreeing on a diff. If none exists, propose one
+   and get it looked at before you build against your own reading.
+2. **Build it.**
+3. **Make that scenario run**, and take its status tag off.
+
+**The rule, and it is the only hard one here: a scenario stops being `@todo` only
+on a PR that runs it.** Promote it to live when it passes; move it to `@unbuilt`,
+`@blocked` or `@decision` **with the reason written down** when it does not. Never
+by re-reading the spec and deciding what it probably is — the four status tags and
+what each one obliges are in
+[features/README.md § Status](features/README.md#status--four-tags-and-only-one-of-them-is-a-backlog).
+
+A scenario promoted and then failed in CI is not wasted work. That is how a wall
+gets found, and the tag afterwards records a fact rather than an assumption.
+
+### Which suite gets the test
+
+Behat is expensive — every scenario is a real Nextcloud, a real Penpot and a real
+round trip — so the split is by what the assertion needs, not by importance.
+
+- **A rule with no I/O** — a path resolver, a mode table, interval parsing, the
+  Transit decoder — is a **unit test**. Faster, and it can enumerate cases a
+  scenario would have to arrange one at a time.
+- **A request payload** is a unit test too: Behat can see what changed at both
+  ends, never what went over the wire.
+- **Anything a person would describe as a thing they did** is a **scenario**.
+
+If you are writing a scenario whose `When` has no human in it — *"when the export
+stream closes with no end event"* — it is a unit test wearing a scenario's clothes.
+
+### Policy
 
 > **Every PR should have tests covering the change when it is reasonable to do
 > so.**
 
-"Reasonable" is judgement: a typo fix or a doc change doesn't need a test; a new
-service method, a bug fix, or a behavior change does. If you choose not to add a
-test, say so in the PR description and why. The default answer is "yes, add a
-test."
+"Reasonable" is judgement: a typo fix or a doc change doesn't need one; a new
+service method, a bug fix, or a behaviour change does. If you choose not to add a
+test, say so in the PR description and why. The default answer is "yes, add a test."
+
+Unit tests live in `tests/unit/`, mirroring the `lib/` tree. The bootstrap is
+standalone — no running Nextcloud — and OCP interfaces are stubbed in
+`tests/ocp-stubs.php`, which grows one entry per interface a test mocks.
+
+### Three guards you can fail without failing a test
+
+They run in the quality job, and each protects something that otherwise rots while
+the build stays green:
+
+| Script | Checks |
+|---|---|
+| `tests/integration/bin/check-suites.sh` | Every feature file is in exactly one Behat suite. A file in none is never run. |
+| `tests/integration/bin/check-notes-anchors.sh` | Every `# notes:` breadcrumb resolves, and no comment block exceeds its two-line budget. |
+| `tests/integration/bin/check-step-definitions.sh` | Every step definition is reachable from `FeatureContext`. |
+
+CI also runs Behat `--strict`, so **an undefined step in an untagged scenario fails
+the build** — a scenario with no status tag is claiming to be live, and CI enforces
+the claim.
 
 ### Static analysis + coding standard
 
-These already run in CI even though there's little for them to check yet — set
-them up locally so the tooling is exercised before real code lands:
+These run in CI; run them locally before pushing to save a round trip:
 
 ```sh
 # PHP
 composer run cs:check    # php-cs-fixer dry-run
 composer run cs:fix      # auto-fix
-composer run psalm       # static analysis (once lib/ exists)
+composer run psalm       # static analysis
 composer run lint        # php -l across lib/
 
 # JS
@@ -371,8 +461,13 @@ If you've found a vulnerability, **do not open a public issue.** Follow
 ## Where to look next
 
 - **"How does this app work?"** → [README.md](README.md)
-- **"Why was it designed this way?"** → [saga/Chapter_1_First_Contact.md](saga/Chapter_1_First_Contact.md)
+- **"What is it supposed to do, exactly?"** → the `.feature` file for that
+  behaviour. [features/README.md](features/README.md) says which one owns it.
+- **"Why is that scenario the shape it is?"** → [features/AGENTS.md](features/AGENTS.md)
+- **"Why was it decided that way?"** → [the saga](saga/), via that section's
+  `saga:` pointer. Start with [Chapter 3](saga/Chapter_3_Building_To_Plan.md) — it
+  is the only chapter that can still be wrong about today.
 - **"I'm an AI agent — where do I start?"** → [AGENTS.md](AGENTS.md)
 
-Thanks for contributing. Be kind in reviews, validate on a real instance once
-there's something to validate, and write a test if you reasonably can.
+Thanks for contributing. Be kind in reviews, validate on a real instance, and start
+from the scenario.

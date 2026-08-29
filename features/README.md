@@ -2,280 +2,186 @@
 SPDX-FileCopyrightText: 2026 kubed-io
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
+# The feature suite
 
-# How the feature files are organised
+`features/**/*.feature` is this app's **specification**. It is written before the
+code and kept true after it — documentation that happens to execute, not a
+test-naming convention.
 
-These are the app's specification, written before the code and kept true after
-it. This file is the map: what belongs where, and what the tags mean.
+This file is the map: what lives where, what the tags mean, and how the suite is
+run. It is the first of three documents, each a level deeper than the last:
 
-## Two documents, and which one you want
+| | Document | Answers |
+|---|---|---|
+| **this file** | `features/README.md` | *Where is the behaviour I'm looking for?* |
+| the notes | [`AGENTS.md`](AGENTS.md) | *Why is this scenario the shape it is?* — one section per file, present tense |
+| the saga | [`../saga/`](../saga/) | *What was decided, what did it replace, and what proved it?* |
 
-| | |
-|---|---|
-| **README.md** (this file) | How the suite is ORGANISED — which file owns which behaviour, what each tag means, which scenarios CI runs, how the backends are covered. Read it to find your way around. |
-| **[AGENTS.md](AGENTS.md)** | WHY each scenario is the way it is — the decision it encodes, what it replaced, what was deliberately left out. One section per feature file, and every `.feature` links to its section on line 1. |
+Each level links to the next: every scenario ends with a `# notes:` breadcrumb,
+and every section of `AGENTS.md` opens with a `saga:` pointer. Stop at the depth
+your question needs.
 
-The split exists because Gherkin is meant to be read as specification. A scenario
-should be legible at a glance and a comment should add scope or a caveat, not
-carry an essay — so the essays live in `AGENTS.md` and the feature files point at
-them. If you change a behaviour, change its note in the same commit: a note
-describing the old behaviour is worse than no note.
+For **how to get a change in** — the order a PR lands in, and where the tests go —
+see [CONTRIBUTING.md § Testing](../CONTRIBUTING.md#testing).
 
-## The organising rule: a feature is a BEHAVIOUR, not a mechanism
+## The layout: the folder is the noun, the file is the verb
 
-A feature file answers *"what happens when someone moves a design?"* — every way
-a design can be moved, in either system, with the consequence on the other side.
-It does not answer *"what does the pull do?"*, because a user does not think in
-pulls.
+A feature file answers *"what happens when someone moves a design?"* — every way a
+design can be moved, from either side, with the consequence on the other. It does
+not answer *"what does the pull do?"*, because nobody thinks in pulls.
 
-That distinction is the whole layout. Before it, finding "how does move work"
-meant reading `move-design.feature` (now `designs/move.feature`) for the Nextcloud half, `reconcile.feature` for the
-Penpot half, and `gestures.feature` for the two that CI could actually prove.
-Three files, one behaviour, and no single place that told you the shape of it.
-
-**The folder is the noun; the file is the verb.** Four folders, and everything in
-one of them acts on the same kind of thing:
+Four folders. Everything in one of them acts on the same kind of thing:
 
 | Folder | The noun | The verbs |
 |---|---|---|
-| [`designs/`](designs/) | a `.penpot` file | create, view, edit, copy, move, rename, delete, restore, purge, open-with |
-| [`projects/`](projects/) | a project folder | create, view, copy, move, rename, delete, restore |
-| [`mapping/`](mapping/) | a mapping | create, view, manage-groups, delete, sync-now |
-| [`connection/`](connection/) | the instance | admin, personal, sync-now |
+| [`designs/`](designs/) | a `.penpot` file | create · view · edit · copy · move · rename · delete · restore · purge · open-with |
+| [`projects/`](projects/) | a project folder | create · copy · move · rename · delete · restore · purge |
+| [`mapping/`](mapping/) | a mapping | create · view · manage-groups · delete · sync-now |
+| [`connection/`](connection/) | the instance | admin · personal · sync-now |
 
-So `designs/move.feature` answers *"what happens when someone moves a design?"* —
-every way it can be moved, in either system, with the consequence on the other
-side. There is no file that answers *"what does the pull do?"*, because nobody
-thinks in pulls.
-
-**A mapping is configuration, not content**, which is why it gets the same verb
-treatment as a noun: creating one, looking at one, changing the one field that is
-editable, tearing one down, and the two things you can ask one to do. It used to
-be `admin-mapping.feature` — one file for five verbs, exactly the shape the
-design/project split had already been fixed out of.
-
-**`connection/` is the instance-wide half**, and it holds the personal token too:
-an admin connects the instance (a URL, a credential and a schedule, as one form),
-a user connects only themselves (a token against the URL the admin gave).
-Different pre-state, different end state, so separate scenarios — the same act,
-so the same folder.
-
-**A connection is one fact, so it is one table.** The URL, the token and the
-schedule are inputs to "the app is connected", not three behaviours; an interval
-is a setting, not something anyone performs.
-
-What stays at the top level is `lifecycle.feature` alone — the app enabling,
+Plus [`lifecycle.feature`](lifecycle.feature) at the top level — the app enabling,
 disabling and being removed belongs to no noun in the app.
 
-**Personal projects have no folder of their own**, deliberately. They are the
-ordinary rules with a different mapping: a design in a personal project is
-created, moved, renamed and deleted by exactly the scenarios in `designs/`. The
-only thing that differs is that setting a personal token maps the user's home
-root to their personal team — which is `connection/personal.feature`'s.
+**A scenario describing a behaviour another file owns is a defect**, even when it
+passes. Move it.
 
-**The nearest-ancestor rule has no file**, and that is deliberate. It is the
-app's most load-bearing decision, and it is a RULE — only ever observed through a
-gesture: you move something and it still belongs, you create something and it
-lands in Drafts. Every scenario that tried to test it directly turned out to be a
-move or a create that already existed elsewhere. The rule is written down in
-[`AGENTS.md`](AGENTS.md#mapping-membership--retired).
+### Why a design and a project are separate nouns
 
-## The two nouns: a DESIGN and a PROJECT
+They are two Penpot objects with different calls, different failure modes and
+different blast radii. A design is moved with `move-files` and a project with
+`move-project`; deleting a design trashes one thing, deleting a project takes
+everything in it. Folding them together would put a one-file gesture and a
+whole-tree one in the same table, reading as though they carried the same risk.
 
-Six verbs, two nouns, twelve files. A design is a `.penpot` file; a project is a
-**folder**, because a folder is the only thing a Penpot project can be in
-Nextcloud.
+**A mapping is configuration rather than content**, which is why it gets the same
+verb treatment: creating one, looking at one, changing the one field that is
+editable, tearing it down, and the two things you can ask it to do.
 
-Every verb file names its noun, so "what happens when I rename X?" has one place
-to look, and the two answers sit side by side. They are genuinely different
-behaviours rather than one with a branch:
+### Two rules that have no file, deliberately
 
-| verb | design | project |
-|---|---|---|
-| copy | duplicates it in Penpot | a new project holding new designs |
-| move | anywhere its project reaches | anywhere at all — the path is the name |
-| delete | one design | one call that takes the whole project with it |
-| restore | the same design, id intact | the project *and* everything in it, or not at all |
+- **Nearest-ancestor membership.** The most load-bearing rule in the app, and it is
+  only ever observed *through* a gesture: you move something and it still belongs;
+  you create something and it lands in Drafts. Every scenario that tried to test it
+  directly turned out to be a move or a create that already existed elsewhere.
+- **Personal projects.** The ordinary rules with a different mapping. A design in a
+  personal project is created, moved, renamed and deleted by exactly the scenarios
+  in `designs/`; the only thing that differs is that setting a personal token maps
+  the user's home root to their personal team, which is
+  [`connection/personal.feature`](connection/personal.feature)'s.
 
-**Two rows of that table were wrong until §C6.38, and both were wrong about the
-API rather than about the design.** `move` said *pinned inside its team folder*
-and `copy` said *refused — Penpot has no duplicate-project call*. Penpot has
-`move-project` (`{project-id, team-id}`) and `duplicate-project`
-(`{project-id, name?}`), both since 1.16; the schemas are in
-`app/rpc/commands/management.clj`. A limit that was never checked became a rule,
-the rule was written into a table, and the table was then cited as the reason to
-keep the limit. `projects/move.feature` and `projects/copy.feature` had already
-been rewritten to say what the app should do — this table was the last place
-still saying otherwise.
+Deliberately **not ported** from the n8n and Grafana siblings: `tag-sync.feature`
+and `reserved-tags.feature`. Penpot has no tags, labels or annotations at all.
 
-A **personal** project is still a project: the verbs behave identically, so the
-only special things are the who (the user's own token) and the where (their home
-root) — and both are settled the moment the token is saved, which is why they
-live in `connection/personal.feature` and not in a file of their own.
+## The files are also a partition — eleven Behat suites
 
-Splitting them is also what makes the CI suites possible — the filename is the
-matrix axis (`tests/integration/behat.dist.yml`), because a **path partition
-cannot leak the way a tag partition does**: measured over the live scenarios, 28
-carry no channel tag and 32 no origin tag, so any tag split would silently stop
-running them.
+Every file belongs to **exactly one** suite, declared in
+[`tests/integration/behat.dist.yml`](../tests/integration/behat.dist.yml), and the
+integration matrix runs one suite per leg:
 
-**The behaviour is the axis, not the kind of thing acted on.** `create-project.feature`
-used to own every verb a project folder could be on the receiving end of —
-renaming one, copying one, moving one, deleting one. That is the same mistake
-`gestures.feature` made in the other direction, and it cost the same thing:
-"what happens when I rename a project folder?" had two answers in two files, and
-the two had already drifted. `rename-design.feature` had *live* coverage of the
-project-folder rename while `create-project.feature` still called it unbuilt;
-`move-design.feature` had all four project-folder move scenarios; `copy-design.feature` had the
-refusal plus a comment pointing back for reasons it could simply have stated.
-
-A project folder is not a separate universe. Renaming one is a RENAME, and it
-belongs beside the other rename where a reader comparing the two sees the whole
-table at once. What is left in `create-project.feature` is the one thing no
-behaviour file can own: a folder's **identity** as a project — how it acquires
-one, and the marker that says so.
-
-**The sync itself** — whose actors are an admin and the clock:
-
-| File | Owns |
+| Suite | Holds |
 |---|---|
-| `connection/sync-now.feature` | An instance-wide sync — the section's button, and the schedule doing it unasked |
-| `mapping/sync-now.feature` | The card's own button: one mapping, on demand |
+| `admin` | the whole settings surface — the connection, the personal token, and the mapping list |
+| `authoring` | the verbs that MAKE or CHANGE a design: create, edit |
+| `copying` | `designs/copy.feature` |
+| `naming` | `designs/rename.feature` |
+| `trash` | a design's state: delete, restore, purge |
+| `motion` | `designs/move.feature` — the gestures that cross a mapping boundary |
+| `core` | viewing, opening, and the app lifecycle |
+| `projects` | `projects/create.feature` — promotion by content |
+| `project-trash` | a project's state: delete, restore, purge |
+| `project-motion` | `projects/move.feature` |
+| `project-copy` | copying and renaming a project folder |
 
-A scenario belongs in either only when someone ASKED for a sync. "A design
-renamed in Penpot reaches Nextcloud" is a rename — it lives in
-`designs/rename.feature`, where the sync is how the news travels, not the point.
+**The axis is the path, not a tag.** A tag partition leaks: `@occ`, `@ui` and
+`@in-penpot` are carried by some scenarios and not others, so an untagged scenario
+would match no leg and quietly stop running — with every leg still green. A path
+partition cannot leak, because `ls features/**/*.feature` minus the union must be
+empty. [`tests/integration/bin/check-suites.sh`](../tests/integration/bin/check-suites.sh)
+checks exactly that, in the quality job, in about a second.
 
-These were one file, and before that `reconcile.feature`, named after the code
-that runs it. That was a mechanism wearing a feature file, and it collected 34
-scenarios that mostly belonged to the behaviours they travelled through. The
-split into two is by SCOPE, which is the only thing that differs between them —
-see AGENTS.md.
+The design verbs are split finer than the project ones because they cost more: a
+`designs/move.feature` scenario is a real WebDAV move plus a Penpot round trip, and
+several are Outlines over both storage kinds.
+
+Running plain `behat` still runs all eleven in sequence, so a local run is
+unaffected by the split.
 
 ## Tags
 
-Two orthogonal axes, because the same verb means two different things depending
-on where it happened — and the interesting part is always the *other* side.
+Two orthogonal axes, because the same verb means two different things depending on
+where it happened — and the interesting part is always the *other* side.
 
 ### Origin — where the action happened
 
 | Tag | Meaning |
 |---|---|
-| `@in-nextcloud` | Someone acted in Nextcloud. The scenario's payoff is what reached Penpot. |
-| `@in-penpot` | The design changed in Penpot (by a human, another client, or Penpot itself). The scenario's payoff is what reached Nextcloud, and a sync run is implied. |
+| `@in-nextcloud` | Someone acted in Nextcloud. The payoff is what reached Penpot. |
+| `@in-penpot` | The design changed in Penpot — a human, another client, or Penpot itself. The payoff is what reached Nextcloud, and a sync is implied. |
 
-A scenario with neither is about something that never crosses the boundary —
-configuration, a refusal, a local-only surface.
+A scenario with **neither** never crosses the boundary: configuration, a refusal,
+or a local-only surface. That absence is information — don't invent an origin to
+fill the column.
 
 ### Channel — how it was triggered
 
 | Tag | Meaning |
 |---|---|
-| `@gesture` | A Files-app gesture: drag, rename, delete, restore, "+ New", upload. Driven over WebDAV, which is what a browser sends. |
-| `@occ` | A CLI command. |
-| `@admin` | The admin settings panel. |
+| `@gesture` | A Files-app action: drag, rename, delete, restore, "+ New", upload. Driven over WebDAV, which is what a browser sends. |
+| `@occ` | Reachable from the CLI. |
+| `@admin` | Needs the admin settings panel or an admin-only command. |
+| `@ui` | The behaviour has a user-interface surface at all. |
+| `@dav` | Asserted through a raw WebDAV request rather than a gesture. |
 | `@scheduled` | The timed job, with no human present. |
 
-`@gesture` is what `gestures.feature` used to be. It was a file, which meant
-every gesture scenario lived away from the behaviour it demonstrated; as a tag,
-`behat --tags @gesture` gives the same collection back without splitting any
-feature. Nothing is lost and the scenarios sit next to their own kind.
+These describe the FEATURE's surfaces, not how the harness drove it. A scenario the
+test runs via `occ` is still `@ui` if the admin panel has a button for it —
+otherwise the index answers "how do we test this", which nobody needs to ask.
 
-### Storage backend — a CELL IN THE MAPPING TABLE, and no longer an axis
+### The storage backend is a CELL, not an axis
 
-Every behaviour is valid on both a plain (admin-owned) folder and a Team Folder,
-and almost none of them has a different outcome. So the backend has to be covered
-without being *written down twice*. Three ways were tried, in this order:
-
-| | |
-|---|---|
-| duplicate each scenario, tagged `@team-folder` / `@plain-folder` | two identical blocks that prove nothing, ×97 |
-| a matrix axis + a dynamic Background — `OccTrait::backendFlags()` reading `PENPOT_TEST_BACKEND`, the spec silent | worked, and cost every scenario the ability to SAY which folder it wanted |
-| **a `storage` cell in the mapping table** | ✓ |
-
-**What the axis bought, and what it cost.** It was genuinely right for a while,
-and it found things: the structural scenarios in `sync-now.feature` had mapped a
-Team Folder and passed only because of where they sat in the run — moved, the
-folder resolved to nothing, and Team Folder provisioning turned out never to have
-been covered at all. No new scenario would have caught that; pointing an existing
-one at the other backend did. The same dimension disproved §C6.27 (below).
-
-What it cost is that the backend was something the RUN decided and the spec could
-not mention. A scenario that genuinely wanted a Team Folder had no way to ask, so
-it needed a `@plain-folder` / `@team-folder` tag to opt out of the leg that could
-not host it — a tag that exists to skip a leg is the duplication coming back in
-through the tag system.
-
-**So groupfolders is installed on every leg** (the same thing the n8n and Grafana
-suites do), and the storage kind is stated where it belongs — in the mapping:
+Every behaviour is valid on both a plain admin-owned folder and a groupfolders Team
+Folder, and almost none of them has a different outcome. The backend is therefore
+stated **in the mapping table**, where a scenario can ask for it:
 
 ```gherkin
-    And a mapping with the following values:
-      | team    | Northwind    |
-      | folder  | <folder>     |
-      | storage | <storage>    |
+    And the following mappings were made:
+      | team      | folder   | mode | storage      |
+      | Northwind | Penpot   | sync | admin folder |
+      | Second    | Shared   | sync | team folder  |
 ```
 
-`mapping/manage-groups.feature` is the worked example: one outline, two `Examples`
-blocks, one per backend, and the two are compared in a single run instead of
-across two legs that never meet. `OccTrait::backendFlags()` survives as the
-default for the steps that do not name a storage — with no `PENPOT_TEST_BACKEND`
-set it resolves to a plain shared folder, which is what a mapping gets when the
-scenario does not care.
+groupfolders is installed on every leg, so either kind is reachable from any
+scenario. [`mapping/manage-groups.feature`](mapping/manage-groups.feature) is the
+worked example: one outline, two `Examples` blocks, one per backend, compared in a
+single run rather than across two legs that never meet.
 
-The objection this replaced was **"a table can only vary the mapping, and the
-difference is whether groupfolders is installed on the server"** — true while the
-app was conditional, and no longer true now that it is always there. The residual
-cost is honest and small: the plain rows exercise a plain folder on a server that
-*has* groupfolders installed, which is not every deployment. That is the price of
-being able to ask, and it is cheaper than a tag per scenario.
+Where a backend genuinely changes an **outcome** it earns its own scenario, because
+then the rows would not be identical. There is one confirmed case: on a shared
+mapping a pruned mirror goes to the **owner's** trash, not the acting user's.
 
-Where a backend genuinely changes an OUTCOME it still earns its own scenario,
-because then the two rows would *not* be identical. There are two confirmed cases:
+### `sync` vs `link` is a restriction in one direction, not an axis
 
-- **§C6.16** — on a shared mapping a pruned mirror goes to the **owner's** trash,
-  not the acting user's.
-- ~~**§C6.27** — emptying a Team Folder's trash cannot reach Penpot at all.~~
-  DISPROVED: with Team Folders installed on every leg and the storage stated in
-  the mapping table, the Team Folder purge reached Penpot exactly like the plain
-  one. See features/AGENTS.md#a-team-folders-trash-reaches-penpot-after-all.
-  groupfolders registers its own `ITrashBackend` whose `removeItem()` emits
-  nothing — no typed event, no legacy hook — so no app can observe it. It
-  self-corrects, because Penpot's own trash expires after 7 days, so the
-  divergence is a window rather than a permanent state.
-
-Both were found by RUNNING the suite across both backends rather than reasoning
-about them — neither needed a new scenario to be discovered, only an existing one
-pointed at the other backend. That is the argument the axis won on, and it is why
-the `storage` cell has to keep both kinds reachable rather than quietly settling
-on whichever one the harness defaults to.
-
-### `sync` vs `link` — a restriction in one direction, not an axis
-
-The tempting move is to write every behaviour twice, once per mode. Don't: the
+The tempting move is to write every behaviour twice, once per mode. Don't — the
 modes only diverge in one direction.
 
-* **`@in-penpot` scenarios are mode-agnostic.** A design renamed, moved or
-  deleted in Penpot reaches Nextcloud the same way whichever mode the mirror is
-  in — a `link` simply has no bytes to update. These scenarios should not
-  mention mode at all, and writing them twice duplicates a rule that never
-  forks.
-* **`@in-nextcloud` scenarios branch.** A `link` is a read-only projection, so
-  it is confined to its project: moves out are refused, and there is nothing to
-  copy. That is a business rule, and it is stated as one.
+- **`@in-penpot` scenarios are mode-agnostic.** A design renamed, moved or deleted
+  in Penpot reaches Nextcloud the same way either way; a `link` simply has no bytes
+  to update. These should not mention mode at all.
+- **`@in-nextcloud` scenarios branch.** A `link` is a read-only projection confined
+  to its project: moves out are refused, trashing is refused, and there is nothing
+  to copy. That is a business rule, and it is stated as one.
 
-The test: can you write the restriction as a sentence beginning *"A link…"*? If
-yes it is a rule worth its own section. If mode makes no difference to the
+The test: can you write the restriction as a sentence beginning *"A link…"*? If yes
+it is a rule and deserves its own scenario. If mode makes no difference to the
 outcome, leave it out.
 
 ### Status — four tags, and only one of them is a backlog
 
-`@todo` used to mean four different things at once: the test is unwritten, the
-*feature* is unwritten, the harness cannot reach it, and there is nothing to
-execute in the first place. Those need four different people to do four
-different things, and lumping them together meant that "what is actually built
-but untested?" — the most useful question you can ask of a spec — took a
-hand-analysis every time it was asked.
+`@todo` on its own means four different things at once: the test is unwritten, the
+*feature* is unwritten, the harness cannot reach it, or there is nothing to execute
+in the first place. Those need four different people to do four different things,
+and lumping them together makes *"what is built but untested?"* — the most useful
+question you can ask a spec — a hand-analysis every time.
 
 | Tag | Meaning | What to do about it |
 |---|---|---|
@@ -285,185 +191,87 @@ hand-analysis every time it was asked.
 | `@blocked` | Real behaviour this harness cannot reach. | Build the harness capability — or accept it. |
 | `@decision` | Records a deliberate absence. There is no operation. | Nothing, ever. |
 
-All four are excluded from the run. The distinction is not about whether a
-scenario executes today; it is about **who picks it up**.
+All four are excluded from the run, and the distinction is not about whether a
+scenario executes today — it is about **who picks it up**.
+`behat --tags @todo` is the work queue.
 
-**`behat --tags @todo` is the work queue.** That is the whole point of narrowing
-it: the list is now things a person can sit down and do, with no triage step in
-front of it.
+Where the suite stands: **113 scenarios, 74 live**, 24 `@todo`, 9 `@unbuilt`,
+6 `@blocked`, 0 `@decision`.
 
-#### Why the queue is one flat list, and how a scenario earns its status back
+#### A scenario stops being `@todo` only on a PR that runs it
 
-The reorganisation this file describes — the folder became the noun, the file
-became the verb, `reconcile.feature` stopped being a feature — rewrote the spec
-faster than the harness could follow. Nine scenarios were still running when it
-landed, and the step vocabulary underneath them had moved. The choice was to
-re-triage 116 scenarios inside the PR that did the rewriting, or to collapse them
-to one flat queue and let each PR that implements a behaviour restore that
-scenario's real status. **The second, because triage done from the spec alone is a
-guess, and the honest answer for each one is found by trying to make it pass.**
+Promote it to live when it passes, or move it to its true status **with the reason
+written down**. Never by re-reading the spec and deciding what it probably is —
+triage from the spec alone is a guess, and this project has a chapter's worth of
+confident guesses that were wrong
+([§C6.38](../saga/Chapter_2_The_Colony.md#c638--the-finale-the-spec-outran-the-harness-on-purpose)).
 
-**Chapter 3 Round 1 drew the first nine** — the ones green in CI the moment before
-the collapse: the two admin-connection scenarios, enabling and disabling the app,
-the three mapping-creation ones, changing a mapped folder's groups, and syncing
-one mapping. They prove the HARNESS rather than any behaviour, which is what made
-them the only sane place to break ground. Where the suite stands now:
+The round trip is the point in both directions. A scenario promoted and then failed
+in CI is not wasted work: that is how a wall gets found, and the tag afterwards
+records a fact instead of an assumption. Equally, a scenario can go from `@unbuilt`
+straight to green when the code catches up with what it already said — which only
+works if the tag was honest about what was owed.
 
-| status | scenarios | |
-|---|---|---|
-| *(none)* — runs in CI | 61 | 123 executed, spread over eleven suite legs |
-| `@todo` | 34 | the queue |
-| `@blocked` | 8 | no browser, no app removal, no way to author a design |
-| `@unbuilt` | 9 | the app disagrees with the spec; see below |
-| `@decision` | 0 | |
+#### `@blocked` must NAME the missing capability
 
-**The `project` leg nearly doubled without a single test being written for it.**
-§C6.38 reversed a rule — a project folder was pinned inside its team folder — and
-scenarios moved straight from `@unbuilt` to green because the code caught up with
-what they already said. That is the payoff of tagging honestly: the work queue told
-the truth about what was owed, so the PR that paid it needed no re-triage.
+In the scenario, or in the section above it. A `@blocked` with no stated reason is
+a `@todo` nobody checked — and that is not hypothetical: flattening the tags once
+turned up one that had been excused from scrutiny for months and had no wall at all.
 
-It also cuts the other way in the same file. A fourth scenario was promoted, failed
-in CI, and went back to `@unbuilt` naming a wall nobody had measured — a move into a
-Team Folder crosses a storage boundary and fires no rename event at all. **That
-round trip is the point**: promoting it was how the wall got found, and the tag now
-records a fact rather than an assumption.
+The walls that exist today:
 
-**The `design` leg then nearly doubled too, and the tests were the small half.**
-`designs/move.feature` held thirteen scenarios and ran none; the round promoted two
-and retagged six, and only ONE of the two was a test anyone could simply have
-written. `Move a design between projects` was held off the run by a defect in the
-**spec** — its shared `Then` demanded `content | an archive` of both Examples
-blocks, and the second block moves a `link`, which holds zero bytes on purpose. The
-row now reads `the mapping's body`, so both modes can answer the same claim.
+* **no browser** — anything about a button, card, panel, icon or menu entry;
+* **no app removal** — `occ` enables and disables; removing and reinstalling an app
+  is a store operation this suite cannot perform;
+* **no fault injection** — anything needing a real Penpot to fail in a specific way,
+  or a sync killed mid-write;
+* **no way to author a design's content** — the harness creates, renames, moves and
+  deletes, but cannot change what is *inside* a design;
+* **no logged-in session** — the personal-token attribution scenarios have no
+  acting user to attribute to;
+* **no time travel** — anything gated on Penpot's deletion delay, which is 7 days
+  and set per team rather than per request.
 
-So the queue shrank by eight and gained two passing scenarios. **That gap is the
-finding, not an accounting error**: `@todo` means *the code exists and only the
-test is missing*, and six of these were something else — four places the app
-contradicts the spec, and two the harness cannot reach without a browser. A queue
-that cannot be read at face value costs more than a short one.
+If a stated reason stops being true, the tag is stale and the scenario is probably
+promotable. That has already happened once here: *"no groupfolders in the CI image"*
+retired the day the app started being installed on every leg.
 
-**Every leg reports tests now**, so the empty-suite exemption in the workflow
-no longer carries any of them. It stays, because it is self-healing in both
-directions and the next spec-first feature file will empty a leg again.
+#### `@unbuilt` vs `@todo` is about the CODE, not the test
 
-**Round 1 also found two things the rewrite had dropped**, which is the argument
-for running a scenario rather than reading it:
+If `lib/` cannot do the thing, it is `@unbuilt`, however well specified it is.
+Marking unbuilt work `@todo` inflates the queue with items no test could pass, which
+is exactly what makes a queue worth ignoring.
 
-* `connection/admin.feature` lost `And nothing is configured yet` from its
-  Background. Commit `466f92d` had added that line on purpose — *"a bad URL names
-  the url field, and the Background starts blank"* — because the bad-URL row
-  relies on it: `set-url` refuses a URL it cannot build requests from, so nothing
-  is stored, and the health check must fail on a MISSING url rather than on the
-  good one the row above left behind. Restored.
-* `lifecycle.feature`'s "Removing the app" was flattened from `@blocked` to
-  `@todo` along with everything else, even though the comment above it names its
-  wall. Restored to `@blocked`; it is the tag's only member.
+The strongest form of `@unbuilt` is worth calling out in the comment: **the app does
+the OPPOSITE of what the scenario says.** Promoting one of those is a bug fix, not a
+test, and a reader deserves to know which they are picking up.
 
-Seven were `@blocked` and one was `@decision`, and **that record is only half in
-the files.** Where the reason was already written as a comment it survives the
-collapse untouched, which is why those comments still open with the old tag name:
+#### `@decision` is a permanent absence, not "nothing happened"
 
-```gherkin
-  # @blocked — no app removal. The harness can enable and disable, which is what
-  # `occ` offers; removing an app and reinstalling it is a store operation this
-  # suite has no way to perform.
-  @blocked
-  Scenario: Removing the app
-```
-
-**A comment naming a status the tag no longer carries is the record, not a
-contradiction** — the tag was the temporary flat state, the comment is the truth,
-and the one above has now been reconciled back. Two more read that way (both of
-`designs/edit.feature`), and the two `# @unbuilt — THIS IS THE SPEC, AND THE APP
-DOES THE OPPOSITE TODAY` notes in `designs/delete.feature` and
-`designs/move.feature` are the same thing and matter more, because they mark
-places where promoting the scenario means **fixing the app, not writing a test**.
-
-The other four `@blocked` and the one `@decision` had no such comment, so their
-status lived only in the tag and is now only in the saga's Chapter 2 close, which
-names all eight. Do not re-derive them from the spec.
-
-**The rule that goes with it:** a scenario stops being `@todo` only on a PR that
-runs it. Promote it to live when it passes, or move it to its true status with the
-reason written down — never by re-reading the spec and deciding what it probably
-is. The build order is in the saga's Chapter 3.
-
-#### What makes something `@blocked` rather than `@todo`
-
-Name the missing capability, in the scenario or the section above it. The seven
-that exist today:
-
-* **no browser** — anything about a button, card, panel, icon, or menu entry;
-* **no tty** — anything that answers an interactive `occ` prompt, which today is
-  the confirmation a demotion asks for before it deletes a stored archive;
-* **no app removal** — `occ` enables and disables; removing an app and
-  reinstalling it is a store operation this suite cannot perform;
-* **no fault injection** — anything that needs a real Penpot to fail in a
-  specific way (a broken export stream, a refused asset download, a listing that
-  errors) or a sync to be killed mid-write;
-* **no way to edit a design's content** — Penpot's `update-file` is the only RPC
-  that changes what is inside a design, and its `changes` payload is unproven
-  (saga §1); the harness creates, renames, moves and deletes, but cannot author;
-* **no logged-in session** — every personal-token attribution scenario, because
-  the occ+DAV harness has no acting user to attribute to;
-* **no time travel** — anything gated on Penpot's deletion delay, which is
-  7 days by default and set per team, not per request (§C6.19).
-
-**"no groupfolders in the CI image" was retired**, and is listed here only so it
-is not reached for again: the app is installed on every leg now, so Team Folder
-provisioning is reachable and the storage kind is a cell in a mapping table
-rather than a dimension the run decides.
-
-A `@blocked` scenario with no stated reason is really a `@todo` nobody checked.
-
-#### What makes something `@decision`
-
-There is no operation to perform. *"There is no 'Sync to Penpot' button, ever"*
-records a design choice; it will never become live, and that is not a gap.
-
-Do not confuse it with a scenario that asserts **nothing happened** — *"Penpot is
-never contacted"*, *"no folder named Drafts is created"*. Those are ordinary
-behaviour, entirely testable by absence, and several of them run in CI today.
+`@decision` records a capability that **does not and will not exist**. Do not
+confuse it with a scenario asserting that nothing happened — *"Penpot is never
+contacted"*, *"no folder named Drafts is created"*. Those are ordinary behaviour,
+entirely testable by absence, and several run in CI today.
 
 The test is on the `Then`, not the `When`: does it name **the outcome of an
-operation**, or **the permanent absence of a capability**? *"Penpot is never
-contacted"* is an outcome — something happened, and this is what it did not
-cause. *"No button offers to push designs to Penpot"* is an absence: there is no
-operation to have an outcome, and there never will be.
+operation**, or **the permanent absence of a capability**?
 
-Looking at the `When` instead would get this wrong, because a `@decision`
-scenario may still open a page to have somewhere to look.
+There are none in this suite today, and one cautionary tale about why the bar is
+high. *"There is no Sync to Penpot button, ever"* was a `@decision` for two
+chapters, on a reading of §6.1 that turned out to be too broad — the button now
+exists. A permanent absence is a hard thing to be right about.
 
-#### A `@todo` that fails is a finding, not a status
+#### A `@todo` that FAILS is a finding, not a status
 
-A scenario may be `@todo` because it FAILS, not because it is unwritten: the spec
-is right, the code is wrong, and the scenario is the evidence. Promoting it is a
-bug fix, not a test-writing task.
+Legitimate — but it must say so in a comment, or it is indistinguishable from one
+nobody has written yet.
 
-**Say so in a comment when you do this.** A silent failing `@todo` is
-indistinguishable from an unwritten one, and the difference is the whole value of
-the tag — which is now the *only* thing that distinguishes them, since the tag
-itself no longer sorts anything (above). Two say so today, both marking the app
-disagreeing with the spec rather than lagging it:
+## Writing a scenario
 
-```gherkin
-    # @unbuilt — THIS IS THE SPEC, AND THE APP DOES THE OPPOSITE TODAY: it trashes
-    # the file and calls it "hidden". A link is Penpot's copy to remove.
-```
+The rules below are the ones that have cost this suite something. Each is cheap to
+follow and expensive to notice afterwards.
 
-in `designs/delete.feature` ("Trash a link") and `designs/move.feature` ("Move an
-untracked design file into a project"). The example this section used to give — the
-restore/pull listing disagreement (§6.49) — was resolved and its comment is gone.
-
-**A status tag sits on its own scenario, never above a comment block.** Gherkin
-binds a floating tag to whatever scenario comes next, across any number of
-intervening comment lines — which is exactly how one scenario was silently
-excluded while four others ran undefined (§C6.14). CI runs `--strict` so
-undefined steps fail the job; nothing protects against a tag landing on the
-wrong scenario except keeping them adjacent.
-
-## `Rule:` is NOT available — verified, not assumed
+### `Rule:` is NOT available — verified, not assumed
 
 Gherkin 6 added `Rule:`, which groups scenarios under one business rule and can
 carry its own `Background`. It maps almost exactly onto how this suite is
@@ -487,7 +295,7 @@ Business rules are therefore **comment banners** (`# ── RULE: … ──`). 
 nothing, read the same, and become real `Rule:` blocks the day Behat ships it —
 the groupings and the Backgrounds they would carry are already in place.
 
-## Never end a line with the bare word `json`
+### Never end a line with the bare word `json`
 
 Not a Gherkin rule — an **editor** one, and worth writing down because the symptom
 looks like a broken file rather than a broken highlighter.
@@ -517,7 +325,7 @@ so changing one means changing its definition too — reword those rather than a
 punctuation, and move the definition with it.
 
 
-### …and never start a token with an apostrophe
+#### …and never start a token with an apostrophe
 
 Same class of bug, same file's grammar. `feature.tmLanguage.json` treats `'` as a
 string delimiter:
@@ -547,7 +355,7 @@ the file:
 The safe habit is simple: **never put an apostrophe next to a quoted parameter.**
 Rephrase the possessive instead.
 
-## Comments: two lines, then a breadcrumb
+### Comments: two lines, then a breadcrumb
 
 A feature file is the specification, so a scenario has to be legible at a glance.
 A comment may add scope to a step; it may not carry the reasoning. **Two lines of
@@ -567,7 +375,7 @@ exceed the budget. Both failures are silent otherwise — a renamed scenario
 orphans its anchor with nothing to notice, and prose creeps back a line at a time
 until the spec is unreadable again.
 
-## Metadata is a POST-STATE, never a subject
+### Metadata is a POST-STATE, never a subject
 
 A mirror's metadata is not something anyone does. It is what is true after
 something was done — so it is never a scenario of its own, and never a lone
@@ -586,14 +394,14 @@ that changed it**:
       | modified        | the design's    |
 ```
 
-**An end state is absolute, not a diff.** An earlier cut of this offered
-`unchanged` / `changed`, backed by a `Given I note the state of "…"` — which is
-an *action* wearing a `Given`, harness bookkeeping in the one position that is
-supposed to say only how the world already is. A row names the thing its value
-came **from** instead: `the design's id` is resolved out of Penpot by name, at
-assertion time, against the design the `Given` already named. That says what "the
-id survived a rename" was reaching for, and says it better — the id is not merely
-different-from-before, it is *that design's*.
+**An end state is absolute, not a diff.** No `unchanged` / `changed`, and no
+`Given I note the state of "…"` to back them — that is an *action* wearing a
+`Given`, harness bookkeeping in the one position that may only say how the world
+already is. A row names the thing its value came **from** instead: `the design's
+id` is resolved out of Penpot by name, at assertion time, against the design the
+`Given` already named. That is what "the id survived a rename" is reaching for,
+and it is stronger — the id is not merely different-from-before, it is *that
+design's*.
 
 **The rows an action did not touch are half the reason the table exists.** "A
 move re-files a design without re-fetching it" and "a rename cannot break the
@@ -609,24 +417,22 @@ Three more name no value on purpose, because the point of the row is that the
 Folder and a `link` one, and spelling `sync` would split one claim into three
 scenarios: `the mapping's team`, `the mapping's mode`, `the mapping's body`.
 
-That trio is spelt as a trio deliberately. The team half was written both ways —
-`the team's id` in four files and `the mapping's team` in nine, with
-`connection/sync-now.feature` using **both**, twenty-six lines apart — and only
-the first spelling was ever implemented. So every scenario reaching for the
-second one failed on "not a value this vocabulary knows": a fixture failure
-wearing the shape of an app failure. One claim, one spelling.
+**One claim, one spelling.** Two wordings for one idea are two step
+implementations to keep in step, and a scenario reaching for the unimplemented one
+fails on *"not a value this vocabulary knows"* — a fixture failure wearing the
+shape of an app failure.
 
 `penpot_mode` reads `"link"` in a table even though the stored value is
 `reference` (the literal string `link` is `is_callable()` and crashes core's
-PROPFIND). The wire quirk is spelt out once, in `view-design.feature`, where the
+PROPFIND). The wire quirk is spelt out once, in [`designs/view.feature`](designs/view.feature), where the
 DAV surface genuinely is the subject; everywhere else a table speaks the
 vocabulary the admin chose.
 
-**One canonical table, then deltas.** `view-design.feature` spells out the full
+**One canonical table, then deltas.** [`designs/view.feature`](designs/view.feature) spells out the full
 property set once, because there LOOKING is the behaviour. Every other file shows
 only the rows its action touches or promises not to touch.
 
-## Data tables: an input, or a different rule?
+### Data tables: an input, or a different rule?
 
 `Scenario Outline` + `Examples` is right when the rows are **one rule applied to
 different inputs** and the outcome is identical for every row. The four link
@@ -641,7 +447,7 @@ thing that made them worth writing.
 The test: can you write the rows as a list of *values*, or only as a list of
 *sentences*? Values → `Examples`. Sentences → separate scenarios.
 
-## Wording is an API
+### Wording is an API
 
 Every step line is a function signature. Two phrasings of one idea are two
 functions to maintain and two ways for the same assertion to drift, so the step
@@ -657,3 +463,73 @@ Then Penpot project "P" holds no design named "D"      # same step
 Prefer extending an existing phrasing with a parameter over inventing a new one.
 `tests/integration/bootstrap/Steps/` is the vocabulary; read it before adding to
 it.
+
+## Where the tests are
+
+A scenario is only real if a step definition matches every one of its lines.
+
+| What | Where |
+|---|---|
+| The scenarios | `features/**/*.feature` — at the repo root, because they are docs |
+| The step definitions | [`tests/integration/bootstrap/Steps/`](../tests/integration/bootstrap/Steps/) |
+| The context that composes them | [`tests/integration/bootstrap/FeatureContext.php`](../tests/integration/bootstrap/FeatureContext.php) |
+| Transports — `occ`, WebDAV, the Penpot RPC | [`tests/integration/bootstrap/Support/`](../tests/integration/bootstrap/Support/) |
+| What CI actually runs | [`tests/integration/behat.dist.yml`](../tests/integration/behat.dist.yml) |
+| The unit suite | [`tests/unit/`](../tests/unit/) — no Nextcloud server; OCP interfaces are stubbed |
+
+Integration runs against **a real Nextcloud and a real Penpot**, one suite per
+matrix leg, in [`.github/workflows/integration.yml`](../.github/workflows/integration.yml).
+The Penpot token is minted by the workflow against a throwaway instance.
+
+```sh
+composer run test:unit                          # the unit suite
+cd tests/integration && vendor/bin/behat         # every suite, in sequence
+cd tests/integration && vendor/bin/behat --suite=motion
+cd tests/integration && vendor/bin/behat --tags '@todo'    # the work queue
+```
+
+CI runs `--strict`, so **an undefined step in an untagged scenario fails the
+build.** That is the safety net: a scenario with no status tag is claiming to be
+live, and CI enforces the claim.
+
+A new `*Steps.php` that nobody `use`d in `FeatureContext` is silently dead.
+
+### Three guards run in the quality job
+
+They exist because each protects something that rots **silently** — every one of
+these failures leaves the build green.
+
+| Script | Checks |
+|---|---|
+| [`check-suites.sh`](../tests/integration/bin/check-suites.sh) | Every feature file is in exactly one Behat suite. A file in none is never run. |
+| [`check-notes-anchors.sh`](../tests/integration/bin/check-notes-anchors.sh) | Every `# notes:` breadcrumb resolves, and no comment block is over its two-line budget. |
+| [`check-step-definitions.sh`](../tests/integration/bin/check-step-definitions.sh) | Every step definition is reachable from `FeatureContext`. |
+
+`check-notes-anchors.sh` proves a pointer **lands**, not that it lands somewhere
+true — two scenarios once spent a whole chapter pointing into notes about feature
+files that no longer existed. When you move a section, read what points at it.
+
+### Which unit tests, and which scenarios
+
+Behat is expensive: every scenario is a real Nextcloud, a real Penpot and a real
+round trip. So the split is by what the assertion needs.
+
+- **A rule with no I/O** — a path resolver, a mode table, interval parsing, the
+  Transit decoder — is a **unit test**. It is faster, and it can enumerate cases a
+  scenario would have to arrange one at a time.
+- **A request payload** is a unit test too. Behat cannot see what went over the
+  wire, only what changed at both ends.
+- **Anything a person would describe as a thing they did** is a **scenario**.
+
+If you find yourself writing a scenario whose `When` has no human in it — *"when
+the export stream closes with no end event"* — it is a unit test wearing a
+scenario's clothes.
+
+---
+
+## Changing any of this
+
+The order a change lands in — scenario first, then code, then tests — is
+[CONTRIBUTING.md § Testing](../CONTRIBUTING.md#testing). The reasoning behind an
+individual scenario is [`AGENTS.md`](AGENTS.md); the history behind a decision is
+[the saga](../saga/).

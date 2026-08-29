@@ -917,3 +917,734 @@ promotion rule would have stacked two independent regression surfaces.
 What went in this round: the README stopped claiming it, and `features/AGENTS.md`
 stopped calling it "worth deciding about" and started saying what it costs and when
 it goes. What did not: the code. Named, dated, and next.
+
+---
+
+## Round 11 — the docs stop carrying history, and gain a direction
+
+Round 10 closed on a leftover that argued for itself: a retired rule with live code
+behind it is a second answer, and it will get proposed. This round is the same
+observation aimed at the prose, because the prose had the same problem at a larger
+scale — three files were each carrying a bit of the history, and none of them was
+the record.
+
+### The cascade, which is the actual decision
+
+There are four documents about behaviour in this repo and, until now, no rule about
+which one holds what. So each grew whatever its author needed at the time:
+`README.md` had a pre-alpha status block, `AGENTS.md` had 180 lines restating
+decisions the saga already owned, and `features/AGENTS.md` had seven sections about
+feature files that no longer exist.
+
+The rule now is a **cascade**, one hop per level of detail, each level linking up to
+the next:
+
+| Level | Document | Holds | Points at |
+|---|---|---|---|
+| 1 | `features/**/*.feature` | The specification. What the app does, in plain language. | its section of `features/AGENTS.md` |
+| 2 | `features/AGENTS.md` | Why each scenario is the shape it is — as of today. | the saga § that decided it |
+| 3 | `saga/` | **The history.** What was decided, what it replaced, what proved it. | nothing; it is the bottom |
+
+The load-bearing half is level 2's constraint: **`AGENTS.md` describes the present
+tense.** A note that opens *"this used to…"* is a note in the wrong file. It goes
+here, and level 2 keeps a pointer.
+
+That is not a style preference. A retired decision sitting in a working document is
+indistinguishable from a live one to whoever reads it next — which is precisely how
+Round 10's tag mechanism kept getting proposed, and how §C6.38 found two crews'
+logbooks disagreeing about the same house.
+
+### What moved, and what it cost
+
+Seven top-level sections of `features/AGENTS.md`, 454 lines, all of them about
+feature files that were retired during Chapter 2. They are reproduced whole below —
+nothing was summarised, because the reason each scenario was dropped is the part
+worth keeping.
+
+**Two live notes were buried inside them**, which is the argument for the cascade in
+one finding. `designs/create.feature` has been pointing into
+`## mapping-membership — RETIRED` for its Drafts rule, and `lifecycle.feature` into
+`## uninstall — RETIRED` for the wall on removing the app. Both anchors resolved, so
+`check-notes-anchors.sh` was green the whole time: the checker proves a pointer
+lands somewhere, not that it lands somewhere true. Both notes moved to the sections
+that own them.
+
+**Six feature files were pointing at anchors named after the old layout** —
+the five `mapping/*.feature` still said `#team-mapping*`, seven rounds after
+§C6.38 renamed the folder, and `designs/edit.feature` pointed at `#edit-design`,
+a heading left over from the flat filenames. Same shape as the mis-filed notes:
+resolving, and wrong.
+
+### And the checker had the bug it was written to prevent
+
+`check-notes-anchors.sh` exists because a breadcrumb rots silently. Its own slug
+rule did not match GitHub's: it collapsed runs of spaces, and GitHub does not.
+
+A heading with an em-dash in it — *"Filing a draft — dragging from the team root
+into a project"* — loses the dash and keeps the spaces on both sides of it, so
+GitHub's anchor carries a **double** hyphen there. The checker produced a single
+one and was satisfied. Three breadcrumbs passed CI and 404ed for anyone who
+clicked them.
+
+Nobody clicks a breadcrumb in CI, which is the whole reason the script exists —
+and it is a fair reminder that a guard is code, and gets the same class of bug as
+the thing it guards. Rule matched to GitHub's, two live breadcrumbs corrected, and
+the reason written into the script's header where the next person will find it.
+
+### The record
+
+Everything below was `features/AGENTS.md`'s until this round. It is the disposition
+of every scenario in seven retired feature files — where each one went, or why it
+was dropped rather than moved.
+
+### admin-section — RETIRED
+
+`features/admin-section.feature` is **gone**. It described the settings panel:
+which cards exist, what order they appear in, which fields each holds, where the
+buttons live. Twelve scenarios, none of them a thing anyone does.
+
+| it said | why it went |
+|---|---|
+| The section presents four panels in the family's order | panel ORDER is an implementation detail of the UI |
+| The Instance card holds both the URL and the service-account token | the structure of a form — those fields are the INPUT to connecting, not a behaviour |
+| The token field never echoes a stored token back | already asserted verbatim in `connection/connection.feature`, as the end state of saving a token: *the token is stored as a sensitive value* |
+| Every button in the section lives in Sync Actions | a UI nuance, and `@blocked` because nobody is testing whether the layout looks good |
+| Test connection works today and reports what the account can see | `connection/connection.feature`'s, and already there |
+| "Sync from Penpot" queues a background job and says so | `connection/sync-now.feature`'s — and whether a run is queued or synchronous is a mechanism this suite asserts nowhere, deliberately |
+| The panel reports the outcome of the last run | an END STATE of syncing → moved onto the sync outline as `And the run is recorded with when it ran and what it did` |
+| A second click while a sync is running does not start another | a real edge case → moved to `connection/sync-now.feature` |
+| The scheduled pull uses the interval from Sync Settings | implementation detail. The interval and the enable toggle are connection settings — inputs, which Gherkin need not describe. The schedule already appears as an actor row in the sync outline |
+| Turning the schedule off stops the runs | a negative with nothing to observe: the only honest test is that every `@in-penpot` behaviour stops arriving, which is a test that waits forever |
+| There is no "Sync to Penpot" button, ever | a negative check on a feature that will never exist |
+| Purge is offered but disabled until the delete machine exists | pins the presence and disabled-ness of a button; if it is anything it is `designs/purge.feature`'s |
+
+THE PATTERN WORTH REMEMBERING: a settings panel is where a behaviour is
+*configured*, not a behaviour. Its fields are inputs to the thing they configure,
+and its layout is not specification at all. Everything real in this file already
+had a home in `connection/` — which is why the folder split is what made the
+duplication visible.
+
+#### A second sync started while one is running does not queue another
+
+FOUR DOORS, AND THEY ALL HOLD THE SAME LINE NOW: the section's button, the
+scheduled job, the card's button and `occ penpot_sync:sync`. Two pulls over one
+folder tree race on the same files, and the scope of each does not make it safe —
+a card sync and an instance-wide one collide exactly as two instance-wide ones do.
+
+THE CLI GETS AN ESCAPE HATCH THE BUTTONS DO NOT NEED. `isBusy()` reads a STORED
+flag, so a run killed outright — SIGKILL, an evicted pod — leaves it at `running`
+forever. A button can wait for the admin to try again later; the CLI is the
+headless door someone reaches for when the UI is the thing misbehaving, so
+refusing it without a way through would wedge the one tool that could unwedge
+things. `--force` runs anyway.
+
+`@blocked` on the scenario itself — no fault injection, and no way to hold a run
+open while a second is issued. The CLI half is the one that could be driven (set
+the status, run the command, assert the refusal); it is not written yet.
+
+`@blocked` — **no browser**, and no way to hold a run open while a second is
+issued. Two concurrent pulls over one folder tree would race on the same files,
+which is the only reason this is worth stating.
+
+### errors — RETIRED
+
+`features/errors.feature` is **gone**. "Failures never cost the user data" is an
+INVARIANT, not a behaviour: nobody performs an error. An error is what happens
+when something a person *did* goes wrong, so each one belongs with the behaviour
+that can fail — the same reasoning that retired `file-type` (a construct),
+`reconcile` (a mechanism) and `admin-section` (a panel).
+
+The `When` lines gave it away. Almost none had a human actor:
+
+    When an export stream closes with no "end" event      the transport
+    When the app exports any file                         the app itself
+    When "get-project-files" fails for that project       an RPC command, by name
+    When the pull is interrupted partway through          the reconciler again
+
+Twenty-one scenarios in, eight out.
+
+#### Where each one went
+
+| scenario | disposition |
+|---|---|
+| An error inside a 200 response is treated as a failure | → `team-mapping/set-mode.feature`, row 1 of one outline |
+| A stream that ends without an end event | → same outline, row 2 |
+| A failed asset download never truncates the existing mirror | → same outline, row 3 |
+| An unauthenticated asset fetch is a credential failure | → same outline, row 4 |
+| A pull interrupted halfway leaves every written file valid | → `connection/sync-now.feature` |
+| A file that fails to export does not stop the rest of the pull | → `connection/sync-now.feature`, one outline with the row below |
+| Losing access to a team halts only that mapping | → same outline: one failure at mapping scale rather than file scale |
+| A failed project listing prunes nothing | → `designs/delete.feature`, row of one outline |
+| A failed team listing prunes nothing anywhere under it | → same outline |
+| An expired service token prunes nothing | → same outline |
+| The pull does not trust "get-projects" alone | → `projects/delete.feature` — the behaviour is a project deleted in Penpot |
+| A restore whose follow-up rename fails | → `designs/restore.feature` |
+| A missing service token blocks mapping | → `team-mapping/create.feature` |
+
+#### And what was dropped, with the reason
+
+| scenario | why |
+|---|---|
+| Penpot error codes are decoded from Transit, not string-matched | "not string-matched" describes how the parser works. `tests/unit/TransitTest.php` |
+| The known-bad export flag combination is never sent | asserts a REQUEST PAYLOAD, which Behat cannot see. `tests/unit/PenpotClientTest.php` |
+| The inner signed storage URL is never persisted | an internal storage decision with no observable outcome at all |
+| A transient download failure is retried before giving up | backoff is a mechanism, and its end state is identical to the outline's |
+| A pruned file goes to the trash, never straight to deletion | duplicate — `designs/delete.feature` asserts it LIVE |
+| A design deleted in Penpot can still be rescued inside the grace window | duplicate — the snapshot and the window closing are both already there |
+| A failed rename leaves the local rename standing | duplicate — `designs/rename.feature` "A failed propagation never reverts the user's local rename" |
+| An invalid personal token falls back rather than blocking | belongs with the WRITE GESTURE, which is where its twin went when `connection.feature` was rewritten |
+
+#### THREE THINGS THIS FILE HID
+
+**Its Background was fiction.** All three steps — `the app is connected to
+Penpot`, `a Team Folder mapped to the Penpot team …`, `the Penpot project … is
+mirrored as a folder inside it` — had never been written. The identical trio that
+had rotted in `remove-mapping.feature`, invisible for the same reason: every
+scenario in the file was tagged.
+
+**A missing token blocking a mapping existed ONLY here.** "Without a
+service-account token, nothing can be mapped" was dropped when `connection.feature`
+was split into `admin`/`personal`, and this file was quietly the last copy. It is
+now `team-mapping/create.feature`'s, where refusing a mapping belongs.
+
+**Four `@blocked` named no capability**, which is the one thing the tag exists to
+do.
+
+#### A promotion that fails leaves the file as it was
+
+FOUR SCENARIOS, ONE RULE. Each described a different way the export can break on
+the wire and then asserted the same end state: the file is untouched. That is an
+`Examples` table, not four scenarios — the `reason` column carries the only thing
+that genuinely differs, which is what the admin is told.
+
+`@blocked` — **no fault injection.** Every row needs a real Penpot to fail in a
+specific way, and the harness can only ask it to succeed.
+
+FILED UNDER PROMOTION because promotion was what triggered the first export.
+⚠️ RETIRED WITH ITS FILE: promotion no longer exists, so the first and riskiest
+export is now the first pull under a `sync` mapping. The four export-failure rows
+below went with `set-mode.feature` and are asserted nowhere — they were `@blocked`
+on fault injection the harness cannot do, and they remain a real gap rather than
+a solved one.
+
+#### An incomplete listing prunes nothing
+
+THE MOST IMPORTANT RULE IN THE APP, and it was four scenarios saying it four
+ways. Not knowing what Penpot holds is not evidence that anything was deleted —
+an expired token, a failed team listing and a failed project listing all mean the
+same thing, and all must mean "prune nothing".
+
+These are NOT the empty negatives this suite rejects elsewhere. Something did
+act: a sync ran, and a dangerous branch was available to it. The claim is that
+the branch did not fire, which is an outcome.
+
+`@todo` rather than `@blocked` because one row IS drivable today — a rejected
+token needs no fault injection, only a bad token — and it happens to be the row
+that matters most.
+
+#### One failure never costs the rest of the sync
+
+TWO SCALES, ONE RULE: one design failing must not cost the other designs, and one
+team failing must not cost the other teams. They were two scenarios that shared
+every line but the noun.
+
+### mapping-membership — RETIRED
+
+`features/mapping-membership.feature` is **gone**. The nearest-ancestor rule is
+this app's most load-bearing decision and it is still true; it was never a
+behaviour. A rule is only ever OBSERVED through a gesture — you move something
+and it still belongs, you create something and it lands in Drafts — so every
+honest scenario in the file was already a move or a create.
+
+Which is exactly why six of them had been rewritten elsewhere, word for word,
+without anyone noticing.
+
+#### THE RULE, which now lives here instead of in a file
+
+A file's project is **the nearest ancestor folder carrying a Penpot project id**,
+found by walking up; its team is the nearest ancestor carrying a team id, however
+far up that is. Nothing is cached on the file — a copy would go stale on the
+first move, which is the whole point (§C6.7). Penpot is flat; Nextcloud need not
+be (§6.29).
+
+Two consequences worth stating once: a folder Penpot has no concept of is simply
+walked past, and a file under a team but under no project is in that team's
+Drafts — which is a state, not a folder (§6.35).
+
+#### Six duplicates of scenarios that were already live
+
+| it said | already asserted by |
+|---|---|
+| A file nested deeper inside a project folder still belongs to that project | `designs/move.feature` — same gesture, same `wip` subfolder, same assertion |
+| Project folders can be grouped under ordinary Nextcloud folders | `projects/move.feature` — which even asserts *"the folder still resolves to the same team, found further up"* |
+| A file with no project-id ancestor belongs to no mapping | `designs/create.feature` "A `.penpot` file created outside every mapping is an inert file" |
+| A file at the mapped folder's root is in that team's Drafts | `designs/create.feature` |
+| No folder is ever created to represent Drafts | `connection/sync-now.feature` — `there is no node at "<folder>/Drafts"`, in the tree table |
+| A folder opted in by tag resolves exactly like a mirrored one | `projects/create.feature` "A folder opted in late brings the designs already inside it" |
+
+#### Four with no `When` at all
+
+`A file's project is the nearest ancestor folder carrying a project id` was the
+file's own thesis restated as a test — and its third `Then` is already
+`designs/view.feature`'s. `A project folder's team is the nearest ancestor
+carrying a team id` and `A personal project folder has no team ancestor` are the
+same shape.
+
+`Two folders carrying the same project id is a reported conflict` had a second
+problem: **nothing can produce that state.** `projects/copy.feature` refuses a
+project-folder copy precisely to prevent it, so the scenario specified recovery
+from a situation the app is built to make unreachable — there is no `Given` a
+test could arrange. It also carried the file's only `But`, which is a real
+Gherkin keyword and a pure synonym for `And`: keywords are ignored in step
+matching, so it reads as contrast and asserts nothing. Contrast is what you write
+when you are describing a situation rather than an outcome.
+
+#### Three survived, two of them as Examples rows
+
+| it said | where it went |
+|---|---|
+| The nearest project id wins when project folders are nested | a row on `projects/move.feature`'s "moved anywhere inside its team folder" — the destination is the only thing that differs |
+| A file in any plain folder under a team is also in Drafts | a row on `designs/create.feature`'s Drafts scenario — the same rule at a different depth |
+| Non-Penpot content inside a project folder is left alone | `connection/sync-now.feature`, as "A sync leaves content it does not manage alone" |
+
+#### A project folder can be moved anywhere inside its team folder
+
+ONE RULE, TWO DESTINATIONS. A project folder may be filed under a plain folder —
+which Penpot has no concept of — or under another project folder, where the
+nearest id wins and the outer project does not swallow the inner one. Same
+gesture, same end state, so it is an `Examples` column rather than two scenarios.
+
+#### A sync leaves content it does not manage alone
+
+FROM THE RETIRED `mapping-membership.feature`. A `notes.txt` sitting in a project
+folder is not the app's business, and a sync must not touch it — pruning keys on
+metadata, never on a file extension or on where a file happens to sit.
+
+Filed with the sync rather than with membership because the actor is a sync: the
+question is what a run does to things it did not create.
+
+IT ARRIVED BROKEN, in the way this suite documents and I still walked into. It
+came from `mapping-membership.feature`, whose Background maps a shared `Penpot`
+folder — and `sync-now.feature` deliberately maps NOTHING, so every scenario here
+names its own folder and cannot inherit another's leftovers. Pasted across
+unchanged, the `PUT` for `notes.txt` 404'd on a parent that did not exist. It now
+maps `Untouched` itself, like everything else in this file.
+
+`.github/instructions/gherkin.instructions.md` names this trap and names these
+two files as the pair it happens between. Check the destination's Background
+before moving a scenario into it.
+
+### personal-projects — RETIRED
+
+`features/personal-projects.feature` is **gone**. Personal projects are not a
+feature: they are **the ordinary rules with a different mapping**. A design in a
+personal project is created, viewed, moved, renamed, deleted and restored by
+exactly the scenarios in `designs/`; a personal project folder behaves exactly as
+`projects/` says. The file existed because "personal" felt like a category — the
+same error that produced `errors`, `mapping-membership` and `file-type`.
+
+Only two things are genuinely different, and both are end states of setting a
+token, so both went to `connection/personal.feature`:
+
+| it said | where it went |
+|---|---|
+| Setting a personal token maps the personal team to the home root | a `Then` on "A user enters a valid token" |
+| Clearing the token removes the implicit mapping | a new scenario, "A user clears their token" |
+
+#### The rest, and why none of it survived
+
+| it said | why |
+|---|---|
+| One user's personal projects never appear in another user's home | a negative on the impossible. Nextcloud homes and per-user tokens make it so; nothing acts on the other user |
+| Clearing a personal token stops personal pulls without deleting anything | the "nothing deleted" half is now one `And` on the clear scenario, where it is a post-state rather than a scenario of its own |
+| The personal team itself gets no folder | see the correction below — it is the same fact as the mapping, stated backwards |
+| A user's personal projects mount at their home root | the first sync of the personal mapping, which `connection/sync-now.feature`'s "A user syncs their own personal team" already owns |
+| Personal projects are pulled with the user's own token, never the service account | implied by the above: the service account cannot see a personal team, so the projects appearing at all IS the proof |
+| Without a personal token, no personal projects appear at all | the inverse of the mapping end state, and asserted by the clear scenario's "inert, as it was before the token" |
+| A personal project folder resolves without a team ancestor | **not true** — see below |
+
+#### TWO CORRECTIONS THIS FILE WAS CARRYING
+
+**"The personal team itself gets no folder" was only half true.** The mapping's
+folder is the user's home root. `/` is a folder — it is simply the one every user
+sees as theirs — so the honest statement is that the personal team maps to `/`,
+with the team's name and the folder's name never needing to agree because nobody
+names either. "No folder is created" and "mapped to the home root" are the same
+fact, and only the second one is useful.
+
+**"Resolves without a team ancestor" claimed an exception that does not exist.**
+The scenario called itself *"the explicit exception to saga §6.29's team
+lookup"* — but the team ancestor of a personal project IS the personal team, sat
+on the home root. `MembershipResolver` walks ancestors looking for markers and
+has no special case for any of this, because it needs none: put the team id on
+the home root and the ordinary rule resolves it. A spec that invents an exception
+the code does not have is worse than a silent one, because the next person builds
+the exception.
+
+### team-mapping/set-mode — RETIRED (and `sync-mode` with it)
+
+`features/team-mapping/set-mode.feature` is **gone**, and so is the
+`occ penpot_sync:set-mode` command it specified. The whole per-file mode axis has
+been removed from the app.
+
+**THE SECTION THIS REPLACES CALLED ITS OWN SHOT.** It was headed *"WHOSE DECISION
+IS THIS, AND WAS IT EVER ASKED FOR?"*, recorded that per-file mutable mode
+*"diverged from the design without a decision"*, that *"nobody asked for per-file
+switching — it arrived because the move guard needed an escape hatch to offer"*,
+and named the exact price of undoing it: *"the lever goes, the move guard loses
+the escape it offers, and every 'promote to sync first' refusal in move.feature
+needs a different answer."* That is precisely what was paid.
+
+THE RULE NOW, AND IT IS THE SIBLINGS' RULE: **the mapping alone decides the
+mode.** It is an immutable field of the mapping, exactly like the folder name and
+the Team Folder flag. A design's mode follows from the mapping it was mirrored
+under, and changing it means removing the mapping and mapping the team again —
+which re-mirrors the same designs, by the same ids, into the same folder.
+
+Neither `nextcloud-grafana` nor `nextcloud-n8n` ever had a per-file lever. This
+app growing one made "the mapping says link" quietly untrue, and gave a third
+place for the same question to be answered differently.
+
+WHAT WENT WHERE:
+
+| it said | where it went |
+|---|---|
+| Promoting a mirrored design fetches a real ZIP from Penpot | the export is still proven live — a `sync` **mapping** pulls, and `move.feature` / `rename.feature` / `edit.feature` assert real ZIP bytes on disk |
+| A promoted file is not re-exported by the next pull | the revision check it rested on is `edit.feature`'s subject, where an edit in Penpot is the action |
+| Demoting throws the archive away and never contacts Penpot | deleted — the action does not exist |
+| Demoting asks first, because it deletes the only local copy | deleted with the prompt, the `--force` flag and `SetModeTest` |
+| A link refusal offers to promote the file to "sync" mode first | deleted — the refusal now names the rule and stops, like both siblings' |
+| Promoting a link first makes the move work normally | deleted — there is no promoting |
+
+`features/sync-mode.feature` had already been retired *into* `set-mode.feature`,
+so its note is folded in here rather than left pointing at a file that no longer
+exists. Its own diagnosis still stands and now reads as the earlier half of this
+one: it was sixteen `@todo` scenarios restating live ones, its
+*"files inherit their mapping's default mode"* scenario described a bulk mode flip
+that has never existed, and two of its scenarios named the pull as the actor —
+the same defect that retired `reconcile.feature` in the Grafana sibling.
+
+HOW A SCENARIO GETS A REAL ARCHIVE NOW: it asks for a sync mapping —
+`Given a Penpot team named "…" is mapped to the folder "…" in "sync" mode` — and
+lets the pull export. The step resets the mappings first, so a scenario stating
+it is doing exactly what a person would do: mapping the team the other way.
+
+### team-import — RETIRED
+
+`features/team-import.feature` is **gone**. "Importing a team" was mapping a team
+and syncing it, stated differently — `team-mapping/create.feature` and
+`connection/sync-now.feature` own both halves. What the file added beyond them
+was a listing UI and three refusals, and none of the four survived contact:
+
+| it said | why it went |
+|---|---|
+| A team already mapped is detected, not re-imported | a status label on a listing. The BEHAVIOUR — a team may be mapped once — is `team-mapping/create.feature`'s "A mapping may not reuse a team or a folder", live |
+| Importing an unmapped team requires Team Folder rights | a permission gate on an operation users do not have. Mapping is admin-only, which is the premise of `team-mapping/` — there is no user-facing import to gate |
+| A team the service account cannot see is not importable | a negative on the impossible: a team the service account cannot see cannot be mapped at all, which is `team-mapping/create.feature`'s precondition |
+| The import surface explains that tagging a folder creates a project | no `When`. Its first half is `projects/view.feature`'s live "A plain folder inside a mapped folder is tolerated, not adopted"; its second asserts UI copy |
+
+#### THE FORK THIS FILE GUARDED IS CLOSED, AND WAS CLOSED BY SHIPPING
+
+The section used to say, at length, that "a new Penpot project from a tagged
+Nextcloud folder" reopens §6.1's read-only lock, that the carve-out was **not
+granted**, and that *"nothing here should be implemented against until a future
+saga chapter ratifies it"*.
+
+`projects/create.feature`'s "Tagging a folder `penpot` creates the project in
+Penpot" is **live and green in CI**. The carve-out was taken. The prose warning
+against it survived the decision by some months, which is its own lesson: a note
+that describes the old world is worse than no note, because it will be believed.
+
+#### WHAT IS STILL OPEN, AND STILL WORTH KNOWING
+
+**Creating a Penpot design for a local file that never had one** — the
+import-as-restore path — remains undecided, and `designs/restore.feature` rows 3
+and 4 are where it bites. That is a narrower question than the one above:
+creating an EMPTY project is cheap and reversible; importing an archive mints a
+design with a new id, no history, and no way back to the original.
+
+Three facts from the live `import-binfile` testing (saga §6.20) apply whenever it
+is built, and are the reason `designs/restore.feature` needs a follow-up rename:
+
+  - the call is SSE, not a plain request;
+  - its params are kebab-case (`project-id`, never `projectId`);
+  - its `name` parameter is IGNORED — an imported file takes the name from its
+    archive manifest.
+
+**The service account must already be on the team.** A user's personal token
+showing them a team is not sufficient for it to be mappable (saga §6.18); the
+service account needs its own `viewer` invite. That is `team-mapping/create.feature`'s
+precondition now, not a property of an import screen.
+
+### uninstall — RETIRED, folded into `lifecycle.feature`
+
+`features/uninstall.feature` is **gone**. Enabling, disabling and removing an app
+are three points on one lifecycle, and they were split across two files because
+the removal grew an essay rather than because a reader needed two places to look.
+
+THREE SCENARIOS IN, ONE OUT:
+
+| it said | verdict |
+|---|---|
+| Removing the app reverts the custom mimetype registration | **kept**, as `lifecycle.feature`'s "Removing the app" — real work of ours, and the exact mirror of what "Enabling the app" now asserts |
+| Disabling the app leaves the mirrored design files in place | **deleted** — the app does nothing on disable. There is no code to write and none to break; it asserted Nextcloud's behaviour, not this app's |
+| Re-enabling and pulling reconciles the existing files without duplicates | **deleted** — `sync-now.feature` "A folder already named like a Penpot project is adopted, not duplicated" already asserts id-matched reconciliation. Disabling and re-enabling changes nothing about how a pull matches |
+
+**The data-orphan promise is still true and still worth knowing** — it is just
+not a scenario. The app never deletes a `.penpot` file, never clears its
+Files-Metadata, never touches a Team Folder and never contacts Penpot on removal.
+Every `sync` file is a real archive, so deleting one would be genuine data loss;
+a `link` holds no bytes but its `penpot_id` is what makes a later reconnect free.
+To wipe the Nextcloud side deliberately, an admin uses Purge (`purge.feature`).
+That is a promise kept by writing no code, which is exactly why it reads as a
+paragraph rather than as a `When`.
+
+
+### Four more, from sections that are otherwise current
+
+These sat inside live sections of `features/AGENTS.md` rather than in a retired
+file's, so the sweep above would have missed them. Same rule: a scenario that no
+longer exists is history.
+
+#### From `designs/view`
+
+#### RETIRED — three more, when this file was aligned with its siblings
+
+Grafana's `dashboards/view.feature` is three scenarios; n8n's is the same three
+plus two CLI listings this app has no command for (`occ` here maps teams, it
+does not list designs). This file was five, and each of the three that went was
+a fact already owned somewhere else:
+
+| scenario | why it went |
+|---|---|
+| The row icon is the app's colour mark | pixels, and unreachable from HTTP — it had been `@blocked` since it was written. Its only observable half is that a mirror carries the app's own mimetype instead of `application/zip`, which the mimetype scenario asserts. The renderer fact it existed to record is kept below, where a note can hold it without pretending to be a test |
+| A file carries the team its design belongs to, but never a project | `penpot_team_id` is a row of the DAV outline, so the positive half was already said. The rest was a NEGATIVE — a scenario proving a key the app deliberately does not write. Why it is not written is documented above; nobody performs it |
+| What the app manages, only the app changes | the refusal is core's and not this app's: every key is registered EDIT_FORBIDDEN, so a PROPPATCH is turned away before any of our code runs. Grafana keeps the note and has no scenario for it, and this file now matches. n8n does keep one, in `workflows/edit.feature` — filed as an edit, which is what a PROPPATCH is |
+
+THE RENDERER FACT, kept because it will otherwise be rediscovered the hard way:
+Nextcloud serves mimetype icons out of `core/img/filetypes/` WITHOUT recolouring
+them, so that file must carry its own fill or it renders invisible. That is the
+opposite contract from the context-menu glyph, which core DOES recolour — which
+is why the menu half lives in `open-with.feature`, beside the action that draws
+it (saga §C6.1/§C6.7).
+
+══ NEXTCLOUD'S TIMESTAMPS ARE PENPOT'S NOW ═══════════════════════════════
+
+A mirror carries two sets of dates and they used to mean different things:
+
+  Nextcloud's `mtime` / `creation_time`   when the app last wrote the node
+  Penpot's `created-at` / `modified-at`   when the DESIGN was last changed
+
+The first is now stamped FROM the second, so sorting a mapped folder by date
+sorts by the designs rather than by sync activity (saga §C6.24).
+
+THERE ARE NO SCENARIOS FOR IT HERE, DELIBERATELY. A modification time is not
+a behaviour anyone performs — it is the shared RESULT of editing, moving,
+copying and renaming, each of which is already owned by its own feature file.
+A scenario asserting "the mtime moved" would be specifying Nextcloud, in the
+wrong file, with an invented actor. So the assertions ride the behaviours that
+cause them: a design changed in Penpot, and a mirror coming into existence —
+both `sync-now.feature`.
+
+This file keeps only what is genuinely about LOOKING at a mirror: which DAV
+properties exist and who may write them.
+
+THE CONSTRAINT THAT MADE IT SUBTLE (§C6.19) still holds and is now enforced
+in `sync-now.feature`: a pull that changes nothing must move neither mtime
+nor etag. `touch()` leaves a file's own etag alone but propagates a fresh one
+to its PARENT FOLDER — which is what sync clients poll — so an unconditional
+stamp would churn the folder on every tick. Every write is conditional.
+
+A PROJECT FOLDER TAKES ITS CREATION TIME ONLY. Core propagates a folder's
+mtime from its children, so stamping that would be a fight lost on every pull
+that writes any design — and a propagated mtime is better information anyway
+("something in this project changed"), since Penpot's project `modified-at`
+only moves on a rename.
+
+---
+
+#### From `designs/rename`
+
+#### A created design is attributed to the acting user when possible — WITHDRAWN
+
+**The two scenarios this note describes were removed, and the rule was not.** They
+were judged low quality and pulled to be redone properly rather than left standing
+as a spec nobody would want to build to. Nothing points at this anchor now; it is
+kept because the RULE is still wanted and the reasoning below is still the
+argument for it.
+
+What has to come back is a statement of authorship at creation — with a personal
+token the design is the user's, without one it is the service account's, and in
+the second case the user is TOLD. The shape below is the part worth keeping; the
+scenarios that carried it are not.
+
+Authorship is a durable property of a design rather than a line in its history,
+which is why this matters more at creation than for any other write. With a
+personal token the design is the user's; without one it is the service account's.
+
+TWO SCENARIOS, NOT TWO EXAMPLES ROWS — the same call as `designs/restore.feature`,
+for the same reason: the end states are not the same shape. Without a token the app
+also TELLS the user who the design will be authored by, and a row cannot carry a
+post-condition the other row does not have. Squeezing them into Examples meant
+dropping that sentence, which is the half a user would actually notice.
+
+The old file had three scenarios on this theme; the third was the same rule stated
+for a personal project folder.
+
+#### From `designs/rename`
+
+#### RETIRED — the admin purge
+
+`purge.feature` described an admin button that removed every `.penpot` file the app
+had mirrored, across every mapping, on the promise that a later sync would bring
+them back. Six scenarios, four of them about which files it spared and how to undo
+it.
+
+Removed for the reason it was removed from n8n and from grafana: it deleted a great
+deal on a promise that only held for files that were faithful mirrors, and the ones
+that were not are exactly the ones you would miss. It was never built here — every
+scenario was @unbuilt or @blocked — so retiring it is a matter of deleting the spec.
+
+Purge now means the same thing in all three apps: emptying the Nextcloud trash,
+which finishes the delete the trash gesture started.
+
+**AND THE BUTTON OUTLIVED THE SPEC BY TWO COURSES.** Retiring the scenarios left
+`templates/sync_settings.php` still rendering a *disabled* "Purge Nextcloud files"
+between the two working buttons, with a tooltip promising it was *"available once
+the purge machine lands"*, two settings-hint paragraphs describing what it would
+spare, and matching notes in `SyncSettings.php` and `js/sync-settings.js`. Nothing
+was ever wired to it — no route, no controller action, no `occ` command — so this
+was pure dead surface, and the only thing it did was tell every admin who read the
+panel that a feature was coming which had already been cancelled.
+
+The general rule, since this is the second time a *present-but-disabled* control has
+gone stale here: the argument for shipping one is that the finished shape of the
+section is visible early and enabling it later is deleting an attribute. That holds
+exactly as long as somebody still intends to enable it. The sync button earned it and
+went live; this one's feature was cancelled underneath it, and at that moment the
+button stopped being a preview and became a lie. **When a feature is retired, the
+retirement includes its UI.**
+
+#### From `connection/sync-now`
+
+#### RETIRED — six scenarios, and what happened to each
+
+| scenario | why it went |
+|---|---|
+| A folder already named like a Penpot project is adopted | now a Background row and a result row |
+| A sync leaves content it does not manage alone | same — `notes.txt` goes in and comes out |
+| A sync that cannot finish says so, and says why | `<what is wrong>` was a whole clause in a placeholder, and a connection failure belongs to `connection/admin.feature` |
+| One failure never costs the rest of the sync | `<one thing fails>` likewise, and neither sibling states it |
+| A sync that dies halfway leaves every file whole | @blocked with no fault injection and no sibling equivalent |
+| A second sync started while one is running does not queue another | a negative about a thing that must not happen, @blocked, and absent from both siblings |
+| A user syncs their own personal team | parked with the rest of the per-user work, to be done across all three apps at once |
+| Two Penpot projects in one team sharing a name | the collision rule now lives with the naming rule in `projects/create` |
+
+The old Outline also varied the mapped FOLDER by actor — `All Mappings` for the admin,
+`On Schedule` for the schedule — so the two rows never touched the same tree. That is a
+fixture working around a collision, not an input the behaviour depends on.
+
+
+### What `features/README.md` used to carry about the queue
+
+The status-tag section of `features/README.md` had grown a round-by-round account of
+how the queue was drained — which was the right information in the wrong file: it
+describes what happened, not what a tag means, and its scenario counts were stale
+within two rounds of being written. It is here now, unchanged.
+
+##### Why the queue is one flat list, and how a scenario earns its status back
+
+The reorganisation this file describes — the folder became the noun, the file
+became the verb, `reconcile.feature` stopped being a feature — rewrote the spec
+faster than the harness could follow. Nine scenarios were still running when it
+landed, and the step vocabulary underneath them had moved. The choice was to
+re-triage 116 scenarios inside the PR that did the rewriting, or to collapse them
+to one flat queue and let each PR that implements a behaviour restore that
+scenario's real status. **The second, because triage done from the spec alone is a
+guess, and the honest answer for each one is found by trying to make it pass.**
+
+**Chapter 3 Round 1 drew the first nine** — the ones green in CI the moment before
+the collapse: the two admin-connection scenarios, enabling and disabling the app,
+the three mapping-creation ones, changing a mapped folder's groups, and syncing
+one mapping. They prove the HARNESS rather than any behaviour, which is what made
+them the only sane place to break ground. Where the suite stands now:
+
+| status | scenarios | |
+|---|---|---|
+| *(none)* — runs in CI | 61 | 123 executed, spread over eleven suite legs |
+| `@todo` | 34 | the queue |
+| `@blocked` | 8 | no browser, no app removal, no way to author a design |
+| `@unbuilt` | 9 | the app disagrees with the spec; see below |
+| `@decision` | 0 | |
+
+**The `project` leg nearly doubled without a single test being written for it.**
+§C6.38 reversed a rule — a project folder was pinned inside its team folder — and
+scenarios moved straight from `@unbuilt` to green because the code caught up with
+what they already said. That is the payoff of tagging honestly: the work queue told
+the truth about what was owed, so the PR that paid it needed no re-triage.
+
+It also cuts the other way in the same file. A fourth scenario was promoted, failed
+in CI, and went back to `@unbuilt` naming a wall nobody had measured — a move into a
+Team Folder crosses a storage boundary and fires no rename event at all. **That
+round trip is the point**: promoting it was how the wall got found, and the tag now
+records a fact rather than an assumption.
+
+**The `design` leg then nearly doubled too, and the tests were the small half.**
+`designs/move.feature` held thirteen scenarios and ran none; the round promoted two
+and retagged six, and only ONE of the two was a test anyone could simply have
+written. `Move a design between projects` was held off the run by a defect in the
+**spec** — its shared `Then` demanded `content | an archive` of both Examples
+blocks, and the second block moves a `link`, which holds zero bytes on purpose. The
+row now reads `the mapping's body`, so both modes can answer the same claim.
+
+So the queue shrank by eight and gained two passing scenarios. **That gap is the
+finding, not an accounting error**: `@todo` means *the code exists and only the
+test is missing*, and six of these were something else — four places the app
+contradicts the spec, and two the harness cannot reach without a browser. A queue
+that cannot be read at face value costs more than a short one.
+
+**Every leg reports tests now**, so the empty-suite exemption in the workflow
+no longer carries any of them. It stays, because it is self-healing in both
+directions and the next spec-first feature file will empty a leg again.
+
+**Round 1 also found two things the rewrite had dropped**, which is the argument
+for running a scenario rather than reading it:
+
+* `connection/admin.feature` lost `And nothing is configured yet` from its
+  Background. Commit `466f92d` had added that line on purpose — *"a bad URL names
+  the url field, and the Background starts blank"* — because the bad-URL row
+  relies on it: `set-url` refuses a URL it cannot build requests from, so nothing
+  is stored, and the health check must fail on a MISSING url rather than on the
+  good one the row above left behind. Restored.
+* `lifecycle.feature`'s "Removing the app" was flattened from `@blocked` to
+  `@todo` along with everything else, even though the comment above it names its
+  wall. Restored to `@blocked`; it is the tag's only member.
+
+Seven were `@blocked` and one was `@decision`, and **that record is only half in
+the files.** Where the reason was already written as a comment it survives the
+collapse untouched, which is why those comments still open with the old tag name:
+
+```gherkin
+  # @blocked — no app removal. The harness can enable and disable, which is what
+  # `occ` offers; removing an app and reinstalling it is a store operation this
+  # suite has no way to perform.
+  @blocked
+  Scenario: Removing the app
+```
+
+**A comment naming a status the tag no longer carries is the record, not a
+contradiction** — the tag was the temporary flat state, the comment is the truth,
+and the one above has now been reconciled back. Two more read that way (both of
+`designs/edit.feature`), and the two `# @unbuilt — THIS IS THE SPEC, AND THE APP
+DOES THE OPPOSITE TODAY` notes in `designs/delete.feature` and
+`designs/move.feature` are the same thing and matter more, because they mark
+places where promoting the scenario means **fixing the app, not writing a test**.
+
+The other four `@blocked` and the one `@decision` had no such comment, so their
+status lived only in the tag and is now only in the saga's Chapter 2 close, which
+names all eight. Do not re-derive them from the spec.
+
+**The rule that goes with it:** a scenario stops being `@todo` only on a PR that
+runs it. Promote it to live when it passes, or move it to its true status with the
+reason written down — never by re-reading the spec and deciding what it probably
+is. The build order is in the saga's Chapter 3.

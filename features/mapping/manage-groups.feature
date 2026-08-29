@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingmanage-groups
+# Notes, decisions and history for this feature: ../AGENTS.md#mappingmanage-groups
 
 Feature: Changing who a mapped folder is shared with
   As a Nextcloud admin
@@ -12,7 +12,7 @@ Feature: Changing who a mapped folder is shared with
 
     # The one field of a mapping that is editable; everything else is fixed at
     # creation, because changing it would migrate already-mirrored content.
-    # notes: ../AGENTS.md#team-mappingmanage-groups
+    # notes: ../AGENTS.md#mappingmanage-groups
 
   # notes: ../AGENTS.md#the-groups-a-mapped-folder-is-shared-with-can-be-changed
   Scenario Outline: The groups a mapped folder is shared with can be changed
