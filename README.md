@@ -182,12 +182,18 @@ Identity lives in **metadata, not in path**, so a project folder works the same
 at any depth and you can reorganise freely. Project folders also carry a visible
 `penpot` **tag** (🏷) so you can spot and search for them among ordinary folders.
 
-**And the tag works in reverse.** Every Penpot project becomes a folder here
-automatically — but a folder of yours becomes a Penpot project *only if you ask*.
-Put the `penpot` tag on any folder inside a mapped folder and it becomes a real
-Penpot project, taking any designs already inside it with it. Everything else
-stays an ordinary folder: notes, exports, whatever you like. Removing the tag
-never deletes the project — it is a label, not a lifetime.
+**And it works in reverse.** Every Penpot project becomes a folder here
+automatically — and a folder of yours becomes a Penpot project **the moment a
+design lands in it**, taking any designs already inside it along too. Make a
+folder, drop a design in, and Penpot has a project named after the path to it.
+
+A folder **holding no designs** stays an ordinary folder, however much else is in
+it: notes, exports, whatever you like. Nothing is inferred until a design
+arrives.
+
+A folder promoted from this side wears a `penpot` tag, so something you did here
+is visible at a glance. It is a label, not a lifetime — taking it off unmaps
+nothing and deletes nothing.
 
 **The one restriction:** a project folder may move anywhere *inside* its Team
 Folder, but **not out of it**. Moving a project between teams is a destructive
@@ -427,8 +433,9 @@ never allowed to diverge. Rename the project in Penpot and the folder follows on
 the next pull; rename the folder in Nextcloud and the project follows immediately.
 Position stays yours; only the name is pinned.
 
-That invariant is what makes the project tag meaningful: a tagged folder named
-"Acme" *is* the Penpot project "Acme", at any depth, with no ambiguity.
+That invariant is what makes a project folder legible: a project folder named
+"Acme" *is* the Penpot project "Acme" — or, nested, `Clients/Acme` — at any depth,
+with no ambiguity.
 
 Renaming a project folder is a genuinely different operation from renaming a file
 — different Nextcloud event, different Penpot endpoint, no file extension to
@@ -789,7 +796,7 @@ The specs *are* the requirements, read before any code lands.
 | [`purge.feature`](features/designs/purge.feature) | Reset the Nextcloud side without touching Penpot. |
 | [`open-with.feature`](features/designs/open-with.feature) | Open in Penpot — no text-editor fallback, ever. |
 | **[`projects/`](features/projects/)** | |
-| [`create.feature`](features/projects/create.feature) | How a folder becomes a project, and the `penpot` tag that marks one. |
+| [`create.feature`](features/projects/create.feature) | How a folder becomes a project: a design lands in it, at any depth. |
 | [`view.feature`](features/projects/view.feature) | **Live.** Telling a project folder from an ordinary one. |
 | [`copy.feature`](features/projects/copy.feature) | Why copying a project is refused rather than half-done. |
 | [`move.feature`](features/projects/move.feature) | Where a project folder may and may not be dragged. |

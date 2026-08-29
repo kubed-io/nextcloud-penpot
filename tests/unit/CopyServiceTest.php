@@ -21,6 +21,7 @@ use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\ProjectFolderService;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -284,9 +285,18 @@ final class CopyServiceTest extends TestCase {
 			->willReturn(['id' => self::NEW_ID, 'projectId' => $projectId]);
 	}
 
+	/**
+	 * THE PARENT IS LOAD-BEARING NOW. {@see DestinationResolver::projectForContentIn()}
+	 * asks the folder a design landed in whether it is a project, instead of
+	 * short-circuiting on the nearest project ANCESTOR — so a fixture with no
+	 * parent resolves past the storage root and lands in Drafts. The mocked
+	 * {@see ProjectFolderService} answers null for it, which is the "already
+	 * covered by the membership" case these tests are about.
+	 */
 	private function source(): File {
 		$node = $this->createMock(File::class);
 		$node->method('getId')->willReturn(11);
+		$node->method('getParent')->willReturn($this->parentFolder());
 
 		return $node;
 	}
@@ -295,7 +305,17 @@ final class CopyServiceTest extends TestCase {
 		$node = $this->createMock(File::class);
 		$node->method('getId')->willReturn(30);
 		$node->method('getName')->willReturn($name);
+		$node->method('getParent')->willReturn($this->parentFolder());
 
 		return $node;
+	}
+
+	/** The folder a design sits in. Not a project of its own in these fixtures. */
+	private function parentFolder(): Folder {
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getId')->willReturn(31);
+		$folder->method('getPath')->willReturn('/admin/files/Penpot/Team');
+
+		return $folder;
 	}
 }

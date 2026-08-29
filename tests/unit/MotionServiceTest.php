@@ -727,6 +727,33 @@ final class MotionServiceTest extends TestCase {
 		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT_A, ''));
 	}
 
+	/**
+	 * A DESIGN DRAGGED INTO A SUBFOLDER OF A PROJECT MAKES THAT SUBFOLDER A
+	 * PROJECT — reported live, where `Bubbles/pustice` stayed nothing and both
+	 * designs sat in `Bubbles`.
+	 *
+	 * The membership still resolves to the ANCESTOR's project, because the folder
+	 * the design landed in has no marker yet; what changed is that
+	 * {@see DestinationResolver::projectForContentIn()} now promotes the landing
+	 * folder instead of answering with that ancestor and stopping. Pinned here as
+	 * well as in {@see DestinationResolverTest} because this is the gesture — the
+	 * resolver test proves the rule, this proves the drag reaches it.
+	 */
+	public function testADesignMovedIntoASubfolderOfAProjectRefilesIntoTheNewProject(): void {
+		$this->givenManagedFile();
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, self::TEAM),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+		$this->projects->method('adoptForContent')->willReturn(self::PROJECT_B);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_B, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
 	// ── a design that crossed a storage boundary (designs/move.feature) ─────
 	//
 	// Nextcloud DELETES a file's metadata when it crosses a storage, and the

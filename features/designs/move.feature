@@ -41,14 +41,14 @@ Feature: Moving a design
       | Penpot/Move From | Penpot           | Drafts    |
       | Penpot           | Penpot/Move To   | Move To   |
 
-  # notes: ../AGENTS.md#a-subfolder-is-nextclouds-layout-not-penpots
+  # notes: ../AGENTS.md#a-subfolder-of-a-project-is-a-project-of-its-own
 
-    Examples: and a plain subfolder is Nextcloud's layout, which Penpot cannot see
-      | source            | destination           | lands in  |
-      | Penpot/Move From  | Penpot/Move From/wip  | Move From |
-      | Pointers/Confined | Pointers/Confined/wip | Confined  |
+    Examples: and a subfolder becomes a project too, unless the mapping forbids creating one
+      | source            | destination           | lands in      |
+      | Penpot/Move From  | Penpot/Move From/wip  | Move From/wip |
+      | Pointers/Confined | Pointers/Confined/wip | Confined      |
 
-  # notes: ../AGENTS.md#a-nested-project-folder-and-a-plain-subfolder-look-identical
+  # notes: ../AGENTS.md#a-subfolder-of-a-project-is-a-project-of-its-own
 
     Examples: while a nested project folder names its project by the path to it
       | source           | destination             | lands in         |

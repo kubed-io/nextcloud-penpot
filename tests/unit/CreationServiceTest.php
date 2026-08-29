@@ -22,6 +22,7 @@ use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\ProjectFolderService;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -281,10 +282,23 @@ final class CreationServiceTest extends TestCase {
 		$this->archives->method('holdsArchive')->willReturn(false);
 	}
 
+	/**
+	 * THE PARENT IS LOAD-BEARING NOW. {@see DestinationResolver::projectForContentIn()}
+	 * asks the folder a design landed in whether it is a project, instead of
+	 * short-circuiting on the nearest project ANCESTOR — so a fixture with no
+	 * parent resolves past the storage root and lands in Drafts. The mocked
+	 * {@see ProjectFolderService} answers null for it, which is the "already
+	 * covered by the membership" case these tests are about.
+	 */
 	private function file(string $name = 'New design.penpot'): File {
+		$parent = $this->createMock(Folder::class);
+		$parent->method('getId')->willReturn(31);
+		$parent->method('getPath')->willReturn('/admin/files/Penpot/Team');
+
 		$node = $this->createMock(File::class);
 		$node->method('getId')->willReturn(30);
 		$node->method('getName')->willReturn($name);
+		$node->method('getParent')->willReturn($parent);
 
 		return $node;
 	}
