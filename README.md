@@ -9,17 +9,6 @@
 [![Nextcloud](https://img.shields.io/badge/Nextcloud-32--34-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com)
 [![PHP](https://img.shields.io/badge/PHP-%E2%89%A58.1-777bb4?logo=php&logoColor=white)](composer.json)
 
-<table>
-<tr>
-<td width="38%" valign="top"><img src="screenshots/penpot-projects.png" alt="A Penpot team showing the projects Brand/2026, Drafts, Cool Designs and Bubbles, each with its design thumbnails"></td>
-<td width="62%" valign="top"><img src="screenshots/penpot-files.png" alt="The same team in the Nextcloud Files app: Brand, Bubbles and Cool Designs as folders, and the two Drafts designs as .penpot files at the folder root"></td>
-</tr>
-<tr>
-<td valign="top"><em>One Penpot team. <code>Brand/2026</code>, <code>Cool Designs</code>, <code>Bubbles</code> — and <strong>Drafts</strong>, which is where an unfiled design goes.</em></td>
-<td valign="top"><em>The same team, mirrored. Each project is a folder; <code>Brand/2026</code> spells two of them. The two <strong>Drafts</strong> designs sit at the root, because that <em>is</em> Drafts.</em></td>
-</tr>
-</table>
-
 ---
 
 ## The whole idea, in one breath
@@ -35,11 +24,40 @@ team     "Northwind"       ⟶    Northwind/
     └ design "Homepage"    ⟶            └── Homepage.penpot
 ```
 
-One project, two folders: a `/` in a Penpot project name is a path over here.
+<table>
+<tr>
+<td width="68%" valign="top">
 
-Drag a design into another folder and Penpot has re-filed it seconds later. Rename it in Penpot and the file renames itself. And a folder holding the real archives is quietly also the easiest backup you'll never have to think about. 💾
+<img src="screenshots/penpot-files.png" alt="The Nextcloud Files app showing a mapped folder: Brand, Bubbles and Cool Designs as folders, and two .penpot designs at the root">
 
-Nothing is matched on filename. Every file carries its design's **id**, so renaming, moving, copying, trashing and restoring never break the link — and re-running a sync never duplicates a thing. Ever. 🙅
+<em>The mirror. Each project is a folder, and the two <strong>Drafts</strong>
+designs sit at the root — because that is what Drafts means.</em>
+
+<p>One project, two folders: a <code>/</code> in a Penpot project name is a path
+over here, so <code>Brand/2026</code> arrives as <code>Brand/</code> holding
+<code>2026/</code>.</p>
+
+<p>Drag a design into another folder and Penpot has re-filed it seconds later.
+Rename it in Penpot and the file renames itself. And a folder holding the real
+archives is quietly also the easiest backup you'll never have to think
+about. 💾</p>
+
+<p>Nothing is matched on filename. Every file carries its design's
+<strong>id</strong>, so renaming, moving, copying, trashing and restoring never
+break the link — and re-running a sync never duplicates a thing. Ever. 🙅</p>
+
+</td>
+<td width="32%" valign="top">
+
+<img src="screenshots/penpot-projects.png" width="230" alt="The same team in Penpot, showing the projects Brand/2026, Drafts, Cool Designs and Bubbles with their design thumbnails">
+
+<em>The same team in Penpot: <code>Brand/2026</code>, <code>Cool Designs</code>,
+<code>Bubbles</code> — and <strong>Drafts</strong>, where an unfiled design
+goes.</em>
+
+</td>
+</tr>
+</table>
 
 ---
 
