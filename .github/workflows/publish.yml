@@ -8,15 +8,9 @@ name: 🧬 Publish Version
 #             a tag; it emits the new tag/version consumed downstream.
 #   package → calls package.yml with that tag, which checks out the exact released
 #             commit and uploads the app tarball as a GHA artifact (build only).
-#   release → downloads that artifact and creates the GitHub Release.
-#
-# ⚠️ APP-STORE PUBLISH IS DEFERRED. The apps.nextcloud.com sign + upload steps are
-# intentionally NOT here yet — the app is pre-code (see AGENTS.md) and must not
-# be listed on the store until it's feature-complete. When it's ready, restore
-# the "Sign tarball" + "Publish to Nextcloud App Store" steps (see
-# kubed-io/nextcloud-grafana or kubed-io/nextcloud-n8n's publish.yml) and add the
-# `nextcloud-store` environment with its NEXTCLOUD_STORE_KEY / NEXTCLOUD_STORE_TOKEN
-# secrets. Until then this workflow stops at the GitHub Release.
+#   release → downloads that artifact and does the outward-facing work: the GitHub
+#             Release + the apps.nextcloud.com upload. It needs NO source checkout —
+#             it operates purely on the artifact + secrets.
 #
 # Run once with push=false (dry run: computes the version and packages, changes
 # nothing, skips release) then push=true to actually cut the release.
@@ -136,8 +130,8 @@ jobs:
       ref: ${{ inputs.push && needs.version.outputs.tag || '' }}
 
   # ---------------------------------------------------------------------------
-  # GitHub Release. No source checkout — pure artifact + secrets. (App-store
-  # publish deliberately omitted — see the header note.)
+  # Outward-facing release. No source checkout — pure artifact + secrets. Login
+  # and secret-fetch run FIRST, then the GitHub Release, then the store upload.
   # ---------------------------------------------------------------------------
   release:
     name: Release
@@ -146,6 +140,12 @@ jobs:
     - package
     if: inputs.push
     runs-on: ubuntu-latest
+    # The nextcloud-store environment carries the app-store credentials:
+    #   NEXTCLOUD_STORE_KEY    the app's PEM signing key
+    #   NEXTCLOUD_STORE_TOKEN  the apps.nextcloud.com API token
+    environment:
+      name: nextcloud-store
+      url: https://apps.nextcloud.com/apps/penpot_sync
     permissions:
       contents: write   # create the GitHub Release on the existing tag
     steps:
@@ -156,6 +156,8 @@ jobs:
       with:
         client-id: ${{ vars.GH_CLIENT_ID }}
         private-key: ${{ secrets.GH_APP_KEY }}
+
+    # Stage the newly minted artifact for releasing
 
     - name: Download package artifact
       uses: actions/download-artifact@v8
@@ -175,14 +177,22 @@ jobs:
           [![Publish](${{ github.server_url }}/${{ github.repository }}/actions/workflows/publish.yml/badge.svg)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           [![Tests](${{ github.server_url }}/${{ github.repository }}/actions/workflows/tests.yml/badge.svg)](${{ github.server_url }}/${{ github.repository }}/actions/workflows/tests.yml)
           [![Quality](${{ github.server_url }}/${{ github.repository }}/actions/workflows/quality.yml/badge.svg)](${{ github.server_url }}/${{ github.repository }}/actions/workflows/quality.yml)
+          [![Integration](${{ github.server_url }}/${{ github.repository }}/actions/workflows/integration.yml/badge.svg)](${{ github.server_url }}/${{ github.repository }}/actions/workflows/integration.yml)
           [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](${{ github.server_url }}/${{ github.repository }}/blob/main/LICENSE)
 
           ${{ needs.version.outputs.release-notes }}
 
           ## Installation
 
-          > Not yet on the Nextcloud App Store — this app is pre-code / early
-          > development. Install manually from this release's tarball.
+          **From the Nextcloud App Store** (recommended, once published) — in the
+          Apps UI search for “Penpot Sync”, or from the CLI:
+
+          ```sh
+          occ app:install penpot_sync
+          ```
+
+          **Manual** — download this release's tarball and extract into your
+          Nextcloud `apps/` directory:
 
           ```sh
           curl -L -o penpot_sync.tar.gz \
@@ -191,11 +201,50 @@ jobs:
           occ app:enable penpot_sync
           ```
 
+    # --- apps.nextcloud.com publish ---
+
+    # Sign the tarball with the app's private key. Separate step from the upload:
+    # its one job is to produce the base64 sha512 signature the store verifies.
+    - name: Sign tarball
+      id: sign
+      env:
+        NC_APP_SIGN_KEY: ${{ secrets.NEXTCLOUD_STORE_KEY }}
+        TARBALL: dist/${{ needs.package.outputs.tarball }}
+      run: |
+        mkdir -p .signing
+        printf '%s' "$NC_APP_SIGN_KEY" > .signing/penpot_sync.key
+        SIGNATURE="$(openssl dgst -sha512 -sign .signing/penpot_sync.key "$TARBALL" | openssl base64 -A)"
+        rm -f .signing/penpot_sync.key
+        echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
+
+    # Hand the store the public download URL + that signature; it downloads and
+    # validates the tarball itself against our registered certificate.
+    - name: Publish to Nextcloud App Store
+      env:
+        NC_APP_STORE_TOKEN: ${{ secrets.NEXTCLOUD_STORE_TOKEN }}
+        DOWNLOAD_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/${{ needs.package.outputs.tarball }}
+        SIGNATURE: ${{ steps.sign.outputs.signature }}
+      run: |
+        BODY="$(jq -n --arg d "$DOWNLOAD_URL" --arg s "$SIGNATURE" '{download:$d, signature:$s, nightly:false}')"
+        CODE="$(curl -sS -o /tmp/store-resp.json -w '%{http_code}' -X POST \
+          https://apps.nextcloud.com/api/v1/apps/releases \
+          -H "Authorization: Token $NC_APP_STORE_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$BODY")"
+        echo "apps.nextcloud.com responded HTTP $CODE"
+        cat /tmp/store-resp.json || true
+        if [[ "$CODE" != "200" && "$CODE" != "201" ]]; then
+          echo "::error::App store upload failed (HTTP $CODE)"
+          exit 1
+        fi
+        echo "::notice::Published penpot_sync ${{ needs.version.outputs.version }} to apps.nextcloud.com"
+
     - name: Summary
       env:
         VERSION: ${{ needs.version.outputs.version }}
         TAG: ${{ needs.version.outputs.tag }}
         TARBALL: ${{ needs.package.outputs.tarball }}
+        STORE: https://apps.nextcloud.com/apps/penpot_sync
         RELEASE_NOTES: ${{ needs.version.outputs.release-notes }}
       run: |
         {
@@ -204,7 +253,7 @@ jobs:
           echo "- **Version**: $VERSION"
           echo "- **Tag**: $TAG"
           echo "- **Tarball**: $TARBALL"
-          echo "- _App-store publish deferred until feature-complete._"
+          echo "- **App store**: $STORE"
           echo ""
           echo "### Release Notes"
           echo ""

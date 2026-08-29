@@ -3,14 +3,8 @@ name: 🧪 Tests
 # Build + lint + unit tests, split by language into two parallel jobs (PHP / JS)
 # so a failure points straight at the language and the two don't block each
 # other. Runs on every PR into main (and pushes to main so the badge tracks
-# trunk).
-#
-# NOTE: the app is in its FIRST SLICE — lib/ and tests/unit/ exist; src/ (the JS
-# frontend) does not yet. The guards below skip cleanly for what's still absent (see
-# AGENTS.md). Both jobs below guard each step on the relevant directory/file
-# existing, so they pass cleanly today (there is nothing to lint/build/test yet)
-# and start exercising real code automatically once lib/ and src/ land, with no
-# workflow changes required.
+# trunk). Needs no services — the integration / e2e layers (Chapter 2 §4a
+# docker-compose stack) come later as their own workflow.
 
 on:
   pull_request:
@@ -48,38 +42,24 @@ jobs:
     - name: Install PHP dependencies
       run: composer install --prefer-dist --no-progress
 
-    # Guarded so the step stays valid as directories arrive slice by slice.
     - name: Lint PHP (php -l)
-      run: |
-        if [[ -d lib ]]; then
-          find lib -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
-        else
-          echo "No lib/ yet — nothing to lint (see AGENTS.md)."
-        fi
+      run: find lib -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
 
-    # tests/phpunit.unit.xml doesn't exist yet — skip rather than fail. Once it
-    # does, this emits tests/results/junit.xml per that config, same as the
-    # sibling apps.
+    # Emits tests/results/junit.xml (configured in tests/phpunit.unit.xml).
     - name: Unit tests
-      run: |
-        if [[ -f tests/phpunit.unit.xml ]]; then
-          composer run test:unit
-        else
-          echo "No tests/phpunit.unit.xml yet — nothing to run (see AGENTS.md)."
-        fi
+      run: composer run test:unit
 
-    # Keep the raw JUnit report downloadable from the run, when it exists.
+    # Keep the raw JUnit report downloadable from the run.
     - name: Upload JUnit results
       if: always()
       uses: actions/upload-artifact@v7
       with:
         name: php-unit-junit
         path: tests/results/junit.xml
-        if-no-files-found: ignore
+        if-no-files-found: error
 
     # Sticky PR comment + check run with inline annotations on failures. Runs
-    # even when tests fail so the report is published either way; harmless
-    # no-op if the JUnit file doesn't exist yet.
+    # even when tests fail so the report is published either way.
     - name: Publish unit test results
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v2
@@ -105,18 +85,12 @@ jobs:
     - name: Install JS dependencies
       run: npm ci
 
-    # src/files.js doesn't exist yet — vite.config.js's entry wouldn't resolve.
-    # Skip rather than fail until there's something to bundle.
+    # If it doesn't build there's nothing worth shipping — this is the JS gate.
     - name: Build bundle
-      run: |
-        if [[ -f src/files.js ]]; then
-          npm run build
-        else
-          echo "No src/files.js yet — skipping frontend build (see AGENTS.md)."
-        fi
+      run: npm run build
 
-    # Pure-logic unit tests (Vitest). `test` runs with --passWithNoTests (see
-    # package.json), so this is green with nothing under tests/js/ yet.
+    # Pure-logic unit tests (Vitest) — fast regression net for the frontend
+    # helpers; the safety net that makes dependency major-bumps safe to land.
     - name: Unit tests
       run: npm test
 
@@ -130,7 +104,7 @@ jobs:
             size=$(du -h dist/penpot_sync-files.js | cut -f1)
             echo "✅ Built \`dist/penpot_sync-files.js\` (${size})"
           else
-            echo "ℹ️ No src/files.js yet — nothing built (see AGENTS.md)."
+            echo "❌ Bundle not produced"
           fi
         } >> "$GITHUB_STEP_SUMMARY"
 
@@ -140,4 +114,4 @@ jobs:
       with:
         name: js-bundle
         path: dist/penpot_sync-files.js
-        if-no-files-found: ignore
+        if-no-files-found: error
