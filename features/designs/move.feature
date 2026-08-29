@@ -78,9 +78,7 @@ Feature: Moving a design
     # notes: ../AGENTS.md#moving-a-design-from-a-personal-project-into-a-mapped-team-project
 
   # notes: ../AGENTS.md#a-cross-team-move-always-crosses-a-storage-boundary
-  # @blocked — the only two teams this suite can map sit on different storages,
-  # and a file's metadata does not survive the crossing.
-  @in-nextcloud @gesture @blocked
+  @in-nextcloud @gesture
   Scenario Outline: Move a design into another team
     Given a design file named "Crossing.penpot" in "<source>"
     When I move the file into "<destination>"
