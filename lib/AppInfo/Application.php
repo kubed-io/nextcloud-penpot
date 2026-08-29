@@ -20,7 +20,6 @@ use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\MoveMemoryListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
-use OCA\PenpotSync\Listener\ProjectTagListener;
 use OCA\PenpotSync\Listener\RegisterDavPluginsListener;
 use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Listener\TrashPurgeHook;
@@ -28,7 +27,8 @@ use OCA\PenpotSync\Notification\Notifier;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
-use OCA\PenpotSync\Settings\PersonalSettings;
+// HIDDEN FOR THE FIRST RELEASE — see the registration below.
+// use OCA\PenpotSync\Settings\PersonalSettings;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -39,7 +39,6 @@ use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
-use OCP\SystemTag\TagAssignedEvent;
 
 /**
  * App bootstrap.
@@ -115,10 +114,26 @@ final class Application extends App implements IBootstrap {
 		$context->registerDeclarativeSettings(InstanceSettings::class);
 		$context->registerDeclarativeSettings(AutoSyncSettings::class);
 
+		// ── PERSONAL TOKEN: HIDDEN FOR THE FIRST RELEASE (saga §D4.13) ───────
+		//
 		// Per-user, attribution-only (saga §6.18). Registered the same way, but
 		// core stores it per-uid because the form declares a PERSONAL section
 		// type — see PersonalSettings.
-		$context->registerDeclarativeSettings(PersonalSettings::class);
+		//
+		// The feature is real but unfinished and untested: every scenario in
+		// `features/connection/personal.feature` is still @todo. Shipping the
+		// card would put a control on the settings page that nothing proves
+		// works, so the ENTRY POINTS are hidden and the plumbing is left intact.
+		//
+		// Nothing downstream breaks. PersonalTokenService::tokenFor() returns
+		// null when no token is stored, which it documents as "the ordinary
+		// case, not a failure" — every write then attributes to the service
+		// account, the same path a user who simply never set one already takes.
+		//
+		// TO RESTORE: uncomment this line and the `use` at the top of the file,
+		// plus <personal-section> and the SetPersonalToken <command> in
+		// appinfo/info.xml. Those four lines are the whole switch.
+		// $context->registerDeclarativeSettings(PersonalSettings::class);
 
 		// THE CHANNEL A FAILURE TRAVELS ON. A failure that only logs reaches an
 		// admin reading nextcloud.log and nobody else — while the person who can
@@ -184,14 +199,6 @@ final class Application extends App implements IBootstrap {
 		// in its folder while the design stayed in Penpot's trash, and the next
 		// pull pruned the file a second time (the gap designs/delete.feature used to name).
 		$context->registerEventListener(NodeRestoredEvent::class, RestoreFromTrashListener::class);
-
-		// A FOLDER BECOMES A PROJECT (projects/create.feature). Normally that
-		// happens when a design lands in it; this listener is the second, explicit
-		// route — tagging the folder — which the test harness relies on to make a
-		// project that holds no design yet. Note what is deliberately absent:
-		// there is no TagUnassignedEvent listener, so "removing the tag never
-		// deletes the project" is true by construction, not by a branch.
-		$context->registerEventListener(TagAssignedEvent::class, ProjectTagListener::class);
 
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to

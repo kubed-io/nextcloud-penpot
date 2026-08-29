@@ -365,6 +365,86 @@ someone typing a name into prose. Every leak came in attached to something else:
 
 ---
 
+### §D4.13 — Decision (locked): an unfinished feature ships hidden, not deleted
+
+**The call:** the personal-token feature stays in the codebase and comes out of
+the product. Its three entry points are **commented out**, not removed.
+
+The feature is real and wanted, but it is unfinished and unproven — every
+scenario in `features/connection/personal.feature` is `@todo`, as is the one
+outline in `designs/create.feature` that needs a personal token. Shipping the
+settings card would put a control on a user's settings page that nothing in the
+suite proves works, and fixing it properly would delay a release that is
+otherwise ready.
+
+**Hiding the entry points is enough, because the fallback is already the
+documented path.** `PersonalTokenService::tokenFor()` returns null when no token
+is stored, and calls that "the ordinary case, not a failure" — every write then
+attributes to the service account. With no way to *set* a token, every user is
+simply a user who never set one, which is a path the suite covers thoroughly.
+So the plumbing threaded through eight services stays exactly where it is and
+keeps being compiled, analysed and unit-tested; only the doors are locked.
+
+**Four lines are the whole switch**, and they are named in the comment at
+`Application.php::register()` so nobody has to rediscover them:
+
+| file | what comes out |
+|---|---|
+| `lib/AppInfo/Application.php` | the `use` import, and `registerDeclarativeSettings(PersonalSettings::class)` |
+| `appinfo/info.xml` | `<personal-section>`, and the `SetPersonalToken` `<command>` |
+
+**Hiding the card without hiding the `occ` command would have been worse than
+doing nothing** — half a feature, reachable by whoever reads `occ list` and
+invisible to everyone else. CLI-first is the house style; that cuts both ways.
+
+**The advertising goes too.** A feature nobody can reach must not be described
+in the README or listed in the release notes, or the first thing a new user does
+is go looking for a control that is not there.
+
+> **The rule:** hiding a feature means hiding *every* way in — the UI, the CLI,
+> and the sentence in the README that says it exists.
+
+---
+
+### §D4.14 — Decision (locked): a folder is a project because of its metadata, and nothing else
+
+**The call:** the `penpot` system tag is removed in full — the service, the
+listener, the event subscription, the stubs and the harness's use of it.
+`penpot_project_id` is the only thing that makes a folder a project.
+
+The tag has been dying for three chapters and would not finish. It began as the
+thing that *made* a folder a project; §C6.38 replaced that with promotion by
+content, and it survived as decoration the pull stamped. Chapter 3 Round 10
+removed the decoration and it survived again — as `onTagged()`, an explicit
+opt-in with **no scenario anywhere in the suite**, kept alive because the test
+harness used it to arrange the one thing nothing else could: a project folder
+holding no design.
+
+> **The rule:** a feature kept alive only by its test harness is not a feature.
+> It is scaffolding wearing a feature's clothes, and it reads to everyone else as
+> a supported second way to do the thing.
+
+**What made it removable was asking what a real user does.** An empty project
+folder is not exotic — every user gets one the moment they make a project in
+Penpot and the pull mirrors it. The harness had been reaching for a private
+gesture to arrange something the product already does in the open. It now creates
+the project in Penpot and pulls, which is both simpler and a truer fixture: it
+arranges the state the way the state actually arises.
+
+**The cost was 14 unit tests**, all of them `onTagged()`'s. None covered
+behaviour that survives: the refusal paths they exercised (unusable name, Penpot
+refused, the mapped root, outside every mapping) all have `adoptForContent()`
+twins that remain, and the "contents come too" case is covered by
+`testAdoptionFilesTheDesignsAlreadyInTheFolder`.
+
+**One thing deliberately did NOT follow.** `TagAssignedEvent` was the only stated
+reason `info.xml` requires Nextcloud 32. The floor stays at 32 anyway, because
+nothing has ever been run below it — lowering it would advertise support for two
+server versions no CI leg has exercised. Widening the range is a change with a
+matrix line behind it, not a side effect of deleting a listener.
+
+---
+
 ## The rounds
 
 ### Round 1 — the README stops being a design doc
@@ -506,6 +586,97 @@ force-push would, and that is a decision with real costs (every existing commit
 link and review comment breaks) that belongs to the maintainer, not to an agent
 doing a docs pass. It is recorded here rather than quietly left out.
 
+
+### Round 7 — locking a door before opening the building
+
+The last thing between the app and a release was a feature that was not ready to
+be seen (§D4.13). The personal-token card, its `occ` twin and its settings
+section are commented out with the reasoning and the restore instructions in
+place; the README sentence advertising it and the CHANGELOG bullet claiming it
+both came out.
+
+**What made this cheap was a decision taken much earlier.** Because the token
+lookup already treated "no personal token" as the ordinary case rather than an
+error, removing every way to set one changed no behaviour at all — it just made
+every user take the path the suite already covers. A feature whose absence is a
+supported state can be withdrawn in four lines. One whose absence throws could
+not have been.
+
+**Nothing needed doing to the specification.** Every personal scenario was
+already `@todo` — the spec had been honest about this the whole time, which is
+what made the decision easy to verify rather than a judgement call.
+
+
+### Round 8 — the tag, finally
+
+Removed: `ProjectTags`, `ProjectTagListener`, their `TagAssignedEvent`
+registration, `ProjectFolderService::onTagged()` and `refuse()`, the three
+`tags->remove()` cleanups in `MotionService`, `PullService` and
+`ProjectFolderService`, the `OCP\SystemTag` stubs, 14 unit tests, and the
+harness's `iAssignThePenpotTagTo()`.
+
+**The specification needed no changes at all.** Not one `.feature` file mentions
+the tag — checked by parsing every non-comment step and table row across the
+suite. The single grep hit was the word *stage*. So nothing was ever asserting
+the tag existed; the spec had been describing the product correctly while the
+code carried a mechanism the product did not have.
+
+**The README was the only place a user could have learned it existed**, and it
+described it as a feature: *"A folder you promote from this side is tagged
+`penpot`, so the ones you made are easy to spot."* That sentence is gone.
+
+**The harness swap is the substantive change.** `ensureProjectFolder()` used to
+tag a folder and check the stamp appeared; it now creates the project in Penpot
+and runs a pull. `kind: project` no longer MKCOLs the folder first — the pull
+makes it, which is the only route there is.
+
+### Round 8, continued — what the clearing actually swept up
+
+Chapter 3 built the colony by trying things. Most worked. This round is the bill
+for the ones that did not, and it is worth reading as a set rather than as four
+separate deletions, because they failed the same way.
+
+**The tag, three times.** It was invented in §C6.18 as the thing that *made* a
+folder a project — a real answer to a real question, and the wrong one, because
+it required teaching a gesture nobody performs. §C6.38 replaced it with
+promotion by content and the tag became decoration the pull stamped: harmless,
+and now describing something that was no longer true. Chapter 3 Round 10 removed
+the decoration, and what survived was the third form — an explicit opt-in with
+no scenario, kept because the harness used it. Each removal was correct and each
+left a smaller version of the same thing behind.
+
+**The carve-out that shipped.** "Only a folder with no project above it gets
+promoted" was a reasonable-sounding rule that made two folders a user cannot
+tell apart behave differently on a marker nobody can see. It shipped, and a live
+instance reported it. §C6.38 reversed it.
+
+**The pinning rule.** Project folders were once required to sit inside their
+team folder. Reversing that nearly doubled the project leg of the suite, because
+a pile of scenarios had been written `@unbuilt` against a rule that was about to
+stop existing.
+
+> **What they have in common:** every one of them was a mechanism invented to
+> answer a question the metadata could already answer. The `penpot_project_id`
+> stamp was there the whole time. The tag, the carve-out and the pinning rule
+> were all attempts to make the *shape of the folder tree* carry meaning that
+> was already recorded on the folder itself.
+
+**Why it took four passes to finish.** Not because anyone was careless — because
+each pass removed the part that was clearly dead and left the part that still
+had a caller. The last caller was a test. That is the one that matters:
+
+> **A mechanism with no user and one test is not "nearly gone". It is a
+> mechanism, and it will be found by whoever reads the code next and reasonably
+> assume it is supported.** Removing it means finding the test another way to
+> arrange what it needs — which here meant asking, for the first time, how a
+> *user* gets an empty project folder. The answer was that they make it in
+> Penpot, which is what the harness now does.
+
+**The grounds are clear.** A folder is a project because it carries
+`penpot_project_id`. There is no second marker, no badge, no opt-in gesture and
+no shape rule. That sentence is now true in the code, in the spec, in the notes
+and in the README, which is the first time it has been true in all four at once.
+
 ---
 
 ## The plan — reaching the store
@@ -620,10 +791,9 @@ Both are inherited from the sibling's review and neither is a blocker:
    committed to and the pipeline carries it. The remaining question is not
    *whether* but *when the countersign lands* — gate 5, and the only one nobody
    here controls.
-2. **Does the tag gesture come out?** Chapter 3 left it dated and queued: live
-   code for a mechanism §C6.18 retired, kept because the harness arranges 27
-   `kind: project` rows with it. It is still a second answer to a settled
-   question.
+2. ~~**Does the tag gesture come out?**~~ **Answered in Round 8** — yes, in
+   full. The harness now arranges a project folder the way a user gets one:
+   the project is made in Penpot and the pull mirrors it.
 3. **Does the sibling family converge on one docs layout?** The cascade (§D4.2)
    is written for this repository. n8n and Grafana have the same four documents
    and the same drift, and nothing has been ported back to them.

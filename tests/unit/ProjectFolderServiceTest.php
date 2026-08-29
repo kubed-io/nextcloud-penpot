@@ -19,8 +19,6 @@ use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\ProjectFolderService;
-use OCA\PenpotSync\Service\ProjectTags;
-use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
@@ -52,7 +50,6 @@ final class ProjectFolderServiceTest extends TestCase {
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
 	private MembershipResolver $resolver;
-	private ProjectTags $tags;
 	private MappingService $mappings;
 
 	/** The mode every mapping reports; see {@see setUp()}. */
@@ -88,7 +85,6 @@ final class ProjectFolderServiceTest extends TestCase {
 		$this->client = $this->createMock(PenpotClient::class);
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
-		$this->tags = $this->createMock(ProjectTags::class);
 		// SYNC unless a test says otherwise — see testALinkMappingIsNeverPromoted().
 		$this->mappings = $this->createMock(MappingService::class);
 		$this->mappings->method('getByTeamId')->willReturnCallback(
@@ -110,257 +106,18 @@ final class ProjectFolderServiceTest extends TestCase {
 			$this->metadata,
 			$this->resolver,
 			$this->createMock(PersonalTokenService::class),
-			$this->tags,
 			$this->mappings,
-			new SyncGuard(),
 			new NullLogger(),
 		);
 	}
 
-	// ── the opt-in itself ───────────────────────────────────────────────────
-
-	public function testTaggingAFolderInsideAMappingCreatesTheProject(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-
-		$this->client->expects($this->once())->method('createProject')
-			->with(self::TEAM, 'Client Work');
-		$this->metadata->expects($this->once())->method('writeFolder')
-			->with(50, [PenpotMetadata::KEY_PROJECT_ID => self::NEW_PROJECT]);
-
-		$this->projects->onTagged($this->folder(50, 'Client Work'));
-	}
-
-	/**
-	 * TAGGING THE MAPPED ROOT CREATES NOTHING, AND TAKES THE TAG BACK OFF.
-	 *
-	 * The root carries a team id, so the team lookup succeeds and the old code fell
-	 * through to the name check — where `pathBelowMapping()`'s null became an empty
-	 * string and the folder was refused with "the folder name cannot be used as a
-	 * Penpot project name". That sends someone off to rename a folder that is
-	 * perfectly fine. A team root simply is not a project.
-	 *
-	 * The tag comes off even so, which is the one thing that differs from a folder
-	 * outside every mapping: THAT tag is left alone because the folder is none of
-	 * this app's business, while a mapped root is entirely its business. The pull
-	 * tags only folders it has stamped with a project id, so a root left wearing
-	 * the tag would be the single place the badge means nothing.
-	 *
-	 * No `createProject`, and no warning either — trying it is reasonable.
-	 */
-	public function testTaggingTheMappedRootCreatesNothingAndUntagsIt(): void {
-		$this->inTeam();
-
-		$this->client->expects($this->never())->method('createProject');
-		$this->tags->expects($this->once())->method('remove')->with(50);
-
-		$this->projects->onTagged($this->rootFolder(50));
-	}
-
-	/**
-	 * A NESTED FOLDER'S PROJECT IS NAMED BY ITS PATH, not by the folder.
-	 *
-	 * `projects/create.feature` says so directly — `Penpot/Team/Deep` becomes the
-	 * project `Team/Deep` — and the pull has always read a project name that way
-	 * round, handing it to `newFolder()` so the slashes become folders. This
-	 * direction used the bare name, so tagging `Penpot/Clients/Client Work` created
-	 * a project called `Client Work` and the two sides disagreed.
-	 */
-	public function testTaggingANestedFolderNamesTheProjectByItsPath(): void {
-		$this->inTeam();
-		$this->pathBelow = 'Clients/Client Work';
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-
-		$this->client->expects($this->once())->method('createProject')
-			->with(self::TEAM, 'Clients/Client Work');
-
-		$this->projects->onTagged($this->folder(50, 'Client Work'));
-	}
-
-	/**
-	 * THE REASON TO ALLOW OPTING IN LATE. A folder someone has been filling with
-	 * designs becomes a project WITH its contents — one `move-files` for the lot,
-	 * because the command takes a set.
-	 */
-	public function testDesignsAlreadyInsideAreFiledIntoTheNewProject(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-		$this->fileStamps[61] = $this->stamp(self::DESIGN_A);
-		$this->fileStamps[62] = $this->stamp(self::DESIGN_B);
-
-		$this->client->expects($this->once())->method('moveFiles')
-			->with(self::NEW_PROJECT, [self::DESIGN_A, self::DESIGN_B]);
-
-		$this->projects->onTagged($this->folder(50, 'Client Work', [
-			$this->design(61, 'Login.penpot'),
-			$this->design(62, 'Signup.penpot'),
-		]));
-	}
-
-	/**
-	 * The descent must read the tree the way {@see MembershipResolver} reads it
-	 * upwards: a subfolder carrying its own project id is a NEARER ancestor, so
-	 * its designs are not ours to claim. Getting this wrong would re-file another
-	 * project's designs into this one.
-	 */
-	public function testDesignsUnderANestedProjectFolderAreLeftAlone(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-		$this->folderMarkers[70] = new FolderMarkers(self::OTHER_PROJECT, '');
-		$this->fileStamps[61] = $this->stamp(self::DESIGN_A);
-		$this->fileStamps[71] = $this->stamp(self::DESIGN_B);
-
-		$nested = $this->folder(70, 'Already A Project', [$this->design(71, 'Theirs.penpot')]);
-
-		$this->client->expects($this->once())->method('moveFiles')
-			->with(self::NEW_PROJECT, [self::DESIGN_A]);
-
-		$this->projects->onTagged($this->folder(50, 'Client Work', [
-			$this->design(61, 'Login.penpot'),
-			$nested,
-		]));
-	}
-
-	/** A plain subfolder is not a boundary — the resolver walks straight past it. */
-	public function testDesignsInAPlainSubfolderAreFiledToo(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-		$this->fileStamps[71] = $this->stamp(self::DESIGN_B);
-
-		$plain = $this->folder(70, 'Drafts', [$this->design(71, 'Sketch.penpot')]);
-
-		$this->client->expects($this->once())->method('moveFiles')
-			->with(self::NEW_PROJECT, [self::DESIGN_B]);
-
-		$this->projects->onTagged($this->folder(50, 'Client Work', [$plain]));
-	}
-
-	/**
-	 * An untracked `.penpot` is an upload or a hand-made file this app has never
-	 * registered. Creating designs for those is CreationService's carve-out — not
-	 * something to infer from a folder tag.
-	 */
-	public function testAnUntrackedPenpotFileIsNotFiled(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-
-		$this->client->expects($this->never())->method('moveFiles');
-
-		$this->projects->onTagged($this->folder(50, 'Client Work', [
-			$this->design(61, 'Uploaded.penpot'),
-			$this->design(62, 'notes.txt'),
-		]));
-	}
-
-	/** An empty folder is a perfectly good project. No `move-files` round trip for nothing. */
-	public function testAnEmptyFolderCostsNoMoveFiles(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-
-		$this->client->expects($this->never())->method('moveFiles');
-
-		$this->projects->onTagged($this->folder(50, 'Client Work'));
-	}
-
-	// ── where it does nothing ───────────────────────────────────────────────
-
-	/**
-	 * The pull tags every folder it mirrors, so this is the COMMON path. A second
-	 * create would leave two folders claiming one project — the exact failure
-	 * `copy-project.feature` refuses folder copies to avoid.
-	 */
-	public function testAFolderThatIsAlreadyAProjectIsNotCreatedAgain(): void {
-		$this->folderMarkers[50] = new FolderMarkers(self::OTHER_PROJECT, '');
-
-		$this->client->expects($this->never())->method('createProject');
-		$this->metadata->expects($this->never())->method('writeFolder');
-
-		$this->projects->onTagged($this->folder(50, 'Already Mirrored'));
-	}
-
-	/**
-	 * Tags are instance-wide: someone can put `penpot` on a folder in Documents.
-	 * No team resolves for it even in principle, so nothing is sent — and the tag
-	 * is LEFT ALONE, because stripping a user's own tag off a folder this app has
-	 * no business touching would be a worse surprise than an inert label.
-	 */
-	public function testAFolderOutsideEveryMappingIsLeftEntirelyAlone(): void {
-		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
-
-		$this->client->expects($this->never())->method('createProject');
-		$this->tags->expects($this->never())->method('remove');
-
-		$this->projects->onTagged($this->folder(50, 'Holiday Photos'));
-	}
-
-	// ── refusals: the tag comes back off ────────────────────────────────────
-
-	/**
-	 * Penpot's own rule is [:string {:max 250, :min 1}], checked locally so the
-	 * refusal costs no round trip. Removing the tag is what makes this a two-step
-	 * the user controls (rename, re-tag) rather than a half-created state.
-	 */
-	public function testAnUnusableNameIsRefusedBeforePenpotIsContacted(): void {
-		$this->inTeam();
-
-		$this->client->expects($this->never())->method('createProject');
-		$this->tags->expects($this->once())->method('remove')->with(50);
-
-		$this->projects->onTagged($this->folder(50, str_repeat('x', 251)));
-	}
-
-	/** §6.18 rule 3: a remote failure never destroys local state — the folder stands. */
-	public function testAFailedCreateLeavesTheFolderUnstampedAndUntagged(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willThrowException(new \RuntimeException('boom'));
-
-		$this->metadata->expects($this->never())->method('writeFolder');
-		$this->tags->expects($this->once())->method('remove')->with(50);
-
-		$this->projects->onTagged($this->folder(50, 'Client Work'));
-	}
-
-	/** A 200 with no id is a failure too, and is treated as one. */
-	public function testACreateWithNoIdIsTreatedAsAFailure(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn([]);
-
-		$this->metadata->expects($this->never())->method('writeFolder');
-		$this->tags->expects($this->once())->method('remove')->with(50);
-
-		$this->projects->onTagged($this->folder(50, 'Client Work'));
-	}
-
-	/**
-	 * The project exists and the folder is stamped; only the re-filing failed. The
-	 * stamp is what every later lookup reads, so keeping it is what lets the next
-	 * pull see the truth — dropping it would leave a project in Penpot that
-	 * nothing in Nextcloud pointed at.
-	 */
-	public function testAFailedRefileStillLeavesTheFolderStamped(): void {
-		$this->inTeam();
-		$this->client->method('createProject')->willReturn(['id' => self::NEW_PROJECT]);
-		$this->client->method('moveFiles')->willThrowException(new \RuntimeException('boom'));
-		$this->fileStamps[61] = $this->stamp(self::DESIGN_A);
-
-		$this->metadata->expects($this->once())->method('writeFolder')
-			->with(50, [PenpotMetadata::KEY_PROJECT_ID => self::NEW_PROJECT]);
-		$this->tags->expects($this->never())->method('remove');
-
-		$this->projects->onTagged($this->folder(50, 'Client Work', [$this->design(61, 'Login.penpot')]));
-	}
-
 	// ── fixtures ────────────────────────────────────────────────────────────
-
-	private function inTeam(): void {
-		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
-	}
 
 	private function stamp(string $penpotId): PenpotFileMetadata {
 		return new PenpotFileMetadata($penpotId, '5@t1', Mapping::MODE_LINK, self::TEAM);
 	}
 
-	// ── adoptForContent: promotion by CONTENT rather than by tag ────────────
+	// ── adoptForContent: the only way in ────────────────────────────────────
 
 	/**
 	 * A DESIGN LANDING IN A PLAIN FOLDER IS WHAT MAKES IT A PROJECT.
@@ -376,7 +133,6 @@ final class ProjectFolderServiceTest extends TestCase {
 
 		$this->metadata->expects($this->once())->method('writeFolder')
 			->with(20, [PenpotMetadata::KEY_PROJECT_ID => 'project-new']);
-		$this->tags->expects($this->once())->method('apply')->with(20);
 
 		self::assertSame('project-new', $this->projects->adoptForContent($this->folder(20, 'Deep')));
 	}
@@ -495,16 +251,13 @@ final class ProjectFolderServiceTest extends TestCase {
 		);
 		$this->metadata->expects($this->never())->method('writeFolder');
 		$this->client->method('createProject')->willReturn(['id' => 'project-mine']);
-		$this->tags->expects($this->never())->method('apply');
 
 		$projects = new ProjectFolderService(
 			$this->client,
 			$this->metadata,
 			$this->resolver,
 			$this->createMock(PersonalTokenService::class),
-			$this->tags,
 			$this->mappings,
-			new SyncGuard(),
 			new NullLogger(),
 		);
 
@@ -526,7 +279,6 @@ final class ProjectFolderServiceTest extends TestCase {
 		$this->client->method('createProject')->willThrowException(new \RuntimeException('nope'));
 
 		$this->metadata->expects($this->never())->method('writeFolder');
-		$this->tags->expects($this->never())->method('apply');
 
 		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Team')));
 	}

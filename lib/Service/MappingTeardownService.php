@@ -61,8 +61,8 @@ use Psr\Log\LoggerInterface;
  *
  * ## THE TREE IS LEFT STANDING
  *
- * Only files are acted on. The project folders stay, keep their `penpot_project_id`
- * and their `penpot` tag, and go on being ordinary folders holding whatever else
+ * Only files are acted on. The project folders stay, keep their `penpot_project_id`,
+ * and go on being ordinary folders holding whatever else
  * was in them — a mapping removal is not a licence to delete somebody's folders.
  * Re-mapping the team walks back into the same tree and adopts it.
  */

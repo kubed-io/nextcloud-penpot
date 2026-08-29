@@ -43,7 +43,6 @@ isn't one. The build history is in [`saga/`](saga/).
 
 - **Scheduled pulls**, one-shot buttons for either direction, and a connection test.
 
-- **A personal access token, optionally**, so your changes are attributed to you in Penpot's history rather than to the service account.
 
 - **Every admin action has an `occ` command**, so the app can be configured headlessly.
 

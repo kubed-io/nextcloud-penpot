@@ -113,11 +113,15 @@ This is a community integration and is not affiliated with, endorsed by, or spon
   <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/connection.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/connection.png</screenshot>
   <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/admin-actions.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/admin-actions.png</screenshot>
   <dependencies>
-    <!-- 32, not 30, since the project-folder opt-in landed: `OCP\SystemTag\TagAssignedEvent`
-         is @since 32.0.0, and on 30/31 the listener would simply never fire — the tag
-         would sit on the folder doing nothing, with no error anywhere. A silently
-         absent feature is the failure mode this project keeps having to dig out, so
-         the floor is raised to where the feature actually works. (Live is 33.) -->
+    <!-- The floor was raised to 32 for `OCP\SystemTag\TagAssignedEvent` (@since
+         32.0.0), which the project-folder tag opt-in needed. That opt-in is gone
+         (saga §D4.14) and with it the one API that forced the floor.
+
+         32 STAYS ANYWAY, because nothing has been run below it. CI tests the
+         advertised range on main and stable34 on a PR; lowering the floor would
+         advertise support for two server versions no leg has ever exercised.
+         Widening it is a deliberate change with a matrix line behind it, not a
+         side effect of deleting a listener. (Live is 33.) -->
     <nextcloud min-version="32" max-version="34"/>
   </dependencies>
   <settings>
@@ -141,7 +145,13 @@ This is a community integration and is not affiliated with, endorsed by, or spon
     <admin>OCA\PenpotSync\Settings\MappingSettings</admin>
     <admin>OCA\PenpotSync\Settings\SyncSettings</admin>
     <admin-section>OCA\PenpotSync\Settings\AdminSection</admin-section>
+    <!-- HIDDEN FOR THE FIRST RELEASE (saga §D4.13). The personal-token card is
+         unfinished and every scenario covering it is still @todo, so its entry
+         points are commented out rather than removed. See the block in
+         lib/AppInfo/Application.php::register() for the full reasoning and the
+         four lines that switch it back on.
     <personal-section>OCA\PenpotSync\Settings\PersonalSection</personal-section>
+    -->
   </settings>
   <commands>
     <!-- CLI-first is the house style: every control on the admin surface has a
@@ -149,7 +159,11 @@ This is a community integration and is not affiliated with, endorsed by, or spon
          declarative cluster config possible. -->
     <command>OCA\PenpotSync\Command\SetUrl</command>
     <command>OCA\PenpotSync\Command\SetToken</command>
+    <!-- HIDDEN FOR THE FIRST RELEASE (saga §D4.13) — the `occ` twin of the
+         personal-token card above. Hiding the card but leaving its CLI would
+         ship exactly half the feature.
     <command>OCA\PenpotSync\Command\SetPersonalToken</command>
+    -->
     <command>OCA\PenpotSync\Command\ShowConfig</command>
     <command>OCA\PenpotSync\Command\Probe</command>
     <command>OCA\PenpotSync\Command\TestConnection</command>

@@ -133,8 +133,6 @@ final class MotionService {
 		private readonly MembershipResolver $resolver,
 		private readonly DestinationResolver $destinations,
 		private readonly PersonalTokenService $personalTokens,
-		private readonly ProjectTags $tags,
-		private readonly SyncGuard $guard,
 		private readonly MoveMemory $memory,
 		private readonly ImportService $imports,
 		private readonly ArchiveService $archives,
@@ -824,11 +822,6 @@ final class MotionService {
 	 * STOPS at a marked folder (those designs belong to that project) while this
 	 * one carries on (that project is leaving too).
 	 *
-	 * The `penpot` tag goes with the marker. It is the opt-in badge
-	 * ({@see ProjectFolderService}), and a folder wearing it while carrying no
-	 * project id is the one place the badge would mean nothing. Inside the guard,
-	 * so the `TagUnassignedEvent` is unmistakably the app's own motion.
-	 *
 	 * Nothing here contacts Penpot, and nothing here is undone by a drag back:
 	 * moving the folder in again finds no marker and adopts nothing, which is
 	 * `projects/create.feature`'s subject rather than this one's.
@@ -840,7 +833,6 @@ final class MotionService {
 
 		if ($this->metadata->readFolder($folder->getId())->hasProject()) {
 			$this->metadata->clear($folder->getId());
-			$this->guard->run(fn () => $this->tags->remove($folder->getId()));
 		}
 
 		try {

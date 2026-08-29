@@ -26,11 +26,10 @@ use Psr\Log\LoggerInterface;
  *
  * ## THE RULE REVERSED, AND THE OLD ONE IS WORTH READING
  *
- * This class used to say **by opt-in, never by accident**, and the opt-in was the
- * `penpot` tag: *"a folder created inside a mapped folder is an ORDINARY FOLDER.
- * Nothing is sent, nothing is inferred."* The reasoning was that a mapped folder
- * which silently turned every subfolder into a project would be unusable for
- * anything else.
+ * This class used to say **by opt-in, never by accident**: *"a folder created
+ * inside a mapped folder is an ORDINARY FOLDER. Nothing is sent, nothing is
+ * inferred."* The reasoning was that a mapped folder which silently turned every
+ * subfolder into a project would be unusable for anything else.
  *
  * That reasoning was sound and the conclusion was too strong, because the thing
  * it was protecting is protected by a narrower rule: **an EMPTY folder is still
@@ -42,8 +41,9 @@ use Psr\Log\LoggerInterface;
  *
  * **Promotion by content rather than by tag, because a move is a gesture people
  * already make and a tag is one they have to be taught** (`AGENTS.md`). The tag
- * still works — {@see onTagged()} is unchanged — it is simply no longer the only
- * way in.
+ * opt-in that used to sit beside this has since been removed outright (saga
+ * §D4.14): `penpot_project_id` is the only thing that makes a folder a project,
+ * and a design arriving is the only thing on this side that writes one.
  *
  * ## WHAT COUNTS AS "IN IT" IS THE FOLDER ITSELF — READING IS STILL THE ANCESTOR
  *
@@ -72,12 +72,11 @@ use Psr\Log\LoggerInterface;
  *
  * ## LATE OPT-IN IS THE WHOLE POINT: THE CONTENTS COME TOO
  *
- * True of BOTH routes in. {@see onTagged()} and {@see adoptForContent()} share
- * {@see fileExistingDesigns()} deliberately: a folder promoted by a design
- * arriving may already hold managed designs — one that left a mapping and came
- * back, one whose own promotion Penpot refused — and filing only the newcomer
- * would leave two designs in one folder showing up in two projects. Which route
- * promoted the folder must not change what the folder means.
+ * {@see adoptForContent()} leans on {@see fileExistingDesigns()} deliberately: a
+ * folder promoted by a design arriving may already hold managed designs — one
+ * that left a mapping and came back, one whose own promotion Penpot refused —
+ * and filing only the newcomer would leave two designs in one folder showing up
+ * in two projects.
  *
  * The interesting half is {@see fileExistingDesigns()}. A folder someone has
  * been filling with designs becomes a project *with those designs in it*, which
@@ -93,25 +92,20 @@ use Psr\Log\LoggerInterface;
  *
  * ## WHERE IT REFUSES, AND WHAT IT LEAVES BEHIND
  *
- *   - **Already a project** (carries `penpot_project_id`) — no-op. The pull
- *     stamps the tag on every folder it mirrors, so this is the common path and
- *     it must cost nothing.
- *   - **The mapped ROOT itself** — not a project and never can be, so the tag is
- *     taken off. Unlike the case below, this folder IS this app's business, and
- *     the pull tags only what it has stamped with a project id; a tagged root
- *     would be the one place the badge meant nothing. Removed silently — trying
- *     it is reasonable, not a mistake worth reporting.
- *   - **Outside every mapping** — nothing to do and nothing to be sorry about.
- *     Tags are instance-wide: a user can put `penpot` on a folder in their
- *     Documents, and no team could be resolved for it even in principle. The tag
- *     is left standing — stripping a user's own tag off a folder this app has no
- *     business touching would be a worse surprise than an inert label.
- *   - **Unusable name** — refused, the tag REMOVED, Penpot never contacted. The
- *     removal is the difference between a two-step the user controls (rename,
- *     re-tag) and a half-created state they have to discover (§6.39).
- *   - **Penpot rejected the call** — §6.18 rule 3: the local folder stands
- *     exactly as it was. The tag is removed for the same reason as above; the
- *     folder is simply not a project yet.
+ * Every one of these returns null and lets the caller fall back to the team's
+ * Drafts. Nothing here is an error the user is shown: this fires as a side
+ * effect of a drag or a "+ New", and the design always lands somewhere.
+ *
+ *   - **Already a project** (carries `penpot_project_id`) — no-op, and the
+ *     overwhelmingly common path, so it must cost nothing.
+ *   - **The mapped ROOT itself** — Drafts, not a project named after the root
+ *     (§6.35). {@see MembershipResolver::pathBelowMapping()} returns null there.
+ *   - **Outside every mapping** — no team can be resolved, so there is no
+ *     project it could belong to.
+ *   - **A link mapping** — the tree is filled FROM Penpot; nothing on this side
+ *     creates anything.
+ *   - **Unusable name, or Penpot rejected the call** — §6.18 rule 3: the local
+ *     folder stands exactly as it was, unstamped. It is simply not a project.
  */
 final class ProjectFolderService {
 	/**
@@ -126,138 +120,19 @@ final class ProjectFolderService {
 		private readonly PenpotMetadata $metadata,
 		private readonly MembershipResolver $resolver,
 		private readonly PersonalTokenService $personalTokens,
-		private readonly ProjectTags $tags,
 		private readonly MappingService $mappings,
-		private readonly SyncGuard $guard,
 		private readonly LoggerInterface $logger,
 	) {
 	}
 
 	/**
-	 * Someone put the `penpot` tag on a folder. Make it a project if it can be
-	 * one, and say why if it cannot.
-	 */
-	public function onTagged(Folder $folder): void {
-		$markers = $this->metadata->readFolder($folder->getId());
-		if ($markers->hasProject()) {
-			// Already a project — mirrored from Penpot, or promoted from this side,
-			// or opted in earlier. `penpot_project_id` is the marker either way; the
-			// tag is not, and the pull never writes one. Re-tagging is a no-op, not a
-			// second create: two folders claiming one project is the exact failure
-			// `projects/create.feature` refuses copies to avoid.
-			return;
-		}
-
-		$teamId = $this->resolver->resolve($folder)->teamId;
-		if ($teamId === null || $teamId === '') {
-			// See the class docblock: no team, no project, no complaint.
-			$this->logger->debug('penpot_sync project: tagged folder is outside every mapping; nothing to create', [
-				'app' => Application::APP_ID,
-				'folder' => $folder->getPath(),
-			]);
-
-			return;
-		}
-
-		// THE NAME IS THE PATH BELOW THE MAPPING, not the folder's own name — see
-		// MembershipResolver::pathBelowMapping(). Using the bare name made this
-		// direction disagree with the pull, which has always spelt a project's
-		// nesting into its name.
-		$below = $this->resolver->pathBelowMapping($folder);
-		if ($below === null) {
-			// NOT THE SAME REFUSAL as an unusable name. Null means the folder has no
-			// path below a mapping to be named by — it IS the mapping root. A team
-			// root is not a project and never was, so saying "the folder name cannot
-			// be used" would send someone off to rename a folder that is fine.
-			//
-			// THE TAG STILL COMES OFF, and this is the one place that differs from
-			// "outside every mapping" above. There the tag is left standing because
-			// the folder is none of this app's business; a mapped root is entirely
-			// its business, and every other folder wearing this tag carries a
-			// `penpot_project_id` — the pull only ever tags what it has stamped. A
-			// root left tagged would be the single folder where the badge means
-			// nothing, which is exactly the confusion the tag exists to prevent.
-			//
-			// Silently, though: no warning and no `refuse()`. Tagging the root is a
-			// reasonable thing to try, not a mistake to report.
-			$this->logger->debug('penpot_sync project: the mapped root is not a project; untagging', [
-				'app' => Application::APP_ID,
-				'folder' => $folder->getPath(),
-			]);
-			$this->guard->run(fn () => $this->tags->remove($folder->getId()));
-
-			return;
-		}
-
-		$name = trim($below);
-		if ($name === '' || mb_strlen($name) > 250) {
-			// Penpot's own rule is [:string {:max 250, :min 1}] — checked here so
-			// the refusal is local and the tag comes off, rather than arriving as a
-			// validation error after a round trip.
-			$this->refuse($folder, 'the folder name cannot be used as a Penpot project name');
-
-			return;
-		}
-
-		try {
-			$created = $this->client->createProject($teamId, $name, $this->personalTokens->tokenForActor());
-		} catch (\Throwable $e) {
-			$this->logger->warning('penpot_sync project: could not create the Penpot project; the folder is unchanged', [
-				'app' => Application::APP_ID,
-				'folder' => $folder->getPath(),
-				'team' => $teamId,
-				'exception' => $e,
-			]);
-			$this->refuse($folder, 'Penpot rejected the project');
-
-			return;
-		}
-
-		$projectId = (string)($created['id'] ?? '');
-		if ($projectId === '') {
-			$this->logger->warning('penpot_sync project: create-project returned no id', [
-				'app' => Application::APP_ID,
-				'folder' => $folder->getPath(),
-			]);
-			$this->refuse($folder, 'Penpot returned no project id');
-
-			return;
-		}
-
-		// Stamp FIRST. The id is what every later lookup reads (§6.29); the tag is
-		// only the visible half. If the re-filing below fails, a stamped folder is
-		// a real project the next pull can reconcile — an unstamped one would be a
-		// project in Penpot that nothing in Nextcloud points at.
-		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
-
-		// STAMPED BEFORE THIS, AND A FAILURE HERE IS SWALLOWED — the same order and
-		// the same trade `onTagged()` has always made. If the re-file fails, designs
-		// stay in their old project while the folder claims the new one, and the
-		// marker's fast path stops a retry. The other ordering loses more: an
-		// unstamped folder is a project in Penpot that nothing in Nextcloud points
-		// at. Neither is free; the choice is recorded in saga Ch3 rather than
-		// re-litigated per call site.
-		$filed = $this->fileExistingDesigns($folder, $projectId);
-
-		$this->logger->info('penpot_sync project: created a Penpot project from a tagged folder', [
-			'app' => Application::APP_ID,
-			'folder' => $folder->getPath(),
-			'team' => $teamId,
-			'project' => $projectId,
-			'name' => $name,
-			'designs_filed' => $filed,
-		]);
-	}
-
-	/**
 	 * A design has landed in this folder, so the folder is a project now.
 	 *
-	 * The content-driven twin of {@see onTagged()}, and deliberately the QUIETER
-	 * of the two. Tagging is a person asking for something and being told when it
-	 * cannot happen; this fires as a side effect of a drag or a "+ New", so every
-	 * way out is a null and a log line. A design that cannot be promoted still
-	 * lands somewhere — the caller falls back to the team's Drafts — and the user
-	 * is never shown an error for a gesture that worked.
+	 * The ONLY way a folder becomes a project from this side, and deliberately a
+	 * quiet one: it fires as a side effect of a drag or a "+ New", so every way
+	 * out is a null and a log line. A design that cannot be promoted still lands
+	 * somewhere — the caller falls back to the team's Drafts — and the user is
+	 * never shown an error for a gesture that worked.
 	 *
 	 * @return string|null the project id to file the design into, or null when this
 	 *                     folder is not a project and the caller should use Drafts
@@ -298,10 +173,9 @@ final class ProjectFolderService {
 		}
 
 		// NULL HERE MEANS THE MAPPING ROOT, WHICH IS DRAFTS AND NOT A PROJECT
-		// (§6.35). The same signal `onTagged()` reads to know a root was tagged,
-		// used here to know a design landed at one — a design dropped straight into
-		// `Penpot/` belongs to the team's Drafts, and naming a project after the
-		// mapped folder would invent a project nobody asked for on the first drag.
+		// (§6.35) — a design dropped straight into `Penpot/` belongs to the team's
+		// Drafts, and naming a project after the mapped folder would invent a
+		// project nobody asked for on the first drag.
 		$name = trim((string)$this->resolver->pathBelowMapping($folder));
 		if ($name === '' || mb_strlen($name) > 250) {
 			return null;
@@ -356,10 +230,9 @@ final class ProjectFolderService {
 			return $landed->projectId;
 		}
 
-		// Stamp FIRST, for the reason `onTagged()` gives: the id is what every
-		// later lookup reads, and the tag is only the visible half.
+		// The stamp is the whole record. `penpot_project_id` is what every later
+		// lookup reads (§C6.18), and nothing else marks a folder as a project.
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
-		$this->guard->run(fn () => $this->tags->apply($folder->getId()));
 
 		// THE CONTENTS COME TOO, exactly as they do for a tag. A managed design can
 		// already be sitting below a plain folder — one that left a mapping and came
@@ -482,21 +355,4 @@ final class ProjectFolderService {
 		}
 	}
 
-	/**
-	 * Take the tag back off and say why.
-	 *
-	 * Inside the guard so the resulting `TagUnassignedEvent` is unmistakably the
-	 * app's own motion — belt and braces, since nothing subscribes to that event
-	 * (see {@see \OCA\PenpotSync\Listener\ProjectTagListener}), but the day
-	 * something does, this is already correct.
-	 */
-	private function refuse(Folder $folder, string $reason): void {
-		$this->logger->warning('penpot_sync project: refused to make a project from a tagged folder', [
-			'app' => Application::APP_ID,
-			'folder' => $folder->getPath(),
-			'reason' => $reason,
-		]);
-
-		$this->guard->run(fn () => $this->tags->remove($folder->getId()));
-	}
 }

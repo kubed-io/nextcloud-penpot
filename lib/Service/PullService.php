@@ -139,7 +139,6 @@ final class PullService {
 		private readonly PenpotMetadata $metadata,
 		private readonly StorageService $storage,
 		private readonly ArchiveService $archives,
-		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
 		private readonly MirrorTimes $times,
 		private readonly TrashControl $trash,
@@ -420,10 +419,9 @@ final class PullService {
 	 *
 	 * ## ONE MARKER, AND IT IS `penpot_project_id`
 	 *
-	 * The pull used to also stamp a `penpot` SYSTEM TAG on every folder it mirrored
-	 * — "the same fact made visible in the Files app". It no longer does, and the
-	 * tag was never what decided anything: {@see MembershipResolver} has only ever
-	 * read the id, and `ProjectTags::isTagged()` had no callers at all.
+	 * There is no second marker and no system tag. {@see MembershipResolver} has
+	 * only ever read the id, and the tag that once shadowed it is gone entirely
+	 * (saga §D4.14).
 	 *
 	 * It was the last remnant of a withdrawn design in which the tag was what MADE
 	 * a folder a project. §C6.38 replaced that with promotion by content, and once
@@ -1296,11 +1294,6 @@ final class PullService {
 			}
 
 			$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => '']);
-			// AND ANY TAG COMES OFF WITH THE ID. The pull never puts one on, but a user
-			// may have — that is the opt-in {@see ProjectFolderService::onTagged()}
-			// answers — and a folder left wearing it after its project died is a folder
-			// waiting to be adopted back into a project that no longer exists.
-			$this->tags->remove($folder->getId());
 			$this->logger->info('penpot_sync pull: a project was deleted in Penpot; its folder kept the other files and stopped being a project', [
 				'app' => Application::APP_ID,
 				'folder' => $path,

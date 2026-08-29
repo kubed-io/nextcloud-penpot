@@ -18,7 +18,6 @@ use OCA\PenpotSync\Service\MirrorTimes;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
-use OCA\PenpotSync\Service\ProjectTags;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\SyncGuard;
@@ -62,7 +61,6 @@ final class PullServiceTest extends TestCase {
 	private PenpotMetadata $metadata;
 	private StorageService $storage;
 	private ArchiveService $archives;
-	private ProjectTags $tags;
 	private MirrorTimes $times;
 	private PullService $pull;
 
@@ -92,7 +90,6 @@ final class PullServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->storage = $this->createMock(StorageService::class);
 		$this->archives = $this->createMock(ArchiveService::class);
-		$this->tags = $this->createMock(ProjectTags::class);
 
 		// An unstamped node reads back as null — *untracked*, the state that makes a
 		// file the user's rather than ours.
@@ -114,7 +111,6 @@ final class PullServiceTest extends TestCase {
 			$this->metadata,
 			$this->storage,
 			$this->archives,
-			$this->tags,
 			new SyncGuard(),
 			// MirrorTimes reaches into the storage/cache stack, so it is mocked here
 			// and covered on its own in MirrorTimesTest — the pull only owes the field
@@ -261,7 +257,6 @@ final class PullServiceTest extends TestCase {
 
 		$bubbles->expects($this->once())->method('newFolder')->with('foo')->willReturn($foo);
 		// NO TAG, on either of them. The id is the only marker a project folder gets.
-		$this->tags->expects($this->never())->method('apply');
 
 		$stamped = [];
 		$this->metadata->method('writeFolder')->willReturnCallback(
@@ -1075,7 +1070,7 @@ final class PullServiceTest extends TestCase {
 	/**
 	 * The other ending. Deleting a user's spreadsheets because a Penpot project
 	 * went away is not this app's call, so the folder stays and merely stops being
-	 * a project — the id cleared and the `penpot` tag off with it.
+	 * a project — its `penpot_project_id` cleared.
 	 */
 	public function testAnOrphanedFolderHoldingOtherFilesKeepsThemAndLosesItsId(): void {
 		$orphan = $this->createMock(Folder::class);
@@ -1092,7 +1087,6 @@ final class PullServiceTest extends TestCase {
 					self::assertSame([PenpotMetadata::KEY_PROJECT_ID => ''], $values);
 				}
 			});
-		$this->tags->expects($this->once())->method('remove')->with(40);
 
 		self::assertSame(1, $this->pull->pullOne($this->mapping(useTeamFolder: false))['orphaned']);
 	}

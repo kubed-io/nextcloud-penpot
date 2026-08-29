@@ -24,8 +24,6 @@ use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\ProjectFolderService;
-use OCA\PenpotSync\Service\ProjectTags;
-use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
@@ -80,7 +78,6 @@ final class MotionServiceTest extends TestCase {
 	private MembershipResolver $resolver;
 	private DestinationResolver $destinations;
 	private PersonalTokenService $personalTokens;
-	private ProjectTags $tags;
 	private ArchiveService $archives;
 	private MappingService $mappings;
 	private ImportService $imports;
@@ -102,7 +99,6 @@ final class MotionServiceTest extends TestCase {
 		$this->metadata = $this->createMock(PenpotMetadata::class);
 		$this->resolver = $this->createMock(MembershipResolver::class);
 		$this->personalTokens = $this->createMock(PersonalTokenService::class);
-		$this->tags = $this->createMock(ProjectTags::class);
 		// The REAL destination resolver over the mocked client, deliberately: the
 		// Drafts lookup is the behaviour a team-root move depends on, and mocking
 		// it away is what let the copy path ship with the opposite rule (§C6.10).
@@ -113,8 +109,6 @@ final class MotionServiceTest extends TestCase {
 			$this->resolver,
 			$this->destinations,
 			$this->personalTokens,
-			$this->tags,
-			new SyncGuard(),
 			$this->memory = new MoveMemory(),
 			$this->imports = $this->createMock(ImportService::class),
 			$this->archives,
@@ -341,7 +335,6 @@ final class MotionServiceTest extends TestCase {
 
 		$this->client->expects($this->never())->method('moveProject');
 		$this->metadata->expects($this->once())->method('clear')->with(40);
-		$this->tags->expects($this->once())->method('remove')->with(40);
 
 		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder()));
 	}
