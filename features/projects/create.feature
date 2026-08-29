@@ -39,6 +39,10 @@ Feature: Creating a project
       | Shared/Team             | Team             |
       | Shared/Team/Deep/Deeper | Team/Deep/Deeper |
 
+    Examples: and a folder inside a project is a project of its own
+      | folder                | project          |
+      | Penpot/Existing/Below | Existing/Below   |
+
   # notes: ../AGENTS.md#the-project-name-is-the-path-below-the-mapping
 
   # @unbuilt — one row of four works. The rest need capabilities this rule does not

@@ -58,14 +58,6 @@ final class DestinationResolver {
 	}
 
 	/**
-	 * The project id a write should target, or null when the node genuinely
-	 * belongs to no mapping.
-	 *
-	 * A null return is always "do not write to Penpot" — never "guess". Callers
-	 * treat it as a reason to leave Penpot alone, because the alternative is
-	 * inventing a destination for someone's file.
-	 */
-	/**
 	 * Where a DESIGN THAT HAS JUST ARRIVED belongs — promoting its folder to a
 	 * project if that is what its arrival means (`projects/create.feature`).
 	 *
@@ -82,21 +74,32 @@ final class DestinationResolver {
 	 * Two methods make that a compile-time distinction instead of a boolean nobody
 	 * reads.
 	 *
-	 * The three outcomes, and they are the nearest-ancestor rule (§6.29) with one
-	 * new branch in the middle:
+	 * ## THE FOLDER A DESIGN LANDS IN IS THE PROJECT — ALWAYS THE FOLDER ITSELF
 	 *
-	 *   - a project ancestor → that project, unchanged. A plain subfolder of a
-	 *     project is Nextcloud's layout, which Penpot cannot see.
-	 *   - a team but no project → the containing folder BECOMES a project, named
-	 *     by its path below the mapping.
-	 *   - a team, and the design landed at the mapping ROOT → Drafts (§6.35).
-	 *     `pathBelowMapping()` returns null there, which is what
-	 *     {@see ProjectFolderService::adoptForContent()} reads to say "not me".
+	 * This used to short-circuit on the nearest project ANCESTOR, so a design
+	 * dragged into `Bubbles/pustice` where `Bubbles` was already a project stayed
+	 * in `Bubbles` and `pustice` became nothing. The rule read "a plain subfolder
+	 * of a project is Nextcloud's layout, which Penpot cannot see", and it made
+	 * two identical-looking folders behave differently on markers a user cannot
+	 * see: whichever folder happened to get a design first won, permanently, and
+	 * nothing in the Files app said so.
+	 *
+	 * It also made `projects/create.feature`'s own headline — *a folder is a
+	 * project when a design is in it* — false of every folder below a project.
+	 *
+	 * So the ancestor is now a FALLBACK rather than an answer, and the order is:
+	 *
+	 *   - the folder the design landed in becomes a project, named by its path
+	 *     below the mapping ({@see ProjectFolderService::adoptForContent()});
+	 *   - failing that, the nearest project ancestor. Two things reach this and
+	 *     both are legitimate: a LINK mapping, where promotion is refused because
+	 *     the tree is Penpot's to write and not ours, and a Penpot refusal, where
+	 *     filing the design with its neighbours beats filing it in Drafts;
+	 *   - failing that, the team's Drafts (§6.35) — which is what the mapping ROOT
+	 *     resolves to, since `pathBelowMapping()` answers null there and
+	 *     `adoptForContent()` reads that as "not me".
 	 */
 	public function projectForContentIn(Node $node, Membership $membership): ?string {
-		if ($membership->projectId !== null) {
-			return $membership->projectId;
-		}
 		if ($membership->teamId === null) {
 			return null;
 		}
@@ -122,11 +125,27 @@ final class DestinationResolver {
 		}
 
 		// A null adoption is not a failure — it is "this folder is not a project",
-		// which the mapping root always is and a Penpot refusal temporarily is.
-		// Either way the design still belongs in the team, so Drafts is the answer.
-		return $this->projects->adoptForContent($parent) ?? $this->draftsProject($membership->teamId);
+		// which the mapping root always is, a link mapping's folders always are,
+		// and a Penpot refusal temporarily is.
+		//
+		// THE ANCESTOR COMES BEFORE DRAFTS, and the link case is why. Under a link
+		// the folders are filled FROM Penpot and promotion is refused by design; a
+		// mirror filed into a subfolder there still belongs to the project it is
+		// under, and sending it to Drafts instead would move somebody's design out
+		// of the project Penpot has it in because they made a folder.
+		return $this->projects->adoptForContent($parent)
+			?? $membership->projectId
+			?? $this->draftsProject($membership->teamId);
 	}
 
+	/**
+	 * The project id a write should target, or null when the node genuinely
+	 * belongs to no mapping.
+	 *
+	 * A null return is always "do not write to Penpot" — never "guess". Callers
+	 * treat it as a reason to leave Penpot alone, because the alternative is
+	 * inventing a destination for someone's file.
+	 */
 	public function projectFor(Membership $membership): ?string {
 		if ($membership->projectId !== null) {
 			return $membership->projectId;

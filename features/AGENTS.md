@@ -1117,12 +1117,51 @@ What is left of the tag is the one thing a user does with it on purpose:
 become a project. That is a gesture, not a marker. **It has no scenario anywhere in
 this suite** — a leftover worth deciding about rather than inheriting.
 
+**AND IT IS STILL HERE, WHICH IS A PROBLEM WORTH NAMING RATHER THAN LEAVING TO BE
+REDISCOVERED.** The gesture is live code — `ProjectTagListener` registered on
+`TagAssignedEvent`, `onTagged()`, and until this round a README advertising it as
+a headline feature — for a rule that was retired several rounds ago. It reads to
+anyone (or anything) surveying the code as a supported second way to make a
+project, and it was proposed as one.
+
+It is not removed yet, and the reason is measured rather than sentimental: the
+HARNESS uses it. `ArrangeSteps::ensureProjectFolder()` tags a folder to make it a
+project, which is how `kind: project` rows are arranged — 27 of them, of which
+**10 need a folder that is a project while holding no design at all**, across four
+feature files. The other 17 get a design in them and are promoted by content
+anyway. So removing the gesture is a harness change first and a code deletion
+second, and doing it inside the round that reversed the promotion rule would have
+put two independent regression surfaces in one PR.
+
+The README no longer claims it. The next round removes it.
+
 ### A folder is a project when a design is in it
 
-**A NESTED PROJECT IS STILL EXPLICIT, and that is this rule's own edge.** A design
-in `Penpot/foo/bar/baz` where `foo/bar` is already a project belongs to `foo/bar`
-— nearest ancestor, §6.29 — so `baz` does NOT become a project by holding it. Only
-a folder with no project above it is promoted.
+**AND THAT NOW MEANS EVERY FOLDER, WHICH IT DID NOT AT FIRST.** The rule shipped
+with an edge: a design in `Penpot/foo/bar/baz` where `foo/bar` was already a
+project belonged to `foo/bar` — nearest ancestor, §6.29 — so `baz` did not become
+a project by holding it, and only a folder with no project above it was promoted.
+
+**Reported from a live instance and reversed.** `Bubbles` was a project; a folder
+`Bubbles/pustice` was made and a design dragged into it; Penpot kept both designs
+in `Bubbles` and `pustice` became nothing. The edge made two identical-looking
+folders behave differently on a marker nobody can see, decided by the accident of
+which folder got a design first — and it made this rule's own sentence false of
+every folder below a project. The folder a design lands in is the project.
+
+**READING AND ARRIVING ARE NOW DIFFERENT QUESTIONS, and they have to stay apart.**
+§6.29 still resolves a node to the nearest project ABOVE it, so a design already
+sitting in a plain subfolder belongs to the project above until something ARRIVES
+in that subfolder. Arriving promotes; sitting there does not. That asymmetry is
+what lets `fileExistingDesigns()` sweep a plain subfolder into the project being
+promoted and still be right.
+
+A LINK MAPPING IS THE ONE PLACE THIS DOES NOT REACH, and not by exception to this
+rule so much as to promotion itself: under a link the tree is filled FROM Penpot,
+so nothing may be created and an arrival belongs to the project it lands under.
+That is why `DestinationResolver` falls back to the ancestor and not to Drafts —
+Drafts would move somebody's design out of the project Penpot has it in, because
+they made a folder.
 
 That reshaped two arranges rather than any behaviour. `Move a folder that other
 projects are named through` and its delete-side twin both need TWO projects, and
@@ -2308,26 +2347,32 @@ the history — and the `penpot_id` STAYS ON THE FILE, which is the whole trick.
 unmapped file is not a file that forgot; it is a file holding a claim on something
 parked.
 
-### A nested project folder and a plain subfolder look identical
+### A subfolder of a project is a project of its own
 
-AND MEAN OPPOSITE THINGS, which is the cost §C6.38 charges for making a project's
-name a path. `Penpot/Move From/wip` and `Penpot/Clients/Traveller` are the same
-shape — a folder inside a folder inside a mapping — and a design dragged into the
-first stays in `Move From` while a design dragged into the second lands in a
-project called `Clients/Traveller`. Nothing about the path says which; the
-MARKERS do, and the nearest-ancestor walk is what reads them.
+AND THIS SECTION USED TO SAY THE OPPOSITE, at length, under the title *"A nested
+project folder and a plain subfolder look identical — AND MEAN OPPOSITE THINGS"*.
+The claim was that `Penpot/Move From/wip` and `Penpot/Clients/Traveller` are the
+same shape and behave differently: a design dragged into the first stayed in
+`Move From` while one dragged into the second landed in `Clients/Traveller`.
+Nothing about the path said which; the MARKERS did, and the nearest-ancestor walk
+read them.
 
-The two Examples blocks sit next to each other for that reason. Read alone,
-either one teaches a rule that is false: "a subfolder is not a project" is wrong
-the moment a design lands in one, and "a folder inside a mapping is named by its
-path" is wrong of `wip`. Together they say the true thing — the folder's markers
-decide, and the path only ever says what it is CALLED once something has decided.
+It was written as a subtlety worth teaching. It was a trap. A user cannot see
+markers, so the two folders were the same folder as far as anyone could tell, and
+which behaviour they got depended on which folder had happened to receive a design
+first. Reported live: a folder made inside a project, a design dragged in, and
+nothing at all in Penpot.
 
-THE CODE HAD THIS BEFORE THE SPEC DID. `MembershipResolver` has resolved nearest
-ancestor since §6.29 and `PushService` has named projects by path since §C6.38, so
-these rows needed no new step definition and no new behaviour — they needed saying.
-Added on the round that taught the PULL to read those names back (#50), because
-until then the app could write a name it then refused to mirror.
+**Both shapes now mean the same thing.** The folder a design lands in becomes a
+project named by its path below the mapping, so `wip` is `Move From/wip` and
+`Traveller` is `Clients/Traveller`. The two Examples blocks that sat next to each
+other to teach the distinction now teach one rule twice — the first that a
+subfolder is promoted at all, the second that the NAME is the whole path.
+
+THE LINK ROW SURVIVES UNCHANGED, and it is the only asymmetry left: promotion is
+refused under a link mapping, so a mirror filed into a subfolder there still
+belongs to the project above it. That is a rule about who may CREATE, not about
+what a folder is.
 
 **THE PROJECT NAME HAS TO BE UNIQUE ACROSS THE WHOLE SUITE, and a nested one makes
 that easy to forget.** The legs get a fresh Nextcloud each and share ONE Penpot, so
@@ -2335,9 +2380,7 @@ a project name is effectively global: `projects/move.feature` already produces
 `Clients/Traveller`, and reusing it here had the destination resolve to that
 project — a real one, in the right team, holding another feature's files. The row
 failed on a path, which reads like a bug in the nesting and is a fixture collision.
-`Nesting/…` belongs to this file alone. Proven separately on a live instance in
-both shapes (team root -> nested project, and project folder -> nested project), so
-the code was never in question.
+`Nesting/…` belongs to this file alone.
 
 ### A cross-team move always crosses a storage boundary
 
@@ -3697,16 +3740,19 @@ in Penpot and confirm", "the app warns this cannot be undone / When I confirm".
 with it. **"There is no app-managed trash-bin setting"** is a decision, and belongs
 here rather than as a scenario asserting a setting does not exist.
 
-### A subfolder is Nextcloud's layout, not Penpot's
+### A subfolder was Nextcloud's layout, and now it is a project
 
-Penpot has no concept of a subfolder, so filing a design into `wip/` changes
-nothing on its side — and a pull must not undo it, because Nextcloud owns layout.
-Those were two scenarios saying one thing; the second only added a pull to prove
-the first still held.
+This section read: *"Penpot has no concept of a subfolder, so filing a design into
+`wip/` changes nothing on its side — and a pull must not undo it, because Nextcloud
+owns layout."* The second half is still true and the first half is not the point
+any more: Penpot has no subfolders, so a subfolder holding a design becomes a
+PROJECT, named by its path. `wip/` is `Move From/wip`.
 
-Confinement is to the PROJECT, not to a folder, which is why a LINK may be filed
-away in a subfolder too. That is the same rule read from the strict end, so it is
-an Examples row rather than its own scenario.
+What survives intact is the confinement rule read from the strict end:
+**confinement is to the PROJECT, not to a folder**, which is why a LINK may still
+be filed away in a subfolder — promotion is refused under a link, so the mirror
+stays in the project it was already in. That is an Examples row rather than its own
+scenario, and it is now the only row in that block that does not promote.
 
 ### A design moved to another team in Penpot leaves this mapping
 

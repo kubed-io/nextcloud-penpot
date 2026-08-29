@@ -348,7 +348,7 @@ markers saying so.
   §6.18 already settled *how* it would work if ratified (attribution + failure
   behaviour); the open part is narrowly "do we call it at all."
 - **§6.1's creation-scope tension (via §6.7/§6.15).** Whether Nextcloud may ever
-  *originate* a Penpot object — a new project from a tagged folder, a new file
+  *originate* a Penpot object — a new project from a folder a design landed in, a new file
   from an unmapped create — is a real open question, separate from the restore
   carve-out §6.23 approved. Don't paper over it.
 - **Webhook delivery (§6.17, open question #19).** Creation works and is

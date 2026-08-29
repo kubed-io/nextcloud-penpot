@@ -45,12 +45,25 @@ use Psr\Log\LoggerInterface;
  * still works — {@see onTagged()} is unchanged — it is simply no longer the only
  * way in.
  *
- * ## WHAT COUNTS AS "IN IT" IS THE NEAREST-ANCESTOR RULE, UNCHANGED
+ * ## WHAT COUNTS AS "IN IT" IS THE FOLDER ITSELF — READING IS STILL THE ANCESTOR
  *
- * A design landing in `Penpot/Team/wip` does NOT make `wip` a project when
- * `Team` already is one — §6.29 finds the nearest project ancestor and the design
- * belongs to that. A plain subfolder of a project is Nextcloud's layout, which
- * Penpot cannot see, and `designs/move.feature` pins it.
+ * A design landing in `Penpot/Team/wip` makes `wip` the project `Team/wip`, even
+ * when `Team` is already one. This used to stop at the nearest project ANCESTOR,
+ * so `wip` became nothing and the design stayed in `Team` — which made two
+ * identical-looking folders behave differently on a marker nobody can see, and
+ * made this class's own headline false of every folder below a project. See
+ * {@see DestinationResolver::projectForContentIn()} for the reversal.
+ *
+ * READING DID NOT CHANGE, and the pair has to be held apart. §6.29 still resolves
+ * a node to the nearest project ABOVE it, so a design already sitting in a plain
+ * subfolder belongs to the project above until something ARRIVES in that
+ * subfolder. Arriving promotes; sitting there does not. That is what lets
+ * {@see fileExistingDesigns()} sweep a plain subfolder into the project being
+ * promoted and still be correct.
+ *
+ * A LINK MAPPING IS THE EXCEPTION, and not to this rule so much as to promotion
+ * itself: under a link the tree is filled FROM Penpot, so nothing here creates
+ * anything and an arrival belongs to the project it lands under.
  *
  * And a design landing at the mapping ROOT is Drafts (§6.35), not a project named
  * after the root. {@see MembershipResolver::pathBelowMapping()} returns null there,

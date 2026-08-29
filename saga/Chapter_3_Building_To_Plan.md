@@ -825,3 +825,95 @@ larger radius: **the running instance is a primary source, and it is cheaper tha
 the argument about it.** Four rounds of inference produced a tag saying "cannot".
 Two minutes of measurement produced a listener — and, unasked, a user-facing bug
 that had been invisible precisely because it was invisible.
+
+## Round 10 — the rule's own edge, and a leftover that argued for itself
+
+Round 9 said the running instance is a primary source and cheaper than the argument
+about it. Round 10 is the round where the instance produced a bug report instead of
+a measurement.
+
+### The edge
+
+`projects/create.feature` has stated one rule since §C6.38: **a folder is a project
+when a design is in it, named by the path from the mapping down to it.** It shipped
+with an edge that seemed like a refinement and was a trap:
+
+> A design in `Penpot/foo/bar/baz` where `foo/bar` is already a project belongs to
+> `foo/bar` — nearest ancestor, §6.29 — so `baz` does NOT become a project by
+> holding it. Only a folder with no project above it is promoted.
+
+Written down twice, in `features/AGENTS.md` and in the class docblock, and pinned by
+an Examples block in `designs/move.feature` captioned *"a plain subfolder is
+Nextcloud's layout, which Penpot cannot see"*. A second block sat directly beneath
+it teaching that a nested project folder names its project by its path, with a note
+between them explaining that the two shapes *"look identical AND MEAN OPPOSITE
+THINGS"*, which was offered as a subtlety worth learning.
+
+The report: a project folder `Bubbles`, a new folder `Bubbles/pustice`, a design
+dragged in — and nothing at all in Penpot. Both designs still in `Bubbles`.
+
+**The app was correct.** Every marker on the live instance was exactly what the spec
+described. The rule was the defect, and the shape of the defect is the lesson: two
+folders that a user cannot tell apart behaved differently, and which behaviour they
+got was decided by the accident of which one had received a design first. There is
+no gesture that reveals it and no way to choose. A rule you cannot see is a rule you
+cannot use.
+
+It also made the feature file's own headline false of every folder below a project,
+which is the kind of contradiction a spec can carry for months because each half is
+read on its own.
+
+So the edge is gone. The folder a design lands in is the project.
+
+**READING AND ARRIVING SPLIT, and keeping them apart is the whole of the change.**
+§6.29 still resolves a node to the nearest project ABOVE it — a design already
+sitting in a plain subfolder belongs to the project above until something arrives in
+that subfolder. Arriving promotes; sitting there does not. `DestinationResolver`
+answers the arriving question and `MembershipResolver` the reading one, and the
+short-circuit that used to make them the same method's answer was the bug.
+
+The one asymmetry left is a `link` mapping, where promotion is refused because the
+tree is Penpot's to write. The fallback there is the project ABOVE and deliberately
+not Drafts: Drafts would move somebody's design out of the project Penpot has it in,
+because they made a folder.
+
+### The leftover that argued for itself
+
+Offered as an option before the rule was reversed: *tag the folder `penpot` and it
+becomes a project* — which is live code, does exactly that, and files the designs
+inside. It was also the mechanism §C6.18 **retired** several rounds earlier, in
+favour of promotion by content.
+
+The answer came back: *the fact you even suggested this means there is conflicting
+information in the code, the saga and the AGENTS files.* There was, and it is worth
+recording what the conflict actually consisted of, because none of it was a comment
+someone forgot to delete:
+
+- `ProjectTagListener`, registered on `TagAssignedEvent`, with its own unit test;
+- `ProjectFolderService::onTagged()`, ~120 lines, fully documented;
+- `ProjectTags`' class docblock describing the tag as *"both the app's marker and the
+  user's opt-in"*;
+- `PenpotClient::createProject()` documented as *"ONLY EVER CALLED ON AN EXPLICIT
+  OPT-IN … exactly one caller, `onTagged()`"*;
+- and a README paragraph advertising it as a headline feature.
+
+`features/AGENTS.md` had even flagged it — *"It has no scenario anywhere in this
+suite — a leftover worth deciding about rather than inheriting"* — and that sentence
+had been sitting there, undecided, being inherited.
+
+**A RETIRED RULE WITH LIVE CODE BEHIND IT IS NOT DEAD CODE. It is a second answer,
+and it will get proposed.** The right time to delete a mechanism is the round that
+replaces it; every round after that, the replacement and the leftover are both true
+of the repository and only one of them is true of the product.
+
+It is still here. The reason is measured rather than sentimental: the HARNESS uses
+it. `ArrangeSteps::ensureProjectFolder()` tags a folder to make it a project, which
+is how every `kind: project` row is arranged — 27 of them, of which **10 need a
+folder that is a project while holding no design at all**. The other 17 get a design
+and are promoted by content anyway. So removing the gesture is a harness change
+first and a deletion second, and putting it in the same PR as a reversal of the
+promotion rule would have stacked two independent regression surfaces.
+
+What went in this round: the README stopped claiming it, and `features/AGENTS.md`
+stopped calling it "worth deciding about" and started saying what it costs and when
+it goes. What did not: the code. Named, dated, and next.

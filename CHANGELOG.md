@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A folder inside a project folder is a project too.** Make a folder inside one Penpot already knows about, drop a design in, and Penpot gets a project named after the path to it — `Bubbles/pustice` — with the design inside. It used to leave the design in the folder above and make nothing, so two folders that looked identical behaved differently depending on which one happened to get a design first. An empty folder is still just a folder, and a folder in a `link` mapping still creates nothing.
+
 - **A design dragged into another team's folder now moves, instead of turning into a copy.** Nextcloud throws a file's Penpot markings away when it crosses between a personal folder and a Team Folder, so the design arrived looking like a stranger and was filed as a brand new one — same picture, new identity, no history. It keeps its identity now, and one move changes both its project and its team.
 
 - **A mapped folder shared with a group is now actually visible to that group.** Nextcloud creates every group share unaccepted, and an unaccepted share never appears in anyone's Files — so the folder existed, was shared correctly, and nobody could see it. The app accepts it for each member as it shares. Anyone who deliberately removed the folder from their own view keeps it removed.
