@@ -2599,6 +2599,35 @@ ITSELF (`Bubbles` → `Bubbles/foo`), which asks a folder to be moved into a fol
 that does not exist yet and whose name it is currently using — the folder parks
 under the mapping root for one step, which is also what lets the reverse
 (`Bubbles/foo` → `Bubbles`) land on the real name instead of `Bubbles (2)`.
+### A project sent to another team takes its folder with it
+
+The mirror of `Move a project folder into another team`, and the half that is
+**not built**. One project has one folder, whichever side moved it: if a project
+leaves for another team, the folder that already is that project should arrive in
+the receiving mapping — with everything in it, designs and ordinary files alike.
+
+**WHY IT DOES NOT WORK YET, and it is one line.** `PullService` builds its folder
+index once per mapping:
+
+```php
+$folderIndex = $this->indexProjectFolders($root);   // per MAPPING ROOT
+```
+
+`ensureProjectFolder()` already does the right thing when the index knows the
+project — `tryMoveProject($existing, $root, …)` relocates the existing folder into
+the new root, and a folder moves whole. But the index only sees folders under the
+root it was built for. When the receiving team pulls, the folder still standing
+under the old mapping is invisible, so the project is RE-CREATED: the designs
+re-mirror into a fresh folder and everything else stays behind in the abandoned
+one. `Budget.xlsx` is the assertion that catches it.
+
+**WHY IT IS NOT A ONE-LINE FIX ANYWAY.** Widening the index to span every mapped
+root asks the pull a question it has never had to answer: what happens when two
+mappings can both see a folder carrying one project id — mid-reap, in whichever
+order the mappings run. That is its own change, with its own scenarios.
+
+<!-- The Nextcloud-side twin went live in Chapter 5 Round 1; this side was split
+     out of the same PR rather than rushed into it. -->
 
 ---
 
