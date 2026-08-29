@@ -36,13 +36,6 @@ trait SyncNowSteps {
 	private const FIXTURE_FOLDER = 'All Sync/Sync Now Source';
 
 	/**
-	 * Rows the Background asked for, waiting for the mappings to be made.
-	 *
-	 * @var list<string>
-	 */
-	private array $syncNowPending = [];
-
-	/**
 	 * Penpot's side of the picture, across SEVERAL teams.
 	 *
 	 * {@see PullSteps::thePenpotTeamAlreadyContains()} is the one-team form and is
@@ -85,24 +78,17 @@ trait SyncNowSteps {
 	 * there" is testing that the app skips an empty file. Everything else is a
 	 * plain folder (no extension) or an ordinary file.
 	 *
-	 * ## THE ROWS ARE RECORDED HERE AND WRITTEN AT SYNC TIME
+	 * ## IT RUNS AFTER THE MAPPINGS, WHICH IS WHY IT CAN WRITE AT ALL
 	 *
-	 * This step runs BEFORE `the following mappings were made` — the Background is
-	 * a picture of the pre-state, and both siblings order it that way. But nothing
-	 * is mapped yet when it runs, and the `.penpot` row cannot be written without a
-	 * mapping: real archive bytes can only be OBTAINED by exporting a design, and a
-	 * design can only be born inside a mapped folder (an empty one created anywhere
-	 * else is refused by {@see \OCA\PenpotSync\Service\MoveRules}, correctly —
-	 * `create-file` needs a project).
+	 * This used to sit in the Background, ahead of `the following mappings were
+	 * made`, and had to DEFER every row to sync time: nothing was mapped yet, and a
+	 * `.penpot` cannot be written without a mapping (real archive bytes come only
+	 * from exporting a design, and a design can only be born inside a mapped
+	 * folder — anywhere else {@see \OCA\PenpotSync\Service\MoveRules} refuses it,
+	 * correctly, since `create-file` needs a project).
 	 *
-	 * {@see ArrangeSteps::theFollowingMappingsWereMade()} also EMPTIES each mapped
-	 * folder, which used to delete these rows out from under the Background. That
-	 * is fixed at the source now (the emptying is latched per scenario, as the
-	 * unmap already was), so this deferral carries only the archive's weight.
-	 *
-	 * So the table is recorded and replayed at the START OF THE SYNC, by which time
-	 * the mappings exist. The pre-state the scenario describes is true when the
-	 * scenario acts, which is all a Background claims.
+	 * Now each scenario states its own side after the Background has mapped, so the
+	 * deferral is gone and this writes immediately.
 	 *
 	 * @Given /^Nextcloud holds these resources:$/
 	 */
@@ -113,24 +99,8 @@ trait SyncNowSteps {
 				throw new \RuntimeException('every row needs a path');
 			}
 
-			$this->syncNowPending[] = $path;
-		}
-	}
-
-	/**
-	 * Write the rows the Background deferred, now that the mappings are made.
-	 *
-	 * Called from BOTH sync steps rather than one, because either direction may be
-	 * the first thing a scenario does and the pre-state has to hold for both.
-	 * Idempotent: the list is drained as it is replayed, and a row that already
-	 * exists is left alone — the legs share one Nextcloud, so a second scenario
-	 * finds what the first left and a `Given` that is already true stops.
-	 */
-	private function syncNowWritePending(): void {
-		$pending = $this->syncNowPending;
-		$this->syncNowPending = [];
-
-		foreach ($pending as $path) {
+			// ALREADY TRUE IS TRUE ENOUGH. The legs share one Nextcloud, so a second
+			// scenario finds what the first left; a `Given` that already holds stops.
 			if ($this->davExists($path)) {
 				continue;
 			}
@@ -160,7 +130,6 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
-		$this->syncNowWritePending();
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -175,7 +144,6 @@ trait SyncNowSteps {
 	 * @When /^the admin syncs every mapping to Penpot$/
 	 */
 	public function theAdminSyncsEveryMappingToPenpot(): void {
-		$this->syncNowWritePending();
 
 		$res = $this->occ('penpot_sync:sync push');
 		if ($res['exit'] !== 0) {
@@ -483,7 +451,6 @@ trait SyncNowSteps {
 	 * @BeforeScenario
 	 */
 	public function armSyncNow(): void {
-		$this->syncNowPending = [];
 		$this->syncNowArchiveBytes = '';
 	}
 

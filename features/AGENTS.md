@@ -4401,6 +4401,24 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
+### The Background is only what both scenarios share
+
+Which turns out to be the mappings, and nothing else. It used to carry both sides of
+the picture — everything Penpot held, everything Nextcloud held — and that made each
+scenario responsible for the other's fixtures: the pull dragged along the archive the
+push needs, and the push dragged along six designs it never looks at.
+
+Worse, it made the Background the thing under test. `connection/sync-now.feature` is
+the only file in the suite whose Background IS its fixture, and every failure this
+feature had traced back to that: an arrange that clears a mapped folder between
+scenarios is harmless when each scenario seeds its own design, and destroys the
+subject when the Background holds it.
+
+So each direction now states its own side. The pull says what Penpot has and what
+little Nextcloud has; the push says the one archive it is about. Both are shorter,
+neither can be broken by the other, and the Background says only the thing they
+genuinely agree on.
+
 ### One actor, not an Outline
 
 The pull scenario had two Examples rows, `the admin` and `the schedule`. It is gone,
