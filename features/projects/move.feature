@@ -140,9 +140,7 @@ Feature: Moving a project
     # One move changing team and name together, keeping the id, the designs and
     # their history. A project is never re-created to cross a team boundary.
 
-  # @todo — the pull's folder index is per mapping root, so the receiving team
-  # re-creates the project instead of relocating the folder.
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Move a project to another team in Penpot
     Given the following items in the mappings:
       | path                          |

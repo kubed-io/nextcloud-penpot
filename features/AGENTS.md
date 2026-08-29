@@ -2601,33 +2601,37 @@ under the mapping root for one step, which is also what lets the reverse
 (`Bubbles/foo` → `Bubbles`) land on the real name instead of `Bubbles (2)`.
 ### A project sent to another team takes its folder with it
 
-The mirror of `Move a project folder into another team`, and the half that is
-**not built**. One project has one folder, whichever side moved it: if a project
-leaves for another team, the folder that already is that project should arrive in
-the receiving mapping — with everything in it, designs and ordinary files alike.
+The mirror of `Move a project folder into another team`. One project has one
+folder, whichever side moved it: when a project leaves for another team, the
+folder that already IS that project arrives in the receiving mapping — with
+everything in it, designs and ordinary files alike. `Budget.xlsx` is the
+assertion, because a design would be re-mirrored either way and would not
+notice the difference.
 
-**WHY IT DOES NOT WORK YET, and it is one line.** `PullService` builds its folder
-index once per mapping:
+**TWO HALVES, AND THE SECOND ONE IS THE ORDERING.** The receiving mapping has to
+find a folder standing under a root that is not its own, and the donor mapping
+must not destroy that folder's identity first.
 
-```php
-$folderIndex = $this->indexProjectFolders($root);   // per MAPPING ROOT
-```
+- **Finding it.** `$folderIndex` is built per mapping root, so a project
+  arriving from another team always MISSED it and a miss means "make a new
+  folder". `foreignProjectFolder()` answers the miss by indexing the other
+  mapped roots — at most once per pull, and only when something actually misses,
+  since a miss is otherwise just a genuinely new project. The relocation itself
+  needed nothing new: `ensureProjectFolder()` already hands whatever it finds to
+  `tryMoveProject()`, which moves the folder whole.
 
-`ensureProjectFolder()` already does the right thing when the index knows the
-project — `tryMoveProject($existing, $root, …)` relocates the existing folder into
-the new root, and a folder moves whole. But the index only sees folders under the
-root it was built for. When the receiving team pulls, the folder still standing
-under the old mapping is invisible, so the project is RE-CREATED: the designs
-re-mirror into a fresh folder and everything else stays behind in the abandoned
-one. `Budget.xlsx` is the assertion that catches it.
+- **Not reaping it.** `reapOrphanProjects()` reads "not named by this team" as
+  "deleted in Penpot", which a migrating project also looks like. Whether the
+  folder survived therefore depended on which mapping happened to pull first —
+  donor first and the id was stripped before anyone could relocate it,
+  irreversibly, since nothing can find a bare folder again.
+  `movedToAnotherMappedTeam()` asks the other mapped teams before reaping, and
+  answers **true on failure**: an unreachable Penpot defers the reap to a later
+  pull rather than destroying an identity on a guess.
 
-**WHY IT IS NOT A ONE-LINE FIX ANYWAY.** Widening the index to span every mapped
-root asks the pull a question it has never had to answer: what happens when two
-mappings can both see a folder carrying one project id — mid-reap, in whichever
-order the mappings run. That is its own change, with its own scenarios.
-
-<!-- The Nextcloud-side twin went live in Chapter 5 Round 1; this side was split
-     out of the same PR rather than rushed into it. -->
+<!-- The Nextcloud-side twin and this one landed together; the Penpot side was
+     split out mid-PR when it turned out to be a different mechanism, then built
+     rather than left @todo. -->
 
 ---
 
