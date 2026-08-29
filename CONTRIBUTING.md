@@ -1,24 +1,23 @@
 # Contributing
 
 Thanks for stopping by. This is **Penpot Sync** — a Nextcloud app that mirrors
-Penpot design files into Nextcloud as native, read-only files. It lives under the
+Penpot design files into Nextcloud as native files. It lives under the
 [kubed-io](https://github.com/kubed-io) GitHub org, shares some workflow plumbing
 with the rest of that org, and has a deliberate process around getting changes in.
 Please read this whole doc before you push code — most of the "why is my PR stuck?"
 questions are answered below.
 
-**Where the work is right now.** Chapters 1 (the API survey) and 2 (the build)
-are both CLOSED. Chapter 2's finale redrew the **master design** — `features/` was
-reorganised so the folder is the noun and the file is the verb — and in the
-process every one of its 116 scenarios became `@todo`, so **the integration suite
-currently runs nothing at all.** That is deliberate and it is the state you are
-picking up.
+**Where the work is right now.** Chapters 1 (the API survey), 2 (the build) and
+3 (building to the spec) are CLOSED. The app works end to end and is deployed:
+both directions of sync, every design and project verb, 73 live scenarios run
+against a real Nextcloud and a real Penpot on every push.
+[Chapter 4](saga/Chapter_4_Open_For_Business.md) is open, and it is about the
+outward-facing surfaces rather than the code.
 
-If you are picking up [saga/Chapter_3_Building_To_Plan.md](saga/Chapter_3_Building_To_Plan.md)
-— building to that design, one behaviour per PR — read it and
-[features/README.md](features/README.md) first, then §C6.38 of
-[saga/Chapter_2_The_Colony.md](saga/Chapter_2_The_Colony.md) for why the suite is
-empty. The one rule: **a scenario stops being `@todo` only on a PR that runs it.**
+**The queue Chapter 3 left is named, not hidden** — 24 `@todo`, 9 `@unbuilt`,
+4 `@blocked`, each saying what it wants. Read
+[features/README.md](features/README.md) for what those tags oblige. The one
+rule: **a scenario stops being `@todo` only on a PR that runs it.**
 
 If you only have time for one paragraph: **prefer opening an issue first so the
 work can be scoped and approved, then open a PR with tests and a clear changelog
@@ -54,8 +53,8 @@ itself is the authoritative detail.
 
 What is still missing, and roughly in the order it is wanted: personal projects
 (a user's own Penpot team at their home root), the mode pills, and tracking a
-copied project folder. [Chapter 3](saga/Chapter_3_Building_To_Plan.md) carries the
-running order.
+copied project folder. [Chapter 3's close](saga/Chapter_3_Building_To_Plan.md#chapter-3--where-it-stands-closed)
+is the honest inventory.
 
 ---
 
@@ -472,8 +471,8 @@ If you've found a vulnerability, **do not open a public issue.** Follow
   behaviour. [features/README.md](features/README.md) says which one owns it.
 - **"Why is that scenario the shape it is?"** → [features/AGENTS.md](features/AGENTS.md)
 - **"Why was it decided that way?"** → [the saga](saga/), via that section's
-  `saga:` pointer. Start with [Chapter 3](saga/Chapter_3_Building_To_Plan.md) — it
-  is the only chapter that can still be wrong about today.
+  `saga:` pointer. Start with [Chapter 4](saga/Chapter_4_Open_For_Business.md) —
+  it is the only chapter that can still be wrong about today.
 - **"I'm an AI agent — where do I start?"** → [AGENTS.md](AGENTS.md)
 
 Thanks for contributing. Be kind in reviews, validate on a real instance, and start
