@@ -216,32 +216,32 @@ Feature: Moving a project
     # ── RULE: what the old parent still holds decides whether it goes ─────────
     # notes: ../AGENTS.md#an-emptied-parent-is-reaped-only-when-it-holds-nothing-else
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Move a project in Penpot out of a parent folder which had nothing inside of it
     Given the following items in the mappings:
-      | path                          |
+      | path                              |
       | /Penpot/foo/Upstream/Alpha.penpot |
     When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
     Then "Penpot/Clients/Upstream" holds:
       | penpot_project_id | the original id |
     And there is no folder at "Penpot/foo"
-    And penpot does not hold a project named "foo"
+    And Penpot holds no project named "foo"
 
     # "foo" only ever existed because "foo/Upstream" needed somewhere to sit. With
     # nothing left in it and no id of its own, it has stopped meaning anything.
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Move a project in Penpot out of a parent folder holding other files
     Given the following items in the mappings:
       | path                              |
       | /Penpot/foo/Upstream/Alpha.penpot |
       | /Penpot/foo/Notes.txt             |
-    And penpot has a project named "foo/upstream"
+    And Penpot holds a project named "foo/Upstream"
     When someone moves that project to "Clients/Upstream" in the "Design Team" Penpot team
     Then "Penpot/Clients/Upstream" holds:
       | penpot_project_id | the original id |
     And "Penpot/foo" still exists in Nextcloud, holding "Notes.txt"
-    And penpot does not hold a project named "foo"
+    And Penpot holds no project named "foo"
 
     # Deleting a user's notes because a Penpot project moved out from under them is
     # not this app's call — the same line Grafana draws for a folder losing its last.
