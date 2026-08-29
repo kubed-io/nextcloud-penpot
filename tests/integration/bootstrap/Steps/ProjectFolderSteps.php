@@ -25,19 +25,13 @@ use Behat\Gherkin\Node\TableNode;
  * inside a mapped folder is just a folder" is a claim about something NOT
  * happening, and the only way to be sure is to make one and look at both sides.
  *
- * ## THE TAG GOES ON OVER occ, NOT DAV — AND THAT IS A REAL CHANNEL
+ * ## AN EMPTY PROJECT FOLDER COMES FROM PENPOT
  *
- * Assigning a system tag over WebDAV means a PROPPATCH against
- * `systemtags-relations`, which needs the tag's numeric id and a second round
- * trip to find it. `occ tag:files:add` fires the very same `TagAssignedEvent`
- * through the very same `ISystemTagObjectMapper::assignTags()` — verified in the
- * live 33.0.4 tree — so it exercises the listener identically at a fraction of
- * the setup.
- *
- * It also covers something the browser path does not: `occ` runs with **no user
- * session**, which is exactly the case the listener's sync-actor fallback exists
- * for. A listener written to require a session would pass every unit test and do
- * nothing here, which is the failure mode this suite keeps catching.
+ * There is no gesture on this side that promotes a folder holding no design —
+ * the tag opt-in that used to provide one is gone (saga §D4.14). So a scenario
+ * asking for `kind: project` gets it the way a real user does: the project is
+ * created in Penpot and the pull mirrors it, stamped with `penpot_project_id`.
+ * See {@see ArrangeSteps::ensureProjectFolder()}.
  *
  * Composed into {@see \OCA\PenpotSync\Tests\Integration\FeatureContext}; uses the
  * occ transport, the DAV transport, and the probe helpers from {@see PullSteps}
@@ -61,18 +55,6 @@ trait ProjectFolderSteps {
 	 */
 	public function iCreateAFolderAt(string $path): void {
 		$this->davMkcol($path);
-	}
-
-	/**
-	 *
-	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
-	 * stays as the plain helper 1 other step calls.
-	 */
-	public function iAssignThePenpotTagTo(string $path): void {
-		$res = $this->occ(sprintf('tag:files:add %s penpot public', escapeshellarg($this->rootPath($path))));
-		if ($res['exit'] !== 0) {
-			throw new \RuntimeException("could not tag '{$path}':\n{$res['output']}");
-		}
 	}
 
 	// ── what the APP believes ───────────────────────────────────────────────

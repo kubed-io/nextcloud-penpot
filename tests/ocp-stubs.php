@@ -387,10 +387,7 @@ namespace OCP\Files {
 
 			public function newFile(string $path, mixed $content = null): File;
 
-			/**
-			 * @since NC 29. How ProjectTagListener turns a tagged object id back
-			 * into a node — a tag event carries ids, not paths.
-			 */
+			/** @since NC 29. Resolve a node by id when only the id is known. */
 			public function getFirstNodeById(int $id): ?Node;
 		}
 	}
@@ -512,89 +509,6 @@ namespace OCP\Files\Events\Node {
 
 			public function getTarget(): \OCP\Files\Node {
 				throw new \LogicException('stub');
-			}
-		}
-	}
-}
-
-namespace OCP\SystemTag {
-	// The tag surface behind the project-folder opt-in (§C6.18). ProjectTags owns
-	// the `penpot` tag; ProjectTagListener reads the event that announces one.
-	if (!interface_exists(ISystemTag::class, false)) {
-		interface ISystemTag {
-			public function getId(): string;
-
-			public function getName(): string;
-
-			public function isUserVisible(): bool;
-
-			public function isUserAssignable(): bool;
-		}
-	}
-	if (!interface_exists(ISystemTagManager::class, false)) {
-		interface ISystemTagManager {
-			public function createTag(string $tagName, bool $userVisible, bool $userAssignable): ISystemTag;
-
-			public function getTag(string $tagName, bool $userVisible, bool $userAssignable): ISystemTag;
-
-			/**
-			 * @param array<int|string> $tagIds
-			 * @return array<string, ISystemTag>
-			 */
-			public function getTagsByIds($tagIds, ?\OCP\IUser $user = null): array;
-		}
-	}
-	if (!interface_exists(ISystemTagObjectMapper::class, false)) {
-		interface ISystemTagObjectMapper {
-			/** @param array<int|string>|int|string $tagIds */
-			public function assignTags(string $objId, string $objectType, $tagIds): void;
-
-			/** @param array<int|string>|int|string $tagIds */
-			public function unassignTags(string $objId, string $objectType, $tagIds): void;
-
-			/** @param list<string> $objIds */
-			public function haveTag($objIds, string $objectType, string $tagId, bool $all = true): bool;
-		}
-	}
-	if (!class_exists(TagNotFoundException::class, false)) {
-		class TagNotFoundException extends \RuntimeException {
-		}
-	}
-	if (!class_exists(TagAlreadyExistsException::class, false)) {
-		class TagAlreadyExistsException extends \RuntimeException {
-		}
-	}
-	// @since NC 32 — which is why appinfo/info.xml's floor moved to 32. It is a
-	// plain value object, so unlike the Files events above this stub carries a
-	// real constructor: the listener tests build one directly.
-	if (!class_exists(TagAssignedEvent::class, false)) {
-		class TagAssignedEvent extends \OCP\EventDispatcher\Event {
-			/**
-			 * @param list<string> $objectIds
-			 * @param list<int> $tags
-			 */
-			// No `parent::__construct()`: the stubbed Event above declares none,
-			// and calling a constructor that does not exist is a fatal, not a
-			// no-op the way it is against the real class.
-			public function __construct(
-				private string $objectType,
-				private array $objectIds,
-				private array $tags,
-			) {
-			}
-
-			public function getObjectType(): string {
-				return $this->objectType;
-			}
-
-			/** @return list<string> */
-			public function getObjectIds(): array {
-				return $this->objectIds;
-			}
-
-			/** @return list<int> */
-			public function getTags(): array {
-				return $this->tags;
 			}
 		}
 	}

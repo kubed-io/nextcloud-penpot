@@ -20,7 +20,6 @@ use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
 use OCA\PenpotSync\Listener\MoveMemoryListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
-use OCA\PenpotSync\Listener\ProjectTagListener;
 use OCA\PenpotSync\Listener\RegisterDavPluginsListener;
 use OCA\PenpotSync\Listener\RestoreFromTrashListener;
 use OCA\PenpotSync\Listener\TrashPurgeHook;
@@ -40,7 +39,6 @@ use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\Events\Node\NodeWrittenEvent;
-use OCP\SystemTag\TagAssignedEvent;
 
 /**
  * App bootstrap.
@@ -201,14 +199,6 @@ final class Application extends App implements IBootstrap {
 		// in its folder while the design stayed in Penpot's trash, and the next
 		// pull pruned the file a second time (the gap designs/delete.feature used to name).
 		$context->registerEventListener(NodeRestoredEvent::class, RestoreFromTrashListener::class);
-
-		// A FOLDER BECOMES A PROJECT (projects/create.feature). Normally that
-		// happens when a design lands in it; this listener is the second, explicit
-		// route — tagging the folder — which the test harness relies on to make a
-		// project that holds no design yet. Note what is deliberately absent:
-		// there is no TagUnassignedEvent listener, so "removing the tag never
-		// deletes the project" is true by construction, not by a branch.
-		$context->registerEventListener(TagAssignedEvent::class, ProjectTagListener::class);
 
 		// The Files-app surface (saga Ch2 Course 6). Loads `dist/penpot_sync-files`
 		// and hands it the instance base URL, which is all the browser needs to

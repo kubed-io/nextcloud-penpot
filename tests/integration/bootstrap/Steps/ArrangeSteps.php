@@ -353,7 +353,9 @@ trait ArrangeSteps {
 					$this->lastDeclaredDesigns[] = $path;
 					break;
 				case 'project':
-					$this->davMkcol($path);
+					// No MKCOL: the pull creates the folder when it mirrors the
+					// project, which is the only route to an empty project folder
+					// now the tag opt-in is gone (§D4.14).
 					$this->ensureProjectFolder($path);
 					$this->rememberProject($path);
 					break;
@@ -439,26 +441,12 @@ trait ArrangeSteps {
 
 			return;
 		} else {
-			// ── THE WRITE IS ALL IT TAKES NOW, AND IT USED NOT TO BE ──────────────
+			// ── THE WRITE IS ALL IT TAKES ────────────────────────────────────────
 			//
-			// This block used to tag the folder first, because a design written into
-			// a folder Penpot had never seen did NOT make that folder a project — it
-			// landed in the team's Drafts, and CI said so in one line: `expected a
-			// Penpot project named 'New'; found: Drafts, Drafts, Drafts`. Tagging
-			// then writing was the only supported way to arrange "this design is in
-			// this project".
-			//
-			// The comment that stood here said `projects/create.feature` specs the
-			// other route as well and that the scenario "is still @todo and stays
-			// that way — this PR has not run it". It runs now, and it passes, so the
-			// tag has stopped being load-bearing and the arrange says what the app
-			// does rather than working around what it did not.
-			//
-			// IT ALSO FIXES THE ROOT CASE. `a design file named … in "Penpot"` used
-			// to tag the mapping root, which `ProjectFolderService` correctly untags
-			// — leaving `ensureProjectFolder()` to throw about a folder that was
-			// never going to be a project. A design at the root is Drafts, and now
-			// simply arranges itself.
+			// Writing the design promotes the folder: that is what §C6.38's
+			// promotion-by-content means, and it is the whole of the arrange. A
+			// design at the mapping ROOT arranges itself too — that is Drafts
+			// (§6.35), not a project named after the mapped folder.
 			//
 			// Empty body: that is what "+ New → Penpot design" writes, and the app
 			// tells a CREATE from an UPLOAD by exactly this (see GestureSteps).
@@ -802,18 +790,38 @@ trait ArrangeSteps {
 	/**
 	 * Make a folder a Penpot project, if it is not one already.
 	 *
-	 * Idempotent by reading the stamp rather than the tag: the stamp is what every
-	 * later lookup uses (§6.29) and `ProjectFolderService` writes it before it does
-	 * anything else, so a folder carrying one is a project whatever its tag says.
+	 * ## THE PROJECT IS MADE IN PENPOT, AND THE PULL MIRRORS IT
+	 *
+	 * This used to assign the `penpot` tag and let the opt-in listener promote the
+	 * folder. That opt-in is gone (§D4.14): a folder is a project because it
+	 * carries `penpot_project_id`, and only two things write one — a design
+	 * landing in the folder, and the pull mirroring a project that exists in
+	 * Penpot. An EMPTY project folder can only come from the second, which is
+	 * also how a real user gets one.
+	 *
+	 * Idempotent by reading the stamp, which is the only marker there has ever
+	 * been worth reading (§6.29).
 	 */
 	private function ensureProjectFolder(string $folder): void {
 		if ($this->projectIdOf($folder) !== '') {
 			return;
 		}
-		$this->iAssignThePenpotTagTo($folder);
+
+		$root = $this->mappingRootOf($folder);
+		$name = trim(substr($folder, strlen($root)), '/');
+		if ($root === '' || $name === '') {
+			throw new \RuntimeException(
+				"'{$folder}' is not below a mapping, so nothing can make it a Penpot project",
+			);
+		}
+
+		$this->penpotProjectIn($root, $name);
+		$this->theAdminRunsAPull();
+
 		if ($this->projectIdOf($folder) === '') {
 			throw new \RuntimeException(
-				"tagging '{$folder}' did not make it a Penpot project:\n" . $this->status($folder),
+				"created the project '{$name}' in Penpot but the pull did not mirror it "
+				. "to '{$folder}':\n" . $this->status($folder),
 			);
 		}
 	}

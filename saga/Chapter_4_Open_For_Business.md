@@ -406,6 +406,45 @@ is go looking for a control that is not there.
 
 ---
 
+### §D4.14 — Decision (locked): a folder is a project because of its metadata, and nothing else
+
+**The call:** the `penpot` system tag is removed in full — the service, the
+listener, the event subscription, the stubs and the harness's use of it.
+`penpot_project_id` is the only thing that makes a folder a project.
+
+The tag has been dying for three chapters and would not finish. It began as the
+thing that *made* a folder a project; §C6.38 replaced that with promotion by
+content, and it survived as decoration the pull stamped. Chapter 3 Round 10
+removed the decoration and it survived again — as `onTagged()`, an explicit
+opt-in with **no scenario anywhere in the suite**, kept alive because the test
+harness used it to arrange the one thing nothing else could: a project folder
+holding no design.
+
+> **The rule:** a feature kept alive only by its test harness is not a feature.
+> It is scaffolding wearing a feature's clothes, and it reads to everyone else as
+> a supported second way to do the thing.
+
+**What made it removable was asking what a real user does.** An empty project
+folder is not exotic — every user gets one the moment they make a project in
+Penpot and the pull mirrors it. The harness had been reaching for a private
+gesture to arrange something the product already does in the open. It now creates
+the project in Penpot and pulls, which is both simpler and a truer fixture: it
+arranges the state the way the state actually arises.
+
+**The cost was 14 unit tests**, all of them `onTagged()`'s. None covered
+behaviour that survives: the refusal paths they exercised (unusable name, Penpot
+refused, the mapped root, outside every mapping) all have `adoptForContent()`
+twins that remain, and the "contents come too" case is covered by
+`testAdoptionFilesTheDesignsAlreadyInTheFolder`.
+
+**One thing deliberately did NOT follow.** `TagAssignedEvent` was the only stated
+reason `info.xml` requires Nextcloud 32. The floor stays at 32 anyway, because
+nothing has ever been run below it — lowering it would advertise support for two
+server versions no CI leg has exercised. Widening the range is a change with a
+matrix line behind it, not a side effect of deleting a listener.
+
+---
+
 ## The rounds
 
 ### Round 1 — the README stops being a design doc
@@ -567,6 +606,30 @@ not have been.
 already `@todo` — the spec had been honest about this the whole time, which is
 what made the decision easy to verify rather than a judgement call.
 
+
+### Round 8 — the tag, finally
+
+Removed: `ProjectTags`, `ProjectTagListener`, their `TagAssignedEvent`
+registration, `ProjectFolderService::onTagged()` and `refuse()`, the three
+`tags->remove()` cleanups in `MotionService`, `PullService` and
+`ProjectFolderService`, the `OCP\SystemTag` stubs, 14 unit tests, and the
+harness's `iAssignThePenpotTagTo()`.
+
+**The specification needed no changes at all.** Not one `.feature` file mentions
+the tag — checked by parsing every non-comment step and table row across the
+suite. The single grep hit was the word *stage*. So nothing was ever asserting
+the tag existed; the spec had been describing the product correctly while the
+code carried a mechanism the product did not have.
+
+**The README was the only place a user could have learned it existed**, and it
+described it as a feature: *"A folder you promote from this side is tagged
+`penpot`, so the ones you made are easy to spot."* That sentence is gone.
+
+**The harness swap is the substantive change.** `ensureProjectFolder()` used to
+tag a folder and check the stamp appeared; it now creates the project in Penpot
+and runs a pull. `kind: project` no longer MKCOLs the folder first — the pull
+makes it, which is the only route there is.
+
 ---
 
 ## The plan — reaching the store
@@ -681,10 +744,9 @@ Both are inherited from the sibling's review and neither is a blocker:
    committed to and the pipeline carries it. The remaining question is not
    *whether* but *when the countersign lands* — gate 5, and the only one nobody
    here controls.
-2. **Does the tag gesture come out?** Chapter 3 left it dated and queued: live
-   code for a mechanism §C6.18 retired, kept because the harness arranges 27
-   `kind: project` rows with it. It is still a second answer to a settled
-   question.
+2. ~~**Does the tag gesture come out?**~~ **Answered in Round 8** — yes, in
+   full. The harness now arranges a project folder the way a user gets one:
+   the project is made in Penpot and the pull mirrors it.
 3. **Does the sibling family converge on one docs layout?** The cascade (§D4.2)
    is written for this repository. n8n and Grafana have the same four documents
    and the same drift, and nothing has been ported back to them.

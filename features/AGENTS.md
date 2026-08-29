@@ -1090,30 +1090,19 @@ A PROJECT IS A FOLDER THAT HOLDS A DESIGN, and its name is the path from the
 mapping's folder down to it. Both halves were decided together (§C6.38) and neither
 works without the other.
 
-**The `penpot` tag is not what makes a folder a project.** `penpot_project_id` is.
-Nothing in the app reads the tag to decide anything, and the pull does not write
-one: a project folder mirrored from Penpot carries the id and no tag.
+**`penpot_project_id` is the only thing that makes a folder a project.** There is
+no second marker. Two things write it: the pull, mirroring a project that exists in
+Penpot, and `adoptForContent()`, when a design lands in a plain folder below a sync
+mapping. Nothing else.
 
-The tag has two writers, and both are gestures made in Nextcloud.
-`adoptForContent()` applies it when a design lands in a plain folder and promotes
-it — a visible receipt for something the user just caused. `onTagged()` reads it
-the other way, as an explicit opt-in: assigning it by hand asks for the folder to
-become a project.
+So an EMPTY project folder can only come from Penpot, and that is how the harness
+arranges every `kind: project` row: create the project in Penpot, pull, and the
+folder arrives stamped.
 
-**That second one has no scenario anywhere in this suite, and it is live code.** It
-reads to anyone surveying the repo as a supported second way to make a project, and
-it has been proposed as one. It stays for a measured reason: the HARNESS uses it.
-`ArrangeSteps::ensureProjectFolder()` tags a folder to make it a project, which is
-how every `kind: project` row is arranged — 27 of them across four feature files, of
-which **10 need a folder that is a project while holding no design at all**.
-Removing the gesture is a harness change first and a deletion second.
-
-<!-- The tag used to BE the opt-in, and for a while afterwards the pull still
-     stamped it as decoration. Both are gone; saga §C6.18
-     (../saga/Chapter_2_The_Colony.md#c618--a-folder-becomes-a-project-and-the-one-marker-that-means-both)
-     and Chapter 3 Round 10
-     (../saga/Chapter_3_Building_To_Plan.md#round-10--the-rules-own-edge-and-a-leftover-that-argued-for-itself),
-     which also records why the leftover is still here. -->
+<!-- There was once a `penpot` system tag that WAS the opt-in, and afterwards a
+     period where the pull stamped it as decoration. It is gone in full — service,
+     listener, event subscription and all: saga §D4.14
+     (../saga/Chapter_4_Open_For_Business.md#d414--decision-locked-a-folder-is-a-project-because-of-its-metadata-and-nothing-else). -->
 
 ### A folder is a project when a design is in it
 

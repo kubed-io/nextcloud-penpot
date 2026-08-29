@@ -513,9 +513,9 @@ final class PenpotClient {
 	 *
 	 * NEVER CALLED FROM THE PULL (`projects/create.feature`). Every Penpot project
 	 * becomes a Nextcloud folder automatically; the reverse only happens on a
-	 * gesture, so both callers are in {@see ProjectFolderService} — a design
-	 * landing in the folder ({@see ProjectFolderService::adoptForContent()}), or
-	 * the folder being tagged ({@see ProjectFolderService::onTagged()}).
+	 * gesture — a design landing in a folder
+	 * ({@see ProjectFolderService::adoptForContent()}), which since saga §D4.14 is
+	 * the only one there is.
 	 *
 	 * `$actorToken` attributes the creation exactly as {@see renameProject()}: the
 	 * project should be owned by the person who asked for it, not by the service

@@ -106,7 +106,6 @@ It runs both ways: a project named `Brand/2026` in Penpot arrives here as the fo
 
 **Drafts is a state, not a folder.** Penpot calls a design that belongs to a team but no project a draft, and we never invent a `Drafts/` folder for it: sitting at the mapping root simply *is* being in Drafts. So filing a draft is a drag, and un-filing it is a drag back. The gesture you already know *is* the Penpot operation. 📥
 
-A folder you promote from this side is tagged `penpot`, so the ones you made are easy to spot among your own folders.
 
 🗂️ [`projects/create.feature`](features/projects/create.feature) · 🚚 [`projects/move.feature`](features/projects/move.feature) · 🔤 [`projects/rename.feature`](features/projects/rename.feature)
 
