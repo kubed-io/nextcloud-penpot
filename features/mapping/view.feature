@@ -1,4 +1,4 @@
-# Notes, decisions and history for this feature: ../AGENTS.md#team-mappingview
+# Notes, decisions and history for this feature: ../AGENTS.md#mappingview
 
 Feature: Looking at the team mappings
   As a Nextcloud admin

@@ -24,7 +24,7 @@ namespace OCA\PenpotSync\Service;
  * {@see PenpotFileMetadata}), which is a different read and a later course's
  * concern.
  *
- * ## THE FOUR STATES (mapping-membership.feature)
+ * ## THE FOUR STATES (saga §6.29; observed through the gestures in `designs/`)
  *
  *   IN_PROJECT — a project id AND a team id above the node. The ordinary case:
  *                the file is in that project, in that team.

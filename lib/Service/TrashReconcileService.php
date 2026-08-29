@@ -25,25 +25,18 @@ use Psr\Log\LoggerInterface;
  * from two sides, and restoring and un-trashing are already each other's undo; the
  * trash itself was the piece that only worked one way.
  *
- * ## THIS REVERSES A DECISION, AND THE OLD ONE WAS NOT SILLY
+ * ## WHY A TRASHED MIRROR IS REACHED INTO AT ALL
  *
- * The rule used to be *a mirror already in the Nextcloud trash is invisible to the
- * pull* — the reconciler walks the mapped folder's listing, so a trashed mirror was
- * not merely spared, it was NOT SEEN AT ALL, and a whole class of question stopped
- * existing because nothing was looking. The stated reason: once Penpot has
- * destroyed the design, the trashed file is the LAST COPY OF IT IN EXISTENCE, and
- * reaching in to delete that on a schedule is the most destructive thing this app
- * could do.
- *
- * That is right about the stakes and wrong about the gesture. Destroying a design
- * in Penpot is not something anyone does by accident on a schedule — it is the
- * second, deliberate half of a two-step delete, by someone who already trashed it
- * once, and it is the same gesture Nextcloud spells "empty the trash", which this
- * app has always answered by destroying the design. Both siblings made this cut
- * first. `features/AGENTS.md#a-design-destroyed-in-penpot-purges-its-trashed-mirror`
+ * Once Penpot has destroyed the design, the trashed file is the last copy of it in
+ * existence, so deleting it on a schedule sounds like the most destructive thing
+ * this app could do. It is not, because of what the trigger is: destroying a design
+ * in Penpot is the second, deliberate half of a two-step delete, by someone who
+ * already trashed it once — the same gesture Nextcloud spells "empty the trash",
+ * which this app has always answered by destroying the design.
+ * `features/AGENTS.md#a-design-destroyed-in-penpot-purges-its-trashed-mirror`
  * carries the argument in full.
  *
- * What survives from the old rule is its actual content: **never guess.**
+ * The constraint that comes with it: **never guess.**
  * {@see isGone()} refuses to purge unless every source agrees the design is gone,
  * and an unreachable Penpot is not agreement.
  *
@@ -54,7 +47,7 @@ use Psr\Log\LoggerInterface;
  *   - a mirror stamped before `penpot_team_id` existed (§C6.7), which cannot be
  *     attributed to a mapping at all
  *   - anything whose mode is not `sync`: an `unmapped` file left its mapping and its
- *     design is not this app's business any more (`purge.feature` says the same of
+ *     design is not this app's business any more (`designs/purge.feature` says the same of
  *     the user-driven purge), and a `link` is never trashed in the first place
  *   - anything at all while the answer from Penpot is uncertain
  *

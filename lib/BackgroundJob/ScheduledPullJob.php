@@ -19,37 +19,26 @@ use Psr\Log\LoggerInterface;
 
 /**
  * The unattended pull, on the interval from Sync Settings
- * (`admin-section.feature`, `reconcile.feature`).
- *
- * ## THIS IS THE SLICE'S WHOLE POINT
- *
- * The interval has been configurable since Course 2 and was read by **nothing**.
- * `occ penpot_sync:show-config` said so out loud — *"every 1h (not running — the
- * pull job is not built yet)"* — but from the admin surface it looked like a
- * working setting. A design renamed in Penpot stayed renamed only in Penpot
- * until somebody ran `occ` by hand, which is exactly how this was reported.
- *
- * The pull itself has followed renames since Course 3. Nothing about it changes
- * here; it finally just gets asked.
+ * (`connection/admin.feature`, `connection/sync-now.feature`).
  *
  * ## A TimedJob, NOT A CRON EXPRESSION
  *
- * Nextcloud schedules by interval, and the interval is re-read every time the
- * job is INSTANTIATED — so changing it in settings takes effect on the next tick
+ * Nextcloud schedules by interval, and the interval is re-read every time the job
+ * is INSTANTIATED — so changing it in settings takes effect on the next tick
  * rather than needing a re-registration.
- *
- * The 60s floor is not a preference: a shorter interval would have the job
- * re-entering faster than a real pull over a large team can finish.
  *
  * ## DISABLED MEANS "DO NOTHING", NOT "DO NOT TICK"
  *
- * When the schedule is off, `run()` returns immediately rather than the job
- * being unregistered. Turning it back on then takes effect by itself, with no
+ * When the schedule is off, `run()` returns immediately rather than the job being
+ * unregistered. Turning it back on then takes effect by itself, with no
  * re-registration and no app reload — the interval simply gates how often the
  * setting is re-read.
  */
 final class ScheduledPullJob extends TimedJob {
-	/** Never re-enter faster than this, whatever the setting says. */
+	/**
+	 * Backstop only. {@see ScheduleConfig::getIntervalSeconds()} already clamps to
+	 * its own, higher minimum — this guards the job if that ever returns less.
+	 */
 	private const MIN_INTERVAL = 60;
 
 	public function __construct(

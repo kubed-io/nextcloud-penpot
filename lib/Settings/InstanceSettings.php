@@ -124,11 +124,8 @@ final class InstanceSettings implements IDeclarativeSettingsFormWithHandlers {
 		// cannot actually use. Test connection is what answers that — so the copy
 		// claims only what it can see and points there for the rest.
 		$tokenDescription = $hasToken
-			? '✓ A service-account token is stored. Paste a new one to replace it, '
-				. 'or use Test connection below to check it still works.'
-			: 'No token stored yet. Create an access token on the Penpot service account '
-				. '(Profile → Access tokens) and paste it here. The Penpot instance needs '
-				. '`enable-access-tokens` — it is off by default.';
+			? '✓ A token is stored. Paste a new one to replace it, or use Test connection to check it still works.'
+			: 'No token stored yet. Create one in Penpot under Profile → Access tokens (the instance needs enable-access-tokens).';
 
 		$tokenPlaceholder = $hasToken
 			? '•••••••••••••• — a token is stored (paste to replace)'
@@ -150,14 +147,12 @@ final class InstanceSettings implements IDeclarativeSettingsFormWithHandlers {
 			// internal path did: a plain string for the URL, ICrypto for the token.
 			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_EXTERNAL,
 			'title' => 'Instance',
-			'description' => 'The Penpot instance this app is scoped to — its base URL and the '
-				. 'service-account token used to reach it. That account only sees teams it has '
-				. 'been invited to, so each team must invite it before it can be mapped.',
+			'description' => 'The Penpot instance this app talks to, and the service-account token it authenticates with.',
 			'fields' => [
 				[
 					'id' => self::KEY_URL,
 					'title' => 'Penpot base URL',
-					'description' => 'e.g. https://penpot.example.com (no trailing slash). In-cluster URLs like http://penpot.cloud.svc.cluster.local:8080 also work.',
+					'description' => 'No trailing slash.',
 					'type' => DeclarativeSettingsTypes::URL,
 					'placeholder' => 'https://penpot.example.com',
 					'default' => '',

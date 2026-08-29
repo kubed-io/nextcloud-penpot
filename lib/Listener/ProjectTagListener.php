@@ -24,7 +24,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Turns "a user put the `penpot` tag on a folder" into a Penpot project
- * ({@see ProjectFolderService}, `project-folder.feature`).
+ * ({@see ProjectFolderService}, `projects/create.feature`).
  *
  * ## THERE IS NO UNASSIGN LISTENER, AND THAT IS THE FEATURE
  *

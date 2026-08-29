@@ -21,7 +21,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Routes a newly written `.penpot` file to {@see CreationService}
- * (`create-design.feature`).
+ * (`designs/create.feature`).
  *
  * ## WHY NodeWrittenEvent AND NOT A CONTROLLER
  *

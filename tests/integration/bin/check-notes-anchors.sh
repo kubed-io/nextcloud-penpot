@@ -28,8 +28,16 @@
 # Dividers, `@blocked`-style status reasons and the breadcrumbs themselves are not
 # prose and do not count.
 #
-# The anchor rule is GitHub's: lowercase, spaces to hyphens, drop anything that is
-# not a letter, digit, hyphen or space. Any heading level counts.
+# The anchor rule is GitHub's: lowercase, drop anything that is not a letter,
+# digit, hyphen, underscore or space, then turn EVERY REMAINING SPACE into a
+# hyphen. Any heading level counts.
+#
+# GitHub does NOT collapse runs of spaces, and this script used to. A heading with
+# an em-dash in it — "Filing a draft — dragging from the team root" — loses the
+# dash and keeps the two spaces around it, so GitHub's anchor carries a DOUBLE
+# hyphen there. Collapsing produced a single one, which meant three breadcrumbs
+# passed this check and 404ed for anyone who clicked them on GitHub. The same
+# class of silent rot the rest of this file is about, in the checker itself.
 #
 # BOTH KINDS OF POINTER ARE CHECKED: the per-scenario `# notes:` breadcrumb AND
 # the `# Notes, decisions and history…` header on line 1. Only the first was
@@ -50,7 +58,7 @@ anchors="$(
 	grep -E '^#{1,6} ' "$notes" \
 		| sed -E 's/^#{1,6} +//' \
 		| tr '[:upper:]' '[:lower:]' \
-		| sed -E 's/[^a-z0-9 -]//g; s/ +/-/g'
+		| sed -E 's/[^a-z0-9 _-]//g; s/ /-/g'
 )"
 
 fail=0

@@ -27,17 +27,15 @@ use Sabre\HTTP\ResponseInterface;
 /**
  * Refuses to let a `link`-mode design file be overwritten over WebDAV.
  *
- * ## THIS APP WAS THE ONLY ONE WITHOUT ONE
+ * ## WHY A ZERO-BYTE FILE NEEDS GUARDING
  *
- * Both siblings have carried this plugin for a while; penpot_sync never grew one,
- * and it is the app where it matters MOST. A `link` here is not a small pointer
- * document the way a linked dashboard or workflow is — it is a **zero-byte file**.
- * Nothing about it on disk says "do not write to me", so a desktop client
- * resolving a conflict, a `curl` PUT, or dragging a real `.penpot` archive on top
- * of one all used to land bytes in it without complaint.
+ * A `link` is not a small pointer document — it is a **zero-byte file**. Nothing
+ * about it on disk says "do not write to me", so a desktop client resolving a
+ * conflict, a `curl` PUT, or dragging a real `.penpot` archive on top of one all
+ * land bytes in it without complaint.
  *
- * What followed was quiet rather than loud, which is why it went unnoticed: the
- * file kept `penpot_mode = link`, so it still LOOKED like a pointer while holding
+ * What follows is quiet rather than loud, which is why it goes unnoticed: the
+ * file keeps `penpot_mode = link`, so it still LOOKED like a pointer while holding
  * an archive nobody would ever read. {@see \OCA\PenpotSync\Service\CreationService}
  * does not adopt it (it already carries a `penpot_id`), nothing pushes it — Penpot
  * has no write path for design content at all — and the next pull empties it again

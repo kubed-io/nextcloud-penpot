@@ -15,17 +15,17 @@ use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
 /**
- * A Nextcloud copy becomes a real new design in Penpot (`copy.feature`,
+ * A Nextcloud copy becomes a real new design in Penpot (`designs/copy.feature`,
  * saga §C6.8).
  *
  * ## THIS REVERSED A DECISION, AND THE REVERSAL IS THE INTERESTING PART
  *
- * `copy.feature` used to say, in its loudest scenario, *"No copy, anywhere, ever
+ * `designs/copy.feature` used to say, in its loudest scenario, *"No copy, anywhere, ever
  * writes to Penpot"* — a Ctrl+C is someone organising files, not authoring work
  * (§6.1). It was overturned deliberately on two grounds: §6.1 is about *content*
  * never flowing back (shape data still never does), and an inert copy is a
  * `.penpot` file that opens nothing and is indistinguishable from a real mirror
- * — the exact quiet lie {@see PullService}'s prune and restore.feature exist to
+ * — the exact quiet lie {@see PullService}'s prune and designs/restore.feature exist to
  * prevent. Both siblings register a copy as a new remote resource; this is
  * parity, arrived at from the other direction.
  *

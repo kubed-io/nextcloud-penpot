@@ -32,8 +32,8 @@ Feature: Moving a design
       | penpot_mode    | the mapping's mode |
       | content        | the mapping's body |
 
-  # notes: ../AGENTS.md#filing-a-draft-dragging-from-the-team-root-into-a-project
-  # notes: ../AGENTS.md#un-filing-dragging-from-a-project-out-to-the-team-root
+  # notes: ../AGENTS.md#filing-a-draft--dragging-from-the-team-root-into-a-project
+  # notes: ../AGENTS.md#un-filing--dragging-from-a-project-out-to-the-team-root
 
     Examples: a project, the team root which IS Drafts, and back again
       | source           | destination      | lands in  |

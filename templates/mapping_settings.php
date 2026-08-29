@@ -4,29 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * Team-mapping admin UI. One **card per mapping** (a repeating form, not a
- * table), laid out to match `nextcloud-grafana` so all three apps in the family
- * look and behave the same:
+ * table). Each field label carries a ⓘ info button (CSS tooltip) explaining it.
+ * Server-renders existing cards; js/mapping-settings.js handles add/save/delete.
  *
- *   col 1: Penpot team (row 1) · Nextcloud folder (row 2)
- *   col 2: Mode (row 1) · Team Folder (row 2)
- *   col 3: Groups picker (spans every row)
- *   row 4: Save / Delete
+ * Card grid: team + mode on row 1, folder + team-folder on row 2 (left two
+ * columns); groups picker spans both rows on the right; Save/Sync/Delete below.
  *
- * Two fields fewer than the Grafana card: no Format, because a `.penpot` archive
- * has exactly one shape, and no Folder mode, which was a designed-but-unbuilt
- * fork rendered as a permanently-immutable label (§C6.36). Everything else —
- * including Groups and Team Folder — sits where the siblings put it.
- *
- * An immutable field is rendered as plain text, and that is the whole signal. It
- * used to carry a "(fixed)" tag as well, in all three apps; the tag was a note
- * about the design rather than something a reader of the card needed.
- *
- * Groups is the one editable control on a saved card, and the only one whose
- * value is not stored: it is read from the mapped folder as this renders and
- * written straight back to it on save (§C6.35).
- *
- * Server-renders existing cards; js/mapping-settings.js handles add/save/delete
- * and the per-field help.
+ * Every field but Groups is immutable once saved, and renders as plain text to
+ * say so. Groups is also the only value not stored here: it is read from the
+ * mapped folder as this renders and written back to it on save.
  *
  * @var array{mappings: list<array<string,mixed>>, teams: list<array<string,mixed>>, groups: list<string>, team_folders_available: bool, error: ?string} $_
  * @var \OCP\IL10N $l
@@ -43,14 +29,13 @@ $tfAvailable = (bool)($_['team_folders_available'] ?? false);
 /** @var ?string $error */
 $error = $_['error'] ?? null;
 
-// Per-field help, shown via the ⓘ tooltip on each label — same affordance the
-// sibling apps use, so the cards read identically.
+// Per-field help, shown via the ⓘ tooltip on each label.
 $desc = [
-	'team' => $l->t('The Penpot team to mirror. Its projects become subfolders inside the Nextcloud folder. Bound by team id, so renaming the team in Penpot never breaks the mapping.'),
-	'nc' => $l->t('Name of the Nextcloud folder the team is mirrored into. Leave blank to use the Penpot team\'s own name. Fixed once the mapping is created — changing it would have to move the whole mirrored tree. Project folders inside it are always named exactly as Penpot names them.'),
-	'mode' => $l->t('Link: a read-only pointer that opens the design in Penpot. Sync: the exported .penpot archive is downloaded and kept as a real file. Fixed once the mapping is created — switching it in bulk would either delete every downloaded archive or export every file at once; promote or demote individual files instead.'),
-	'tf' => $l->t('On = an ownerless Team Folder (groupfolders). Off = a folder in the admin account shared to the groups below. Fixed once the mapping is created — switching would have to migrate the folder and its shares.'),
-	'groups' => $l->t('Which Nextcloud groups the mapped folder is shared with. Read from the folder itself, so sharing it elsewhere — the Files app, occ — shows up here too, and syncing never puts back a group you removed.'),
+	'team' => $l->t('The Penpot team to mirror. Its projects become subfolders of the Nextcloud folder.'),
+	'nc' => $l->t('The Nextcloud folder the team is mirrored into. Blank uses the Penpot team\'s own name. Fixed once saved.'),
+	'mode' => $l->t('Link: a read-only pointer that opens the design in Penpot. Sync: the .penpot archive is downloaded and kept as a real file. Fixed once saved.'),
+	'tf' => $l->t('On: an ownerless Team Folder (groupfolders). Off: an admin-owned folder shared to the groups. Fixed once saved.'),
+	'groups' => $l->t('Nextcloud groups the mapped folder is shared with. Read from the folder itself, so re-sharing it elsewhere shows up here too.'),
 ];
 
 // Inline an SVG glyph from img/icons/ — the single source of truth for the app's
@@ -91,7 +76,7 @@ $info = static function (string $tip) use ($icon): string {
 	])); ?>">
 	<h3 class="penpot-sync-mappings__heading"><?php p($l->t('Team mappings')); ?></h3>
 	<p class="settings-hint">
-		<?php p($l->t('Each mapping mirrors a Penpot team into a Nextcloud folder. The team\'s projects become subfolders automatically — there is nothing to configure per project. Hover the ⓘ on a field for details.')); ?>
+		<?php p($l->t('Each mapping mirrors a Penpot team into a Nextcloud folder; its projects become subfolders automatically. Hover ⓘ for details.')); ?>
 	</p>
 
 	<?php if ($error !== null) { ?>
@@ -102,15 +87,15 @@ $info = static function (string $tip) use ($icon): string {
 			<strong><?php p($l->t('Could not reach Penpot.')); ?></strong>
 			<?php p($error); ?>
 			<br>
-			<?php p($l->t('Existing mappings are shown below and can still be edited or removed, but no new team can be mapped until this is fixed.')); ?>
+			<?php p($l->t('Existing mappings can still be edited or removed; no new team can be mapped until this is fixed.')); ?>
 		</div>
 	<?php } elseif ($teams === []) { ?>
-		<?php /* Authenticated, member of nothing — the §6.18 precondition, unmet.
-				 This is the single most likely reason an admin gets stuck here, so
-				 it names the exact fix rather than showing an empty dropdown. */ ?>
+		<?php /* Authenticated but a member of nothing — the likeliest reason an admin
+				 gets stuck here, so it names the fix rather than showing an empty
+				 dropdown. */ ?>
 		<div class="penpot-sync-notice">
 			<strong><?php p($l->t('The service account cannot see any Penpot teams.')); ?></strong>
-			<?php p($l->t('Penpot has no instance-wide view — an account only sees teams it belongs to. In Penpot, invite the service account to the team you want to mirror, then reload this page.')); ?>
+			<?php p($l->t('An account only sees teams it belongs to. Invite the service account to the team you want to mirror, then reload this page.')); ?>
 		</div>
 	<?php } ?>
 
@@ -124,11 +109,9 @@ $info = static function (string $tip) use ($icon): string {
 			$selectedGroups = $m['nc_groups'] ?? [];
 			$useTf = filter_var($m['use_team_folder'] ?? $tfAvailable, FILTER_VALIDATE_BOOLEAN);
 			?>
-			<?php /* THE FACTS, NOT THE LABELS. The three fields below render as
-					 LOCALISED text — "Link"/"Sync", and a team name with its id in
-					 brackets — which is right for a reader and useless to a script.
-					 The delete confirmation needs the plain values, and scraping the
-					 spans would have it comparing against a translated "Sync". */ ?>
+			<?php /* The data- attributes carry the RAW values. The fields render
+					 localised text, which is right for a reader and useless to the
+					 delete confirmation that has to compare against "sync". */ ?>
 			<div class="penpot-sync-mappings__card" data-id="<?php p($m['id']); ?>"
 				data-team-name="<?php p($teamName !== '' ? $teamName : $teamId); ?>"
 				data-nc-folder="<?php p((string)($m['nc_folder'] ?? '')); ?>"
@@ -137,10 +120,8 @@ $info = static function (string $tip) use ($icon): string {
 					<div class="penpot-sync-field pp-team">
 						<label><?php p($l->t('Penpot team'));
 			print_unescaped($info($desc['team'])); ?></label>
-						<?php /* The team is immutable — a mapping IS its team, so a
-								 different team is a different mapping. Rendered as a
-								 single-option select purely so the card's shape matches
-								 the sibling apps'. */ ?>
+						<?php /* A mapping IS its team, so a different team is a different mapping.
+								 A single-option select keeps the card the same shape as the others. */ ?>
 						<select class="js-team" data-id="<?php p($teamId); ?>" disabled>
 							<option selected><?php p($label); ?></option>
 						</select>
@@ -148,30 +129,25 @@ $info = static function (string $tip) use ($icon): string {
 					<div class="penpot-sync-field pp-nc">
 						<label><?php p($l->t('Nextcloud folder'));
 			print_unescaped($info($desc['nc'])); ?></label>
-						<?php /* Immutable once created — re-pointing it would have to move
-								 the whole mirrored tree and re-stamp every file's metadata.
-								 Shown as text for the same reason folder mode is: a disabled
-								 input invites typing and implies it might save. */ ?>
+						<?php /* Re-pointing this would have to move the whole mirrored tree and
+								 re-stamp every file. Text, not a disabled input: an input invites
+								 typing and implies it might save. */ ?>
 						<span class="penpot-sync-fixed"><?php p((string)($m['nc_folder'] ?? '')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-mode">
 						<label><?php p($l->t('Mode'));
 			print_unescaped($info($desc['mode'])); ?></label>
-						<?php /* Immutable: sync→link would delete every downloaded archive
-								 under the mapping, link→sync would export every file at once.
-								 Per-FILE promotion is the supported path, because it can ask
-								 first. */ ?>
-						<?php /* The SAME localised labels the add-card offers — a saved card
-								 showing raw "link"/"sync" while a new one says "Link"/"Sync"
-								 is both inconsistent and untranslatable. */ ?>
+						<?php /* sync→link would delete every downloaded archive under the mapping;
+								 link→sync would export every file at once. Remap the team to change
+								 it. Labels match the add-card's, so a saved card never shows a raw
+								 untranslated "sync". */ ?>
 						<span class="penpot-sync-fixed"><?php p($modeSel === 'sync' ? $l->t('Sync') : $l->t('Link')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-tf">
 						<label><?php p($l->t('Team Folder'));
 			print_unescaped($info($desc['tf'])); ?></label>
-						<?php /* Immutable: switching backend would have to migrate the
-								 provisioned folder and all its shares. Both siblings lock
-								 this too. */ ?>
+						<?php /* Switching backend would have to migrate the provisioned folder and
+								 all of its shares. */ ?>
 						<span class="penpot-sync-fixed"><?php p($useTf ? $l->t('yes') : $l->t('no')); ?></span>
 					</div>
 					<div class="penpot-sync-field pp-groups">
@@ -191,12 +167,9 @@ $info = static function (string $tip) use ($icon): string {
 						<button type="button" class="button js-save" title="<?php p($l->t('Save')); ?>" aria-label="<?php p($l->t('Save')); ?>">
 							<?php print_unescaped($icon('save')); ?>
 						</button>
-						<?php /* Per-mapping sync — LIVE, and deliberately SYNCHRONOUS: one
-								 mapping, bounded, answered in the same request, because the
-								 admin is watching this card. The section-wide "Sync from
-								 Penpot" is the async one. Same position and treatment as in
-								 the sibling apps; enabling it was wiring a handler, not
-								 redesigning the card, exactly as planned. */ ?>
+						<?php /* Deliberately synchronous: one mapping, bounded, answered in the same
+								 request, because the admin is watching this card. The section-wide
+								 "Sync from Penpot" is the async one. */ ?>
 						<button type="button" class="button js-sync" title="<?php p($l->t('Sync now')); ?>" aria-label="<?php p($l->t('Sync now')); ?>">
 							<?php print_unescaped($icon('sync')); ?>
 						</button>
@@ -216,9 +189,5 @@ $info = static function (string $tip) use ($icon): string {
 		</button>
 		<span id="penpot-sync-mappings-status" class="msg"></span>
 	</div>
-
-	<p class="settings-hint">
-		<?php p($l->t('Mapping a team records it. Nothing is mirrored yet — the pull is not built (see the project roadmap).')); ?>
-	</p>
 </div>
 </div>

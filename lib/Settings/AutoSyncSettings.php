@@ -103,14 +103,12 @@ final class AutoSyncSettings implements IDeclarativeSettingsFormWithHandlers {
 			// class docblock for why INTERNAL cannot carry a checkbox either way.
 			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_EXTERNAL,
 			'title' => 'Sync Settings',
-			'description' => 'How often Nextcloud mirrors mapped Penpot teams. The pull is read-only — '
-				. 'it never changes anything in Penpot. Runs unattended on this interval; '
-				. 'the last run is reported under Sync Actions.',
+			'description' => 'How often Nextcloud pulls from mapped Penpot teams. Use Sync Actions below to run either direction on demand.',
 			'fields' => [
 				[
 					'id' => self::KEY_ENABLED,
 					'title' => 'Pull from Penpot on a schedule',
-					'description' => 'Nextcloud periodically refreshes mirrored files from Penpot — read-only, so nothing in Penpot changes. When off, use "Sync from Penpot" under Sync Actions.',
+					'description' => 'Nextcloud periodically refreshes mirrored files from Penpot; nothing in Penpot changes. When off, use Sync from Penpot in Sync Actions.',
 					'type' => DeclarativeSettingsTypes::CHECKBOX,
 					// A real bool: this is what the frontend round-trips. It is safe
 					// here only because EXTERNAL storage never feeds it to
@@ -120,10 +118,7 @@ final class AutoSyncSettings implements IDeclarativeSettingsFormWithHandlers {
 				[
 					'id' => self::KEY_INTERVAL,
 					'title' => 'How often',
-					'description' => 'A number plus a unit (s/m/h/d) — for example 15m, 1h, 6h, 1d. '
-						. 'A plain number means seconds. Minimum 5m: a Penpot pull costs one '
-						. 'request per team plus one per project, and anything faster spends '
-						. 'requests without catching meaningfully fresher designs.',
+					'description' => 'Number + unit (s/m/h/d), e.g. 15m, 1h, 6h, 1d. A plain number means seconds. Minimum 5m.',
 					'type' => DeclarativeSettingsTypes::TEXT,
 					'placeholder' => self::DEFAULT_INTERVAL,
 					'default' => self::DEFAULT_INTERVAL,

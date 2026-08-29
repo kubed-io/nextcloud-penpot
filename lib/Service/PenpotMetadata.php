@@ -37,8 +37,8 @@ use OCP\FilesMetadata\Model\IMetadataValueWrapper;
  *
  * The folder ids are INDEXED so the reconciler can find "the folder carrying
  * project id X" with a search instead of a full-tree walk — which is exactly
- * what the duplicate-project-id conflict check (mapping-membership.feature,
- * saga open question #30) will need. The resolver's own upward walk does not use
+ * what the duplicate-project-id conflict check (saga open question #30) will
+ * need. The resolver's own upward walk does not use
  * the index; the index is for the reverse lookup.
  *
  * ## THE `link` ⇄ `reference` WIRE TRANSLATION (carried over from BOTH siblings)

@@ -76,18 +76,11 @@ final class DestinationResolver {
 	 *
 	 * ## THE FOLDER A DESIGN LANDS IN IS THE PROJECT — ALWAYS THE FOLDER ITSELF
 	 *
-	 * This used to short-circuit on the nearest project ANCESTOR, so a design
-	 * dragged into `Bubbles/pustice` where `Bubbles` was already a project stayed
-	 * in `Bubbles` and `pustice` became nothing. The rule read "a plain subfolder
-	 * of a project is Nextcloud's layout, which Penpot cannot see", and it made
-	 * two identical-looking folders behave differently on markers a user cannot
-	 * see: whichever folder happened to get a design first won, permanently, and
-	 * nothing in the Files app said so.
-	 *
-	 * It also made `projects/create.feature`'s own headline — *a folder is a
-	 * project when a design is in it* — false of every folder below a project.
-	 *
-	 * So the ancestor is now a FALLBACK rather than an answer, and the order is:
+	 * Resolving to the nearest project ANCESTOR instead would make two
+	 * identical-looking folders behave differently on markers a user cannot see:
+	 * whichever folder happened to receive a design first would win, permanently,
+	 * with nothing in the Files app saying so. The ancestor is a FALLBACK, not an
+	 * answer, and the order is:
 	 *
 	 *   - the folder the design landed in becomes a project, named by its path
 	 *     below the mapping ({@see ProjectFolderService::adoptForContent()});
@@ -114,8 +107,7 @@ final class DestinationResolver {
 			// every design arriving in someone's personal project, silently, while a
 			// perfectly good project id sits in the membership. The short-circuit
 			// this method used to open with covered that by accident; taking it out
-			// took the cover with it. Raised by Copilot on #57, against the same
-			// state it raised on #52.
+			// took the cover with it.
 			return $membership->projectId;
 		}
 

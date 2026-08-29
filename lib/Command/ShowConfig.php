@@ -87,12 +87,8 @@ final class ShowConfig extends Command {
 			));
 		}
 
-		// This line used to end "(not running — the pull job is not built yet)".
-		// That was true when written and became a lie the moment ScheduledPullJob
-		// landed — a caveat nobody thinks to delete, which is worse than no caveat
-		// at all: it tells an operator the schedule is inert while it is running.
-		// It now reports the LAST RUN instead, which is a fact rather than a claim
-		// about what exists, so it cannot rot the same way.
+		// Reports the LAST RUN rather than anything about the job's existence: a
+		// fact an operator can act on, and one that cannot go stale.
 		$output->writeln(sprintf(
 			'Scheduled pull: %s, every %s',
 			$this->schedule->isEnabled() ? '<info>enabled</info>' : '<comment>disabled</comment>',

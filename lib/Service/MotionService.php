@@ -18,7 +18,7 @@ use OCP\Files\NotFoundException;
 use Psr\Log\LoggerInterface;
 
 /**
- * The move half of Course 4 — the drag, propagated (saga Ch2, `move.feature`).
+ * The move half of Course 4 — the drag, propagated (saga Ch2, `designs/move.feature`).
  * Driven by {@see \OCA\PenpotSync\Listener\NodeRenamedListener} on the *completed*
  * `NodeRenamedEvent`; the *before* gate that can refuse a move is
  * {@see \OCA\PenpotSync\Listener\MoveGuardListener}.
@@ -292,7 +292,7 @@ final class MotionService {
 				//
 				// So it becomes an ordinary untracked `.penpot` — the same shape any
 				// file the app never adopted has, and one a later gesture can still
-				// import. Raised by Copilot on #52.
+				// import.
 				$this->metadata->clear($target->getId());
 				$this->logger->warning('penpot_sync writeback: could not import a duplicate arrival; cleared its stale id', [
 					'app' => Application::APP_ID,

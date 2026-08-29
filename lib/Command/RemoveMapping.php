@@ -75,7 +75,7 @@ final class RemoveMapping extends Command {
 		// down first, a throw here would leave the mapping configured over a tree
 		// already dismantled. This way the worst case is a removed mapping with its
 		// pointers still lying about, which the next removal or a person can clear.
-		// Raised by Copilot on #47.
+		//
 		$torn = $this->teardown->tearDown($mapping);
 
 		$output->writeln(sprintf(

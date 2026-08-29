@@ -20,7 +20,7 @@ use OCP\Files\File;
 use Psr\Log\LoggerInterface;
 
 /**
- * Routes a copied `.penpot` file to {@see CopyService} (`copy.feature`).
+ * Routes a copied `.penpot` file to {@see CopyService} (`designs/copy.feature`).
  *
  * `NodeCopiedEvent` is its own event — a copy fires neither `NodeWrittenEvent`
  * nor `NodeRenamedEvent`, so without this listener a copied design is simply
@@ -56,7 +56,7 @@ final class CopyListener implements IEventListener {
 		$target = $event->getTarget();
 		if (!$target instanceof File) {
 			// Copying a project FOLDER is refused before it happens, by
-			// MoveGuardListener's sibling rule (project-folder.feature) — not
+			// MoveGuardListener's sibling rule (projects/create.feature) — not
 			// something to half-handle here.
 			return;
 		}

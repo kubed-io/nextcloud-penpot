@@ -115,7 +115,7 @@ final class MoveRules {
 	 *     is nobody's business but its owner's. So does adopting a folder that
 	 *     already held one. Either way the extension test re-created the very trap
 	 *     this method exists to remove, for the design archive somebody keeps
-	 *     beside the mirrors. Raised by Copilot on #47;
+	 *     beside the mirrors.
 	 *   - a folder carrying a project marker, or the mapping root's team marker;
 	 *   - a folder with either of those anywhere below it — a project's name is its
 	 *     PATH, so `foo` holding `foo/bar` is as much Penpot's as `foo/bar` is.
@@ -384,23 +384,15 @@ final class MoveRules {
 	/**
 	 * Rule 1 (§C6.38) — a folder may not move in or out of a `link` mapping.
 	 *
-	 * ## WHAT THIS RULE REPLACED, AND WHY THE OLD ONE WAS WRONG
+	 * ## CROSSING A TEAM IS NOT REFUSED (§C6.38)
 	 *
-	 * Until §C6.38 this was §6.30: *a project folder stays inside the team folder
-	 * it belongs to*, refusing every move that changed the team — including one
-	 * that left every mapping. It was stated three times in the old spec and it
-	 * was wrong all three, for two separate reasons:
+	 * `move-project` takes `{project-id, team-id}`, so crossing a team is ONE call,
+	 * exactly as `move-files` is for a single design; and dragging a project out of
+	 * every mapping is an unmapping rather than a desync, the same thing a single
+	 * design leaving already does.
 	 *
-	 *   - `move-project` takes `{project-id, team-id}`, so crossing a team is ONE
-	 *     call, exactly as `move-files` is for a single design. The refusal was
-	 *     protecting against a limit Penpot does not have.
-	 *   - Dragging a project OUT of every mapping is not a desync, it is an
-	 *     unmapping — the same thing a single design leaving already does. The
-	 *     Penpot project stands untouched; the folder simply stops mirroring it.
-	 *
-	 * What is left is the rule that is actually about safety rather than about a
-	 * misread API, and it is a MODE rule: a mode belongs to the team, and no
-	 * gesture in Nextcloud may change one.
+	 * What IS refused is about safety, and it is a MODE rule: a mode belongs to the
+	 * team, and no gesture in Nextcloud may change one.
 	 *
 	 *   - **out of a `link` mapping** — a link folder holds no archives, only
 	 *     pointers, so wherever it went it would arrive as a tree of empty files.
@@ -468,11 +460,9 @@ final class MoveRules {
 	 * ## TWO GESTURES, ONE EVENT, AND THE NAME IS ALL THAT SEPARATES THEM
 	 *
 	 * A rename IS a move to a sibling path: the same DAV verb, the same Nextcloud
-	 * event, the same pair of nodes. So the position test below cannot see one —
-	 * a rename resolves to the same project it started in and was waved straight
-	 * through. That is why the spec's `Rename a link in Nextcloud` was `@unbuilt`
-	 * while `A link cannot be moved out of the project it points into` had been
-	 * green for courses.
+	 * event, the same pair of nodes. So the position test below cannot see one — a
+	 * rename resolves to the same project it started in, and would be waved straight
+	 * through on position alone.
 	 *
 	 * The name is the discriminator, and it is passed in rather than read off a
 	 * node because the DAV side asks BEFORE the destination exists.

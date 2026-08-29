@@ -15,28 +15,15 @@ new design.
 Lives under the [kubed-io](https://github.com/kubed-io) GitHub org. Licensed
 AGPL-3.0-or-later. Target: the official Nextcloud app store, eventually.
 
-**The app mirrors for real, and is now clickable.** The admin surface, the
-membership resolver, the pull (both directions — it adds what appeared and
-prunes what vanished), the confirmed write paths (rename, move, `sync`-mode
-export) and the Files-app opener are all built. `src/` landed with Course 6 and
-holds exactly one file action, "Open in Penpot".
+**The app mirrors for real, in both directions.** The admin surface, the
+membership resolver, the pull, the scheduled job, the push ("Sync to Penpot"),
+the write paths (create, copy, move, rename, delete, restore, purge) and the
+Files-app surface are all built. `src/` holds the file action and the New-menu
+entry; `lib/Service/` is where the behaviour lives.
 
-Still absent: the scheduled background job, the mode pills, "+ New → design",
-personal projects, and notifications. See the Course tables in
-[`saga/Chapter_2_The_Colony.md`](saga/Chapter_2_The_Colony.md) for the live
-status of every structure — that table is maintained per slice and is the
-fastest way to see what exists.
-
-> **READ THIS BEFORE YOU TRUST A GREEN BUILD.** Chapter 2 is CLOSED, and its
-> finale (§C6.38) redrew the **master design**: `features/` is now organised so
-> the folder is the noun and the file is the verb, and **all 116 scenarios are
-> `@todo`, so the integration suite runs zero tests on every leg.** Zero is a
-> pass here and says so in `behat.dist.yml`, the workflow header and
-> `features/README.md` — but it means a green integration run currently proves
-> **nothing** about this app. Re-teaching the harness is
-> [Chapter 3](saga/Chapter_3_Building_To_Plan.md), one behaviour per PR, and its
-> one rule is: **a scenario stops being `@todo` only on a PR that runs it** —
-> never by re-reading the spec and deciding what it probably is.
+Not built: **personal projects** (a user's own Penpot team mounting at their home
+root), **the mode pills**, and tracking a **copied project folder**. A handful of
+"Penpot went unreachable mid-gesture" paths log rather than notify.
 
 Chapter 1 of the saga is CLOSED and carries a complete architecture — but read
 it before building, because several load-bearing decisions are still open forks
@@ -60,27 +47,54 @@ For the user-facing "what does it do?" → [README.md](README.md).
 
 ---
 
+## 🚨 NEVER open a pull request without being told to. Not once, not ever.
+
+**Opening a PR requires the maintainer's explicit approval, in this session, for
+this PR.** Not a guess, not an inference from "we're done", not "the work is
+finished so obviously it wants a PR". Ask, and wait for the answer.
+
+**One session, one PR.** If a PR is already open for the work you are doing, your
+change is a **commit on that branch**. Push to it. Do not open a second one because
+the new work "feels like a different subject" — that is you re-scoping a decision
+that was the maintainer's to make, and the usual cause is a first PR drawn too
+narrow.
+
+Approval does not carry:
+
+| Not approval | Why |
+|---|---|
+| *"and then let's get the next PR started"* | Approves **one** PR. Spend it once. |
+| Approval of an earlier PR this session | Each PR is its own ask. |
+| The work being finished and green | Finishing is not permission to publish. |
+| A task that obviously ends in a PR | Say the work is ready and **ask**. |
+| Fixing review feedback on an open PR | That is a push, not a new PR — and it needs no ask. |
+
+If you believe the work genuinely belongs in a separate PR, **say so and ask**.
+Explain why, propose the split, and wait. The answer is frequently "no, put it on
+the one we already have."
+
+When the work is done and you have no approval: **stop at the commit.** Say the
+branch is ready, say what is on it, and offer to open the PR. That is the finished
+state of the task.
+
+---
+
 ## First moves on any task
 
-1. **Read [README.md](README.md)** if you don't already know what the app is
-   meant to do — its "what works today vs. what's design" split is literal, not
-   boilerplate.
-2. **Read [CONTRIBUTING.md](CONTRIBUTING.md)** for the process — issue-first
-   flow, PR rules, what CI expects, testing policy, release flow. **Don't
-   re-derive any of this; the contributing doc is the source of truth.**
-3. **Read [`saga/Chapter_1_First_Contact.md`](saga/Chapter_1_First_Contact.md)
-   before writing anything design-relevant.** It's long and written in an
-   alien-survey narrative style (deliberate, per the project owner) — don't skim
-   it. It is the authoritative source for what's confirmed true about Penpot's
-   API, what's locked architecturally, and what's still an **open fork**. A fork
-   marked "raised, not decided" is not yours to silently resolve — either flag it
-   back to a human or write code that keeps both options open.
-
-   **Chapter 1 is CLOSED.** Read **§6.18–§6.48 first** — they carry the current
-   decisions; everything before them is the survey that produced them, and
-   several sections are explicitly superseded (each says so inline). The
-   "Chapter 1 — closed" section at the end summarises what was settled, what was
-   left open, and where to start building.
+1. **Read the `.feature` file for the behaviour you were sent to change.**
+   [`features/README.md`](features/README.md) says which file owns what. The specs
+   are the requirements, and reading the one that already describes your task is
+   faster than reading anything else in this repo.
+2. **Read [CONTRIBUTING.md](CONTRIBUTING.md)** for the process — the Gherkin-first
+   order, PR rules, what CI expects, release flow. **Don't re-derive it.**
+3. **Follow the scenario's pointers when you need the why.** Each one names its
+   section of [`features/AGENTS.md`](features/AGENTS.md), which names the saga
+   decision behind it. Stop at the depth your question needs — that is what the
+   cascade is for.
+4. **Before anything design-relevant, read the saga.** [Chapter 3](saga/Chapter_3_Building_To_Plan.md)
+   first, because it is the only chapter that can still be wrong about today; then
+   Chapter 1 from §6.18, which carries the architecture. It is long and written in
+   an alien-survey narrative (deliberate, per the project owner) — don't skim it.
 
 This repo is a deliberate third member of a family started by
 [kubed-io/nextcloud-n8n](https://github.com/kubed-io/nextcloud-n8n) (the
@@ -104,13 +118,13 @@ CONTRIBUTING.md owns that — don't ask the human to re-explain the PR flow.
 
 | Path | What's there |
 |---|---|
-| [appinfo/](appinfo/) | NC app metadata (`info.xml` only — no `routes.php` yet; it would reference Controller classes that don't exist). |
-| [lib/](lib/) | PHP backend (`OCA\PenpotSync`). `AppInfo/`, `Settings/`, `Command/` (the `occ` twins), `Service/` (client, pull, push, archive, metadata, resolver), `Listener/` (rename/move guards + the Files script) and `Migration/` (the mimetype repair steps). `BackgroundJob/` arrives with the scheduled pull. |
+| [appinfo/](appinfo/) | NC app metadata — `info.xml` (incl. the mimetype repair steps) and `routes.php`. |
+| [lib/](lib/) | PHP backend (`OCA\PenpotSync`). `AppInfo/`, `Settings/`, `Command/` (the `occ` twins), `Service/` (client, pull, push, archive, metadata, resolver), `Listener/` (the gesture listeners and guards), `Controller/`, `DAV/`, `Notification/`, `BackgroundJob/` (the scheduled pull) and `Migration/` (the mimetype repair steps). |
 | [src/](src/) | JS frontend, Vite-built to `dist/penpot_sync-files.js` per [vite.config.js](vite.config.js). `files.js` registers the one file action; `files-helpers.js` holds the pure logic so Vitest can reach it without `@nextcloud/*` imports. |
 | [tests/](tests/) | `unit/` (standalone, no NC server — see `bootstrap.php` + `ocp-stubs.php`) and `integration/` (Behat against a real Nextcloud; the Penpot token is minted by the workflow). `ocp-stubs.php` grows one entry per OCP interface a test mocks. |
-| [.github/workflows/](.github/workflows/) | CI: `tests.yml`, `quality.yml`, `integration.yml`, `pr.yml`, `package.yml`, `publish.yml`, `copilot-setup-steps.yml`. All green on the current slice. |
+| [.github/workflows/](.github/workflows/) | CI: `tests.yml`, `quality.yml`, `integration.yml`, `pr.yml`, `package.yml`, `publish.yml`, `copilot-setup-steps.yml`. |
 | [.devcontainer/](.devcontainer/) | PHP 8.3 + Node + GH CLI dev environment. |
-| [saga/](saga/) | The long-form design narrative. **Read Chapter 1 before touching anything design-relevant.** |
+| [saga/](saga/) | The long-form design narrative, and the **only** place history lives. |
 | [composer.json](composer.json) [package.json](package.json) | Dep manifests + script entrypoints, matching the sibling apps' tooling (PHPUnit, Psalm, php-cs-fixer / ESLint, Vite, Vitest). |
 | [psalm.xml](psalm.xml) [.php-cs-fixer.dist.php](.php-cs-fixer.dist.php) | Static analysis + style config, copied from the apprentice with only namespace/product-name changes. |
 | [CHANGELOG.md](CHANGELOG.md) | Every PR adds a line under `## [Unreleased]`. |
@@ -147,10 +161,9 @@ Same commands as the sibling apps, and all of them run for real today.
 Integration runs via Behat from `tests/integration/` (see
 `.github/workflows/integration.yml`).
 
-CI runs the JS/PHP install + lint/build steps today; see
-[CONTRIBUTING.md §What CI expects](CONTRIBUTING.md#what-ci-expects) for exactly
-what each workflow currently does versus what it's structured to do once code
-lands.
+See [CONTRIBUTING.md §What CI expects](CONTRIBUTING.md#what-ci-expects) for what
+each workflow does, and [CONTRIBUTING.md §Testing](CONTRIBUTING.md#testing) for the
+Gherkin-first order a change lands in.
 
 ---
 
@@ -177,13 +190,12 @@ forks* listed right after, which are explicitly NOT decided.
   tagging system at all (confirmed by grepping the full 149-command `/api/doc`
   RPC surface — zero real hits). There is no Penpot equivalent to n8n's
   `TagSyncService` quartet or even Grafana's simpler folder-based tag mirror
-  (saga §6.3). **Note:** this app DOES use Nextcloud-side system tags — the
-  project marker (§6.32) and the ignore marker (§6.23) — which is unrelated:
-  those are local UI affordances, not a two-system tag sync.
+  (saga §6.3). **Note:** this app does put one Nextcloud-side system tag on folders — the
+  project marker (§6.32) — which is unrelated: a local UI affordance, not a
+  two-system tag sync.
 - **Files-Metadata API is the file↔resource link**, keyed on Penpot's file
-  `id` — same pattern as n8n's `n8n_id` / Grafana's `grafana_uid`. The metadata
-  key name is not yet decided; `penpot_id` is the obvious default but is not
-  confirmed in the saga as final.
+  `id` — same pattern as n8n's `n8n_id` / Grafana's `grafana_uid`. The key is
+  `penpot_id`, and it is indexed alongside `penpot_mode`.
 - **Pulling a file is `export-binfile`, and it is SSE, not a plain POST.**
   Calling it returns `text/event-stream` (`progress` events, then `error` or
   `end`); the `end` event carries a separate `/assets/by-id/<uuid>` URL that
@@ -205,10 +217,10 @@ forks* listed right after, which are explicitly NOT decided.
   admin-level credential on the Penpot side (saga §6.8, checked structurally
   — no `admin`/`system` RPC module exists, and `organizationId` is
   permission-gated off on self-hosted instances).
-- **Two instance flags are required and off by default upstream:**
-  `enable-access-tokens` and `enable-webhooks`. Any setup doc, install script,
-  or admin-settings validation should account for both being potentially
-  unset (saga Course 0 / §5).
+- **`enable-access-tokens` is required and off by default upstream** — it is what
+  lets a Penpot user mint the token this app authenticates with. `enable-webhooks`
+  is NOT a requirement: creation works but delivery has never been observed, so
+  the scheduled pull is the only trigger (§6.17).
 - **The `.penpot` extension is a single token, not a compound** — unlike
   n8n's `.n8n.json` / Grafana's `.grafana.json`, there's no fragility risk
   from someone "simplifying" it, but Penpot's own server still serves the
@@ -217,183 +229,39 @@ forks* listed right after, which are explicitly NOT decided.
   maintenance:mimetype:update-db`/`update-js` mechanism both sibling apps use
   (saga §6.4). Don't assume a free Penpot-branded mimetype exists.
 
-### Decided across §6.18–§6.48 — these ARE locked
+### Where the decisions live — and it is not here
 
-Several forks that earlier drafts of this file listed as open have since been
-closed. **Read §6.18–§6.48 before anything else** — they supersede parts of
-§6.1, §6.9, §6.12, §6.13 and §6.16, and the superseded sections carry inline
-markers saying so.
+**The decisions are in the saga, and the saga is the only place they are.** What
+follows is an index, not a summary — enough to find the right section, never enough
+to act on without opening it. **Do not restate a decision here.** A summary of a
+living record is a second answer that nobody updates, and it will be read as the
+current one.
 
-- **§6.18 — The access model.** A **required service-account token** does all
-  reading/mirroring (one background job, one credential — a per-user pull would
-  race on shared Team Folders). An **optional per-user personal token** exists
-  only to attribute the two write actions to the human who performed them. A
-  team cannot be mapped unless the service account holds a `viewer` invite on it.
-- **§6.19 — The write paths are few, and only ONE destroys anything.**
-  `move-files` (file between projects, and the trash), `create-file`,
-  `import-binfile` (restore), `rename-project`, and `rename-file` (still gated
-  on §6.2 below). **`delete-file` is the only destructive call in the app**, and
-  is only ever reached through an explicitly confirmed user action. Ordinary
-  file-manager gestures on a mirror stay purely local.
-- **§6.22 — `sync` vs `link` is back**, meaning *whether we store the bytes*,
-  **not** which direction edits flow. Neither mode edits an existing design. `link`
-  is the default. Penpot is authoritative for a mirrored file's name and project
-  placement.
-- **§6.23 — Ignore and restore are one mechanism.** "Tagged ignore" and "moved
-  out of a mapped folder" are the same state. Restore is always user-confirmed.
-- **§6.24 — A mapping is a TEAM.** Projects are mirrored as subfolders by the
-  pull, never mapped individually. There is no project-mapping object.
-- **§6.21 — Folder metadata is the mapping store**, confirmed live on a real
-  production Team Folder (write, persist, read back — identical to an ordinary
-  folder). Membership is derived by walking up, never stored on the file.
-- **§6.25 — Failure behaviour.** Don't lose data: never prune on a failed or
-  partial listing; a remote failure never destroys local state.
-- **§6.29 — NESTING IS FREE.** The old "exactly one level, hard cap" is
-  **withdrawn**. A file's project is **the nearest ancestor folder carrying a
-  project id**; a project folder's team is the nearest ancestor carrying a team
-  id. Nextcloud may nest as deeply as the user likes while Penpot stays flat.
-  Authority split: **Penpot owns project membership, Nextcloud owns folder
-  layout** — a pull never drags a file to a fixed path.
-- **§6.30 — A project folder may not leave its team folder.** Free to move
-  anywhere inside it; refused (loudly, never silently undone) outside it.
-- **§6.31 — Personal projects mount at the user's home root**, with no team
-  folder. The ONE exception to the team lookup: no team ancestor + a personal
-  project id is valid, not broken. Pulled with the user's own token — the
-  service account can never see a personal team.
-- **§6.32 — Project folders carry a visible tag** as well as their metadata.
-  Metadata is authoritative machine state; the tag is the human-visible,
-  searchable marker. The tag is app-owned output, never user input.
-- **§6.33 — Creation from Nextcloud is ratified in principle**, scoped to
-  locations where the target project is unambiguous; a team's **Drafts** is the
-  landing zone otherwise. `create-file` is still unexercised live.
-- **§6.34 — The trash bin is ADOPTED, opt-in, off by default.** (This REVERSES
-  §6.27, which rejected it — that rejection compared "move the file" against
-  doing nothing, when the real alternative is the irreversible `delete-file`.)
-  Deleting in Penpot with the bin on **moves** the design to a trash project in
-  the service account's personal team. Proven lossless: same id, name, revn,
-  history. Restoring moves it back. **We must record the origin project id
-  ourselves** — Penpot doesn't remember it. A trashed design is NOT required to
-  function while trashed; only the restore must work.
-- **§6.35 — Drafts is a STATE, not a folder.** "Has a team ancestor, no project
-  ancestor." Never mirror Drafts as a folder. A file at a team folder's root, or
-  in any plain folder under it, is in that team's Drafts. Dragging it into a
-  project folder files it (`move-files`); dragging it out un-files it. **This
-  makes Nextcloud more expressive than Penpot** — one flat Drafts bucket on
-  their side, any folder arrangement on ours.
-- **§6.36 — A project folder's name always equals its Penpot project's name**,
-  both directions (`rename-project` propagates a folder rename). Position is
-  free; only the name is pinned. This is what earns the project tag its keep.
-  Note this is the INVERSE of the still-open *file* rename fork (§6.2).
-- **§6.37 — The reconciler is Nextcloud-trash-aware.** Check the NC trash for a
-  matching `penpot_id` before creating a mirror, or restoring one file yields
-  two. The NC trash and the Penpot trash project are **independent layers**; say
-  which one an action is operating on.
-- **§6.39 — Renaming a project folder is its OWN flow**, not a variant of file
-  rename. Different node type (folder vs file), different metadata key, different
-  RPC (`rename-project` → **204, no body**), no `.penpot` extension to handle,
-  and it's **decided** (propagates) where file rename is still an open fork.
-  Don't share an implementation path between them. See
-  `features/project-folder.feature`.
-- **§6.40 — Copying a folder that carries `penpot_project_id` is REFUSED.** Not
-  stripped, not allowed. Copying ordinary folders and individual files is
-  unaffected. (Reason that generalises: on this cluster one folder may carry
-  Penpot, n8n *and* Grafana mappings simultaneously.)
-- **§6.41 — With the bin off, restore is BEST-EFFORT, not a failure.** Measured:
-  name, pages, assets and `revn` all come back; the id and `file_change` history
-  do not. Frame it as "here's what you get" rather than as data loss. It requires
-  the file to be in `sync` mode — a `link` file has no bytes to restore from.
-- **§6.42 — `get-projects` DOES NOT FILTER `deleted_at`.** It lists deleted
-  projects; `get-all-projects` filters correctly, `get-project` 404s,
-  `get-project-files` returns `[]`, and *files* filter correctly everywhere.
-  **Never conclude a project exists because `get-projects` listed it** — confirm
-  with `get-project`/`get-all-projects`, or the pull resurrects deleted folders.
-  (This also killed the hope of dropping the trash bin: there is no visible
-  Penpot trash to restore from.)
-- **§6.42 — `export-binfile` still exports a soft-deleted file** (confirmed:
-  6496 real bytes from a file deleted moments earlier, while `get-file` 404s).
-  There is still no un-delete — `move-files` on one succeeds but leaves
-  `deleted_at` set. Useful as a **rescue path** for `link` files inside the
-  ~7-day window.
-- **§6.43 — `link` files are confined to their project.** Movable within it
-  (including plain subfolders); refused into another project, to the team root,
-  or out of the mapping; can't be ignore-tagged. A local delete **hides** them
-  and the pull must not recreate them. `sync` files have none of these limits.
-  ⚠️ AMENDED: the refusals used to end "promote to `sync` first", pointing at
-  `occ penpot_sync:set-mode`. That command is gone — the mode is the mapping's
-  and nothing overrides it per file — so a refusal now names the rule and stops,
-  as both siblings' already did.
-- **§6.44 — A trashed Nextcloud file is fully reachable** (tested live): the
-  **fileid is preserved**, metadata survives and is **writable**, content is
-  readable **and writable**, and the trash is enumerable via
-  `Files_Trashbin\Helper::getTrashFiles()`. ⚠️ Trashed files gain a
-  `.dTIMESTAMP` suffix on disk — **match by fileid or metadata, never filename.**
-- **§6.45 — The trash IS the hidden marker for links.** No separate flag. "In the
-  trash with a matching `penpot_id`" *is* hidden; restoring unhides. Emptying the
-  trash un-hides (document it). **A link is NEVER restored to Penpot** — its
-  content is never touched for any reason.
-- **§6.46 — Take a final snapshot before pruning a `link`.** `export-binfile`
-  still works on a soft-deleted file for ~7 days, and trashed-file content is
-  writable — so export, write the archive in, stamp the mode as `sync`, *then*
-  trash it. (An internal stamp on the way to the trash, not a user action: there
-  is no command that changes a file's mode.)
-  Also: a design restored in **Penpot's own UI** reappears under its original id,
-  and the trash-aware reconciler re-adopts the trashed mirror automatically —
-  the best restore path in the app, costing no new mechanism.
+<!-- This file carried such a summary for a while: 180 lines restating §6.18-§6.48,
+     of which the trash bin, the project-folder-cannot-leave-its-team rule, the
+     ignore marker and the open rename fork had all changed underneath it. Saga
+     Chapter 3, Round 11
+     (saga/Chapter_3_Building_To_Plan.md#round-11--the-docs-stop-carrying-history-and-gain-a-direction). -->
 
-### Explicitly NOT decided — do not treat these as locked
+| Chapter | What it is | Read it when |
+|---|---|---|
+| [1 — First Contact](saga/Chapter_1_First_Contact.md) · CLOSED | The API survey and §6.1–§6.54, the architecture. Several sections are superseded **in place** and say so inline. | You need to know what Penpot's API actually does, or why a rule exists. Start at §6.18. |
+| [2 — The Colony](saga/Chapter_2_The_Colony.md) · CLOSED | §C6.1–§C6.38, the build. Ends by reorganising the spec around behaviour. | You want to know how a mechanism came out the way it did. |
+| [3 — Building to Plan](saga/Chapter_3_Building_To_Plan.md) · **open** | Rounds 1–11: one behaviour per PR, and what running it found. **The current chapter.** | Always. It is the only chapter that can still be wrong about today. |
 
-- **§6.2 — Does read-only extend to the filename?** `rename-file` is a real,
-  simple RPC (one field, fires a webhook) — it's plausible a Nextcloud-side
-  rename could propagate even though content stays one-way. **Still open.** Note
-  §6.18 already settled *how* it would work if ratified (attribution + failure
-  behaviour); the open part is narrowly "do we call it at all."
-- **§6.1's creation-scope tension (via §6.7/§6.15).** Whether Nextcloud may ever
-  *originate* a Penpot object — a new project from a folder a design landed in, a new file
-  from an unmapped create — is a real open question, separate from the restore
-  carve-out §6.23 approved. Don't paper over it.
-- **Webhook delivery (§6.17, open question #19).** Creation works and is
-  provisioned; **delivery has never been observed.** Nothing in the current
-  design depends on webhooks — the cron pull is the sole trigger. Don't build
-  webhook-triggered behaviour until this is explained.
-- **Export weight on a real design file (open question #5).** Still unmeasured;
-  the only test file is ~6 KB. `link`-by-default makes this less urgent, but the
-  `sync` path's real cost is unknown.
+**Two rules reversed during Chapter 3, and code written against the older one is
+still the likeliest thing you will meet.** Check both before reasoning from an
+earlier saga section:
 
-### Confirmed live in the latest probe — build against these facts
+- **Round 7** — a file's `penpot_id` decides nothing on arrival. An archive moved
+  into a mapping is imported as a new design, whatever id it is carrying.
+- **Round 10** — the folder a design lands in *is* the project, at any depth. The
+  "nearest project ancestor" short-circuit was the bug, not the rule.
 
-- **`import-binfile` works** (both create-new and in-place `file-id`). It is
-  **SSE**, its params are **kebab-case** (`project-id`, `file-id` — unlike
-  `export-binfile`, which takes camelCase `fileId`), and its **`name` param is
-  ignored** (the archive manifest wins), so a rename is a second call.
-- **A deleted Penpot file cannot be resurrected at its original id** —
-  `object-not-found`. Restore of a deleted design creates a NEW id, and the user
-  must be told.
-- **HTTP 200 does not mean success.** Errors arrive as an SSE `error` event
-  inside a 200 response. Always parse the stream.
-- **The asset URL requires the bearer token** (401 without it) and its inner
-  signed GCS URL expires in ~24h — but the asset **id** is stable and
-  re-fetchable. Never persist the signed URL.
-- **`duplicate-file` is real and works** — `{fileId, name?}`, camelCase, and it
-  **does** honour `name` (unlike `import-binfile`). Three commands now disagree
-  on param casing; encode it per command, never assume a convention.
-- **Penpot has a 7-day soft delete** — `deleted_at` is set to the future *purge*
-  time, and the row/history/assets survive until then. But **no API command
-  reaches it** (every plausible name 404s), and a soft-deleted file stays
-  invisible to all listings. Document it as a user-facing caveat; **never touch
-  Penpot's database to work around it.**
-- **Cross-team file moves work** — `move-files` to a project in another team
-  returns 204 and updates `teamId` automatically. A full round trip is
-  **lossless** (same id, name, revn, history), which is what makes §6.34's trash
-  bin viable.
-- **`create-project {team-id, name}`** → 200 + full record (**kebab-case**).
-  **`rename-project {id, name}`** → **204, no body**. Both exercised live.
-- **Penpot's name rules are LOOSER than Nextcloud's** — it accepts any non-empty
-  string ≤250 chars including `/`, `🎨`, leading spaces. So validation protects
-  the **pull** direction (a project named `Has/Slash` can't be a folder), not the
-  push. Only `""` is rejected.
-- **`delete-project` is soft too**, same ~7-day grace as files — and
-  `get-projects` **still returned deleted projects** right after a 204. Don't
-  assume a delete disappears from the next listing.
+**A fork marked "raised, not decided" is not yours to resolve silently.** Chapter 1
+still carries genuinely open ones — webhook delivery has never been observed, and
+export weight on a real design has never been measured. If a task forces the issue,
+say so in the PR rather than writing code that quietly forecloses one branch.
 
 ### Verifying things yourself
 
@@ -420,44 +288,52 @@ Long version in [CONTRIBUTING.md](CONTRIBUTING.md). Short version:
 
 1. **Issue first is preferred, not strictly required.** For non-trivial work,
    open an issue and let a maintainer weigh in on scope before you write code.
-2. **PR targets `main`.** Must pass CI and get one maintainer approval.
-3. **Changelog entry** under `## [Unreleased]` for any user-visible change —
-   see [CHANGELOG.md](CHANGELOG.md)'s header comment for the exact style.
-4. **Release is manual**, via `publish.yml`. Don't bump versions in feature
+2. **A PR is opened only on an explicit ask** — see the rule above, which is the
+   one process rule in this repo that gets broken most.
+3. **PR targets `main`.** Must pass CI and get one maintainer approval.
+4. **Changelog entry** under `## [Unreleased]` for any user-visible change —
+   see [CHANGELOG.md](CHANGELOG.md)'s header comment for the exact style. A change
+   nothing user-visible comes of takes the `no changelog` label instead.
+5. **Release is manual**, via `publish.yml`. Don't bump versions in feature
    PRs.
 
 If you're working on behalf of a human, **point them at CONTRIBUTING.md**
 rather than re-explaining the flow each session.
 
-### Shape of a feature change (once Chapter 2 starts)
+### Shape of a feature change
 
-The sibling apps follow one repeatable shape for a feature PR — spec, code,
-tests, docs, changelog — described in full in
-[nextcloud-grafana/AGENTS.md § Shape of a feature change](https://github.com/kubed-io/nextcloud-grafana/blob/main/AGENTS.md).
-That shape IS executable here now, and the `.feature` files are the top of it.
-`tests/unit` runs under PHPUnit and `tests/integration` under Behat, the latter
-against a real Nextcloud and a real Penpot across a seven-leg matrix. Scenarios
-tagged `@todo`, `@unbuilt`, `@blocked` or `@decision` are specification with no
-implementation yet and are excluded from the run; everything untagged is live and
-must stay green.
+**A PR starts with a scenario, not with code.** Full version in
+[CONTRIBUTING.md §Testing](CONTRIBUTING.md#testing); the order is:
 
-**The specs are the requirements**: read the relevant `.feature` before writing
-code for that area, and update it in the same PR if behaviour changes. Two
-documents sit beside them and both are worth knowing:
+1. **Pick the scenario** the change is about, in `features/`. If none describes it,
+   the spec is what to discuss first — a new scenario is a conversation, not a
+   commit you make on the way past.
+2. **Write the code** in `lib/` — a `Service` for the logic, a thin
+   `Listener`/`Controller`/`Command` as the adapter, wired in `AppInfo/Application.php`.
+3. **Make the scenario run**, and take its `@todo` off. A scenario stops being
+   `@todo` only on a PR that runs it — never by reading the spec and deciding what
+   it probably is.
+4. **Unit-test the rules** that Behat cannot reach cheaply, in `tests/unit/`.
+5. **README + `## [Unreleased]` changelog** if a user could notice.
 
-- [`features/README.md`](features/README.md) — how the suite is organised: which
-  file owns which behaviour, what the tags mean, how the backends are covered.
-- [`features/AGENTS.md`](features/AGENTS.md) — WHY each scenario is the way it
-  is, one section per feature file. The feature files stay legible by keeping
-  their reasoning here and linking to it; if you change a behaviour, change its
-  note in the same commit.
+### The cascade: which document answers which question
 
-Don't invent a different process without checking whether the saga has already
-settled on this one.
+Four documents, one hop each, and the rule is what keeps them from drifting:
 
-**Agents: update the [saga](saga/)**, not just the changelog, when you do
-design-relevant work — it's the durable "why" and the record of what's still
-open, across sessions.
+| | Document | Holds |
+|---|---|---|
+| 1 | [`features/**/*.feature`](features/) | **The specification.** What the app does. Each scenario points at its note. |
+| 2 | [`features/AGENTS.md`](features/AGENTS.md) | **The reasoning, in the present tense.** Each section points at its decision. |
+| 3 | [`saga/`](saga/) | **The history**, the proofs, the reversals, the open forks. |
+| — | [`features/README.md`](features/README.md) | How the suite is laid out: the nouns, the tags, the suites. |
+
+**History goes in the saga and nowhere else.** A note in levels 1–2 that opens
+*"this used to…"* is in the wrong file. That is not tidiness: a retired decision
+sitting in a working document is indistinguishable from a live one, which is how
+the same withdrawn mechanism got proposed three rounds running.
+
+**Agents: update the saga**, not just the changelog, when you do design-relevant
+work. It is the durable "why" across sessions, and the record of what is still open.
 
 ---
 
@@ -478,23 +354,22 @@ open, across sessions.
 - **Verify external references.** Action versions, package versions, API
   endpoints — all of it. Use `gh api` / package registries to confirm.
 - **A change is not done until a human has tried it on a real Nextcloud
-  instance**, once there's anything to try. CI green is necessary, not
-  sufficient.
+  instance.** CI green is necessary, not sufficient.
 
 ---
 
 ## When stuck
 
-- **"How does X work?"** → there is no `lib/` to grep yet; the saga is the
-  only source of truth right now, especially Chapter 1.
+- **"How does X work?"** → the `.feature` file for that behaviour, then the
+  service in `lib/Service/`. `features/README.md` says which file owns what.
 - **"What's the convention for Y?"** → [CONTRIBUTING.md](CONTRIBUTING.md); if
   it's not there, check the apprentice ([nextcloud-grafana](https://github.com/kubed-io/nextcloud-grafana))
   first, then the master ([nextcloud-n8n](https://github.com/kubed-io/nextcloud-n8n)).
-- **"Why was this decided?"** → [saga/Chapter_1_First_Contact.md](saga/Chapter_1_First_Contact.md).
+- **"Why is this scenario the way it is?"** → [features/AGENTS.md](features/AGENTS.md).
+- **"Why was this decided?"** → the saga, via that scenario's `saga:` pointer.
 - **"Is this a vulnerability?"** → [SECURITY.md](SECURITY.md).
-- **"Is this fork resolved yet?"** → check the saga's latest chapter, not this
-  file — AGENTS.md records the state as of scaffolding time; the saga is the
-  living record.
+- **"Is this fork resolved yet?"** → the saga's latest chapter, never this file.
+  AGENTS.md is a map; the saga is the record.
 
 That's the whole map. Now go read [CONTRIBUTING.md](CONTRIBUTING.md) before
 opening anything.
