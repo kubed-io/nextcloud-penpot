@@ -387,7 +387,16 @@ trait RenameSteps {
 		}
 
 		$this->penpotRpc('rename-project', ['id' => $id, 'name' => $name]);
-		$this->penpotRpc('move-project', ['project-id' => $id, 'team-id' => $this->teamIdNamed($team)]);
+
+		// ONLY WHEN THE TEAM ACTUALLY CHANGES. Penpot refuses a move to the team a
+		// project is already in — `cant-move-to-same-team`, a validation error, not
+		// a no-op — so the rows of this outline that only re-path would fail on the
+		// arrange rather than on the app.
+		$wanted = $this->teamIdNamed($team);
+		if ($wanted !== $this->teamIdForPath($this->lastDeclaredProject)) {
+			$this->penpotRpc('move-project', ['project-id' => $id, 'team-id' => $wanted]);
+		}
+
 		$this->theAdminRunsAPull();
 	}
 

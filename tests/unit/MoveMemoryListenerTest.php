@@ -10,8 +10,8 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Listener\MoveMemoryListener;
-use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\FolderMarkers;
+use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\MoveMemory;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
