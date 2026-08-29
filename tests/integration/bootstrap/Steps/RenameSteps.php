@@ -263,13 +263,20 @@ trait RenameSteps {
 
 				return count($found) === 1;
 			},
-			fn (): string => sprintf(
-				"expected exactly one file for the design %s under '%s', found %d: %s",
-				$id,
-				$this->currentFolder,
-				count($found),
-				implode(', ', $found) ?: '(none)',
-			),
+			// A CLOSURE, NOT AN ARROW FN. An arrow function captures by value at the
+			// point it is DEFINED, which is here — before a single poll has run — so
+			// it would report the empty list forever and say "found 0: (none)" on
+			// every failure, whatever was actually on disk. The one message anyone
+			// reads is the one that has to be true.
+			function () use ($id, &$found): string {
+				return sprintf(
+					"expected exactly one file for the design %s under '%s', found %d: %s",
+					$id,
+					$this->currentFolder,
+					count($found),
+					implode(', ', $found) ?: '(none)',
+				);
+			},
 		);
 	}
 

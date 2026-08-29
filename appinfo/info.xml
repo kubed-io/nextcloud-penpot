@@ -27,7 +27,8 @@ design in the project its folder spells. Nothing existing is touched.
 Your Nextcloud gestures are mirrored where Penpot has somewhere to put them:
 renaming a file renames the design, moving one between folders moves it between
 projects, deleting one sends it to Penpot's trash, and restoring it brings it
-back. Folders you make inside a mapped folder become projects.
+back. A folder becomes a project once a design lands in it — an empty one is
+yours alone.
 
 ⚠️ **Early development.** The sync engine, file actions and both sync
 directions work, and every control has an `occ` twin — but the app has not yet
