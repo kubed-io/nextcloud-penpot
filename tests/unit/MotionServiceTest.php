@@ -29,6 +29,7 @@ use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -685,7 +686,8 @@ final class MotionServiceTest extends TestCase {
 		$oldParent->method('getId')->willReturn(11);
 
 		$source = $this->createMock(Folder::class);
-		$source->method('getId')->willReturn(40);
+		// Same refusal as {@see source()}, for the same reason.
+		$source->method('getId')->willThrowException(new NotFoundException());
 		$source->method('getParent')->willReturn($oldParent);
 
 		return $source;
@@ -850,13 +852,29 @@ final class MotionServiceTest extends TestCase {
 		return $folder;
 	}
 
-	/** The pre-move node. Its parent is the folder the file came from. */
+	/**
+	 * The pre-move node. Its parent is the folder the file came from.
+	 *
+	 * ## `getId()` THROWS, ON PURPOSE — IT DOES IN PRODUCTION
+	 *
+	 * `NodeRenamedEvent`'s source is a `NonExistingFile`: the node is gone from
+	 * that path by the time this runs, and asking it for an id raises
+	 * `NotFoundException`. This mock used to answer 30, which made it a fixture
+	 * that could not fail the way the real thing does — and it duly let a
+	 * `$source->getId()` through to CI, where it threw on EVERY arrival with no
+	 * metadata and took three scenarios down that have nothing to do with moves
+	 * between storages.
+	 *
+	 * The parent is still answerable, and that is the whole asymmetry: the folder
+	 * a file came from still exists, which is why
+	 * {@see MotionService::sourceProject()} asks THAT and never the node.
+	 */
 	private function source(): File {
 		$oldParent = $this->createMock(Folder::class);
 		$oldParent->method('getId')->willReturn(11);
 
 		$source = $this->createMock(File::class);
-		$source->method('getId')->willReturn(30);
+		$source->method('getId')->willThrowException(new NotFoundException());
 		$source->method('getParent')->willReturn($oldParent);
 
 		return $source;

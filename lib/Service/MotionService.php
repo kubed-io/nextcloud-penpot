@@ -166,7 +166,7 @@ final class MotionService {
 			return false;
 		}
 
-		$meta = $this->metadata->readFile($target->getId()) ?? $this->recoverAcrossStorages($source, $target);
+		$meta = $this->metadata->readFile($target->getId()) ?? $this->recoverAcrossStorages($target);
 		if ($meta === null || !$meta->isManaged()) {
 			// A `.penpot` WE DO NOT TRACK, dragged somewhere. If it landed inside a
 			// mapping and holds an archive, that is the §6.33 import — the same act
@@ -451,9 +451,26 @@ final class MotionService {
 	 * A cross-storage move looks like a copy-and-delete, so the natural assumption
 	 * is a new file id — and it is wrong. Measured live: the id is preserved and
 	 * the METADATA is what goes, because removing the source cache entries raises
-	 * `CacheEntriesRemovedEvent` and core's own listener drops the rows. Both ids
-	 * are tried anyway: they agree today, and a recovery that quietly depended on
-	 * them agreeing would be a very quiet thing to get wrong later.
+	 * `CacheEntriesRemovedEvent` and core's own listener drops the rows. So the id
+	 * the memory was filed under on the before-event is the id the target has now,
+	 * and the target is the only node this needs.
+	 *
+	 * ## AND THE SOURCE IS NOT A NODE YOU CAN ASK
+	 *
+	 * The first cut looked the note up under BOTH ids — the source's and the
+	 * target's — reasoning that they agree today and a recovery quietly depending
+	 * on that would be a quiet thing to get wrong later. `$source` on a COMPLETED
+	 * rename is a `NonExistingFile`, and `getId()` on one throws
+	 * `NotFoundException`. Which made the belt-and-braces the failure: every
+	 * arrival with no metadata — every §6.33 import, the commonest path through
+	 * this method — threw before it could reach the import at all, and three
+	 * scenarios that had nothing to do with storages went red.
+	 *
+	 * The unit suite could not have caught it. `$source` there is a mock with a
+	 * `getId()` that answers; only a real completed rename has a source that
+	 * refuses. {@see \OCA\PenpotSync\Listener\NodeRenamedListener::parentPath()}
+	 * already said as much — it reads the source's PATH rather than calling
+	 * `getParent()`, because "the source node no longer exists at that path".
 	 *
 	 * ## AN EMPTY VALUE IS NOT WRITTEN
 	 *
@@ -462,13 +479,12 @@ final class MotionService {
 	 * to be empty" where "never stamped" is the truth. Only what the file actually
 	 * carried is put back.
 	 */
-	private function recoverAcrossStorages(Node $source, File $target): ?PenpotFileMetadata {
-		$remembered = $this->memory->recall($source->getId()) ?? $this->memory->recall($target->getId());
+	private function recoverAcrossStorages(File $target): ?PenpotFileMetadata {
+		$remembered = $this->memory->recall($target->getId());
 		if ($remembered === null) {
 			return null;
 		}
 
-		$this->memory->forget($source->getId());
 		$this->memory->forget($target->getId());
 
 		$stamp = [PenpotMetadata::KEY_ID => $remembered->penpotId];
