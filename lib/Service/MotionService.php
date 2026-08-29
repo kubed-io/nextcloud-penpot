@@ -450,6 +450,48 @@ final class MotionService {
 	 * to be empty" where "never stamped" is the truth. Only what the file actually
 	 * carried is put back.
 	 */
+	/**
+	 * The project marker a folder was carrying before it crossed a storage.
+	 *
+	 * The folder twin of {@see recoverAcrossStorages()}, and it exists for the
+	 * same measured reason: a cross-storage move preserves the node id and
+	 * destroys its `files_metadata` row, so the folder that lands looks like an
+	 * ordinary folder and `onFolderMove()` bailed before it could move anything.
+	 *
+	 * THE SPEC BLAMED THE WRONG THING for a while. `projects/move.feature` was
+	 * @unbuilt on a note saying the gesture fires no `NodeRenamedEvent` — the
+	 * same mistake the design side made first, and disproved the same way: on a
+	 * live instance the event arrives and the marker is what is missing.
+	 *
+	 * Re-stamping here rather than in the listener keeps the write on the side of
+	 * the gesture that has somewhere to put it: the target node exists, and
+	 * everything downstream — the team comparison, `move-project`, the unmap —
+	 * then runs exactly as it does for a move that never left its storage.
+	 */
+	private function recoverFolderAcrossStorages(Folder $target): ?FolderMarkers {
+		$remembered = $this->memory->recallFolder($target->getId());
+		if ($remembered === null) {
+			return null;
+		}
+
+		$this->memory->forgetFolder($target->getId());
+
+		$stamp = [PenpotMetadata::KEY_PROJECT_ID => $remembered->projectId];
+		if ($remembered->teamId !== '') {
+			$stamp[PenpotMetadata::KEY_TEAM_ID] = $remembered->teamId;
+		}
+
+		$this->metadata->writeFolder($target->getId(), $stamp);
+		$this->logger->info('penpot_sync writeback: a project folder crossed a storage boundary; restored the marker Nextcloud dropped', [
+			'app' => Application::APP_ID,
+			'projectId' => $remembered->projectId,
+			'folderId' => $target->getId(),
+			'path' => $target->getPath(),
+		]);
+
+		return $remembered;
+	}
+
 	private function recoverAcrossStorages(File $target): ?PenpotFileMetadata {
 		$remembered = $this->memory->recall($target->getId());
 		if ($remembered === null) {
@@ -749,6 +791,9 @@ final class MotionService {
 	private function onFolderMove(Node $source, Folder $target): bool {
 		$markers = $this->metadata->readFolder($target->getId());
 		if (!$markers->hasProject()) {
+			$markers = $this->recoverFolderAcrossStorages($target) ?? $markers;
+		}
+		if (!$markers->hasProject()) {
 			// A plain folder. Every PROJECT below it was named through it and has
 			// just been renamed — but that is a rename, and PushService pushes it
 			// from the same event.
@@ -762,12 +807,11 @@ final class MotionService {
 			// asymmetry is real and it is written down here rather than in a review
 			// thread.
 			//
-			// Not closed in the PR that found it, deliberately: the only cross-team
-			// pair the suite can express crosses a STORAGE boundary (a Team Folder),
-			// which fires no NodeRenamedEvent at all — measured, see
-			// `projects/move.feature`. So the fix cannot be proven by the
-			// integration suite today, and it belongs with the capability that
-			// unblocks it: noticing a folder that has ARRIVED inside a mapping.
+			// STILL OPEN, but no longer for the reason written here. This used to
+			// say the only cross-team pair the suite can express fires no
+			// NodeRenamedEvent at all. It does fire — see
+			// {@see recoverFolderAcrossStorages()} — so the blocker was never the
+			// event. What remains is the subtree walk this branch does not do.
 			return false;
 		}
 		$projectId = $markers->projectId;

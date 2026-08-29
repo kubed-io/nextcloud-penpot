@@ -311,6 +311,70 @@ final class MotionServiceTest extends TestCase {
 		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder()));
 	}
 
+	/**
+	 * A PROJECT FOLDER THAT CROSSED A STORAGE BOUNDARY IS STILL A PROJECT FOLDER.
+	 *
+	 * `projects/move.feature` was `@unbuilt` for months on a note saying the app
+	 * never sees this gesture — that a move into a Team Folder fires no
+	 * `NodeRenamedEvent`. It fires. Measured on a live instance: the node id
+	 * survives and the `files_metadata` row is destroyed, which is the same thing
+	 * that had already been measured for DESIGNS and fixed with {@see MoveMemory}.
+	 *
+	 * So the arriving folder reads as bare, and without the memory `onFolderMove()`
+	 * bails at `!hasProject()` — silently, which is exactly why nothing in the log
+	 * ever pointed at it.
+	 */
+	public function testAProjectFolderThatLostItsMarkerToAStorageCrossingStillMoves(): void {
+		// What a crossing leaves behind: the id is gone from the folder itself.
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->memory->rememberFolder(40, new FolderMarkers(self::PROJECT_A, self::TEAM));
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, 'team-NEW'),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+
+		// The marker is written back before anything downstream reads it...
+		$this->metadata->expects($this->once())->method('writeFolder')
+			->with(40, $this->callback(
+				fn (array $stamp): bool => ($stamp[PenpotMetadata::KEY_PROJECT_ID] ?? null) === self::PROJECT_A,
+			));
+		// ...and the move then happens exactly as it does for a same-storage drag.
+		$this->client->expects($this->once())->method('moveProject')
+			->with(self::PROJECT_A, 'team-NEW', null);
+
+		self::assertTrue($this->motion->onMove($this->sourceFolder(), $this->folder()));
+	}
+
+	/**
+	 * The note is consumed, not left lying around: a second gesture on the same
+	 * folder id must not be handed an identity from the first one.
+	 */
+	public function testTheCrossingNoteIsForgottenOnceItHasBeenUsed(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->memory->rememberFolder(40, new FolderMarkers(self::PROJECT_A, self::TEAM));
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_A, 'team-NEW'),
+			'oldParent' => new Membership(null, self::TEAM),
+		]);
+
+		$this->motion->onMove($this->sourceFolder(), $this->folder());
+
+		self::assertNull($this->memory->recallFolder(40));
+	}
+
+	/**
+	 * A BARE FOLDER WITH NO NOTE IS STILL A PLAIN FOLDER. The memory must not
+	 * turn every unmarked folder into a project — it only restores what was
+	 * measurably there a moment ago.
+	 */
+	public function testABareFolderWithNoNoteIsLeftAlone(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->client->expects($this->never())->method('moveProject');
+		$this->metadata->expects($this->never())->method('writeFolder');
+
+		self::assertFalse($this->motion->onMove($this->sourceFolder(), $this->folder()));
+	}
+
 	public function testAProjectFolderDraggedWithinItsTeamContactsNobody(): void {
 		// The position means nothing to Penpot; the NAME changed and PushService
 		// has already pushed that from the same event. Zero requests here.

@@ -359,6 +359,39 @@ trait RenameSteps {
 		$this->theAdminRunsAPull();
 	}
 	/**
+	 * A project MOVED to another team in Penpot, name and team in one gesture.
+	 *
+	 * The twin of the rename above, and the half a Nextcloud drag cannot express:
+	 * a drag changes the path, and only Penpot can change the team. Both halves
+	 * land before the pull runs, so the sync sees one project that has changed
+	 * name and owner at once — which is what makes the "ensure the destination,
+	 * then move that folder" path worth asserting.
+	 *
+	 * TWO RPCs, ONE GESTURE. Penpot has no single command that takes a name and a
+	 * team, so this is `rename-project` followed by `move-project`. The rename
+	 * goes first: the name is what the pull turns into a path, and doing it the
+	 * other way round would leave one pull's worth of window where the project
+	 * sits in the new team under its old name.
+	 *
+	 * THE WIRE KEYS ARE `project-id` AND `team-id`, not `project` and `team`.
+	 * `PenpotClient::moveProject()` passes the short forms and `PARAMS` translates
+	 * them — the same trap the rename step above documents, and the reason this
+	 * says so twice.
+	 *
+	 * @When /^someone moves that project to "([^"]*)" in the "([^"]*)" Penpot team$/
+	 */
+	public function someoneMovesThatProjectToInThePenpotTeam(string $name, string $team): void {
+		$id = $this->declaredProjectIds[$this->lastDeclaredProject] ?? '';
+		if ($id === '') {
+			throw new \RuntimeException('no project is on stage to move in Penpot');
+		}
+
+		$this->penpotRpc('rename-project', ['id' => $id, 'name' => $name]);
+		$this->penpotRpc('move-project', ['project-id' => $id, 'team-id' => $this->teamIdNamed($team)]);
+		$this->theAdminRunsAPull();
+	}
+
+	/**
 	 * A rename this app was never entitled to propagate.
 	 *
 	 * ASSERTED ACROSS THE WHOLE INSTANCE rather than in one project, because an

@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Listener\MoveMemoryListener;
 use OCA\PenpotSync\Service\Mapping;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\MoveMemory;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
@@ -33,6 +34,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class MoveMemoryListenerTest extends TestCase {
 	private const PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
+	private const PROJECT_ID = '86f123cb-0682-808c-8008-69d4e8b803ec';
 
 	private PenpotMetadata $metadata;
 	private MoveMemory $memory;
@@ -75,10 +77,54 @@ final class MoveMemoryListenerTest extends TestCase {
 		self::assertNull($this->memory->recall(30));
 	}
 
-	public function testAFolderIsNotRemembered(): void {
-		$this->metadata->expects($this->never())->method('readFile');
+	/**
+	 * A PROJECT FOLDER IS REMEMBERED TOO, and this test used to assert the
+	 * opposite — that a folder is never remembered at all.
+	 *
+	 * It was right about the code and wrong about the world. A folder loses
+	 * `penpot_project_id` to a storage crossing exactly as a design loses
+	 * `penpot_id`, and `projects/move.feature` was @unbuilt on a note blaming a
+	 * missing event for it. The event fires; the marker is what goes. So the
+	 * folder now takes the same note the design always did (saga §D5.1).
+	 */
+	public function testAProjectFolderIsRemembered(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
 
-		$this->listener->handle($this->move($this->createMock(Folder::class)));
+		$this->listener->handle($this->move($this->folder()));
+
+		self::assertSame(self::PROJECT_ID, $this->memory->recallFolder(40)?->projectId);
+	}
+
+	/**
+	 * A folder carrying no project id is an ordinary Nextcloud folder, and a note
+	 * against it would be an identity it does not have — the same reasoning as
+	 * the untracked design above.
+	 */
+	public function testAPlainFolderIsNotRemembered(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+
+		$this->listener->handle($this->move($this->folder()));
+
+		self::assertNull($this->memory->recallFolder(40));
+	}
+
+	/** A folder is never read as a file, whatever else changes here. */
+	public function testAFolderIsNotReadAsAFile(): void {
+		$this->metadata->expects($this->never())->method('readFile');
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+
+		$this->listener->handle($this->move($this->folder()));
+	}
+
+	/** The guard silences the folder branch as well as the file one. */
+	public function testThePullsOwnFolderRenamesLeaveNoNote(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT_ID, ''));
+
+		$this->guard->run(function (): void {
+			$this->listener->handle($this->move($this->folder()));
+		});
+
+		self::assertNull($this->memory->recallFolder(40));
 	}
 
 	/**
@@ -98,6 +144,13 @@ final class MoveMemoryListenerTest extends TestCase {
 
 	private function givenStamp(?PenpotFileMetadata $meta): void {
 		$this->metadata->method('readFile')->willReturn($meta);
+	}
+
+	private function folder(): Folder {
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getId')->willReturn(40);
+
+		return $folder;
 	}
 
 	private function file(string $name = 'Login screen.penpot'): File {

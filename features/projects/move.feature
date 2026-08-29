@@ -125,9 +125,7 @@ Feature: Moving a project
     # ── RULE: a project carries its team as well as its name ──────────────────
     # notes: ../AGENTS.md#a-project-carries-its-team-as-well-as-its-name
 
-  # @unbuilt — the app never sees this gesture: "Shared" is a Team Folder, so the
-  # move crosses a storage boundary and fires no NodeRenamedEvent. Measured in CI.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Move a project folder into another team
     Given the following items in the mappings:
       | path                          |
@@ -145,7 +143,7 @@ Feature: Moving a project
     # ── RULE: a project changed in Penpot moves its folder ────────────────────
     # notes: ../AGENTS.md#a-project-renamed-in-penpot-moves-its-folder
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Move/Rename a project in Penpot
     Given the following items in the mappings:
       | path                  |

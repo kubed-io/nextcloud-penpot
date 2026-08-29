@@ -921,6 +921,26 @@ trait ArrangeSteps {
 	 * A file in `Penpot/Brand` then compared against the LINK team's id and failed
 	 * for a reason that had nothing to do with the app.
 	 */
+	/**
+	 * The Penpot team id behind a team NAME, as the Background mapped it.
+	 *
+	 * The mappings table is the only place a team name and its id are both known,
+	 * so this reverses the two arrays it fills rather than asking Penpot — which
+	 * would match by name across every team the account can see and hit the same
+	 * ambiguity {@see penpotProjectIn()} documents.
+	 */
+	private function teamIdNamed(string $team): string {
+		foreach ($this->mappingTeamNames as $folder => $name) {
+			if ($name === $team) {
+				return $this->mappingTeamIds[$folder] ?? '';
+			}
+		}
+
+		throw new \RuntimeException(
+			"no mapping declares a team named '{$team}' — the Background has to map it before a step can name it",
+		);
+	}
+
 	private function teamIdForPath(string $path): string {
 		return $this->mappingTeamIds[$this->mappingRootOf($path)] ?? '';
 	}
