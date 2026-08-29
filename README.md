@@ -186,8 +186,10 @@ at any depth and you can reorganise freely. Project folders also carry a visible
 automatically — and a folder of yours becomes a Penpot project **the moment a
 design lands in it**, taking any designs already inside it along too. Make a
 folder, drop a design in, and Penpot has a project named after the path to it.
-An EMPTY folder stays an ordinary folder for as long as it is empty: notes,
-exports, whatever you like. Nothing is inferred from a folder holding no designs.
+
+A folder **holding no designs** stays an ordinary folder, however much else is in
+it: notes, exports, whatever you like. Nothing is inferred until a design
+arrives.
 
 A folder promoted from this side wears a `penpot` tag, so something you did here
 is visible at a glance. It is a label, not a lifetime — taking it off unmaps

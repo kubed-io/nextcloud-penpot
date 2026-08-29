@@ -37,11 +37,11 @@ Feature: Creating a design
       | penpot_revision | set                |
       | content         | an archive         |
 
-    Examples: the nearest project ancestor decides, at either storage kind
-      | folder                | project   |
-      | Penpot/Make Here      | Make Here |
-      | Penpot/Make Here/wip  | Make Here |
-      | Shared/Quarterly      | Quarterly |
+    Examples: the folder it is made in is the project, at either storage kind
+      | folder                | project       |
+      | Penpot/Make Here      | Make Here     |
+      | Penpot/Make Here/wip  | Make Here/wip |
+      | Shared/Quarterly      | Quarterly     |
 
     Examples: and at the mapping root, which IS the team's Drafts
       | folder | project |

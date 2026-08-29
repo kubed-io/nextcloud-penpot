@@ -48,11 +48,11 @@ Feature: Copying a design
   # notes: ../AGENTS.md#a-copy-made-in-nextcloud-is-named-by-nextcloud
   # notes: ../AGENTS.md#copying-to-the-team-root-creates-the-design-in-drafts
 
-    Examples: where it lands is the NEAREST project, and the team root is Drafts
-      | source           | destination          | copy            | named    | lands in  |
-      | Penpot/Copy Here | Penpot/Copy Here/wip | Original.penpot | Original | Copy Here |
-      | Penpot/Copy Here | Penpot               | Original.penpot | Original | Drafts    |
-      | Penpot/Copy Here | Shared               | Original.penpot | Original | Drafts    |
+    Examples: where it lands is the folder it lands IN, and the team root is Drafts
+      | source           | destination          | copy            | named    | lands in      |
+      | Penpot/Copy Here | Penpot/Copy Here/wip | Original.penpot | Original | Copy Here/wip |
+      | Penpot/Copy Here | Penpot               | Original.penpot | Original | Drafts        |
+      | Penpot/Copy Here | Shared               | Original.penpot | Original | Drafts        |
 
     # ── RULE: a design duplicated in Penpot arrives as its own file ───────────
     # notes: ../AGENTS.md#a-design-duplicated-in-penpot-is-mirrored-like-any-other-new-design

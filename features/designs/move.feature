@@ -48,7 +48,7 @@ Feature: Moving a design
       | Penpot/Move From  | Penpot/Move From/wip  | Move From/wip |
       | Pointers/Confined | Pointers/Confined/wip | Confined      |
 
-  # notes: ../AGENTS.md#a-nested-project-folder-and-a-plain-subfolder-look-identical
+  # notes: ../AGENTS.md#a-subfolder-of-a-project-is-a-project-of-its-own
 
     Examples: while a nested project folder names its project by the path to it
       | source           | destination             | lands in         |

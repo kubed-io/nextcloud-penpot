@@ -1156,6 +1156,21 @@ in that subfolder. Arriving promotes; sitting there does not. That asymmetry is
 what lets `fileExistingDesigns()` sweep a plain subfolder into the project being
 promoted and still be right.
 
+**THE RULE IS SPELT OUT IN FOUR VERB FILES, and the reversal had to reach all of
+them.** One rule, said once per gesture, which is how this suite is organised — and
+also how a change to it gets shipped half-done. The rows to look for are the ones
+whose destination is a subfolder of a project:
+
+| file | row |
+|---|---|
+| `designs/create.feature` | `Penpot/Make Here/wip` |
+| `designs/copy.feature` | `Penpot/Copy Here/wip` |
+| `designs/move.feature` | `Penpot/Move From/wip`, and the `link` row beside it |
+| `projects/create.feature` | `Penpot/Existing/Below` |
+
+CI found the two that were missed, one leg each, which is the cheap version of this
+lesson. `grep -rn "wip\b" features/*/*.feature` is the whole audit.
+
 A LINK MAPPING IS THE ONE PLACE THIS DOES NOT REACH, and not by exception to this
 rule so much as to promotion itself: under a link the tree is filled FROM Penpot,
 so nothing may be created and an arrival belongs to the project it lands under.
