@@ -33,14 +33,7 @@ trait SyncNowSteps {
 	 * Inside the mapping, because a design can only be born in one — and therefore
 	 * inside what both `exactly` assertions walk, which is why they skip it.
 	 */
-	private const FIXTURE_FOLDER = 'Penpot/Sync Now Source';
-
-	/**
-	 * Rows the Background asked for, waiting for the mappings to be made.
-	 *
-	 * @var list<string>
-	 */
-	private array $syncNowPending = [];
+	private const FIXTURE_FOLDER = 'All Sync/Sync Now Source';
 
 	/**
 	 * Penpot's side of the picture, across SEVERAL teams.
@@ -85,25 +78,17 @@ trait SyncNowSteps {
 	 * there" is testing that the app skips an empty file. Everything else is a
 	 * plain folder (no extension) or an ordinary file.
 	 *
-	 * ## EVERY ROW IS DEFERRED, NOT JUST THE ARCHIVES
+	 * ## IT RUNS AFTER THE MAPPINGS, WHICH IS WHY IT CAN WRITE AT ALL
 	 *
-	 * This step runs BEFORE `the following mappings were made` — the Background is
-	 * a picture of the pre-state, and both siblings order it that way. Writing the
-	 * files here is what does not survive, for two separate reasons:
+	 * This used to sit in the Background, ahead of `the following mappings were
+	 * made`, and had to DEFER every row to sync time: nothing was mapped yet, and a
+	 * `.penpot` cannot be written without a mapping (real archive bytes come only
+	 * from exporting a design, and a design can only be born inside a mapped
+	 * folder — anywhere else {@see \OCA\PenpotSync\Service\MoveRules} refuses it,
+	 * correctly, since `create-file` needs a project).
 	 *
-	 *   - {@see ArrangeSteps::theFollowingMappingsWereMade()} UNMAPS FIRST ("unmap
-	 *     before touching any content"), and since `remove-mapping` learned to tear
-	 *     down a mapping's mirrors, that teardown deletes whatever this step has
-	 *     already put inside the folder. `notes.txt` and `plan.txt` disappeared out
-	 *     of a Background that had just created them. Grafana's twin does not unmap,
-	 *     which is why the identical Gherkin is safe there and destructive here.
-	 *   - a real `.penpot` can only be OBTAINED by exporting a design, and a design
-	 *     can only be born inside a mapped folder.
-	 *
-	 * So the whole table is recorded and replayed at the START OF THE SYNC, by which
-	 * time the mappings exist and nothing further will tear them down. The pre-state
-	 * the scenario describes is true when the scenario acts, which is all a
-	 * Background claims.
+	 * Now each scenario states its own side after the Background has mapped, so the
+	 * deferral is gone and this writes immediately.
 	 *
 	 * @Given /^Nextcloud holds these resources:$/
 	 */
@@ -114,24 +99,8 @@ trait SyncNowSteps {
 				throw new \RuntimeException('every row needs a path');
 			}
 
-			$this->syncNowPending[] = $path;
-		}
-	}
-
-	/**
-	 * Write the rows the Background deferred, now that the mappings are made.
-	 *
-	 * Called from BOTH sync steps rather than one, because either direction may be
-	 * the first thing a scenario does and the pre-state has to hold for both.
-	 * Idempotent: the list is drained as it is replayed, and a row that already
-	 * exists is left alone — the legs share one Nextcloud, so a second scenario
-	 * finds what the first left and a `Given` that is already true stops.
-	 */
-	private function syncNowWritePending(): void {
-		$pending = $this->syncNowPending;
-		$this->syncNowPending = [];
-
-		foreach ($pending as $path) {
+			// ALREADY TRUE IS TRUE ENOUGH. The legs share one Nextcloud, so a second
+			// scenario finds what the first left; a `Given` that already holds stops.
 			if ($this->davExists($path)) {
 				continue;
 			}
@@ -161,7 +130,6 @@ trait SyncNowSteps {
 	 * @When /^(the admin|the schedule) syncs every mapping from Penpot$/
 	 */
 	public function actorSyncsEveryMappingFromPenpot(string $actor): void {
-		$this->syncNowWritePending();
 		$this->actorSyncsScope($actor, 'every mapping');
 	}
 
@@ -176,7 +144,6 @@ trait SyncNowSteps {
 	 * @When /^the admin syncs every mapping to Penpot$/
 	 */
 	public function theAdminSyncsEveryMappingToPenpot(): void {
-		$this->syncNowWritePending();
 
 		$res = $this->occ('penpot_sync:sync push');
 		if ($res['exit'] !== 0) {
@@ -239,13 +206,11 @@ trait SyncNowSteps {
 	 * SCOPED TO THE PROJECTS THE TABLE NAMES, and the scope is narrower than it
 	 * looks like it should be for a reason worth stating.
 	 *
-	 * Scoping to the TEAMS was the obvious reading of `exactly` and is wrong here:
-	 * `Design Team` is shared, and `mapping/sync-now.feature` — in this same leg —
-	 * seeds `Levers/Sprocket` into it. That design is in no table of this feature,
-	 * so a team-wide sweep reports it as `unexpected:` and the leg goes red on a
-	 * push that did exactly the right thing. It passes today only because Behat
-	 * happens to run this file first, which is ordering luck rather than a property
-	 * of the test.
+	 * Scoping to the TEAMS is a trap even now that this feature owns its nouns: the
+	 * archive fixture keeps a project of its own inside the mapping, and anything
+	 * else that ever shares a team would land in the sweep too. Naming the projects
+	 * says what the scenario means — these projects, exactly this — instead of
+	 * asserting that nothing anywhere else in the leg ever touches the team.
 	 *
 	 * Within a named project, though, `exactly` is fully enforced — which is what
 	 * the scenario is actually about. A push that invented a second `Hand Made`
@@ -270,10 +235,19 @@ trait SyncNowSteps {
 		}
 		sort($expected);
 
+		// READ ONCE, NOT PER TEAM. `get-all-projects` takes no team argument and
+		// answers the whole instance, so calling it inside the loop was one HTTP
+		// round trip per team for identical data. Raised in review.
+		$allProjects = $this->penpotRpcRead('get-all-projects', []);
+
 		$actual = [];
 		foreach ($wanted as $team => $projects) {
 			$teamId = $this->teamNamed((string)$team);
-			foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+			// camelCase keys — see {@see projectIdInTeamOrNull()}.
+			foreach ($allProjects as $project) {
+				if (($project['teamId'] ?? $project['team-id'] ?? null) !== $teamId) {
+					continue;
+				}
 				$projectId = (string)($project['id'] ?? '');
 				$projectName = (string)($project['name'] ?? '');
 				if ($projectId === '' || !isset($projects[$projectName])) {
@@ -347,8 +321,31 @@ trait SyncNowSteps {
 		return $id;
 	}
 
+	/**
+	 * A project by name inside a team, or null.
+	 *
+	 * ## `get-all-projects`, NEVER `get-projects` (saga §6.42)
+	 *
+	 * THIS WAS THE BUG that kept the leg red through three wrong diagnoses.
+	 * `get-projects` does NOT filter soft-deleted projects, so on the second
+	 * Examples row this found the DEAD `Cogs` left by the first, asked it for its
+	 * files, and reported the designs as "already there" — while the pull, which
+	 * reads `get-all-projects` like the rest of `lib/`, correctly ignored it. The
+	 * Background believed it had seeded a team that was in fact empty.
+	 *
+	 * CAMELCASE FIRST, KEBAB AS A FALLBACK. `penpotRpcRead()` sends
+	 * `Accept: application/json`, so Penpot answers plain JSON with camelCase keys
+	 * rather than Transit — `teamId`, not `team-id`. The kebab form is read too
+	 * because `lib/` sends no such header and sees the other shape, and a helper
+	 * that works for both cannot be broken by a caller changing its Accept header.
+	 * Both traps are documented on {@see ArrangeSteps}; this trait had not learned
+	 * them.
+	 */
 	private function projectIdInTeamOrNull(string $teamId, string $name): ?string {
-		foreach ($this->penpotRpcRead('get-projects', ['team-id' => $teamId]) as $project) {
+		foreach ($this->penpotRpcRead('get-all-projects', []) as $project) {
+			if (($project['teamId'] ?? $project['team-id'] ?? null) !== $teamId) {
+				continue;
+			}
 			if (($project['name'] ?? null) === $name) {
 				$id = (string)($project['id'] ?? '');
 
@@ -454,7 +451,6 @@ trait SyncNowSteps {
 	 * @BeforeScenario
 	 */
 	public function armSyncNow(): void {
-		$this->syncNowPending = [];
 		$this->syncNowArchiveBytes = '';
 	}
 

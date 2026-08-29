@@ -4401,6 +4401,106 @@ Penpot and from nowhere else, so there is nothing for a push to do there — and
 an untracked file under one would have been asking a question `designs/create` already
 refuses.
 
+### The Background is only what both scenarios share
+
+Which turns out to be the mappings, and nothing else. It used to carry both sides of
+the picture — everything Penpot held, everything Nextcloud held — and that made each
+scenario responsible for the other's fixtures: the pull dragged along the archive the
+push needs, and the push dragged along six designs it never looks at.
+
+Worse, it made the Background the thing under test. `connection/sync-now.feature` is
+the only file in the suite whose Background IS its fixture, and every failure this
+feature had traced back to that: an arrange that clears a mapped folder between
+scenarios is harmless when each scenario seeds its own design, and destroys the
+subject when the Background holds it.
+
+So each direction now states its own side. The pull says what Penpot has and what
+little Nextcloud has; the push says the one archive it is about. Both are shorter,
+neither can be broken by the other, and the Background says only the thing they
+genuinely agree on.
+
+### One actor, not an Outline
+
+The pull scenario had two Examples rows, `the admin` and `the schedule`. It is gone,
+and the reason is this file's Background: it IS the fixture. A second row re-runs
+that Background against a folder the first row has already mirrored into, and the
+arrange clears a mapped folder before re-mapping it — which, in penpot, deletes the
+designs in Penpot ({@see DeletionService} fires on any file carrying a `penpot_id`,
+including one the unmap left `unmapped`).
+
+Five attempts to make the shared `emptyMappedFolder()` safe for that all failed, and
+three of them broke other legs. The function is fine; ten features depend on it and
+they all seed per scenario. This file was asking it for something it was never
+built to give.
+
+WHAT THE SECOND ROW PROVED is that a timer starts the same run as a button — which
+is a claim about the TRIGGER, and triggers are `connection/admin.feature`'s subject.
+What a sync DOES is this file's, and one actor says it.
+
+### Every noun in this file is unique to it, and that is the actual fix
+
+`Design Team`, `Cogs`, `Gizmo`, `Doohickey` — this feature shared all four with
+`mapping/sync-now.feature`, which sits in the SAME LEG and maps that team to its own
+folder. One Penpot, one Nextcloud, two features legitimately doing different things
+to the same objects.
+
+Everything below is real and was worth fixing, but none of it could ever have made
+this file pass on its own: the other feature was entitled to reshape the team, and
+this one asserts `exactly`.
+
+So the nouns are now this file's alone — `Everything Team` / `Everything Shared` /
+`Everything Linked`, folders `All Sync` / `All Team` / `All Link`, projects
+`Widgets` and `Deep/Nested`, designs `Sprocket A`, `Sprocket B`, `Buried`,
+`Stray Sketch`, `Ebb`, `Riveted`, `Local Only`. Before adding a fixture here, grep
+the suite for its name; a leg shares one instance, and `exactly` cannot survive a
+neighbour.
+
+THE GENERAL RULE: reused names are safe for a feature that asserts only its own
+rows, and unsafe for one that asserts a whole tree. This is the only file in the
+suite doing the latter.
+
+### Two bugs, one symptom — and why that took five runs
+
+The leg failed at 30/32 with `Gizmo` and `Doohickey` missing. TWO independent
+faults produced that same line, which is why fixing either one alone left the
+number unchanged and made each fix look wrong.
+
+**1. The mapping step emptied the folder while a mapping was live.**
+`theFollowingMappingsWereMade()` empties each mapped folder before mapping it. The
+unmap beside it is latched by `$mappingsDeclared`; the emptying was not — so on the
+second row it ran again with the first row's mappings still LIVE, and a delete
+inside a live mapping is a gesture `DeleteListener` carries into Penpot. A probe
+caught it between two adjacent steps:
+
+    [nextcloudHolds START]  Cogs[Hand Made|Doohickey|Gizmo] Drafts[Loose Idea]
+    [sync step START]       Drafts[]
+
+The cure is to empty only while NOTHING is mapped, which is exactly the condition
+that makes the delete safe. Two blunter versions came first and both were worse: a
+per-scenario latch does nothing (Behat fires `@BeforeScenario` once per Examples
+ROW, so it clears before the row that needs it), and a per-RUN latch fixed this leg
+while breaking four others — a folder emptied once and never again accumulates
+every later scenario's leftovers, which is the `Pinned (1) (2) (3)` problem the
+function exists to prevent.
+
+Ten feature files survive it because their scenarios seed per row; only this one,
+whose BACKGROUND holds what the assertion checks, could notice. **Grafana and n8n
+pass the same Gherkin because their mapping step does not empty at all** — the
+emptying is a penpot addition for its reused folder names, and outlines are where
+it bites.
+
+**2. `get-projects` does not filter soft-deleted projects (§6.42).**
+Which meant the Background's find-or-create read the dead `Cogs` left by fault 1,
+saw the designs it still listed, and skipped re-seeding — hiding the damage. Use
+`get-all-projects`, and expect camelCase keys because `penpotRpcRead()` sends
+`Accept: application/json`. `ArrangeSteps` documents both; this trait had not
+learned them.
+
+MEASURE, DO NOT REASON. Three diagnoses were argued from the symptom and all three
+were wrong-or-partial; one probe printing Penpot's actual contents at each step
+boundary settled it in a single run. When a fix does not move the number, suspect a
+second fault before concluding the first was wrong.
+
 ### RETIRED — six scenarios, and what happened to each
 
 | scenario | why it went |

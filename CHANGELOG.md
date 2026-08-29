@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Internal: the sync-now integration tests cover both directions again, and no longer depend on a shared Background.
+
 - **A project with a `/` in its name now arrives in Nextcloud.** Renaming a project to `Bubbles/foo` in Penpot did nothing at all: no folder appeared, no design moved, and — invisibly — that mapping stopped tidying up after itself entirely, so nothing deleted in Penpot was ever cleared from Nextcloud again. The name is a path now, the way it always was on the way out: `Bubbles/foo` is a folder inside a folder, and moving a project between them moves everything it holds.
 
 - **Confirming the deletion of designs no longer flashes a failure at you.** Saying yes worked, but an error appeared for a moment first, claiming the mapping had not been saved — while it was being saved. Nextcloud's own confirmation dialog answers a second time after it closes, and the app was listening to the echo.
