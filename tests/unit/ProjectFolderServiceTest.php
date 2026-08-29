@@ -111,7 +111,13 @@ final class ProjectFolderServiceTest extends TestCase {
 		);
 	}
 
-	// ── the opt-in itself ───────────────────────────────────────────────────
+	// ── fixtures ────────────────────────────────────────────────────────────
+
+	private function stamp(string $penpotId): PenpotFileMetadata {
+		return new PenpotFileMetadata($penpotId, '5@t1', Mapping::MODE_LINK, self::TEAM);
+	}
+
+	// ── adoptForContent: the only way in ────────────────────────────────────
 
 	/**
 	 * A DESIGN LANDING IN A PLAIN FOLDER IS WHAT MAKES IT A PROJECT.
