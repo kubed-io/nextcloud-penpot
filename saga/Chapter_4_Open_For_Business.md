@@ -365,6 +365,47 @@ someone typing a name into prose. Every leak came in attached to something else:
 
 ---
 
+### §D4.13 — Decision (locked): an unfinished feature ships hidden, not deleted
+
+**The call:** the personal-token feature stays in the codebase and comes out of
+the product. Its three entry points are **commented out**, not removed.
+
+The feature is real and wanted, but it is unfinished and unproven — every
+scenario in `features/connection/personal.feature` is `@todo`, as is the one
+outline in `designs/create.feature` that needs a personal token. Shipping the
+settings card would put a control on a user's settings page that nothing in the
+suite proves works, and fixing it properly would delay a release that is
+otherwise ready.
+
+**Hiding the entry points is enough, because the fallback is already the
+documented path.** `PersonalTokenService::tokenFor()` returns null when no token
+is stored, and calls that "the ordinary case, not a failure" — every write then
+attributes to the service account. With no way to *set* a token, every user is
+simply a user who never set one, which is a path the suite covers thoroughly.
+So the plumbing threaded through eight services stays exactly where it is and
+keeps being compiled, analysed and unit-tested; only the doors are locked.
+
+**Four lines are the whole switch**, and they are named in the comment at
+`Application.php::register()` so nobody has to rediscover them:
+
+| | |
+|---|---|
+| `lib/AppInfo/Application.php` | the `use` import, and `registerDeclarativeSettings(PersonalSettings::class)` |
+| `appinfo/info.xml` | `<personal-section>`, and the `SetPersonalToken` `<command>` |
+
+**Hiding the card without hiding the `occ` command would have been worse than
+doing nothing** — half a feature, reachable by whoever reads `occ list` and
+invisible to everyone else. CLI-first is the house style; that cuts both ways.
+
+**The advertising goes too.** A feature nobody can reach must not be described
+in the README or listed in the release notes, or the first thing a new user does
+is go looking for a control that is not there.
+
+> **The rule:** hiding a feature means hiding *every* way in — the UI, the CLI,
+> and the sentence in the README that says it exists.
+
+---
+
 ## The rounds
 
 ### Round 1 — the README stops being a design doc
@@ -505,6 +546,26 @@ That is not in a file, so no edit removes it — only a full history rewrite and
 force-push would, and that is a decision with real costs (every existing commit
 link and review comment breaks) that belongs to the maintainer, not to an agent
 doing a docs pass. It is recorded here rather than quietly left out.
+
+
+### Round 7 — locking a door before opening the building
+
+The last thing between the app and a release was a feature that was not ready to
+be seen (§D4.13). The personal-token card, its `occ` twin and its settings
+section are commented out with the reasoning and the restore instructions in
+place; the README sentence advertising it and the CHANGELOG bullet claiming it
+both came out.
+
+**What made this cheap was a decision taken much earlier.** Because the token
+lookup already treated "no personal token" as the ordinary case rather than an
+error, removing every way to set one changed no behaviour at all — it just made
+every user take the path the suite already covers. A feature whose absence is a
+supported state can be withdrawn in four lines. One whose absence throws could
+not have been.
+
+**Nothing needed doing to the specification.** Every personal scenario was
+already `@todo` — the spec had been honest about this the whole time, which is
+what made the decision easy to verify rather than a judgement call.
 
 ---
 

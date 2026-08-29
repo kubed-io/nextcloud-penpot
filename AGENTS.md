@@ -271,7 +271,7 @@ current one.
 | [1 — First Contact](saga/Chapter_1_First_Contact.md) · CLOSED | The API survey and §6.1–§6.54, the architecture. Several sections are superseded **in place** and say so inline. | You need to know what Penpot's API actually does, or why a rule exists. Start at §6.18. |
 | [2 — The Colony](saga/Chapter_2_The_Colony.md) · CLOSED | §C6.1–§C6.38, the build. Ends by reorganising the spec around behaviour. | You want to know how a mechanism came out the way it did. |
 | [3 — Building to Plan](saga/Chapter_3_Building_To_Plan.md) · CLOSED | Rounds 1–11: one behaviour per PR, and what running it found. Its close is the honest inventory of what is built and what is owed. | You want to know whether something works, or what the queue still holds. |
-| [4 — Open for Business](saga/Chapter_4_Open_For_Business.md) · **open** | §D4.1–§D4.12: the outward-facing surfaces — the README, the admin copy, the store listing, the documentation cascade — and the road to publishing on apps.nextcloud.com. **The current chapter.** | Always. It is the only chapter that can still be wrong about today. |
+| [4 — Open for Business](saga/Chapter_4_Open_For_Business.md) · **open** | §D4.1–§D4.13: the outward-facing surfaces — the README, the admin copy, the store listing, the documentation cascade — and the road to publishing on apps.nextcloud.com. **The current chapter.** | Always. It is the only chapter that can still be wrong about today. |
 
 **Two rules reversed during Chapter 3, and code written against the older one is
 still the likeliest thing you will meet.** Check both before reasoning from an

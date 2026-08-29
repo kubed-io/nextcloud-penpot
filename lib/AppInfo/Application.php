@@ -28,7 +28,8 @@ use OCA\PenpotSync\Notification\Notifier;
 use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Settings\AutoSyncSettings;
 use OCA\PenpotSync\Settings\InstanceSettings;
-use OCA\PenpotSync\Settings\PersonalSettings;
+// HIDDEN FOR THE FIRST RELEASE — see the registration below.
+// use OCA\PenpotSync\Settings\PersonalSettings;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -115,10 +116,26 @@ final class Application extends App implements IBootstrap {
 		$context->registerDeclarativeSettings(InstanceSettings::class);
 		$context->registerDeclarativeSettings(AutoSyncSettings::class);
 
+		// ── PERSONAL TOKEN: HIDDEN FOR THE FIRST RELEASE (saga §D4.13) ───────
+		//
 		// Per-user, attribution-only (saga §6.18). Registered the same way, but
 		// core stores it per-uid because the form declares a PERSONAL section
 		// type — see PersonalSettings.
-		$context->registerDeclarativeSettings(PersonalSettings::class);
+		//
+		// The feature is real but unfinished and untested: every scenario in
+		// `features/connection/personal.feature` is still @todo. Shipping the
+		// card would put a control on the settings page that nothing proves
+		// works, so the ENTRY POINTS are hidden and the plumbing is left intact.
+		//
+		// Nothing downstream breaks. PersonalTokenService::tokenFor() returns
+		// null when no token is stored, which it documents as "the ordinary
+		// case, not a failure" — every write then attributes to the service
+		// account, the same path a user who simply never set one already takes.
+		//
+		// TO RESTORE: uncomment this line and the `use` at the top of the file,
+		// plus <personal-section> and the SetPersonalToken <command> in
+		// appinfo/info.xml. Those four lines are the whole switch.
+		// $context->registerDeclarativeSettings(PersonalSettings::class);
 
 		// THE CHANNEL A FAILURE TRAVELS ON. A failure that only logs reaches an
 		// admin reading nextcloud.log and nobody else — while the person who can

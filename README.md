@@ -203,7 +203,7 @@ There's a third state you don't configure: **unmapped**. That's what a sync file
 
 ## 🛠 Setup, in three moves
 
-**1. Point it at Penpot.** Base URL and an access token, stored encrypted and never echoed back. That is the whole connection. Each user can add their own token too, so the changes they make from Nextcloud are attributed to them in Penpot's history rather than to the app.
+**1. Point it at Penpot.** Base URL and an access token, stored encrypted and never echoed back. That is the whole connection.
 
 ![The Penpot Sync admin settings showing the Instance card with a base URL and service-account token, and the Sync Settings card with the scheduled pull and its interval](screenshots/connection.png)
 

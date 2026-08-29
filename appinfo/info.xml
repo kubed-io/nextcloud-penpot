@@ -141,7 +141,13 @@ This is a community integration and is not affiliated with, endorsed by, or spon
     <admin>OCA\PenpotSync\Settings\MappingSettings</admin>
     <admin>OCA\PenpotSync\Settings\SyncSettings</admin>
     <admin-section>OCA\PenpotSync\Settings\AdminSection</admin-section>
+    <!-- HIDDEN FOR THE FIRST RELEASE (saga §D4.13). The personal-token card is
+         unfinished and every scenario covering it is still @todo, so its entry
+         points are commented out rather than removed. See the block in
+         lib/AppInfo/Application.php::register() for the full reasoning and the
+         four lines that switch it back on.
     <personal-section>OCA\PenpotSync\Settings\PersonalSection</personal-section>
+    -->
   </settings>
   <commands>
     <!-- CLI-first is the house style: every control on the admin surface has a
@@ -149,7 +155,11 @@ This is a community integration and is not affiliated with, endorsed by, or spon
          declarative cluster config possible. -->
     <command>OCA\PenpotSync\Command\SetUrl</command>
     <command>OCA\PenpotSync\Command\SetToken</command>
+    <!-- HIDDEN FOR THE FIRST RELEASE (saga §D4.13) — the `occ` twin of the
+         personal-token card above. Hiding the card but leaving its CLI would
+         ship exactly half the feature.
     <command>OCA\PenpotSync\Command\SetPersonalToken</command>
+    -->
     <command>OCA\PenpotSync\Command\ShowConfig</command>
     <command>OCA\PenpotSync\Command\Probe</command>
     <command>OCA\PenpotSync\Command\TestConnection</command>
