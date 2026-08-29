@@ -1434,11 +1434,7 @@ final class PullServiceTest extends TestCase {
 		$this->storage->method('ensureRoot')->willReturnCallback(
 			fn (Mapping $m): Folder => $m->id === $current->id ? $root : $donorRoot,
 		);
-		$this->metadata->method('readFolder')->willReturnCallback(
-			fn (int $id): FolderMarkers => $id === 70
-				? new FolderMarkers('proj-acme', '')
-				: new FolderMarkers('', ''),
-		);
+		$this->folderMarkersById[70] = new FolderMarkers('proj-acme', '');
 
 		// The project now belongs to THIS mapping's team.
 		$this->client->method('getAllProjects')->willReturn([
@@ -1493,11 +1489,7 @@ final class PullServiceTest extends TestCase {
 		$this->mappings->method('list')->willReturn([$current, $receiver]);
 		$this->storage->method('isAvailable')->willReturn(true);
 		$this->storage->method('ensureRoot')->willReturn($root);
-		$this->metadata->method('readFolder')->willReturnCallback(
-			fn (int $id): FolderMarkers => $id === 70
-				? new FolderMarkers('proj-acme', '')
-				: new FolderMarkers('', ''),
-		);
+		$this->folderMarkersById[70] = new FolderMarkers('proj-acme', '');
 
 		// This team no longer has it; the OTHER mapped team does.
 		$this->client->method('getAllProjects')->willReturn([
