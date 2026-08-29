@@ -8,8 +8,10 @@
 
 ## What this repo is
 
-**Penpot Sync** — a Nextcloud app (planned: PHP backend + small JS frontend) that
-mirrors Penpot design files into Nextcloud folders as read-only `.penpot` files.
+**Penpot Sync** — a Nextcloud app (PHP backend + a small JS frontend) that mirrors
+Penpot design files into Nextcloud folders as `.penpot` files. Mirrors are not
+edited back into Penpot; a `.penpot` Penpot has never seen can be pushed up as a
+new design.
 Lives under the [kubed-io](https://github.com/kubed-io) GitHub org. Licensed
 AGPL-3.0-or-later. Target: the official Nextcloud app store, eventually.
 
@@ -50,9 +52,11 @@ For the user-facing "what does it do?" → [README.md](README.md).
   export weight).
 - Not a generic file plugin.
 - Not a fork of any upstream Nextcloud app.
-- Not a two-way sync engine — this app is **read-only from the Nextcloud side**
-  (locked, saga §6.1). Don't design or scaffold a writeback path for file
-  *content*.
+- Not a two-way sync engine — this app **never overwrites a design Penpot already
+  has** (locked, saga §6.1). Don't design or scaffold a writeback path that edits
+  an existing design's *content*. An archive Penpot has NEVER SEEN is the one
+  exception and it already exists: "Sync to Penpot" imports it as a new design
+  ({@see lib/Service/BulkPushService.php}), the same door a dragged-in file uses.
 
 ---
 
@@ -85,9 +89,10 @@ This repo is a deliberate third member of a family started by
 "apprentice," a cleaner second-generation copy of n8n). Grafana is the closer
 template for anything structural (tooling config, CI shape, doc structure); n8n
 is the reference for anything Grafana simplified away that Penpot might still
-need. But **Penpot is not a drop-in third copy** — the read-only architecture
-(§6.1) is a genuine structural break from both siblings, so don't assume
-parity beyond what the saga confirms.
+need. But **Penpot is not a drop-in third copy** — §6.1 (no editing a design
+Penpot already holds) is a genuine structural break from both siblings, whose
+`sync` mode means edits flow back. Don't assume parity beyond what the saga
+confirms.
 
 If the task is about **how the app is meant to work**, the README + the saga are
 where to look. If the task is about **the process of getting a change in**,
@@ -159,13 +164,15 @@ forks* listed right after, which are explicitly NOT decided.
 - **No `External Storage` / `OCP\Files\Storage` backend.** Wrong tool for "API
   ⇆ archive of files" — same rejection as both sibling apps, more clearly
   correct here given `.penpot` export weight (saga Course 4).
-- **Nextcloud never pushes design CONTENT to Penpot — locked (saga §6.1).** No
-  "Edit as text" file action, no `NodeWrittenEvent`-driven content writeback, no
-  dual-channel writeback config. Do not scaffold any of these.
-  **⚠️ Two corrections to earlier wording:** there IS a `sync` vs `link` mode
+- **Nextcloud never overwrites a design Penpot already has — locked (saga §6.1).**
+  No "Edit as text" file action, no `NodeWrittenEvent`-driven content writeback,
+  no dual-channel writeback config. Do not scaffold any of these.
+  **⚠️ Three corrections to earlier wording:** there IS a `sync` vs `link` mode
   axis (§6.22) — it means *whether we store the bytes*, not which way edits
-  flow; and there IS a small set of non-content write paths (§6.19: file moves,
-  create, restore, project rename, delete). Content stays one-way regardless.
+  flow; there IS a small set of non-content write paths (§6.19: file moves,
+  create, restore, project rename, delete); and there IS a push, for archives
+  Penpot has never seen. An existing design's content stays one-way regardless,
+  which is the line §6.1 actually draws.
 - **No tag/label/annotation sync of any kind.** Penpot's API has no first-class
   tagging system at all (confirmed by grepping the full 149-command `/api/doc`
   RPC surface — zero real hits). There is no Penpot equivalent to n8n's
@@ -229,7 +236,7 @@ markers saying so.
   is only ever reached through an explicitly confirmed user action. Ordinary
   file-manager gestures on a mirror stay purely local.
 - **§6.22 — `sync` vs `link` is back**, meaning *whether we store the bytes*,
-  **not** which direction edits flow. Neither mode ever pushes content. `link`
+  **not** which direction edits flow. Neither mode edits an existing design. `link`
   is the default. Penpot is authoritative for a mirrored file's name and project
   placement.
 - **§6.23 — Ignore and restore are one mechanism.** "Tagged ignore" and "moved

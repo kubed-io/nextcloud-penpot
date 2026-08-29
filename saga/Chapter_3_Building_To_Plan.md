@@ -663,3 +663,86 @@ The step definitions in this suite are far more coupled than they look. Every on
 of those was caught by CI rather than by reading, which worked, but the reading
 would have been cheaper.
 
+
+## Round 8 — the push, and eleven runs spent on one test
+
+Two PRs. The first built "Sync to Penpot" — the direction three files said would
+never exist — and the second spent an evening making its test pass.
+
+### §6.1 said less than everyone thought
+
+Three files claimed this app is read-only for design content and that a push was
+therefore permanently off the table. That over-read the rule. §6.1 forbids pushing
+SHAPE DATA into a design Penpot already has; it says nothing about an archive
+Penpot has never seen — and the app had been importing those on every drag-and-drop
+for courses.
+
+So `BulkPushService` walks each `sync` mapping and hands every archive that is not
+already a mirror to the same `ImportService::adopt()` a dragged-in file uses, with
+the destination resolved by the same `DestinationResolver::projectForContentIn()`.
+The path model, Drafts at the root, project creation: all free, rather than
+answered a second time.
+
+**An `unmapped` file IS pushed, and this is where the siblings stop being the bar.**
+Grafana skips them, correctly for Grafana: a file there keeps its uid and reattaches
+to the same dashboard. Penpot cannot reattach at all (§6.20 — a deleted design
+cannot be resurrected, and `import-binfile` always mints a new id), which is exactly
+why Round 7 removed the reattach. Skipping them would strand real bytes in a mapped
+folder that nothing in Penpot answers to.
+
+### The bug the push found in provisioning
+
+`ensureRoot()` created the mapping's folder and never marked it: the only writer of
+`penpot_team_id` on a root was the pull. So between "mapping saved" and "first
+pull", the folder was indistinguishable from any unmapped folder — and two things
+failed silently on the first thing anyone does with a new mapping. A push declined
+every file and reported "processed, nothing done". Creating a design in the folder
+was refused outright by `MoveRules`, which cannot tell an unmarked root from
+somewhere outside every mapping.
+
+The marker is a property of the mapping EXISTING, not of a sync having run. It
+moved into `ensureRoot()`, which all three callers already go through — the same
+reasoning that had already moved PROVISIONING there from the first pull, and which
+nobody had thought to apply to the marker.
+
+### Eleven runs, and the pattern in every wrong answer
+
+`connection/sync-now.feature` failed at 30/32 for an evening. Five diagnoses were
+argued from the symptom and every one was wrong-or-partial: the mapping teardown,
+a fixture's own delete, per-row folder emptying, `get-projects` reading
+soft-deleted projects, five separate reshapings of `emptyMappedFolder()` — three of
+which broke other legs.
+
+Two things made it that expensive.
+
+**Two independent faults produced one symptom.** The arrange's folder-emptying
+destroyed the team; `get-projects` (which does not filter soft-deleted projects,
+§6.42) then read the dead project, saw the designs it still listed, and skipped
+re-seeding — hiding the damage. Fixing either alone moved the count not at all, so
+each correct fix looked wrong and one was reverted. **When a fix does not move the
+number, suspect a second fault before concluding the first was wrong.**
+
+**The Background was the fixture.** This is the only file in the suite whose
+Background holds what its assertion checks; the other ten seed per scenario. An
+arrange that clears a mapped folder between scenarios is harmless there and fatal
+here — and in penpot a delete inside a live mapping reaches Penpot, which is a
+hazard Grafana's harness does not have because it never clears at all.
+
+The fix was not in the harness. It was three lines of Gherkin: drop the Scenario
+Outline whose second row re-ran the Background against a folder the first row had
+mirrored into, and give each scenario its own `Given`. Every harness change was
+reverted; `ArrangeSteps` ended byte-identical to where it started. The feature is
+smaller than when the evening began.
+
+**A probe found in one run what five arguments could not.** Printing Penpot's
+actual contents at each step boundary named the deleting call between two adjacent
+lines. Measure the state; do not reason from the symptom.
+
+### And the names
+
+Reused fixture names are safe for a feature asserting only its own rows — which is
+why ten files share `Cogs` happily — and unsafe for one asserting a whole tree.
+`connection/sync-now.feature` shared its team and three designs with
+`mapping/sync-now.feature`, in the same leg, against one Penpot. No harness fix
+could ever have made that pass: the neighbour was entitled to reshape the team.
+Every noun in that file is now its own.
