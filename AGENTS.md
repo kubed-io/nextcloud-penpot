@@ -199,15 +199,17 @@ forks* listed right after, which are explicitly NOT decided.
 
 ### Where the decisions live — and it is not here
 
-**This file used to restate §6.18–§6.48, and every restatement rotted.** The trash
-bin it called "ADOPTED" was withdrawn, the project folder it said could never leave
-its team folder now can, the ignore marker it documented no longer exists, and the
-file-rename fork it listed as open was closed by §6.54. A summary of a living record
-is a second answer that nobody updates.
-
-So the decisions are in the saga, and the saga is the only place they are. What
+**The decisions are in the saga, and the saga is the only place they are.** What
 follows is an index, not a summary — enough to find the right section, never enough
-to act on without opening it.
+to act on without opening it. **Do not restate a decision here.** A summary of a
+living record is a second answer that nobody updates, and it will be read as the
+current one.
+
+<!-- This file carried such a summary for a while: 180 lines restating §6.18-§6.48,
+     of which the trash bin, the project-folder-cannot-leave-its-team rule, the
+     ignore marker and the open rename fork had all changed underneath it. Saga
+     Chapter 3, Round 11
+     (saga/Chapter_3_Building_To_Plan.md#round-11--the-docs-stop-carrying-history-and-gain-a-direction). -->
 
 | Chapter | What it is | Read it when |
 |---|---|---|
@@ -215,8 +217,9 @@ to act on without opening it.
 | [2 — The Colony](saga/Chapter_2_The_Colony.md) · CLOSED | §C6.1–§C6.38, the build. Ends by reorganising the spec around behaviour. | You want to know how a mechanism came out the way it did. |
 | [3 — Building to Plan](saga/Chapter_3_Building_To_Plan.md) · **open** | Rounds 1–11: one behaviour per PR, and what running it found. **The current chapter.** | Always. It is the only chapter that can still be wrong about today. |
 
-**Two rules reversed during Chapter 3, and both bit code that had been written
-against the old one.** Check these before you reason from an older section:
+**Two rules reversed during Chapter 3, and code written against the older one is
+still the likeliest thing you will meet.** Check both before reasoning from an
+earlier saga section:
 
 - **Round 7** — a file's `penpot_id` decides nothing on arrival. An archive moved
   into a mapping is imported as a new design, whatever id it is carrying.

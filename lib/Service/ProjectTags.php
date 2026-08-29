@@ -19,22 +19,25 @@ use OCP\SystemTag\TagNotFoundException;
  * The one system tag this app puts on FOLDERS: `penpot`, meaning *this folder is
  * a Penpot project* (`projects/create.feature`, saga §C6.18).
  *
- * ## ONE TAG, TWO JOBS
+ * ## NOT A MARKER, AND NOT AUTHORITATIVE — `penpot_project_id` IS
  *
- * The tag is mainly the app's **marker**: {@see PullService::ensureProjectFolder()}
- * stamps it on every folder it mirrors, and {@see ProjectFolderService} stamps it
- * on every folder promoted from this side, so a project folder is visible as one
- * in the Files app without opening any sidebar.
+ * **The pull does not stamp this tag.** A project folder mirrored from Penpot
+ * carries `penpot_project_id` and no tag, and nothing in the app reads the tag to
+ * decide anything: {@see MembershipResolver} reads the id, and {@see includedIn()}
+ * answers only the listener below.
  *
- * It is also a second, explicit **opt-in** — assigning it by hand asks for the
- * folder to become a project ({@see ProjectFolderService::onTagged()}). That is
- * not how a folder normally becomes one; a design landing in it is (§C6.38). The
- * gesture survives because the integration harness needs a project folder that
- * holds no design yet.
+ * There are exactly two writers, and both are gestures made in Nextcloud:
  *
- * A user cannot tell — and should not have to — whether a project folder started
- * life in Penpot or was promoted from Nextcloud. Both carry the tag; both are
- * projects.
+ *   - {@see ProjectFolderService::adoptForContent()} applies it when a design
+ *     lands in a plain folder and promotes it — a visible receipt for something
+ *     the user just caused;
+ *   - {@see ProjectFolderService::onTagged()} reads it as an **opt-in**: assigning
+ *     it by hand asks for the folder to become a project. That is not how a folder
+ *     normally becomes one (a design landing in it is, §C6.38); the gesture
+ *     survives because the integration harness needs a project folder holding no
+ *     design yet.
+ *
+ * Removing the tag unmaps nothing and deletes nothing — the id is what counts.
  *
  * ## WHY A TAG AND NOT A NAME CONVENTION OR A BUTTON
  *
