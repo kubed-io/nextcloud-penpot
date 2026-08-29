@@ -1446,10 +1446,20 @@ final class PullServiceTest extends TestCase {
 		]);
 		$this->client->method('getProjectFiles')->willReturn([]);
 
-		// THE ASSERTION: nothing new is made. The folder that exists is the one used.
-		$root->expects($this->never())->method('newFolder');
+		// THE ASSERTION: the folder that ALREADY EXISTS is the one stamped with the
+		// project. Asserted on the stamp rather than on `newFolder` never being
+		// called, because the root is also stamped with its team marker in the same
+		// pull and the two are only told apart by which node id they name.
+		$stamped = [];
+		$this->metadata->method('writeFolder')->willReturnCallback(
+			function (int $folderId) use (&$stamped): void {
+				$stamped[] = $folderId;
+			},
+		);
 
 		$this->pull->pullOne($current);
+
+		self::assertContains(70, $stamped, 'the existing folder was adopted, not replaced');
 	}
 
 	/**
