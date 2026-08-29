@@ -41,7 +41,7 @@ That's the pitch. Do it in Penpot, do it in Nextcloud, it doesn't matter:
 | **+ New → Penpot design** in a mapped folder | A real design appears in Penpot, in the project that folder spells |
 | Create a design in Penpot | A file appears in the mapped folder |
 | Drop a `.penpot` archive into a mapped folder | It's imported as a new design |
-| Edit a design in Penpot | The stored archive is refreshed |
+| Edit a design in Penpot | A stored archive is brought up to date |
 | Rename a file or a folder | The design or the project is renamed |
 | Rename either one in Penpot | The file or the folder follows |
 
@@ -188,7 +188,7 @@ The whole setup is scriptable, so a Kubernetes init job can stand the thing up w
 ```sh
 # Connect
 occ penpot_sync:set-url https://penpot.example.com
-occ penpot_sync:set-token                     # reads stdin, keeps it out of your history
+occ penpot_sync:set-token "$PENPOT_TOKEN"
 occ penpot_sync:test-connection
 
 # Map a team to a folder
@@ -211,7 +211,7 @@ occ penpot_sync:status "Northwind/Brand/2026/Homepage.penpot"
 
 ## 📋 The specs are the docs
 
-Every feature above links to an **executable specification** — a Gherkin `.feature` file under [`features/`](features/) written in plain language, which also *drives the integration tests* against a real Nextcloud and a real Penpot. They're written before the code and kept true after it. If a `.feature` file says it, CI proves it. 🧪
+Every feature above links to an **executable specification** — a Gherkin `.feature` file under [`features/`](features/) written in plain language, which also *drives the integration tests* against a real Nextcloud and a real Penpot. They're written before the code and kept true after it: a scenario counts as done only once CI has run it green. 🧪
 
 Read [`features/README.md`](features/README.md) for how they're organised.
 
