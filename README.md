@@ -1,827 +1,235 @@
 # Penpot Sync
 
-A Nextcloud app that mirrors your Penpot design files into the Files app — a
-click-through to every design, a real backup for the ones that matter, and a
-folder tree you can organise however you like.
+**Your Penpot designs, living in Nextcloud as real files.** File them into folders, rename them, copy them, trash them, restore them — and every one of those gestures lands in Penpot for real. 🎨
 
+[![🧪 Tests](https://github.com/kubed-io/nextcloud-penpot/actions/workflows/tests.yml/badge.svg)](https://github.com/kubed-io/nextcloud-penpot/actions/workflows/tests.yml)
+[![🛡️ Quality](https://github.com/kubed-io/nextcloud-penpot/actions/workflows/quality.yml/badge.svg)](https://github.com/kubed-io/nextcloud-penpot/actions/workflows/quality.yml)
+[![🔗 Integration](https://github.com/kubed-io/nextcloud-penpot/actions/workflows/integration.yml/badge.svg)](https://github.com/kubed-io/nextcloud-penpot/actions/workflows/integration.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Nextcloud](https://img.shields.io/badge/Nextcloud-30--33-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com)
+[![Nextcloud](https://img.shields.io/badge/Nextcloud-32--34-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com)
 [![PHP](https://img.shields.io/badge/PHP-%E2%89%A58.1-777bb4?logo=php&logoColor=white)](composer.json)
 
-> **Status: pre-alpha — most of what follows is design, not shipped behavior.**
->
-> **What works today:**
->
-> - The app installs on Nextcloud and you can point it at a Penpot instance —
->   an admin setting plus `occ penpot_sync:set-url` / `occ penpot_sync:show-config`.
-> - A **Penpot API client**: Transit decoding, the per-command parameter table,
->   and typed errors. Store a service-account token with
->   `occ penpot_sync:set-token`, then check the connection with
->   `occ penpot_sync:test-connection` — it reports which teams that token can
->   actually see, which is what decides what you can map.
-> - **The complete admin surface**: instance URL, service-account credential,
->   team mappings, scheduled-pull settings, and an optional per-user token for
->   attribution. Every control persists and has an `occ` twin
->   (`list-teams`, `add-mapping`, `list-mappings`, `remove-mapping`, …).
-> - **The pull** (Penpot → Nextcloud): `occ penpot_sync:sync pull` mirrors a
->   mapped team into a plain Nextcloud folder — projects become folders and files
->   become `.penpot` files, each stamped with Penpot metadata, and re-pulling
->   reconciles in place instead of duplicating. `occ penpot_sync:status <path>`
->   shows a node's metadata, what the file actually holds, and the project/team
->   the **membership resolver** derives by walking its ancestor folders.
-> - **Moving things** — the two illegal moves are refused *before* they happen
->   (a project folder leaving its team folder; a `link` file changing project),
->   and moving a stored design between project folders re-files it in Penpot for
->   real via `move-files`.
-> - **`sync` mode — real archives.** A mapping made with `--mode=sync` exports
->   each design from Penpot and stores the actual `.penpot` ZIP in Nextcloud; a
->   `link` mapping stores nothing but the pointer. A pull re-exports a `sync`
->   file only when its Penpot revision moved or its archive went missing, so
->   **a team of links costs zero exports.**
-> - **The prune, with a parachute.** A design deleted in Penpot no longer leaves
->   a mirror that opens nothing: the pull moves it to the **Nextcloud trash** —
->   never a hard delete — and a pointer gets one last export on the way out, so
->   what lands in the trash is a real, openable archive. Any incomplete listing
->   switches pruning off entirely, because a network blip and "everything was
->   deleted" look identical from here.
->
-> Verified against a real Nextcloud *and* a real Penpot in CI — including a pull
-> asserted end-to-end against a project seeded directly in Penpot, and a
-> promotion asserted to leave real ZIP bytes on disk.
->
-> **It mirrors, it keeps the bytes you ask it to, and it respects your folder
-> layout.** It is still narrow: only the plain admin-owned folder backend (the
-> groupfolders Team Folder backend, the Files-app surface, and the remaining
-> write-back paths are the next slices), and controls that configure an unbuilt
-> part still say so. The admin surface was built *whole* first so that every
-> later feature is something you configure rather than something that ships
-> twice.
->
-> **Everything else below is the design**, written as if it already worked
-> because that is how the spec is written. Each `.feature` file stays tagged
-> `@todo` until its slice ships. Treat it as a detailed design document backed by
-> a live-verified API survey. See [Status](#status).
+---
+
+## The whole idea, in one breath
+
+Map a Penpot **team** to a Nextcloud **folder**. Its projects arrive as folders, its designs arrive as `.penpot` files with the real Penpot icon, and clicking one opens the live design.
+
+```
+Penpot                          Nextcloud
+──────────────────────────      ─────────────────────────────────
+team    "Northwind"        ⟶    folder    Northwind/
+ └ project "Brand/2026"    ⟶      folder     Brand/2026/
+    └ design  "Homepage"   ⟶        file       Homepage.penpot
+```
+
+Nothing is matched on filename. Every file carries its design's **id**, so renaming, moving, copying, trashing and restoring never break the link — and re-running a sync never duplicates a thing. Ever. 🙅
 
 ---
 
-## How it works (the design)
+## ✨ Every gesture means the same thing on both sides
 
-Penpot Sync walks your mapped Penpot teams on a schedule and reflects them into
-Nextcloud. Each Penpot **team** becomes a Team Folder; each **project** inside it
-becomes a folder; each **design** becomes a `.penpot` file with a real icon and a
-deep link back to the live design in Penpot.
+Do it in Nextcloud and Penpot hears about it immediately. Do it in Penpot and the next pull brings it here.
 
-```
-Penpot                              Nextcloud
-─────────────────────────────       ─────────────────────────────────────
-team    "Northwind"            ⟶    Team Folder  Northwind/
- └ project "My Stuff"          ⟶      folder       My Stuff/
-    └ file  "My firsty"        ⟶        file         My firsty.penpot
-```
+| You do this in Nextcloud… | …and this happens in Penpot |
+|---|---|
+| Drag a design into another folder | It's re-filed into that project |
+| Drag it into another team's folder | It changes team **and** project in one move — same id, same history |
+| Drag it to the mapping root | It becomes a draft |
+| **+ New → Penpot design** | A design is created in the project that folder spells |
+| Drop a `.penpot` archive in | It's imported as a new design |
+| Copy a design | A real new design, with its own id |
+| Rename a file or a folder | The design or the project is renamed |
+| 🗑️ Trash it | It goes to **Penpot's** trash |
+| ↩️ Restore it | It comes back out — id, revision, history and deep links intact |
 
-A `.penpot` file is a plain ZIP (a `manifest.json`, a `files/` tree of
-pages/colors/components/typographies, and an `objects/` tree of binary assets),
-fetched through Penpot's `export-binfile` RPC. You can unzip and inspect one.
+…and the mirror image, on the next pull: create, duplicate, rename, move or delete a design over there and the file here does the matching thing. A design duplicated in Penpot arrives as its own new file; a design moved into another project surfaces at that project's folder.
 
-### Modes — what gets backed up, not which way edits flow
+**Exactly one file per design, always.** Penpot lets three designs in one project share a name; Nextcloud can't. So they arrive as `Original.penpot`, `Original (2).penpot`, `Original (3).penpot` — one file each, still all named `Original` upstream, and no pull ever shuffles which is which.
 
-Every mirrored file is one of two things, and you choose per file:
-
-| Mode | What it is | What it costs |
-|---|---|---|
-| **`link`** *(default)* | An empty file that points at the live design. Opens in Penpot. | Nothing — never exports, stores no bytes |
-| **`sync`** *(opt-in)* | A real, downloaded `.penpot` archive you can open offline | One export whenever the design changes |
-
-**Neither mode ever overwrites a design Penpot already has.** In the sibling apps
-for [n8n](https://github.com/kubed-io/nextcloud-n8n) and
-[Grafana](https://github.com/kubed-io/nextcloud-grafana), `sync` means "edits flow
-back." Here the axis decides only **whether we store the bytes** — editing a
-`sync` file does not push your changes into the live design.
-
-The one thing that does travel upward is a `.penpot` Penpot has *never seen*:
-drop one into a mapped folder, or press **Sync to Penpot**, and it becomes a new
-design. Nothing existing is touched.
-
-Why: a `.penpot` export is a full archive with embedded images and fonts, not a
-small JSON document. Backing up every design in a large team would be expensive
-and mostly pointless — most designs need to be *findable and clickable*, not
-duplicated. So `link` is the default, and a team worth backing up is mapped with
-`--mode=sync` instead.
-
-**Links stay where Penpot put them.** A `link` file holds no bytes, so moving one
-out of its project would hand you an empty husk that looks like a design and
-isn't. Links can be filed freely *within* their own project — including into
-plain subfolders — but can't be moved to another project, out to Drafts, or out
-of the mapping entirely. Deleting one just hides it. `sync` files have none of
-these limits, because they hold something real — which is a property of the
-mapping they were mirrored under, not something a single file can be switched
-into.
-
-### Read-only, on purpose
-
-**This app never edits your designs.** A `.penpot` export is an opaque archive of
-nested shape data — there is no sane way to hand-edit it in Nextcloud and
-re-import it coherently. Design happens in Penpot; Nextcloud holds the backup and
-the click-through.
-
-- No "Edit as text" action — not even as a fallback, unlike both siblings.
-- No content writeback. Editing a mirrored file's bytes never reaches Penpot.
-- No tag sync — Penpot's API has no tags, labels, or annotations at all
-  (confirmed by scanning its full RPC surface: 149 commands, zero hits).
-- No design content is ever written back. Deleting *is* passed on — to Penpot's
-  own trash, which is as reversible as your Nextcloud one, and restoring the
-  file brings the design back with it. Nothing is destroyed until you empty the
-  trash, and even then only if Penpot still has it in its own.
-
-### What *can* reach Penpot, and why it's safe
-
-The app isn't inert — it just never does anything destructive by accident. The
-complete list:
-
-| What you do | What happens in Penpot | Reversible? |
-|---|---|---|
-| Drag a design into another project folder | It moves to that project | Drag it back |
-| Drag it to the team root | It moves to Drafts | Drag it back |
-| Drag it **out of every mapped folder** | The design goes to **Penpot's trash** | Drag it back in — as a new design |
-| Drag an unmapped design file **in** | Its contents become a new design | Delete it |
-| **New → Penpot design** | A design is created | Delete it |
-| Copy a design file | A real copy is created | Delete it |
-| Rename a design or project folder | It's renamed | Rename it back |
-| Delete a mirror | Moved to **Penpot's trash** | Restore it from your trash |
-| Restore a mirror from your trash | Taken back out of Penpot's trash | Delete it again |
-| **Empty your trash** | Permanently deleted **— only if still in Penpot's trash** | **NO** |
-
-**Exactly one operation in the entire app destroys anything** — emptying your
-Nextcloud trash, the one gesture Nextcloud itself treats as irreversible.
-Everything else is additive or reversible, and the delete/restore pair mirrors
-Penpot's own trash step for step. That, rather than a short list, is what the
-read-only promise actually protects.
-
-### Nesting: flat in Penpot, however you like in Nextcloud
-
-Penpot's hierarchy is rigid — team → project → file, no sub-projects. Nextcloud
-is a file manager. **This app doesn't force Penpot's flatness onto your Nextcloud
-folders.**
-
-A file's project is **the nearest ancestor folder carrying a Penpot project id**.
-That one rule buys a lot:
-
-```
-Northwind/                     ← Team Folder (team id in metadata)
-├── Clients/                   ← just a folder you made. Penpot never sees it
-│   ├── Acme/                  ← project folder (project id in metadata) 🏷
-│   │   ├── Homepage.penpot    → belongs to the "Acme" project
-│   │   └── wip/               ← just a folder
-│   │       └── Draft.penpot   → still belongs to "Acme" (nearest ancestor)
-│   └── Globex/                ← project folder 🏷
-│       └── Brand.penpot       → belongs to "Globex"
-└── notes.txt                  ← ignored entirely, never touched
-```
-
-Identity lives in **metadata, not in path**, so a project folder works the same
-at any depth and you can reorganise freely. Project folders also carry a visible
-`penpot` **tag** (🏷) so you can spot and search for them among ordinary folders.
-
-**And it works in reverse.** Every Penpot project becomes a folder here
-automatically — and a folder of yours becomes a Penpot project **the moment a
-design lands in it**, taking any designs already inside it along too. Make a
-folder, drop a design in, and Penpot has a project named after the path to it.
-
-A folder **holding no designs** stays an ordinary folder, however much else is in
-it: notes, exports, whatever you like. Nothing is inferred until a design
-arrives.
-
-A folder promoted from this side wears a `penpot` tag, so something you did here
-is visible at a glance. It is a label, not a lifetime — taking it off unmaps
-nothing and deletes nothing.
-
-**The one restriction:** a project folder may move anywhere *inside* its Team
-Folder, but **not out of it**. Moving a project between teams is a destructive
-cross-team change that belongs in Penpot, not in a drag gesture.
-
-### A `/` in a Penpot project name
-
-Project names are plain names here, and a `/` in one is not allowed — a Nextcloud
-folder name cannot carry it, and inventing an intermediate folder from it would
-create a folder no Penpot object corresponds to. Such a project is skipped and
-reported by name so you can rename it in Penpot.
-
-The alternative — a project's name *being* its path, so `foo/bar` mirrors as two
-folders — was designed and never built. Either `/` carries structure or it
-doesn't, and it can't do both, so it would have to be a per-team choice rather
-than a fallback. Until that is built there is nothing to choose, so there is no
-setting for it.
-
-### Personal designs land in your home folder
-
-Every Penpot account has a personal "Default" team. It gets **no Team Folder** —
-a personal space isn't a sharing boundary. Instead, its projects mount as folders
-at the root of your Nextcloud home:
-
-```
-Your home/
-├── Sketches/          ← your personal Penpot project 🏷
-└── Logos/             ← another one 🏷
-```
-
-This is the one part of the mirror that uses **your own** token — a service
-account can never be a member of your personal team.
-
-### Access: a service account reads, you write as yourself
-
-Penpot has no service-account or admin credential type: every access token is
-scoped to a personal user account (confirmed structurally — there is no
-`admin`/`system` RPC module, and the organization layer above teams is
-permission-gated off on self-hosted instances). So the app splits the job in two:
-
-| | Service-account token | Your personal token |
-|---|---|---|
-| **Required?** | **Yes**, per mapped team | **No** — optional |
-| **Set by** | Admin, once | You, in personal settings |
-| **Does** | All mirroring: list, export, pull | Attributes *your* changes to *you* |
-| | | Pulls your personal projects |
-
-**Why a service account is required.** It does all the reading, as one background
-job. If the pull ran per-user, two people on the same Penpot team would both
-write the same mirrored file from separate jobs — a real data race. One puller,
-no race.
-
-The cost: someone with authority over each Penpot team must invite the service
-account as a **`viewer`** before that team can be mapped. That's not us being
-strict — Penpot gives *no* credential an instance-wide view, so a team has to be
-brought into scope explicitly either way. It doubles as a clean opt-in gate:
-inviting the service account is how a team says *"yes, Nextcloud may manage this."*
-
-**Why your own token is still worth setting.** Penpot attributes every change to
-whoever's token made it. Without one, every change from Nextcloud shows up in
-Penpot's history as the service account — forever, unfixable after the fact.
+📋 [`create`](features/designs/create.feature) · 🚚 [`move`](features/designs/move.feature) · 🍝 [`copy`](features/designs/copy.feature) · 🔤 [`rename`](features/designs/rename.feature)
 
 ---
 
-## Features
+## 🗂 The folder *is* the project
 
-### Mapping a team
+Penpot's hierarchy is rigid — team → project → design, no sub-projects. Nextcloud is a file manager. This app doesn't force Penpot's flatness onto your folders; it teaches Penpot yours. 😏
 
-An admin maps a Penpot **team**; its projects come along automatically as folders.
-There is no project-level mapping to configure — nothing to add, and nothing that
-could get out of sync with what Penpot actually contains.
-
-**You name the folder; Penpot names the projects.** A mapping binds a Penpot team
-to a Nextcloud folder, and the folder can be called whatever suits your instance.
-Leave the name blank and it defaults to the Penpot team's own name — the same
-rule the Grafana integration uses for its folder mappings, so the two behave
-alike. The mapping is keyed on the team **id**, so renaming the team in Penpot
-never breaks it, and never silently renames the folder you chose.
-
-Project folders *inside* the mapped folder are the exception: they always match
-their Penpot project's name exactly, in both directions. A rename in Penpot
-propagates down on the pull, and renaming a project folder in Nextcloud renames
-the project upstream. The reasoning for the split: a team folder is a mount point
-you chose to create, so naming it is yours; a project folder is a mirror of a
-Penpot object, and letting its name drift would break the identity the pull uses
-to match folders to projects.
-
-Two mappings cannot target the same Nextcloud folder — their project subfolders
-would interleave and the pull would fight over the same names on every run.
-
-**Most of a mapping is fixed once it is created**, following the same rule the
-n8n and Grafana integrations use: a field is immutable when changing it would
-force a live migration of already-mirrored content. The team, the Nextcloud
-folder, the Team Folder setting and the default mode are all set at creation; the
-groups the folder is shared with stay editable. To change anything else, remove
-the mapping and add it again — which makes the cost visible instead of hiding it
-behind a dropdown.
-
-**The groups are the folder's, not the mapping's.** Nothing about sharing is
-stored here: the app applies the groups you give it when it creates the folder,
-and after that it simply reads whatever the folder says. Re-share it from the
-Files app or with `occ` and this app reports the change; syncing never puts back
-a group you removed. `occ penpot_sync:set-groups` is a convenience that does the
-right thing on either backend, not a separate source of truth — which also means
-two of these integrations can point at the same folder without fighting over its
-sharing.
-
-The **mode** is immutable, exactly as it is in both sibling integrations. It
-decides whether the app *holds the bytes*, so flipping it on a live mapping would
-either delete every downloaded archive under it or export every file at once. To
-change it, remove the mapping and map the team again — the same designs come back,
-by the same ids, into the same folder.
-
-Non-Penpot content inside a mapped folder is expected and never touched. The pull
-only acts on files it recognizes by their metadata.
-
-**Each mapping carries the Nextcloud groups its folder is shared with**, exactly
-as the n8n and Grafana integrations do — same control, same meaning, same
-defaults, so configuring all three is the same act each time. Groups start empty
-and are opt-in.
-
-**Team Folders are optional, not a hard dependency.** When the `groupfolders` app
-is installed, a mapped team becomes a real Team Folder — the closest match to
-Penpot's own model, where the team *is* the access boundary. Without it, the app
-falls back to an ordinary folder shared to the mapping's groups, and everything
-else behaves identically (folder metadata works the same on both). Note that Team
-Folder *creation* is admin-only by default in Nextcloud, so mapping a team is an
-admin action unless delegation has been configured.
-
-> The groups and Team Folder settings **persist today and are honoured when the
-> pull provisions the folder** (not yet built) — the same "saved now, applied
-> later" state the Grafana integration ships them in.
-
-### The admin section
-
-Laid out to match the n8n and Grafana integrations, so an admin who has
-configured one already knows where to look:
-
-| Panel | What's in it |
-|---|---|
-| **Instance** | The Penpot base URL and the service-account token. |
-| **Sync Settings** | Whether the pull runs on a schedule, and how often. |
-| **Team mappings** | One card per mapped team — folder name, mode, sharing. |
-| **Sync Actions** | Every button in the section: Test connection, and (later) bulk sync and purge. |
-
-Each user also gets a personal **Penpot** section holding their own optional
-access token, used only to attribute their changes in Penpot's history.
-
-### The pull, and why it scales
-
-`get-project-files` returns every file's `revn` (revision number) and `modifiedAt`
-for a whole project in **one response**. So the pull compares revisions against a
-listing it already has, and only exports files that actually changed *and* are in
-`sync` mode:
+**A folder becomes a project the moment a design lands in it**, and the path spells the name:
 
 ```
-per team:   1 × get-projects  +  1 × get-project-files per project
-per file:   an export ONLY if mode == sync AND revn moved
+Northwind/                     ← the mapped team
+├── quick-thing.penpot         → a draft: under the team, under no project
+├── Brand/                     ← project "Brand" 🏷
+│   ├── Logo.penpot            →   …because a design landed in it
+│   └── 2026/                  ← project "Brand/2026" 🏷
+│       └── Homepage.penpot    →   …and the path is the project's name
+└── Moodboards/                ← no designs in it, so it stays a plain folder
+    └── notes.txt              ← never touched
 ```
 
-A 100-file team where nothing changed costs a handful of API calls and **zero
-bytes** — while still reconciling every rename and project move, because names and
-project ids come back in that same listing.
+It runs both ways: a project named `Brand/2026` in Penpot mirrors as two nested folders here. Make a folder, drop a design in, and Penpot has a project named after the path to it. A folder holding **no** designs stays an ordinary folder, however much else is in it — nothing is inferred until a design arrives.
 
-Renames and moves *in Penpot* are reflected on the next pull. Renames and moves
-*in Nextcloud* are yours to make freely, as long as a file stays under a folder
-mapping to its real project.
+**Drafts is a state, not a folder.** Penpot calls a design that belongs to a team but no project a draft, and we never invent a `Drafts/` folder for it: being at the mapping root simply *is* being in Drafts. Filing a draft is a drag; un-filing it is a drag back. 📥
 
-### Create a design from Nextcloud
+Identity lives in metadata, not in path, so you can reorganise freely — and a project folder wears a visible `penpot` tag so you can spot one among ordinary folders.
 
-**New → Penpot design**, the same affordance the sibling apps offer. It appears
-only where the target project is unambiguous:
+🗂️ [`projects/create`](features/projects/create.feature) · 🚚 [`projects/move`](features/projects/move.feature) · 🔤 [`projects/rename`](features/projects/rename.feature)
 
-| Where you are | Where the design is created |
-|---|---|
-| Inside a project folder | That project |
-| At a Team Folder's root | That team's **Drafts** |
-| In a plain folder under a team | That team's **Drafts** |
-| Anywhere with no team above it | *The action isn't offered* |
+---
 
-### Drafts is a state, not a folder
+## 🔁 Sync or Link — what gets *stored*, not which way edits flow
 
-Penpot calls a design that belongs to a team but sits in no project a **draft**.
-It has one Drafts bucket per team, because a flat system has nowhere else to put
-an unfiled design.
+Every mapping is one of two modes, and it applies to every design the mapping pulls.
 
-**We never create a "Drafts" folder.** Being in Drafts simply means *"under a
-team, but not under a project folder"* — which falls straight out of the
-nearest-ancestor rule. So this all works, and all of it is Drafts on Penpot's
-side:
+| Mode | The file holds | What it costs |
+|---|---|---|
+| 🔗 **Link** *(default)* | Nothing — zero bytes, pure pointer | Nothing. A team of links never exports |
+| 💾 **Sync** | The real `.penpot` archive, openable offline | One export whenever the design changes |
 
-```
-Northwind/
-├── Inbox/2026/sketch.penpot     → Drafts
-├── Scratch/idea.penpot          → Drafts
-├── quick-thing.penpot           → Drafts
-└── Acme/                        ← a project folder 🏷
-    └── Homepage.penpot          → the "Acme" project
-```
+⚠️ **This axis is not the sibling apps' axis.** In [n8n Sync](https://github.com/kubed-io/nextcloud-n8n) and [Grafana Sync](https://github.com/kubed-io/nextcloud-grafana), `sync` means "edits flow back". Here it decides only **whether we keep the bytes** — because a `.penpot` export is a full archive with embedded images and fonts, not a small JSON document. Most designs need to be findable and clickable, not duplicated; the ones worth backing up get `--mode=sync`.
 
-**Nextcloud is more expressive than Penpot here, for free** — one flat bucket on
-their side can be any folder tree you like on ours.
+**A link is Penpot's copy, so Nextcloud treats it as read-only.** It can't be trashed, copied, created or moved out of its project from this side — a pointer that wandered would hand you an empty husk that looks like a design and isn't. `sync` files have none of those limits, because they hold something real.
 
-**And filing a draft is just a drag.** Move a file from anywhere under the team
-into a project folder and the design moves into that project in Penpot. Drag it
-back out and it returns to Drafts. The gesture you already know *is* the Penpot
-operation.
+**And a `sync` mapping is a backup you can point at.** A 100-design team where nothing changed costs a handful of API calls and zero bytes, because Penpot hands back every design's revision number for a whole project in one response — so only what actually moved is re-exported.
 
-### Copying a design (a plain local duplicate)
+---
 
-Copying a mirrored file **never creates a design in Penpot**. Someone dragging a
-file with Ctrl held is organising files, not authoring work — and a Penpot design
-appearing out of nowhere is something a whole team would see.
+## 🖌 It never edits a design Penpot already has
 
-A copy made under a mapped project is **stripped of its `penpot_id`** and becomes
-ordinary untracked content — keeping the id would give the pull two files claiming
-to be the same design. A copy made outside every mapping **keeps** the id as a
-historical record of where the archive came from, which is what makes a later
-restore possible.
+Design happens in Penpot. Nextcloud holds the archive and the click-through.
 
-*(Penpot does have a real `duplicate-file` endpoint, and it works. A deliberate
-"Duplicate in Penpot" action would be one cheap call — recorded as available, not
-adopted.)*
+A `.penpot` export is an opaque tree of nested shape data — there is no sane way to hand-edit it here and re-import it coherently. So there is **no "Edit as text" action**, in any mode, for any file, unlike both siblings. Editing a mirror's bytes never reaches Penpot.
 
-**Copying a project *folder* is refused.** Three reasons, any one sufficient: the
-copy would claim the same project id for its whole subtree; Nextcloud's automatic
-`My Stuff (2)` suffix instantly breaks the name-matching rule, and "fixing" it by
-renaming would rename the *original* Penpot project; and on a cluster running all
-three sibling apps, one folder can carry Penpot, n8n **and** Grafana mappings at
-once — a folder copy asks three independent apps to agree on what a duplicate
-means. Copying ordinary folders and individual files is unaffected.
+The one thing that *does* travel upward is an archive Penpot has **never seen**: drop a `.penpot` into a mapped folder, or press **Sync to Penpot**, and it becomes a new design in the project its folder spells. Nothing existing is touched. That's the button for the day something went wrong upstream and Nextcloud is the copy you trust. 💾
 
-### Renaming
+*(No tag sync, either — Penpot's API has no tags, labels or annotations at all. We scanned all 149 RPC commands looking.)*
 
-**Project folders** and their Penpot projects always share a name — the two are
-never allowed to diverge. Rename the project in Penpot and the folder follows on
-the next pull; rename the folder in Nextcloud and the project follows immediately.
-Position stays yours; only the name is pinned.
+---
 
-That invariant is what makes a project folder legible: a project folder named
-"Acme" *is* the Penpot project "Acme" — or, nested, `Clients/Acme` — at any depth,
-with no ambiguity.
+## 🗑️ Two trashes, one gesture
 
-Renaming a project folder is a genuinely different operation from renaming a file
-— different Nextcloud event, different Penpot endpoint, no file extension to
-handle — which is why the two are specified apart, in
-[`projects/rename.feature`](features/projects/rename.feature) and
-[`designs/rename.feature`](features/designs/rename.feature).
-
-**One caveat runs backwards from expectation.** Penpot's naming rules are *looser*
-than Nextcloud's: it accepts essentially any non-empty string, including `/`,
-which can never be a folder name. So a project called `Has/Slash` gets a sanitised
-folder name and the app tells you the names couldn't match — the project id stays
-authoritative. Going the other way, anything you can name a folder, Penpot will
-accept.
-
-**Files** are different. Renaming a design in Penpot renames the mirror on the
-next pull, in both modes, with no export needed. Whether renaming a file in
-**Nextcloud** propagates back is a genuine open decision — a file's name is
-cosmetic, where a project folder's name is identity-bearing. If it's ratified, the
-behavior is already settled: your personal token attributes it to you, and a
-failure leaves your local rename standing rather than reverting your work.
-
-### Ignoring a design — keep the file, stop the mirroring
-
-Tag a `sync` file with the app's ignore marker and this app takes its hands off:
-never refreshed, never renamed, never moved, **never pruned** — even if the design
-is deleted in Penpot. The archive stays yours.
-
-This is the same state a file reaches by leaving every mapped folder, and the app
-treats them alike from there — but the two entrances differ in what they cost.
-Ignoring touches Penpot not at all. Moving out puts the design in **Penpot's
-trash**, where it ages out on its own, because a design nothing mirrors is a
-design nobody in Nextcloud can see.
-
-Ignoring is refused on `link` files: a `link` file holds no archive, so an
-"ignored link" is a pointer to something nobody is tracking — it looks like a
-backup and isn't one.
-
-### Restore — putting a design back
-
-"Restore" can mean several different things. The app picks the best path
-available and tells you which one it used — best first:
-
-| # | Situation | What you get back | |
-|---|---|---|---|
-| 1 | Only the **Nextcloud** file was deleted | Everything — the design never moved | ✅ |
-| 2 | It's in **Penpot's trash** (~7 days) | **Everything** — id, revision, history, links | ✅ |
-| 3 | Deleted in Penpot, you have a `sync` archive | The design, not its id or history | not yet |
-| 4 | Deleted in Penpot, rescued by a **final snapshot** | The design, not its id or history | not yet |
-| 5 | A `link` whose design vanished over a week ago | Nothing | — |
-
-**Rows 1 and 2 need no thought and no clicks: just restore the file from your
-Nextcloud trash.** The app works out which case it is and does the least
-destructive thing that applies. If the design never left Penpot, nothing is sent
-at all; if it's in Penpot's trash, the app takes it back out — with its id,
-revision, history and links intact — and confirms by re-reading, because Penpot's
-restore command reports success for ids it did not restore. Either way you end up
-with one mirror, not two, and the next pull leaves it alone.
-
-Rows 3 and 4 are best-effort and **not built yet**: **a deleted Penpot design
-cannot be resurrected at its original id**, verified against a live instance, so
-importing returns the *artwork* rather than the *file* — same name, pages and
-assets, new identity, no edit history. That's a trade worth making, but it's
-yours to make, so it needs a confirmation step rather than a listener. Until it
-lands, the app tells you when you're in this case instead of failing quietly:
-the design is gone from Penpot and your file is the only copy of it.
-
-**Row 5 is the only real loss, and the app works hard to avoid it.** When a pull
-notices a `link` file's design was deleted, it takes a **final snapshot** first —
-Penpot still lets us export a deleted design for about a week — writes that
-archive into the file, and *then* moves it to the trash. You end up holding a
-real `.penpot` file instead of a dead pointer.
-
-**Penpot has its own safety net, and it's better than ours.** Deleting a design in
-Penpot doesn't erase it immediately — Penpot retains the data for roughly **7
-days** before a purge worker removes it. That grace period isn't reachable through
-the API, so this app can't drive it, but if you deleted something recently,
-**recovering it in Penpot's own UI keeps the id, the links, and the history.** The
-app says so rather than quietly offering you the worse option.
-
-### Deleting
-
-**Each Nextcloud gesture gets the Penpot operation with the same
-reversibility** — that symmetry is the whole design:
+Penpot has a real trash of its own, so a delete here is a delete there — and just as reversible.
 
 | You do | Penpot does | Get it back by |
 |---|---|---|
-| Delete a mirror (→ your trash) | The design goes to **Penpot's trash**, ~7 days | Restoring the file |
-| Restore it from your trash | The design comes **back out**, losslessly | — |
-| Empty your trash | The design is **permanently deleted** | Nothing. This is the irreversible one |
+| 🗑️ Move a design to the trash | It goes to **Penpot's trash** | Restoring the file |
+| ↩️ Restore it from the trash | It comes **back out**, losslessly | — |
+| 💥 Empty the trash | **Permanently deleted** | Nothing. This is the irreversible one |
 
-An earlier version of this app kept the delete purely local, on the belief that
-Penpot's trash was unreachable by API. It isn't — and once that's true, "purely
-local" stops being the safe choice and starts being the surprising one: someone
-who deletes a design in Nextcloud and finds it still in Penpot hasn't been
-protected, they've been ignored.
+It works from the other side too: delete a design in Penpot and its mirror lands in your Nextcloud trash — never a hard delete, and a pointer gets one last export on the way out so what you're holding is a real, openable archive rather than a dead link. Destroy it for good over there and the trashed file here is cleared.
 
-**Restoring inside the window costs nothing.** The app calls Penpot's own restore
-and the design comes back exactly as it was — verified against a live instance:
-same id, same revision, deep links working again.
+**Exactly one operation in this entire app destroys anything** — emptying your Nextcloud trash, the one gesture Nextcloud itself treats as irreversible. Everything else is additive or undoable.
 
-It does not trust the reply. Penpot's restore answers "success" for ids it did
-not restore, and it answers *before its own transaction settles*, so the app
-re-reads the design's project listing — the same listing the sync reads — and
-calls the restore a second time if the design is not in it yet. That is the
-difference between your file coming back and your file coming back for ninety
-seconds until the next sync tidies it away again.
+Even that has a guard. Penpot's permanent delete does *not* check that a design is in the trash (we proved it live, on a design it cheerfully destroyed anyway), so the purge reads Penpot's trash listing first and passes on only ids that come back in it. If someone restored the design upstream in the meantime, emptying your trash leaves it alone. 🛡️
 
-**There is no trash-bin setting to configure.** An earlier design built a
-parallel "trash project" inside a service account's team, on the same mistaken
-belief. Penpot's own trash preserves strictly more, with no configuration and
-without a design vanishing into a robot's private team.
+And the restore doesn't trust Penpot's reply: the RPC answers "success" for ids it did not restore, and answers *before its own transaction settles*, so the app re-reads and asks again. That's the difference between your design coming back and it coming back for ninety seconds.
 
-**Emptying your trash is the irreversible one, and it has a guard.** Penpot's
-`permanently-delete-team-files` does *not* check that a design is in the trash —
-proven live on a design that had been restored, which it destroyed anyway. So the
-app reads Penpot's trash listing first and passes on only ids that come back in
-it. If someone restored the design in Penpot in the meantime, emptying your trash
-leaves it alone.
-
-⚠️ **After the window closes, only the bytes are left.** A `sync` file holds a
-real archive and a `link` holds none, so if a link's design is deleted in Penpot
-the pull takes a [final snapshot](#restore--putting-a-design-back) on its way out
-rather than leaving you a dead pointer. Rebuilding a design *from* that archive
-is the one restore path still to come — see rows 3 and 4 above.
-
-**Deleting a `link` currently behaves like deleting a `sync`** — the design goes
-to Penpot's trash, and restoring the file brings it back. The intended end state
-is different: a link holds no content, so trashing one should be a *visibility*
-choice that Penpot never hears about, with the trashed file itself acting as the
-"hidden" marker. That needs the pull to read your trash before it recreates a
-mirror, or a dismissed link would simply reappear on the next run — so the two
-land together, in a later release, and until then the delete is uniform.
-
-### When someone deletes a design in Penpot
-
-The sync notices on its next run and moves your mirror to the **Nextcloud
-trash** — never a hard delete, and never anything else. Three things are worth
-knowing about that, in order of how likely they are to surprise you.
-
-**Nextcloud never empties its own trash because Penpot did.** Even a design
-*permanently* deleted in Penpot leaves your mirror sitting in the trash, with
-whatever archive it had. The tidy-looking alternative — mirror Penpot's purge too
-— is a trap: the two trashes expire on their own schedules (Penpot's is about 7
-days and not configurable, yours might be 30), so every design that quietly ages
-out of Penpot's trash would take your last copy with it, on a schedule nobody
-chose. Emptying your trash stays your decision.
-
-**It goes to the trash of whoever owns the folder.** The sync runs as the account
-that owns the mapped folder — the service account, for a shared Team Folder — so
-that is whose trash the mirror lands in. This is ordinary Nextcloud behaviour for
-shared files rather than anything this app invents: the owner's delete fills the
-owner's trash. If you are a *member* of a shared design folder, you will see the
-file disappear and find nothing in your own trash. Ask whoever owns the folder,
-or check the account the mapping was created under.
-
-**Want a copy that no Penpot deletion can ever touch?** Move the file **out of
-the mapped folder** first. The sync only ever prunes inside folders it manages,
-so a file parked anywhere else is yours permanently — and if it is in `sync` mode
-it is a real archive, not a pointer. That is the honest way to keep something
-before deleting it in Penpot.
-
-Note what that costs on the way out and back. Moving a design out of every mapped
-folder puts **the design** in Penpot's trash, where it ages out on its own; the
-file keeps its bytes. Moving it back in **imports those bytes as a new design** —
-so the file you are holding is exactly what ends up in Penpot, and the identity
-and edit history of the old one do not come with it.
-
-That is deliberate, and the alternative is worse. The app used to hunt down the
-original design and bring it back instead, which meant that if anyone had touched
-it in Penpot in the meantime you silently got their version rather than the file
-you had. Penpot offers no way to put new bytes inside an existing design —
-`import-binfile` always creates one — so the choice is between your content and
-their id, and your content wins.
-
-### Failures never cost you data
-
-Penpot's transport has more ways to fail than a plain REST call — `export-binfile`
-and `import-binfile` are both SSE streams, in Transit encoding, and the actual
-bytes come from a second authenticated request. **HTTP 200 does not mean success**
-here; an error arrives as an event *inside* a 200 response.
-
-The rules that follow from that:
-
-- A failed export or download **keeps the existing mirror**, never truncating it.
-- Archives are written atomically — a file is the old version or the new one,
-  never a half-written ZIP.
-- **Pruning requires a clean listing.** A failed listing looks exactly like
-  "everything was deleted." An expired token, a network blip, or a lost team
-  invitation never prunes anything.
-- A failed write leaves your local change standing and reports the divergence.
-
-### A first-class file type
-
-Mirrored files get a custom Penpot mimetype and icon rather than showing as
-generic archives, and expose their state over WebDAV:
-
-| Property | What it is |
-|---|---|
-| `nc:metadata-penpot_id` | The Penpot design id — stable across renames and moves |
-| `nc:metadata-penpot_revision` | Penpot's `revn` + `modifiedAt`, the drift signal |
-| `nc:metadata-penpot_mode` | `sync` or `link` |
-
-Folders carry `penpot_project_id` / `penpot_team_id` the same way. All of it is
-read-only over DAV — the sync engine owns these properties.
-
-The mimetype is `application/vnd.penpot`, and it carries no `+json` / `+zip`
-suffix on purpose: a `sync` mirror really is a ZIP archive while a `link` mirror
-holds nothing at all, so either suffix would be wrong for half your files.
-Removing the app reverts the registration and leaves Nextcloud as it found it.
-
-**A `link` file is empty — zero bytes.** Everything that identifies it (the
-design id, the revision it reflects, its mode) lives in the metadata above, so a
-body would only be a second copy of the same facts, free to drift from the first.
-It is deliberately *not* a small placeholder archive either: that would be
-indistinguishable from a real export, which is how you end up trusting a backup
-that was never taken. `occ penpot_sync:status` tells you which a file is.
-
-### Opening a design
-
-Clicking a mirrored `.penpot` file opens the live design in Penpot. That is the
-only opener it gets — unlike this app's siblings for n8n and Grafana, there is no
-"edit as text" action, in any mode, for any file. A `.penpot` archive is opaque
-nested design data; there is nothing coherent to hand-edit and no way to
-re-import it if there were.
-
-`sync` and `link` files open **identically**. The mode decides whether the
-archive is stored on your Nextcloud, never whether the design can be opened.
-
-The link is built from the design id the file already carries, so it keeps
-working after you rename the file or drag it somewhere else — including out of
-its mapped folder entirely. The one case where the action disappears is a file
-whose design was deleted in Penpot: that id is permanently dead, so the app hides
-the action rather than send you to a 404.
+🗑️ [`delete`](features/designs/delete.feature) · ↩️ [`restore`](features/designs/restore.feature) · 💥 [`purge`](features/designs/purge.feature)
 
 ---
 
-## Administration
+## 🎨 A first-class file type — icon, mimetype, honest timestamps
 
-### Penpot connection
+A mirrored design isn't a generic ZIP. The app registers the `application/vnd.penpot` mimetype so your designs wear the **real Penpot icon**, and removing the app puts Nextcloud back exactly as it found it.
 
-Two cards, deliberately separate:
+Then the detail we're quietly proud of: **a mirror gets the timestamps of the thing it mirrors.** Penpot's `modified-at` becomes the file's modification time and `created-at` its creation time — because "the sync job wrote this at 15:02" is never the question someone sorting a folder by date is actually asking. A design nobody has touched in a year should *look* like it. 🕰️
 
-- **Instance** — the base Penpot URL. Admin-scoped, no credential field.
-- **Service account** — the required token that does all mirroring. Stored
-  encrypted, never echoed back.
+Every file's state is queryable over WebDAV, too:
 
-A connection test distinguishes *unset* from *rejected*, and names the required
-Penpot instance flag if it's missing.
-
-### Personal settings
-
-Each user can store their own Penpot access token. Optional everywhere except
-personal projects. Clearing it degrades attribution; it never stops team
-mirroring and never deletes anything.
-
-### Required Penpot instance flag
-
-| Flag | Why |
+| DAV property | What it holds |
 |---|---|
-| `enable-access-tokens` | Lets a Penpot user mint the token this app authenticates with. Off by default upstream. |
+| `nc:metadata-penpot_id` | The design's id in Penpot — stable across renames and moves |
+| `nc:metadata-penpot_revision` | Penpot's revision + `modified-at`, the drift signal |
+| `nc:metadata-penpot_mode` | `sync`, `reference`¹ or `unmapped` — and it's **indexed** |
 
-### Required Nextcloud setting, if Penpot is not public
+Folders carry `penpot_project_id` / `penpot_team_id` the same way. All of it is **read-only** — no `PROPPATCH`; the sync engine owns these.
 
-If Nextcloud reaches Penpot at a private or in-cluster address — a Kubernetes
-service name, a LAN IP, `localhost` — Nextcloud's SSRF guard blocks the request
-before it leaves:
+¹ `reference` is the on-the-wire value for **link** mode — Nextcloud's PROPFIND treats a stored `link` as a callback and falls over. Everywhere a human looks, it's **link**.
 
-```
-Host "penpot.cloud.svc.cluster.local" violates local access rules
-```
-
-```bash
-occ config:system:set allow_local_remote_servers --value=true --type=boolean
-```
-
-`occ penpot_sync:probe` reports this case by name rather than as a generic
-connection failure, so you should not have to guess. Not needed when Penpot is
-on a public hostname.
-
-> `enable-webhooks` was expected to be a second requirement, as a fast-path
-> trigger for the pull. It isn't currently part of the design: webhook *creation*
-> works, but **delivery has never been observed** — two confirmed mutations
-> against a validated webhook produced zero deliveries. Until that's explained,
-> the scheduled pull is the only trigger.
+👀 [`view`](features/designs/view.feature) · 🖱️ [`open-with`](features/designs/open-with.feature)
 
 ---
 
-## Status
+## 🔑 A service account reads; you write as yourself
 
-Early development, pre-alpha, **version 0.1.0**.
+Penpot has no admin or service credential type — every access token is scoped to a user account. So the job splits in two:
 
-**Implemented:** the complete admin surface — Instance (URL + service-account
-token), Sync Settings, Team mappings, and Sync Actions — plus a personal
-per-user token page. Every control persists and has an `occ` twin
-(`set-url`, `set-token`, `test-connection`, `list-teams`, `add-mapping`,
-`list-mappings`, `remove-mapping`, `set-personal-token`, `show-config`, `probe`).
+| | Service-account token | Your personal token |
+|---|---|---|
+| **Required?** | **Yes**, once | No — optional |
+| **Set by** | An admin | You, in personal settings |
+| **Does** | All mirroring: list, export, pull | Attributes *your* changes to *you* in Penpot's history |
 
-On top of that, **the mirror itself**: `sync pull` walks a mapped team into a
-plain Nextcloud folder, `status` inspects any node (metadata, resolved
-membership, and whether the file holds a real archive or a pointer), a move
-between project folders is either refused or propagated to Penpot, and a design
-deleted in Penpot has its mirror snapshotted and moved to the Nextcloud trash.
-Covered by unit tests and by Behat scenarios that install the app on a real
-Nextcloud and drive the CLI against a real Penpot — including an export asserted
-to land real ZIP bytes on disk.
-
-The Files-app surface has opened: a mirrored design carries its own file type and
-icon, and **"Open in Penpot"** is the default click — a deep link built from the
-id the file already carries, so it survives being renamed and moved. It is the
-only opener a `.penpot` file gets; there is deliberately no "edit as text".
-
-**Not implemented:** creating designs from Nextcloud, the ignore and restore
-actions, the mode pills, refusing to download a `link` file as though it were an
-archive, adopting a mirror back out of the Nextcloud trash, and personal
-projects. The scheduled pull is configurable but does not yet run.
-
-**The [`saga/`](saga/) is the authoritative "where are we" record**, ahead of
-this README and the feature files.
-[Chapter 1: First Contact](saga/Chapter_1_First_Contact.md) is the API survey and
-the decisions it forced — read §6.18–§6.48 first if you want the decisions rather
-than the survey that produced them, and its closing section for what's settled,
-what's open, and where to build next. [Chapter 2: The
-Colony](saga/Chapter_2_The_Colony.md) is what has actually been built, course by
-course, and its table is the honest map of what is done and what is next. It is
-now **CLOSED**, and its finale (§C6.38) is the one thing to read before trusting
-any test result here: it got the colony its footing and then redrew the **master
-design** — the feature suite, reorganised around behaviour rather than mechanism —
-and **every one of its 116 scenarios is `@todo`, so the integration suite
-currently runs nothing at all.** [Chapter 3: Building to
-Plan](saga/Chapter_3_Building_To_Plan.md) is the work of building to it, one PR at
-a time, and carries the order it happens in.
-
-### Executable specification
-
-The specs *are* the requirements, read before any code lands.
-
-| Folder / file | What it covers |
-|---|---|
-| **[`connection/`](features/connection/)** | |
-| [`admin.feature`](features/connection/admin.feature) | **Live.** The connection details as one form, and a failure that names the field. |
-| [`personal.feature`](features/connection/personal.feature) | A user's own token — attribution, and their personal team. |
-| [`sync-now.feature`](features/connection/sync-now.feature) | **Live.** The instance-wide sync: what every mapped folder holds once it has run. |
-| **[`team-mapping/`](features/team-mapping/)** | |
-| [`create.feature`](features/team-mapping/create.feature) | **Live.** Mapping a team, and every value a mapping may not take. |
-| [`view.feature`](features/team-mapping/view.feature) | What a mapping resolves to, and why a rename upstream does not move it. |
-| [`manage-groups.feature`](features/team-mapping/manage-groups.feature) | **Live.** The one field of a mapping that is editable. |
-| [`delete.feature`](features/team-mapping/delete.feature) | Tearing a mapping down; Penpot is never contacted. |
-| [`sync-now.feature`](features/team-mapping/sync-now.feature) | **Live.** The card's own button — one mapping, on demand. |
-| **[`designs/`](features/designs/)** | |
-| [`create.feature`](features/designs/create.feature) | New → Penpot design, and Drafts semantics. |
-| [`view.feature`](features/designs/view.feature) | Looking at a mirror: its file type, and the metadata it publishes. |
-| [`edit.feature`](features/designs/edit.feature) | A design's content changing in Penpot, and what the mirror does about it. |
-| [`copy.feature`](features/designs/copy.feature) | Copies never create designs. |
-| [`move.feature`](features/designs/move.feature) | Free nesting; a link cannot leave its project. |
-| [`rename.feature`](features/designs/rename.feature) | **Live.** Both name guards, both directions. |
-| [`delete.feature`](features/designs/delete.feature) | Penpot's trash, the 7-day grace period, and the one irreversible gesture. |
-| [`restore.feature`](features/designs/restore.feature) | Putting a design back, and what it cannot recover. |
-| [`purge.feature`](features/designs/purge.feature) | Reset the Nextcloud side without touching Penpot. |
-| [`open-with.feature`](features/designs/open-with.feature) | Open in Penpot — no text-editor fallback, ever. |
-| **[`projects/`](features/projects/)** | |
-| [`create.feature`](features/projects/create.feature) | How a folder becomes a project: a design lands in it, at any depth. |
-| [`view.feature`](features/projects/view.feature) | **Live.** Telling a project folder from an ordinary one. |
-| [`copy.feature`](features/projects/copy.feature) | Why copying a project is refused rather than half-done. |
-| [`move.feature`](features/projects/move.feature) | Where a project folder may and may not be dragged. |
-| [`rename.feature`](features/projects/rename.feature) | **Live.** A project changing name, and the name guards. |
-| [`delete.feature`](features/projects/delete.feature) | Deleting a project — one call, not one per design. |
-| [`restore.feature`](features/projects/restore.feature) | Bringing a project back whole, and the one case that cannot be. |
-| **top level** | |
-| [`lifecycle.feature`](features/lifecycle.feature) | App enable, disable and removal — including the mimetype it registers and reverts. |
-
-**The folders are the nouns.** A design and a project are two Penpot objects with
-different calls, different failure modes and different blast radii, so each gets
-its own verbs; a mapping and the connection are configuration rather than
-content, so they get theirs. `features/README.md` explains the split.
-
-Deliberately **not ported** from either sibling: `tag-sync.feature` and
-`reserved-tags.feature` (Penpot has no tags at all).
+One puller means no race: if the pull ran per-user, two people on the same team would write the same mirrored file from separate jobs. The cost is that someone has to invite the service account to each Penpot team as a **viewer** before it can be mapped — which doubles as a clean opt-in gate. Inviting it is how a team says *"yes, Nextcloud may manage this."*
 
 ---
 
-## Development
+## 🛠 Setup, in three moves
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for process and [AGENTS.md](AGENTS.md) for
-a cold-start orientation.
+**1. Point it at Penpot.** Base URL and a service-account token, stored encrypted and never echoed back. **Test connection** reports which teams that token can actually see — which is what decides what you can map.
 
-This is a community integration and is not affiliated with, endorsed by, or
-sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are
-trademarks of their respective owner, used here only to identify the service this
-app integrates with.
+**2. Map a team.** Pick the team, the folder name, the mode, and the groups it's shared with. Its projects come along automatically; there's no project-level mapping to configure and nothing that can drift from what Penpot contains. With the `groupfolders` app installed you get a real Team Folder — the closest match to Penpot's own model, where the team *is* the access boundary — and without it, a plain shared folder that behaves identically.
+
+**3. Sync it.** A scheduled pull on whatever interval you like, plus **Sync from Penpot** / **Sync to Penpot** buttons for when you're impatient.
+
+Two things worth knowing about a Penpot instance:
+
+- `enable-access-tokens` must be on — it's off by default upstream, and it's what lets a user mint the token this app authenticates with.
+- If Nextcloud reaches Penpot at a private address (a Kubernetes service name, a LAN IP), Nextcloud's SSRF guard blocks it: `occ config:system:set allow_local_remote_servers --value=true --type=boolean`. `occ penpot_sync:probe` reports that case by name rather than as a generic failure.
+
+🔌 [`connection/admin`](features/connection/admin.feature) · 🗂️ [`mapping/create`](features/mapping/create.feature) · 🔄 [`sync-now`](features/connection/sync-now.feature)
+
+---
+
+## ⌨️ Every button is also a command
+
+The whole setup is scriptable, so a Kubernetes init job can stand it up with no clicking. Exit `0` on success, non-zero on failure.
+
+```sh
+# Connect
+occ penpot_sync:set-url https://penpot.example.com
+occ penpot_sync:set-token                          # reads stdin, stays out of your history
+occ penpot_sync:test-connection
+
+# Map a team to a folder
+occ penpot_sync:list-teams
+occ penpot_sync:add-mapping <team-id> --folder="Northwind" --mode=sync --groups=designers
+occ penpot_sync:list-mappings
+occ penpot_sync:set-groups <mapping-id> designers,admins
+occ penpot_sync:remove-mapping <mapping-id>
+
+# Sync — either direction, one mapping or all of them
+occ penpot_sync:sync pull
+occ penpot_sync:sync push --mapping=<mapping-id>
+
+# Ask what the app thinks about a path
+occ penpot_sync:status "Northwind/Brand/2026/Homepage.penpot"
+occ penpot_sync:probe
+```
+
+---
+
+## 📋 The specs are the docs
+
+Every feature above links to an **executable specification** — a Gherkin `.feature` file under [`features/`](features/), written in plain language, which also *drives the integration tests* against a real Nextcloud and a real Penpot. The folder is the noun and the file is the verb: [`designs/`](features/designs/), [`projects/`](features/projects/), [`mapping/`](features/mapping/), [`connection/`](features/connection/). They're written before the code and kept true after it. 🧪
+
+Read [`features/README.md`](features/README.md) for how they're organised and [`features/AGENTS.md`](features/AGENTS.md) for why each scenario is the way it is.
+
+---
+
+## 🚧 Status
+
+**Early development, v0.1.0** — this runs, and it hasn't yet run in anger anywhere but its authors' homelab.
+
+Most of what's above is proven by scenarios CI drives against a live Nextcloud and a live Penpot. The known gaps: **personal Penpot projects** don't mount into your home folder yet, copying a whole project **folder** isn't tracked, and a handful of "Penpot went unreachable mid-gesture" paths log the failure rather than report it to you. The Files-app surface — the icon, the context menu — is checked by hand, because the harness has no browser.
+
+The [`saga/`](saga/) is the authoritative record of what's built, what's blocked and why; [Chapter 3](saga/Chapter_3_Building_To_Plan.md) is the current one.
+
+---
+
+## 📜 Licence & trademark
+
+AGPL-3.0-or-later. See [LICENSE](LICENSE). Development notes are in [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+
+This is a community integration and is not affiliated with, endorsed by, or sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are trademarks of their respective owner, used here only to identify the service this app integrates with.
