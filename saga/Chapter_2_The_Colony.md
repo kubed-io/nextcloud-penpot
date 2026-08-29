@@ -1847,7 +1847,7 @@ project with no folder (§6.35).
 Two live details that made this hard to see, both worth keeping:
 
 - **The live instance never reproduced it.** Delete/restore/poll for 40 seconds
-  on `drive.kellyferrone.com` showed the design listed continuously from 600 ms
+  against the live instance showed the design listed continuously from 600 ms
   after the restore returned. A near-idle Penpot with five designs settles inside
   the gap; CI's, mid-suite with seventeen projects, does not. *"It works on the
   real instance"* was true and meant nothing.
@@ -1949,7 +1949,7 @@ The trash row and the blob were both there, on **storage 1**:
 ```
 oc_files_trash    My Ultra Kicker.penpot | nextcloud | 1785513504 | /Design Files/My Stuff
 oc_filecache      files_trashbin/files/My Ultra Kicker.penpot.d1785513504 | storage 1 | 2558 bytes
-oc_storages       1 = object::user:nextcloud       3 = object::user:kelly
+oc_storages       1 = object::user:nextcloud       3 = object::user:drk
 ```
 
 The mapped folder is owned by the service account, and **the pull runs as its

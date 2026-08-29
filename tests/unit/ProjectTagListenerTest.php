@@ -64,7 +64,7 @@ final class ProjectTagListenerTest extends TestCase {
 		);
 
 		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('kelly');
+		$user->method('getUID')->willReturn('drk');
 		$this->session = $this->createMock(IUserSession::class);
 		$this->session->method('getUser')->willReturn($user);
 
@@ -163,7 +163,7 @@ final class ProjectTagListenerTest extends TestCase {
 
 		$this->listener->handle($this->assignment());
 
-		self::assertSame('kelly', $this->homeAskedFor);
+		self::assertSame('drk', $this->homeAskedFor);
 	}
 
 	/** Tags land on comments and other object types; only `files` are nodes. */

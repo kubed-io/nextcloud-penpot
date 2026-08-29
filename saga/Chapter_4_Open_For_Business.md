@@ -333,6 +333,38 @@ under the thing it was copied from.
 
 ---
 
+### §D4.12 — Decision (locked): the maintainer is **Dr K**, and no real name appears anywhere
+
+**The call:** no first name, surname, family nickname, personal email, personal
+domain or personal GitHub handle in any tracked file. `Dr K` in prose, `drk` in
+fixtures, `kubed-io` in SPDX headers.
+
+The convention already existed; it had simply never been **written down** in
+either this repository or the sibling. A rule that lives only in the
+maintainer's head is a rule an agent rediscovers by breaking it, which is
+exactly what happened over the week before this round. It is now in `AGENTS.md`,
+which is where the cascade (§D4.2) says the current rules live.
+
+**What the scrub actually found is the useful part**, because none of it was
+someone typing a name into prose. Every leak came in attached to something else:
+
+- **Two SPDX headers** carrying a personal copyright line, against 184 files
+  saying `kubed-io` — editor template drift, invisible in review.
+- **A live hostname** pasted into a Chapter 2 transcript as evidence for a
+  timing claim.
+- **A username inside a database dump**, copied verbatim into a code block
+  because it was evidence and evidence gets pasted whole.
+- **A test fixture's user id**, where a real name reads as a neutral
+  placeholder.
+
+> **The rule:** personal details do not arrive in sentences. They arrive inside
+> pasted evidence, generated headers, and fixtures — the three places nobody
+> proofreads.
+
+**What a scrub cannot reach:** git authorship. See Round 6.
+
+---
+
 ## The rounds
 
 ### Round 1 — the README stops being a design doc
@@ -451,6 +483,29 @@ hand and produced a 334 KB tarball with exactly one top-level directory,
 `penpot_sync/appinfo/info.xml` in place, and a valid SHA-512 signature from the
 new key. That is every store precondition except the two that need Nextcloud.
 
+
+### Round 6 — the scrub, before the doors actually open
+
+A public repository about to become a listed app is a different exposure from a
+public repository nobody visits. The maintainer's name came out of every tracked
+file (§D4.12): two SPDX headers, a live hostname in a Chapter 2 transcript, a
+username inside a pasted database dump, a test fixture id, and four cells of the
+gate table in this chapter. All five screenshots were checked frame by frame and
+carry no name; they also carry no PNG text metadata.
+
+**The fork moved orgs.** `app-certificate-requests` had been forked to a personal
+account. It is now forked from the upstream into
+[kubed-io/app-certificate-requests](https://github.com/kubed-io/app-certificate-requests)
+so the CSR is filed by the organisation that owns the app. No certificate PR was
+opened — gate 4 is still deliberately unfiled.
+
+**And the part a scrub cannot reach: git authorship.** Every commit in this
+repository names a real person, and about half carry a personal email address.
+That is not in a file, so no edit removes it — only a full history rewrite and a
+force-push would, and that is a decision with real costs (every existing commit
+link and review comment breaks) that belongs to the maintainer, not to an agent
+doing a docs pass. It is recorded here rather than quietly left out.
+
 ---
 
 ## The plan — reaching the store
@@ -478,11 +533,11 @@ overlaps the wait.
 | 1 | App id `penpot_sync` locked across `info.xml`, `package.json`, namespace | — | ✅ done, long since |
 | 2 | Signing keypair + CSR minted, gitignored, verified | agent | ✅ done this round |
 | 3 | Release pipeline carries sign + upload | agent | ✅ done this round |
-| 4 | **CSR filed** with `nextcloud/app-certificate-requests` | **Kelly** | ⬜ blocked on a human |
+| 4 | **CSR filed** with `nextcloud/app-certificate-requests` | **Dr K** | ⬜ blocked on a human |
 | 5 | **Countersigned `.crt` committed back** to that repo | Nextcloud | ⬜ the wait (~2 days for n8n) |
-| 6 | **Private key into `NEXTCLOUD_STORE_KEY`** | **Kelly** | ⬜ secret exists, value empty |
-| 7 | Durable backup of the private key | **Kelly** | ⬜ see below |
-| 8 | `NEXTCLOUD_STORE_TOKEN` is a valid apps.nextcloud.com token | **Kelly** | ◑ set 2026-08-29, never exercised |
+| 6 | **Private key into `NEXTCLOUD_STORE_KEY`** | **Dr K** | ⬜ secret exists, value empty |
+| 7 | Durable backup of the private key | **Dr K** | ⬜ see below |
+| 8 | `NEXTCLOUD_STORE_TOKEN` is a valid apps.nextcloud.com token | **Dr K** | ◑ set 2026-08-29, never exercised |
 | 9 | **Register the app id** on the store (cert + ownership signature) | either | ⬜ needs gate 5 |
 | 10 | Dry run, then cut the release | either | ⬜ needs 6 + 9 |
 
