@@ -20,7 +20,7 @@ use OCP\Files\File;
 use Psr\Log\LoggerInterface;
 
 /**
- * Routes a copied `.penpot` file to {@see CopyService} (`copy.feature`).
+ * Routes a copied `.penpot` file to {@see CopyService} (`designs/copy.feature`).
  *
  * `NodeCopiedEvent` is its own event — a copy fires neither `NodeWrittenEvent`
  * nor `NodeRenamedEvent`, so without this listener a copied design is simply

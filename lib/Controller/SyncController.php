@@ -22,7 +22,7 @@ use OCP\IRequest;
 
 /**
  * The section-wide "Sync from Penpot" button, and the state the panel polls
- * (`connection/admin.feature`).
+ * (`connection/sync-now.feature`).
  *
  * ## ASYNC, UNLIKE THE PER-MAPPING BUTTON
  *

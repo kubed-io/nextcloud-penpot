@@ -84,7 +84,7 @@ use OCP\SystemTag\TagAssignedEvent;
  * thing the browser cannot read off the file listing.
  *
  * Still to land: restoring a design from its local archive when Penpot's own
- * trash no longer holds it (`restore.feature`, the lossy layer), and personal
+ * trash no longer holds it (`designs/restore.feature`, the lossy layer), and personal
  * projects. Don't scaffold those here ahead of the code that uses them.
  *
  * The admin purge is NOT on that list any more — it was retired rather than
@@ -162,7 +162,7 @@ final class Application extends App implements IBootstrap {
 
 		// A COPY IS ITS OWN EVENT. NodeCopiedEvent fires for neither a write nor a
 		// rename, so without this a copied design is simply never noticed. It
-		// becomes a real new design in Penpot (copy.feature, reversed deliberately
+		// becomes a real new design in Penpot (designs/copy.feature, reversed deliberately
 		// in §C6.8) — one `duplicate-file` when it lands in the same project, plus
 		// a `move-files` when it lands anywhere else.
 		$context->registerEventListener(NodeCopiedEvent::class, CopyListener::class);
@@ -173,7 +173,7 @@ final class Application extends App implements IBootstrap {
 		// SyncGuard is load-bearing: the pull writes .penpot files constantly.
 		$context->registerEventListener(NodeWrittenEvent::class, CreateListener::class);
 
-		// DELETING REACHES PENPOT'S TRASH (delete.feature). This covers the SOFT
+		// DELETING REACHES PENPOT'S TRASH (designs/delete.feature). This covers the SOFT
 		// step only — the purge fires no typed event at all and is wired as a
 		// legacy hook in boot(), see TrashPurgeHook.
 		$context->registerEventListener(BeforeNodeDeletedEvent::class, DeleteListener::class);
@@ -182,7 +182,7 @@ final class Application extends App implements IBootstrap {
 		// unlike the purge this one IS a typed event — files_trashbin dispatches
 		// NodeRestoredEvent once the file is back. Without it a restored mirror sat
 		// in its folder while the design stayed in Penpot's trash, and the next
-		// pull pruned the file a second time (the gap delete.feature used to name).
+		// pull pruned the file a second time (the gap designs/delete.feature used to name).
 		$context->registerEventListener(NodeRestoredEvent::class, RestoreFromTrashListener::class);
 
 		// A FOLDER BECOMES A PROJECT (projects/create.feature). Normally that

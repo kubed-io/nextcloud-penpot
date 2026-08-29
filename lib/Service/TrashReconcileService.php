@@ -47,7 +47,7 @@ use Psr\Log\LoggerInterface;
  *   - a mirror stamped before `penpot_team_id` existed (§C6.7), which cannot be
  *     attributed to a mapping at all
  *   - anything whose mode is not `sync`: an `unmapped` file left its mapping and its
- *     design is not this app's business any more (`purge.feature` says the same of
+ *     design is not this app's business any more (`designs/purge.feature` says the same of
  *     the user-driven purge), and a `link` is never trashed in the first place
  *   - anything at all while the answer from Penpot is uncertain
  *

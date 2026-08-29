@@ -22,7 +22,7 @@ use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
 /**
- * Routes a deleted `.penpot` file to {@see DeletionService} (`delete.feature`).
+ * Routes a deleted `.penpot` file to {@see DeletionService} (`designs/delete.feature`).
  *
  * ## THIS IS THE SOFT STEP ONLY. THE PURGE IS NOT AN EVENT.
  *

@@ -1464,7 +1464,7 @@ final class PullService {
 	 * This used to read only the folder's DIRECT children, while
 	 * {@see collectMirrors()} — the prune's half of the same question — has
 	 * always walked the whole tree. That asymmetry produced duplicates: a user
-	 * files a mirror into a plain subfolder (which `move.feature` explicitly
+	 * files a mirror into a plain subfolder (which `designs/move.feature` explicitly
 	 * allows and §6.29 makes meaningless to Penpot), the next pull cannot see it
 	 * here, and so it creates a SECOND mirror for the same design at the
 	 * canonical path.

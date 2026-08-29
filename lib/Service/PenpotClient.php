@@ -282,7 +282,7 @@ final class PenpotClient {
 	 * There is no project parameter in the schema, so the duplicate always lands
 	 * in the SOURCE design's project. A copy that must end up elsewhere is this
 	 * call followed by {@see moveFiles()} — which is exactly why one Nextcloud
-	 * gesture is two mechanisms (copy.feature). The returned record carries
+	 * gesture is two mechanisms (designs/copy.feature). The returned record carries
 	 * `projectId`, so the caller compares against that rather than guessing.
 	 *
 	 * @return array<string, mixed> the new file record, incl. `id` and `projectId`

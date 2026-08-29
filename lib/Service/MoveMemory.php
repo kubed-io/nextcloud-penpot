@@ -31,7 +31,7 @@ namespace OCA\PenpotSync\Service;
  * home folder into a Team Folder looks exactly like a stranger: a `.penpot` with
  * no id, which the §6.33 branch imports as a BRAND NEW DESIGN. The user asked for
  * a move and got a duplicate, with a new id and no history — the one outcome
- * `move.feature` says a cross-team move must never produce.
+ * `designs/move.feature` says a cross-team move must never produce.
  *
  * ## WHY A MEMORY AND NOT A LOOKUP
  *

@@ -140,9 +140,10 @@ final class ProjectFolderService {
 	public function onTagged(Folder $folder): void {
 		$markers = $this->metadata->readFolder($folder->getId());
 		if ($markers->hasProject()) {
-			// Already a project — either mirrored from Penpot (the pull stamps the
-			// tag itself) or opted in earlier. Re-tagging is a no-op, not a second
-			// create: two folders claiming one project is the exact failure
+			// Already a project — mirrored from Penpot, or promoted from this side,
+			// or opted in earlier. `penpot_project_id` is the marker either way; the
+			// tag is not, and the pull never writes one. Re-tagging is a no-op, not a
+			// second create: two folders claiming one project is the exact failure
 			// `projects/create.feature` refuses copies to avoid.
 			return;
 		}

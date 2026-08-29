@@ -16,7 +16,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Taking a mirror back out of the Nextcloud trash, and putting the design back
- * with it (`delete.feature`, `restore.feature`, saga §6.52).
+ * with it (`designs/delete.feature`, `designs/restore.feature`, saga §6.52).
  *
  * ## THE INVERSE OF {@see DeletionService}, GESTURE FOR GESTURE
  *
@@ -28,7 +28,7 @@ use Psr\Log\LoggerInterface;
  * in the middle: restoring a mirror put the file back in its folder while the
  * design stayed in Penpot's trash, so the next pull — seeing a design Penpot no
  * longer names — pruned the mirror again. Nothing was lost, but the file
- * appeared to delete itself a second time. `delete.feature` carried that as a
+ * appeared to delete itself a second time. `designs/delete.feature` carried that as a
  * stated KNOWN GAP; this closes it.
  *
  * ## THREE LAYERS, CHEAPEST AND MOST LOSSLESS FIRST (saga §6.52)
@@ -181,8 +181,10 @@ final class RestoreService {
 		$stamped = $this->metadata->readFile($node->getId());
 		if ($stamped === null || $stamped->penpotId === '') {
 			// Untracked, or a mirror whose stamp was cleared. Nothing in Penpot
-			// answers to this file, and inventing something for it to answer to is
-			// mapping/sync-now.feature's still-open fork, not a restore.
+			// answers to this file, so the file comes back and Penpot is left alone
+			// — `designs/restore.feature`, "Restore an untracked design file".
+			// Importing one to give it something to answer to is a different
+			// gesture, and not one a restore performs on the user's behalf.
 			return;
 		}
 		$penpotId = $stamped->penpotId;
@@ -463,7 +465,7 @@ final class RestoreService {
 		// LAYER 3, AND IT FINISHES THE RESTORE RATHER THAN REPORTING IT UNFINISHED.
 		//
 		// The file is back inside a mapping and it holds the archive, so this is the
-		// §6.33 import — the same act `move.feature` performs for an arrival whose id
+		// §6.33 import — the same act `designs/move.feature` performs for an arrival whose id
 		// names nothing. `adopt()` re-stamps the file with the id that comes back;
 		// nothing here has to clear the dead one first.
 		//

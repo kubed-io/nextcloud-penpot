@@ -24,7 +24,8 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Propagates a completed Nextcloud rename or move of a managed Penpot node up to
- * Penpot (`rename.feature`, `move.feature`).
+ * Penpot. A node here is a design OR a project folder, so this one listener sits
+ * behind four features: `rename` and `move` under both `designs/` and `projects/`.
  *
  * ## ONE EVENT, TWO GESTURES
  *

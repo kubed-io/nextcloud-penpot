@@ -23,7 +23,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Routes a mirror coming back out of the Nextcloud trash to
- * {@see RestoreService} (`delete.feature`).
+ * {@see RestoreService} (`designs/delete.feature`).
  *
  * ## THIS ONE *IS* A TYPED EVENT — UNLIKE ITS OPPOSITE NUMBER
  *

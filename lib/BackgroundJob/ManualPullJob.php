@@ -17,7 +17,7 @@ use OCP\BackgroundJob\QueuedJob;
 use Psr\Log\LoggerInterface;
 
 /**
- * "Sync from Penpot", run out of band (`connection/admin.feature`).
+ * "Sync from Penpot", run out of band (`connection/sync-now.feature`).
  *
  * ## WHY THE BULK PULL CANNOT BE SYNCHRONOUS
  *

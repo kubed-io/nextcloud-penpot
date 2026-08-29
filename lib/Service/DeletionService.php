@@ -16,14 +16,14 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Deleting a mirror reaches Penpot — in two steps, mirroring the two trashes
- * (`delete.feature`, saga §C6.11).
+ * (`designs/delete.feature`, saga §C6.11).
  *
  * ## EACH GESTURE GETS THE OPERATION WITH THE SAME REVERSIBILITY
  *
  *     Nextcloud delete (→ NC trash)  →  delete-file  (→ Penpot trash, ~7 days)
  *     Nextcloud purge  (empty trash) →  permanently-delete-team-files
  *
- * That symmetry is the whole design. `delete.feature` used to say a local delete
+ * That symmetry is the whole design. `designs/delete.feature` used to say a local delete
  * was "purely local, ALWAYS" — written under §6.34, which believed Penpot's
  * trash was unreachable and `delete-file` therefore destructive. §6.52 disproved
  * both and §C6.11 confirmed it live: a deleted design keeps its id, revision and
