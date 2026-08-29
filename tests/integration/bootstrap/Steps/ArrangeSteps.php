@@ -353,9 +353,9 @@ trait ArrangeSteps {
 					$this->lastDeclaredDesigns[] = $path;
 					break;
 				case 'project':
-					// No MKCOL: the pull creates the folder when it mirrors the
-					// project, which is the only route to an empty project folder
-					// now the tag opt-in is gone (§D4.14).
+					// ensureProjectFolder() makes the folder itself now — it has to,
+					// because the stamp check it opens with cannot run on a missing
+					// node. See there for why the project is made in Penpot (§D4.14).
 					$this->ensureProjectFolder($path);
 					$this->rememberProject($path);
 					break;
@@ -803,6 +803,17 @@ trait ArrangeSteps {
 	 * been worth reading (§6.29).
 	 */
 	private function ensureProjectFolder(string $folder): void {
+		// THE FOLDER HAS TO EXIST BEFORE ANYTHING CAN BE ASKED ABOUT IT.
+		// `projectIdOf()` runs `penpot_sync:status`, which THROWS on a missing
+		// node rather than answering "no id" — so this MKCOL is load-bearing for
+		// the guard below, not just for the pull. Moving it after the guard is
+		// what turned four legs red with `No such node`.
+		//
+		// It is also the cheaper half of the pull's own work:
+		// `PullService::ensureProjectFolder()` walks and provisions a PATH,
+		// reusing whatever is already there.
+		$this->davMkcol($folder);
+
 		if ($this->projectIdOf($folder) !== '') {
 			return;
 		}
@@ -816,12 +827,6 @@ trait ArrangeSteps {
 		}
 
 		$this->penpotProjectIn($root, $name);
-
-		// MKCOL FIRST so the pull has a folder to stamp rather than one to create.
-		// `PullService::ensureProjectFolder()` walks and provisions a PATH, reusing
-		// what is already there, so this is the cheaper half of the same result and
-		// it removes folder CREATION from the list of things that can go wrong here.
-		$this->davMkcol($folder);
 
 		// The pull's exit code is checked, unlike the bare helper: a pull that fails
 		// here leaves the arrange silently short of a project folder, and the
