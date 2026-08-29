@@ -17,11 +17,14 @@ Point the app at your Penpot instance, bind a Penpot **team** to a Nextcloud **f
 
 ```
 Penpot                          Nextcloud
-──────────────────────────      ─────────────────────────────────
-team    "Northwind"        ⟶    folder    Northwind/
- └ project "Brand/2026"    ⟶      folder     Brand/2026/
-    └ design  "Homepage"   ⟶        file       Homepage.penpot
+──────────────────────────      ─────────────────────────────
+team     "Northwind"       ⟶    Northwind/
+ └ project "Brand/2026"    ⟶    └── Brand/
+                                    └── 2026/
+    └ design "Homepage"    ⟶            └── Homepage.penpot
 ```
+
+One project, two folders: a `/` in a Penpot project name is a path over here.
 
 Drag a design into another folder and Penpot has re-filed it seconds later. Rename it in Penpot and the file renames itself. And a folder holding the real archives is quietly also the easiest backup you'll never have to think about. 💾
 
