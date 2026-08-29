@@ -488,6 +488,15 @@ final class StorageService {
 		foreach ($group->getUsers() as $user) {
 			$uid = $user->getUID();
 			foreach ($this->shareManager->getSharedWith($uid, IShare::TYPE_GROUP, $folder, -1) as $share) {
+				// THIS GROUP'S SHARE, not every group share this user has to this
+				// folder. The prune above deletes a dropped group's share and only
+				// LOGS a failure, so an unwanted share can still be sitting there —
+				// and accepting it for someone who happens to be in both groups
+				// would hand back the access an admin just took away. Raised by
+				// Copilot on #56.
+				if ($share->getSharedWith() !== $gid) {
+					continue;
+				}
 				if ($share->getStatus() !== IShare::STATUS_PENDING) {
 					continue;
 				}

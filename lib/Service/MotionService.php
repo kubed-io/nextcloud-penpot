@@ -399,33 +399,6 @@ final class MotionService {
 	}
 
 	/**
-	 * `move-files`, treating "it is already there" as the success it is.
-	 *
-	 * ## PENPOT REFUSES A MOVE INTO THE PROJECT A DESIGN IS ALREADY IN
-	 *
-	 * `cant-move-to-same-project`, HTTP 400. Ordinarily unreachable, because the
-	 * caller compares `$from` against `$to` first and returns early when they match.
-	 * Two paths get past that comparison anyway, and both are legitimate:
-	 *
-	 *   - **an arrival from unmapped space.** `projectForContentIn()` runs BEFORE
-	 *     this, and for a folder that is not yet a project it promotes one — which
-	 *     files the designs already sitting in that folder, ours included. So by the
-	 *     time we ask, Penpot has already put the design where we were about to.
-	 *   - **a drag to the team root** whose file was in Drafts to begin with, where
-	 *     `$from` reads null and `$to` resolves to that same Drafts project.
-	 *
-	 * In both the end state the caller wanted is already true, so reporting a
-	 * failure would be a lie — and an expensive one, since the listener turns it
-	 * into a notification telling the user their move did not reach Penpot.
-	 *
-	 * ONLY THAT ONE CODE. Every other 400 is a real refusal and still throws.
-	 *
-	 * @return bool true when Penpot actually moved it, false when it was already
-	 *              there — the caller uses that only to decide what to log
-	 *
-	 * @throws PenpotApiException
-	 */
-	/**
 	 * Recover the identity a design lost by crossing a storage boundary.
 	 *
 	 * ## THE GESTURE THIS MAKES POSSIBLE (`designs/move.feature`, "Move a design into another team")
@@ -509,6 +482,33 @@ final class MotionService {
 		return $remembered;
 	}
 
+	/**
+	 * `move-files`, treating "it is already there" as the success it is.
+	 *
+	 * ## PENPOT REFUSES A MOVE INTO THE PROJECT A DESIGN IS ALREADY IN
+	 *
+	 * `cant-move-to-same-project`, HTTP 400. Ordinarily unreachable, because the
+	 * caller compares `$from` against `$to` first and returns early when they match.
+	 * Two paths get past that comparison anyway, and both are legitimate:
+	 *
+	 *   - **an arrival from unmapped space.** `projectForContentIn()` runs BEFORE
+	 *     this, and for a folder that is not yet a project it promotes one — which
+	 *     files the designs already sitting in that folder, ours included. So by the
+	 *     time we ask, Penpot has already put the design where we were about to.
+	 *   - **a drag to the team root** whose file was in Drafts to begin with, where
+	 *     `$from` reads null and `$to` resolves to that same Drafts project.
+	 *
+	 * In both the end state the caller wanted is already true, so reporting a
+	 * failure would be a lie — and an expensive one, since the listener turns it
+	 * into a notification telling the user their move did not reach Penpot.
+	 *
+	 * ONLY THAT ONE CODE. Every other 400 is a real refusal and still throws.
+	 *
+	 * @return bool true when Penpot actually moved it, false when it was already
+	 *              there — the caller uses that only to decide what to log
+	 *
+	 * @throws PenpotApiException
+	 */
 	private function fileInto(string $project, string $penpotId): bool {
 		try {
 			$this->client->moveFiles($project, [$penpotId], $this->personalTokens->tokenForActor());
