@@ -101,7 +101,22 @@ final class DestinationResolver {
 	 */
 	public function projectForContentIn(Node $node, Membership $membership): ?string {
 		if ($membership->teamId === null) {
-			return null;
+			// NO TEAM IS TWO STATES, AND ONLY ONE OF THEM IS "NOT OURS".
+			//
+			//   - A PERSONAL PROJECT (§6.31) is a project id with NO team above it,
+			//     and it is Penpot space like any other. Promotion is impossible
+			//     here — `create-project` takes a team — but there is nothing to
+			//     promote: the design landed in a folder that already IS a project.
+			//   - Genuinely outside every mapping, where `projectId` is null too and
+			//     this returns null, which is "leave Penpot alone".
+			//
+			// Reading `teamId === null` as the second one alone skips the write for
+			// every design arriving in someone's personal project, silently, while a
+			// perfectly good project id sits in the membership. The short-circuit
+			// this method used to open with covered that by accident; taking it out
+			// took the cover with it. Raised by Copilot on #57, against the same
+			// state it raised on #52.
+			return $membership->projectId;
 		}
 
 		try {

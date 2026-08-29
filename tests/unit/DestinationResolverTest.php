@@ -123,6 +123,29 @@ final class DestinationResolverTest extends TestCase {
 		);
 	}
 
+	/**
+	 * A PERSONAL PROJECT IS PENPOT SPACE (§6.31): a project id with NO team above
+	 * it. Promotion cannot happen — `create-project` takes a team — but there is
+	 * nothing to promote, because the design landed in a folder that already is a
+	 * project.
+	 *
+	 * THE TEST THAT WAS MISSING. The reversal replaced a `projectId !== null`
+	 * short-circuit with a `teamId === null` guard, and the short-circuit had been
+	 * covering this state by accident. Nothing in 563 unit tests or eleven
+	 * integration legs noticed that every design arriving in someone's personal
+	 * project stopped reaching Penpot at all — silently, with a usable project id
+	 * sitting in the membership.
+	 */
+	public function testADesignArrivingInAPersonalProjectStillReachesIt(): void {
+		$this->projects->expects($this->never())->method('adoptForContent');
+		$this->client->expects($this->never())->method('getAllProjects');
+
+		self::assertSame(
+			self::ANCESTOR,
+			$this->destinations->projectForContentIn($this->design(), new Membership(self::ANCESTOR, null)),
+		);
+	}
+
 	/** Outside every mapping there is nothing to write to, and no guess to make. */
 	public function testOutsideEveryMappingThereIsNoDestination(): void {
 		$this->projects->expects($this->never())->method('adoptForContent');
