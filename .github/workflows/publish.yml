@@ -211,10 +211,22 @@ jobs:
         NC_APP_SIGN_KEY: ${{ secrets.NEXTCLOUD_STORE_KEY }}
         TARBALL: dist/${{ needs.package.outputs.tarball }}
       run: |
+        # The key must not outlive this step, on ANY exit path — a failed
+        # `openssl dgst` would otherwise leave a private key in the workspace
+        # for every later step in the job to read. Trap first, write second.
+        # pipefail is load-bearing: the status of `dgst | base64` is base64's,
+        # and base64 happily succeeds on empty input. Without it a failed sign
+        # yields an EMPTY signature, a green step, and a confusing 400 from the
+        # store one step later.
+        set -o pipefail
         mkdir -p .signing
-        printf '%s' "$NC_APP_SIGN_KEY" > .signing/penpot_sync.key
+        trap 'rm -f .signing/penpot_sync.key' EXIT
+        (umask 077; printf '%s' "$NC_APP_SIGN_KEY" > .signing/penpot_sync.key)
         SIGNATURE="$(openssl dgst -sha512 -sign .signing/penpot_sync.key "$TARBALL" | openssl base64 -A)"
-        rm -f .signing/penpot_sync.key
+        if [[ -z "$SIGNATURE" ]]; then
+          echo "::error::Signing produced an empty signature — is NEXTCLOUD_STORE_KEY set?"
+          exit 1
+        fi
         echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
 
     # Hand the store the public download URL + that signature; it downloads and
@@ -224,6 +236,7 @@ jobs:
         NC_APP_STORE_TOKEN: ${{ secrets.NEXTCLOUD_STORE_TOKEN }}
         DOWNLOAD_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/${{ needs.package.outputs.tarball }}
         SIGNATURE: ${{ steps.sign.outputs.signature }}
+        VERSION: ${{ needs.version.outputs.version }}
       run: |
         BODY="$(jq -n --arg d "$DOWNLOAD_URL" --arg s "$SIGNATURE" '{download:$d, signature:$s, nightly:false}')"
         CODE="$(curl -sS -o /tmp/store-resp.json -w '%{http_code}' -X POST \
@@ -237,7 +250,7 @@ jobs:
           echo "::error::App store upload failed (HTTP $CODE)"
           exit 1
         fi
-        echo "::notice::Published penpot_sync ${{ needs.version.outputs.version }} to apps.nextcloud.com"
+        echo "::notice::Published penpot_sync $VERSION to apps.nextcloud.com"
 
     - name: Summary
       env:
