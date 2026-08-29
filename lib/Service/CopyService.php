@@ -11,6 +11,7 @@ namespace OCA\PenpotSync\Service;
 
 use OCA\PenpotSync\AppInfo\Application;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
 
@@ -58,6 +59,9 @@ use Psr\Log\LoggerInterface;
  * refused, because losing a name's tail is a smaller harm than refusing to copy.
  */
 final class CopyService {
+	/** A seatbelt on the descent, in the same spirit as the other tree walks here. */
+	private const MAX_DEPTH = 100;
+
 	/** Penpot's schema limit on a file name (`[:string {:max 250}]`, §C6.8). */
 	private const MAX_NAME = 250;
 
@@ -78,6 +82,87 @@ final class CopyService {
 	 * @param Node $source the file that was copied FROM (still exists)
 	 * @param File $target the freshly created copy
 	 */
+	/**
+	 * A whole project folder was copied.
+	 *
+	 * ## ONE EVENT, NO CHILDREN — MEASURED
+	 *
+	 * Core fires `NodeCopiedEvent` once for the folder and not once per design
+	 * below it. That is not a guess: a live instance copied a project folder
+	 * holding two designs and both copies came back with no `penpot_id`, no mode
+	 * and no revision, with nothing in the app log at all. So this walks the
+	 * SOURCE tree itself — there is no per-child event to wait for, and the
+	 * copies carry nothing to walk FROM.
+	 *
+	 * ## AND THEN IT IS JUST {@see onCopy()}, ONCE PER DESIGN
+	 *
+	 * Pairing each source design with the copy that landed at the same relative
+	 * path is the whole of the extra work. Everything after that — resolving the
+	 * destination, promoting the folder, duplicating in Penpot, stamping, and the
+	 * §6.18 rule-3 containment when Penpot refuses — is the single-file path,
+	 * unchanged and unduplicated.
+	 *
+	 * The FIRST pair is what makes the copy a project: `onCopy()` asks
+	 * {@see DestinationResolver::projectForContentIn()} where the design belongs,
+	 * which promotes the folder it landed in. Every later pair then resolves to
+	 * the project the first one created. Nothing here creates a project directly,
+	 * which is what keeps "a folder becomes a project when a design lands in it"
+	 * the only rule there is (§C6.38).
+	 *
+	 * A copy of a PLAIN folder needs nothing: its designs, tracked or not, are
+	 * each handled by the pairing below or by nothing at all.
+	 */
+	public function onFolderCopy(Node $source, Folder $target): void {
+		if (!$source instanceof Folder) {
+			return;
+		}
+
+		foreach ($this->designPairs($source, $target, 0) as [$sourceFile, $targetFile]) {
+			$this->onCopy($sourceFile, $targetFile);
+		}
+	}
+
+	/**
+	 * Every tracked design below $source, paired with the copy of it below $target.
+	 *
+	 * Matched on the RELATIVE PATH, which a copy preserves exactly — the one thing
+	 * about the copied tree that is reliable, since none of its metadata survived.
+	 * A pair is dropped rather than guessed at when the counterpart is missing:
+	 * half a copy handled wrongly is worse than half a copy left untracked.
+	 *
+	 * @return list<array{0: File, 1: File}>
+	 */
+	private function designPairs(Folder $source, Folder $target, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		$pairs = [];
+		foreach ($source->getDirectoryListing() as $node) {
+			$name = $node->getName();
+			try {
+				if (!$target->nodeExists($name)) {
+					continue;
+				}
+				$twin = $target->get($name);
+			} catch (\Throwable) {
+				continue;
+			}
+
+			if ($node instanceof Folder && $twin instanceof Folder) {
+				$pairs = [...$pairs, ...$this->designPairs($node, $twin, $depth + 1)];
+				continue;
+			}
+
+			if ($node instanceof File && $twin instanceof File
+				&& str_ends_with($name, PullService::EXTENSION)) {
+				$pairs[] = [$node, $twin];
+			}
+		}
+
+		return $pairs;
+	}
+
 	public function onCopy(Node $source, File $target): void {
 		// Guarded on $stamped ITSELF, not on a value derived from it: the early
 		// return has to narrow the type for everything below, or `$stamped->mode`

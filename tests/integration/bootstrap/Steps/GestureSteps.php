@@ -111,6 +111,32 @@ trait GestureSteps {
 	}
 
 	/**
+	 * Copy something INTO a folder — the folder-shaped twin of
+	 * {@see CopySteps::iCopyTheFileInto()}.
+	 *
+	 * `into` names the destination FOLDER and keeps the thing's own name, exactly
+	 * as it does for a move. That distinction is the whole point here: copying a
+	 * project beside itself is a scenario ABOUT the name core picks, so the
+	 * sentence must not contain one.
+	 *
+	 * THE HARNESS RESOLVES CORE'S NAME RATHER THAN CHOOSING ONE. DAV COPY needs an
+	 * explicit `Destination`, so something has to spell the target path — but
+	 * `freeCopyPath()` reproduces `Folder::getNonExistingName()` (from 2, not 1),
+	 * so the scenario asserts core's rule and not the harness's preference.
+	 *
+	 * @When /^I copy "([^"]*)" into "([^"]*)"$/
+	 */
+	public function iCopyInto(string $path, string $folder): void {
+		$folder = trim($folder, '/');
+		$target = $folder . '/' . basename($path);
+		$this->gestureTarget = $this->davExists($target)
+			? $this->freeCopyPath($folder, basename($path))
+			: $target;
+
+		$this->davCopy($path, $this->gestureTarget);
+	}
+
+	/**
 	 * Move something INTO a folder, which is what a drag actually is.
 	 *
 	 * ## WHY THIS IS NOT THE SAME STEP AS `… to "…"`

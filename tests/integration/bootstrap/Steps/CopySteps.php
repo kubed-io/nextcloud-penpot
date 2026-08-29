@@ -491,21 +491,37 @@ trait CopySteps {
 	 * rather than being hidden.
 	 */
 	private function freeCopyName(string $folder, string $filename): string {
-		$base = preg_replace('/\.penpot$/', '', $filename) ?? $filename;
-		// FROM 2, BECAUSE THAT IS WHERE CORE STARTS. `Folder::getNonExistingName()`
-		// sets `$counter = 2` for the first collision — read out of the running
-		// server, not remembered — so the first copy of `Original.penpot` is
-		// `Original (2).penpot`. Starting at 1 made this helper pick a name core
-		// never would, and the scenario then asserted the harness's own choice.
+		return $this->freeCopyPath($folder, $filename);
+	}
+
+	/**
+	 * The name core would give a copy landing beside something of the same name —
+	 * for a FILE or a FOLDER.
+	 *
+	 * Generalised from the `.penpot`-only version when project folders started
+	 * being copied: a folder has no extension, and hard-coding one produced
+	 * `My Stuff (2).penpot` for a directory.
+	 *
+	 * FROM 2, BECAUSE THAT IS WHERE CORE STARTS — `Folder::getNonExistingName()`
+	 * sets `$counter = 2` for the first collision, read out of the running server
+	 * rather than remembered. Starting at 1 makes the harness pick a name core
+	 * never would, and the scenario then asserts the harness's own choice.
+	 */
+	private function freeCopyPath(string $folder, string $name): string {
+		$dot = strrpos($name, '.');
+		$stem = $dot === false ? $name : substr($name, 0, $dot);
+		$ext = $dot === false ? '' : substr($name, $dot);
+
 		for ($n = 2; $n < 100; $n++) {
-			$candidate = sprintf('%s/%s (%d).penpot', $folder, $base, $n);
+			$candidate = sprintf('%s/%s (%d)%s', $folder, $stem, $n, $ext);
 			if (!$this->davExists($candidate)) {
 				return $candidate;
 			}
 		}
 
-		throw new \RuntimeException("could not find a free name for a copy of '{$filename}' in '{$folder}'");
+		throw new \RuntimeException("could not find a free name for a copy of '{$name}' in '{$folder}'");
 	}
+
 	/**
 	 * When Penpot says a design was created, by id.
 	 *
