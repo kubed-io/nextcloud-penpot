@@ -14,20 +14,26 @@ scheduled pull walks your mapped Penpot teams/projects and every design file
 appears in Nextcloud as a `.penpot` file — a real file icon, a deep link back to
 the live design in Penpot, and a local backup of the exported archive.
 
-Unlike this app's sibling integrations for n8n and Grafana, Penpot Sync is
-**read-only**: there is no "Edit as text" action and no Nextcloud → Penpot
-writeback. A `.penpot` export is an opaque archive of nested design data —
-editing it outside Penpot wouldn't produce anything sane to re-import. Design
+Unlike this app's sibling integrations for n8n and Grafana, Penpot Sync **never
+edits a design Penpot already has**: there is no "Edit as text" action and no
+content writeback. A `.penpot` export is an opaque archive of nested design data
+— editing it outside Penpot wouldn't produce anything sane to re-import. Design
 happens in Penpot; Nextcloud holds the backup and the click-through.
 
-⚠️ **Very early development.** The admin surface is complete — instance URL,
-service-account token, team mappings, scheduled-pull settings, and an optional
-per-user token for attribution — and every control has an `occ` twin. But there
-is still **no sync engine and no file actions: nothing is mirrored yet.** You
-can configure the app fully and verify it reaches your Penpot
-(`occ penpot_sync:test-connection` reports which teams the account can see), and
-that is all it does today. See the project's `saga/` design narrative for what's
-confirmed, what's locked, and what's still an open question.
+The one thing that does travel upward is a `.penpot` Penpot has never seen. Drop
+one into a mapped folder, or press **Sync to Penpot**, and it becomes a new
+design in the project its folder spells. Nothing existing is touched.
+
+Your Nextcloud gestures are mirrored where Penpot has somewhere to put them:
+renaming a file renames the design, moving one between folders moves it between
+projects, deleting one sends it to Penpot's trash, and restoring it brings it
+back. Folders you make inside a mapped folder become projects.
+
+⚠️ **Early development.** The sync engine, file actions and both sync
+directions work, and every control has an `occ` twin — but the app has not yet
+been run in anger anywhere but its authors' homelab. See the project's `saga/`
+design narrative for what's confirmed, what's locked, and what's still an open
+question.
 
 The `enable-access-tokens` Penpot instance flag is required to mint the token;
 it is off by default upstream.
