@@ -72,9 +72,11 @@ final class PenpotApiException extends \RuntimeException {
 	/**
 	 * Whether retrying the same call might succeed without anyone changing anything.
 	 *
-	 * Used by the pull to decide "skip this object and carry on" vs "stop, the
-	 * instance is down". Deliberately conservative: a validation error or a 403 will
-	 * never fix itself, so retrying them just multiplies noise in the log.
+	 * NOTHING CALLS THIS YET, and the previous wording claimed the pull did — it
+	 * does not, and never has. Kept because the classification is the hard part and
+	 * it is right: deliberately conservative, so a validation error or a 403 (which
+	 * will never fix itself) is not retryable and retrying it cannot multiply noise
+	 * in the log. Wire it the day a caller has a real retry policy to hang on it.
 	 */
 	public function isRetryable(): bool {
 		return in_array($this->kind, [self::KIND_UNREACHABLE, self::KIND_PROTOCOL], true);

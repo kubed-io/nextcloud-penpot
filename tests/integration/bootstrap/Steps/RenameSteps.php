@@ -242,24 +242,35 @@ trait RenameSteps {
 	 */
 	public function thereIsExactlyOneFileForThatDesign(): void {
 		$id = $this->currentFileId;
+
+		// POLLS, because every scenario that says this sentence has just restored or
+		// renamed something — a mutate-then-read, the shape {@see GestureSteps} says
+		// must not be asserted with a single look. Counting is safe to poll in a way
+		// a bare negative is not: a second file that appears late still fails, since
+		// the count never settles at one.
 		$found = [];
-		foreach ($this->davChildren($this->currentFolder) as $child) {
-			if (!str_ends_with($child, '.penpot')) {
-				continue;
-			}
-			if (($this->davReadMetadata($child, 'penpot_id') ?? '') === $id) {
-				$found[] = basename($child);
-			}
-		}
-		if (count($found) !== 1) {
-			throw new \RuntimeException(sprintf(
+		$this->until(
+			function () use ($id, &$found): bool {
+				$found = [];
+				foreach ($this->davChildren($this->currentFolder) as $child) {
+					if (!str_ends_with($child, '.penpot')) {
+						continue;
+					}
+					if (($this->davReadMetadata($child, 'penpot_id') ?? '') === $id) {
+						$found[] = basename($child);
+					}
+				}
+
+				return count($found) === 1;
+			},
+			fn (): string => sprintf(
 				"expected exactly one file for the design %s under '%s', found %d: %s",
 				$id,
 				$this->currentFolder,
 				count($found),
 				implode(', ', $found) ?: '(none)',
-			));
-		}
+			),
+		);
 	}
 
 	/**

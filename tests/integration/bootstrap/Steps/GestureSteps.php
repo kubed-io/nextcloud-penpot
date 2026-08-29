@@ -483,9 +483,22 @@ trait GestureSteps {
 	 * stays as the plain helper 3 other steps call.
 	 */
 	public function theFileIsNotInTheNextcloudTrash(string $path): void {
-		if ($this->trashbinPathFor($path) !== null) {
-			throw new \RuntimeException("expected no trashbin entry for '{$path}', but one is there");
-		}
+		// POLLS, for the reason the four Penpot assertions below poll — this is a
+		// mutate-then-read of exactly that shape, and it was the one left out.
+		//
+		// The purge that removes the entry runs through Nextcloud's own trashbin
+		// machinery after the gesture returns, so a single read can arrive while the
+		// row is still there. Measured on `purge.feature`'s "Permanently delete a
+		// design in Penpot", which failed on its Team Folder row while the identical
+		// admin-folder row above it passed — the difference being how long a second
+		// storage takes to catch up, which is a race and not a behaviour.
+		//
+		// Same message on failure as before, so a state that never arrives still
+		// fails; it just stops failing when the state was merely late.
+		$this->until(
+			fn (): bool => $this->trashbinPathFor($path) === null,
+			fn (): string => "expected no trashbin entry for '{$path}', but one is there",
+		);
 	}
 
 	// ── Penpot's trash ──────────────────────────────────────────────────────

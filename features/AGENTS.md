@@ -4437,16 +4437,17 @@ WHAT THE SECOND ROW PROVED is that a timer starts the same run as a button — w
 is a claim about the TRIGGER, and triggers are `connection/admin.feature`'s subject.
 What a sync DOES is this file's, and one actor says it.
 
-### Every noun in this file is unique to it, and that is the actual fix
+### Every noun in this file is unique to it
 
 `Design Team`, `Cogs`, `Gizmo`, `Doohickey` — this feature shared all four with
 `mapping/sync-now.feature`, which sits in the SAME LEG and maps that team to its own
 folder. One Penpot, one Nextcloud, two features legitimately doing different things
 to the same objects.
 
-Everything below is real and was worth fixing, but none of it could ever have made
-this file pass on its own: the other feature was entitled to reshape the team, and
-this one asserts `exactly`.
+Necessary but not sufficient — the Outline and the shared Background were the rest
+of it. Still, no harness fix could ever have made this file pass while the names
+collided: the other feature was entitled to reshape the team, and this one asserts
+`exactly`.
 
 So the nouns are now this file's alone — `Everything Team` / `Everything Shared` /
 `Everything Linked`, folders `All Sync` / `All Team` / `All Link`, projects
@@ -4459,7 +4460,7 @@ THE GENERAL RULE: reused names are safe for a feature that asserts only its own
 rows, and unsafe for one that asserts a whole tree. This is the only file in the
 suite doing the latter.
 
-### Two bugs, one symptom — and why that took five runs
+### Two bugs, one symptom — and why that took eleven runs
 
 The leg failed at 30/32 with `Gizmo` and `Doohickey` missing. TWO independent
 faults produced that same line, which is why fixing either one alone left the
@@ -4475,16 +4476,23 @@ caught it between two adjacent steps:
     [nextcloudHolds START]  Cogs[Hand Made|Doohickey|Gizmo] Drafts[Loose Idea]
     [sync step START]       Drafts[]
 
-The cure is to empty only while NOTHING is mapped, which is exactly the condition
-that makes the delete safe. Two blunter versions came first and both were worse: a
-per-scenario latch does nothing (Behat fires `@BeforeScenario` once per Examples
-ROW, so it clears before the row that needs it), and a per-RUN latch fixed this leg
-while breaking four others — a folder emptied once and never again accumulates
-every later scenario's leftovers, which is the `Pinned (1) (2) (3)` problem the
-function exists to prevent.
+THE CURE WAS NOT IN THE HARNESS, and five attempts to put it there are the reason
+this took an evening. Latching per scenario does nothing (Behat fires
+`@BeforeScenario` once per Examples ROW, so it clears before the row that needs
+it). Latching per RUN fixed this leg and broke four others — a folder emptied once
+and never again accumulates every later scenario's leftovers, which is the
+`Pinned (1) (2) (3)` problem the function exists to prevent. Asking whether the
+folder is mapped is always false, because the unmap runs first. Disabling the app
+around the delete works and is a sledgehammer aimed at the wrong wall.
 
-Ten feature files survive it because their scenarios seed per row; only this one,
-whose BACKGROUND holds what the assertion checks, could notice. **Grafana and n8n
+All of it was reverted. `emptyMappedFolder()` is untouched, and the fix is three
+lines of Gherkin: the Scenario Outline is gone (see *One actor, not an Outline*)
+and each scenario states its own pre-state (see *The Background is only what both
+scenarios share*), so nothing re-runs the Background against a folder a previous
+row has already mirrored into.
+
+Ten feature files survive the hazard because their scenarios seed per row; only
+this one, whose BACKGROUND held what the assertion checks, could notice. **Grafana and n8n
 pass the same Gherkin because their mapping step does not empty at all** — the
 emptying is a penpot addition for its reused folder names, and outlines are where
 it bites.
@@ -4496,8 +4504,8 @@ saw the designs it still listed, and skipped re-seeding — hiding the damage. U
 `Accept: application/json`. `ArrangeSteps` documents both; this trait had not
 learned them.
 
-MEASURE, DO NOT REASON. Three diagnoses were argued from the symptom and all three
-were wrong-or-partial; one probe printing Penpot's actual contents at each step
+MEASURE, DO NOT REASON. Five diagnoses were argued from the symptom and every one
+was wrong-or-partial; one probe printing Penpot's actual contents at each step
 boundary settled it in a single run. When a fix does not move the number, suspect a
 second fault before concluding the first was wrong.
 
