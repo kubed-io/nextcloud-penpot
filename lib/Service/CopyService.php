@@ -77,12 +77,6 @@ final class CopyService {
 	}
 
 	/**
-	 * Handle a copied `.penpot` file.
-	 *
-	 * @param Node $source the file that was copied FROM (still exists)
-	 * @param File $target the freshly created copy
-	 */
-	/**
 	 * A whole project folder was copied.
 	 *
 	 * ## ONE EVENT, NO CHILDREN — MEASURED
@@ -123,12 +117,17 @@ final class CopyService {
 	}
 
 	/**
-	 * Every tracked design below $source, paired with the copy of it below $target.
+	 * Every `.penpot` below $source, paired with the copy of it below $target.
 	 *
 	 * Matched on the RELATIVE PATH, which a copy preserves exactly — the one thing
 	 * about the copied tree that is reliable, since none of its metadata survived.
 	 * A pair is dropped rather than guessed at when the counterpart is missing:
 	 * half a copy handled wrongly is worse than half a copy left untracked.
+	 *
+	 * NO TRACKING CHECK HERE. Whether the source is a design this app knows is
+	 * {@see onCopy()}'s first question, and it has an answer for "no" that this
+	 * method must not pre-empt: an untracked `.penpot` landing in a mapping is
+	 * the §6.33 import. Filtering it out here would silently skip that.
 	 *
 	 * @return list<array{0: File, 1: File}>
 	 */
@@ -150,7 +149,11 @@ final class CopyService {
 			}
 
 			if ($node instanceof Folder && $twin instanceof Folder) {
-				$pairs = [...$pairs, ...$this->designPairs($node, $twin, $depth + 1)];
+				// Appended rather than spread: `[...$pairs, ...$deeper]` rebuilds the
+				// whole accumulator at every level, which is quadratic on a deep tree.
+				foreach ($this->designPairs($node, $twin, $depth + 1) as $pair) {
+					$pairs[] = $pair;
+				}
 				continue;
 			}
 
@@ -163,6 +166,12 @@ final class CopyService {
 		return $pairs;
 	}
 
+	/**
+	 * Handle a copied `.penpot` file.
+	 *
+	 * @param Node $source the file that was copied FROM (still exists)
+	 * @param File $target the freshly created copy
+	 */
 	public function onCopy(Node $source, File $target): void {
 		// Guarded on $stamped ITSELF, not on a value derived from it: the early
 		// return has to narrow the type for everything below, or `$stamped->mode`

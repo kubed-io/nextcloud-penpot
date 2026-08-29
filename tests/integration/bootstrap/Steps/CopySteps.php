@@ -37,6 +37,9 @@ use Behat\Gherkin\Node\TableNode;
  * "the file" and mean the right one.
  */
 trait CopySteps {
+	/** The one extension this harness copies, and the only one it splits off a name. */
+	private const DESIGN_EXTENSION = '.penpot';
+
 	/** The copy this scenario made: its path, and the id it ended up carrying. */
 	private string $copyPath = '';
 
@@ -85,6 +88,41 @@ trait CopySteps {
 		// `CopyService` says so: "no revision is stamped, the copy has never been
 		// pulled". Collapsing that wait here is the harness's job, exactly as it is
 		// after a create; the scenario describes the state the person ends up in.
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * A project duplicated in PENPOT, and the sync that carries the news.
+	 *
+	 * ## THE SUFFIX IS PENPOT'S, AND IT COMES FROM THE FRONTEND
+	 *
+	 * `duplicate-project` does NOT name the copy — called bare it returns a
+	 * project with the SAME name as the original, which Penpot allows (§31).
+	 * The `(copy)` a user sees is built by Penpot's dashboard, which reads
+	 * `dashboard.copy-suffix` (`"(copy)"`) and appends it before calling.
+	 * Verified twice: in the frontend bundle, and by duplicating a project on a
+	 * live instance.
+	 *
+	 * So the name is passed here for the same reason the free name is computed in
+	 * {@see iCopyTheFileInto()} — the harness reproduces what the gesture does
+	 * rather than inventing its own, and the scenario then asserts the answer.
+	 *
+	 * "That project" is the one the arrange most recently put on stage, the same
+	 * referent the rename and move steps use.
+	 *
+	 * @When /^someone duplicates that project in Penpot$/
+	 */
+	public function someoneDuplicatesThatProjectInPenpot(): void {
+		$folder = $this->lastDeclaredProject;
+		$id = $this->declaredProjectIds[$folder] ?? '';
+		if ($id === '') {
+			throw new \RuntimeException('no project is on stage to duplicate in Penpot');
+		}
+
+		$this->penpotRpc('duplicate-project', [
+			'project-id' => $id,
+			'name' => basename($folder) . ' (copy)',
+		]);
 		$this->theAdminRunsAPull();
 	}
 
@@ -508,9 +546,13 @@ trait CopySteps {
 	 * never would, and the scenario then asserts the harness's own choice.
 	 */
 	private function freeCopyPath(string $folder, string $name): string {
-		$dot = strrpos($name, '.');
-		$stem = $dot === false ? $name : substr($name, 0, $dot);
-		$ext = $dot === false ? '' : substr($name, $dot);
+		// ONLY `.penpot` COUNTS AS AN EXTENSION, and splitting on the last dot
+		// instead was wrong for exactly the things this method was generalised
+		// for: a folder named `My.Stuff` became `My (2).Stuff`, and `.config`
+		// became ` (2).config`. `.penpot` is the only extension the harness ever
+		// copies, so it is the only one worth knowing about.
+		$ext = str_ends_with($name, self::DESIGN_EXTENSION) ? self::DESIGN_EXTENSION : '';
+		$stem = $ext === '' ? $name : substr($name, 0, -strlen($ext));
 
 		for ($n = 2; $n < 100; $n++) {
 			$candidate = sprintf('%s/%s (%d)%s', $folder, $stem, $n, $ext);
