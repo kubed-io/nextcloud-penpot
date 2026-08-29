@@ -30,8 +30,11 @@ team     "Northwind"       ⟶    Northwind/
 
 <img src="screenshots/penpot-files.png" alt="The Nextcloud Files app showing a mapped folder: Brand, Bubbles and Cool Designs as folders, and two .penpot designs at the root">
 
-<em>The mirror. Each project is a folder, and the two <strong>Drafts</strong>
-designs sit at the root — because that is what Drafts means.</em>
+<em>The mirror. Every project is a folder; every design is a file.</em>
+
+<p>👉 The two designs at the <strong>root</strong> are the team's
+<strong>drafts</strong>. There is no <code>Drafts/</code> folder, because
+sitting above the project folders is what being in Drafts means.</p>
 
 <p>One project, two folders: a <code>/</code> in a Penpot project name is a path
 over here, so <code>Brand/2026</code> arrives as <code>Brand/</code> holding
