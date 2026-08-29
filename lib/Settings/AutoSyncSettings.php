@@ -103,7 +103,7 @@ final class AutoSyncSettings implements IDeclarativeSettingsFormWithHandlers {
 			// class docblock for why INTERNAL cannot carry a checkbox either way.
 			'storage_type' => DeclarativeSettingsTypes::STORAGE_TYPE_EXTERNAL,
 			'title' => 'Sync Settings',
-			'description' => 'How often Nextcloud pulls from mapped Penpot teams. Sync Actions below runs either direction on demand.',
+			'description' => 'How often Nextcloud pulls from mapped Penpot teams. Use Sync Actions below to run either direction on demand.',
 			'fields' => [
 				[
 					'id' => self::KEY_ENABLED,

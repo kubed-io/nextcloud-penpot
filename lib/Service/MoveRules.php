@@ -115,7 +115,8 @@ final class MoveRules {
 	 *     is nobody's business but its owner's. So does adopting a folder that
 	 *     already held one. Either way the extension test re-created the very trap
 	 *     this method exists to remove, for the design archive somebody keeps
-	 *     beside the mirrors. *   - a folder carrying a project marker, or the mapping root's team marker;
+	 *     beside the mirrors.
+	 *   - a folder carrying a project marker, or the mapping root's team marker;
 	 *   - a folder with either of those anywhere below it — a project's name is its
 	 *     PATH, so `foo` holding `foo/bar` is as much Penpot's as `foo/bar` is.
 	 *
