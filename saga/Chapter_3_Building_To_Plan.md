@@ -746,3 +746,82 @@ why ten files share `Cogs` happily — and unsafe for one asserting a whole tree
 `mapping/sync-now.feature`, in the same leg, against one Penpot. No harness fix
 could ever have made that pass: the neighbour was entitled to reshape the team.
 Every noun in that file is now its own.
+
+## Round 9 — two minutes against a live instance, and a wall that was a listener
+
+Round 8 ended on a lesson about measuring rather than reasoning, and Round 9 is the
+round that took it somewhere. Two things came off the blocked list, and neither
+needed a new idea — both needed somebody to look at a running instance instead of at
+the code that describes one.
+
+### The scenario that had been `@blocked` for four rounds
+
+`Move a design into another team` was tagged with a reason that was true and
+incomplete: *the only two teams this suite can map sit on different storages, and a
+file's metadata does not survive the crossing.* Four CI rounds had established
+**that** the metadata was lost. Nothing had established **what lost it**, and the
+difference turned out to be the whole thing.
+
+The probe was a plain `.txt` file, stamped with `penpot_id`, moved from a home folder
+into a groupfolder mount — **with a same-storage rename as the control, in the same
+script, in the same run.** Penpot was never contacted. It took about two minutes.
+
+| | file id | `penpot_id` afterwards |
+|---|---|---|
+| same-storage rename | preserved | **survives** |
+| cross-storage move | **preserved** | **gone** |
+
+**The file id is preserved**, which nobody had assumed and everybody had reasoned
+past. A cross-storage move looks like a copy-and-delete, so the natural story is a
+new file with a new id and orphaned metadata. The real story is that the id survives
+and the metadata is destroyed *on purpose*: removing the source cache entries raises
+`CacheEntriesRemovedEvent`, and core's own `MetadataDelete` listener drops the rows.
+
+That reframes the problem completely. There is nothing to look up afterwards and
+nothing to repair — but there is a last moment when the record still exists, and it
+has a name: `BeforeNodeRenamedEvent`. `MoveMemoryListener` reads the identity there;
+`MoveMemory` holds it for the length of the request, on exactly the argument
+`SyncGuard` already makes; `MotionService` consults it only when the arriving file
+has no metadata at all. From the re-stamp onward nothing downstream can tell the
+difference between a design that crossed a storage and one that did not — the
+project comparison, the `move-files` and the team re-stamp all work unchanged.
+
+Penpot needed nothing. `move-files` has carried the destination team in one call
+since §6.27/§6.34. **Nextcloud was the half that could not express it**, and the
+app's own docblock had been asserting the wrong mechanism since before `sync` mode
+existed: *"a move that crosses a storage boundary … never reaches this service."* It
+reaches it. It always did. It just arrived with nothing to identify it.
+
+### The bug the live instance volunteered
+
+While the probe was running, the instance produced a second finding nobody went
+looking for: a mapped folder shared with five groups was invisible to every member
+of all five.
+
+The shares were there. Correct node, correct permissions, correct groups. And
+`DefaultShareProvider::create()` writes `accepted = STATUS_PENDING` for every share
+it makes, unconditionally — there is no flag to set and no argument to `createShare()`
+that changes it. `Files_Sharing`'s mount provider then built the super-share and
+declined to mount it. A group share raises no acceptance prompt the way a user share
+does, so there was nothing for anyone to click.
+
+Proved both directions in one script: the mount provider returned the super-share at
+status 0 and produced no mount; accepting the four pending shares and asking again
+produced the mount, nothing else changed. `StorageService` now accepts each share for
+each member as it shares — and only from `PENDING`, so somebody who deliberately
+removed the folder from their own Files view is not handed it back every time an
+admin re-saves the mapping's groups.
+
+**This one had been shipping.** Every mapping made with groups had provisioned a
+folder nobody could see, and no test in eleven legs could have caught it: the suite
+asserts through WebDAV as a user who is the owner, and an owner sees their own folder
+whatever the recipients' shares say.
+
+### What the round is actually about
+
+Round 8's closing line was *measure the state; do not reason from the symptom*, and
+it was written about a Penpot probe inside CI. Round 9 is the same lesson at a
+larger radius: **the running instance is a primary source, and it is cheaper than
+the argument about it.** Four rounds of inference produced a tag saying "cannot".
+Two minutes of measurement produced a listener — and, unasked, a user-facing bug
+that had been invisible precisely because it was invisible.

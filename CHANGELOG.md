@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A design dragged into another team's folder now moves, instead of turning into a copy.** Nextcloud throws a file's Penpot markings away when it crosses between a personal folder and a Team Folder, so the design arrived looking like a stranger and was filed as a brand new one — same picture, new identity, no history. It keeps its identity now, and one move changes both its project and its team.
+
+- **A mapped folder shared with a group is now actually visible to that group.** Nextcloud creates every group share unaccepted, and an unaccepted share never appears in anyone's Files — so the folder existed, was shared correctly, and nobody could see it. The app accepts it for each member as it shares. Anyone who deliberately removed the folder from their own view keeps it removed.
+
 - **"Sync to Penpot" — designs made out of the files you already have.** Map a folder that is already full of `.penpot` files and press the new button: each one Penpot has never seen becomes a real design, in the project its folder spells. Designs that already exist are never touched, and `link` mappings are skipped entirely. Also available as `occ penpot_sync:sync push`.
 
 - **Mapping a folder that already holds designs in link mode now asks first.** A linked folder holds pointers, so a real design cannot survive in one — the app used to map over them anyway and leave files that looked like designs and were not. It now tells you how many are there and that deleting them is permanent, and does nothing until you say so. Sync mappings are unaffected: they adopt what they find.

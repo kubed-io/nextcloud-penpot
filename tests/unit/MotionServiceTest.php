@@ -18,6 +18,7 @@ use OCA\PenpotSync\Service\MappingService;
 use OCA\PenpotSync\Service\Membership;
 use OCA\PenpotSync\Service\MembershipResolver;
 use OCA\PenpotSync\Service\MotionService;
+use OCA\PenpotSync\Service\MoveMemory;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
 use OCA\PenpotSync\Service\PenpotMetadata;
@@ -71,6 +72,7 @@ final class MotionServiceTest extends TestCase {
 	private const PROJECT_B = '7c11a0d4-1f52-4a7e-9b3c-2f9d0e4a1b66';
 	private const DRAFTS = '0f9b6c2a-5d31-4e88-a1f0-9c7b3d2e5a44';
 	private const TEAM = 'df59d46b-a997-80d9-8008-6452575a4b87';
+	private const OTHER_TEAM = '4eda2e11-843e-8045-8008-51824bda07a1';
 
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
@@ -81,6 +83,7 @@ final class MotionServiceTest extends TestCase {
 	private ArchiveService $archives;
 	private MappingService $mappings;
 	private ImportService $imports;
+	private MoveMemory $memory;
 	private MotionService $motion;
 
 	/** @var array<int, string> node id -> the penpot_id stamped on it */
@@ -111,6 +114,7 @@ final class MotionServiceTest extends TestCase {
 			$this->personalTokens,
 			$this->tags,
 			new SyncGuard(),
+			$this->memory = new MoveMemory(),
 			$this->imports = $this->createMock(ImportService::class),
 			$this->archives,
 			$this->mappings,
@@ -719,6 +723,115 @@ final class MotionServiceTest extends TestCase {
 
 	private function givenProjectFolder(): void {
 		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT_A, ''));
+	}
+
+	// ── a design that crossed a storage boundary (designs/move.feature) ─────
+	//
+	// Nextcloud DELETES a file's metadata when it crosses a storage, and the
+	// file id survives — measured live, with a same-storage rename as the
+	// control. So the design arrives here looking untracked, and without the
+	// memory it is imported as a brand new design: the user asks for a move and
+	// gets a duplicate with no history. Every cross-TEAM move crosses a storage
+	// in this suite, which is why the scenario stood `@blocked`.
+
+	/**
+	 * THE GESTURE THE MEMORY EXISTS FOR. One `move-files` carrying the
+	 * destination team, exactly as a same-storage move would send — Penpot has
+	 * done cross-team in a single call since saga §6.27/§6.34; Nextcloud was the
+	 * half that could not express it.
+	 */
+	public function testADesignThatCrossedAStorageIsMovedRatherThanImported(): void {
+		// GONE, not stale: the record is deleted outright, so this is null rather
+		// than a metadata object with empty fields.
+		$this->metadata->method('readFile')->willReturn(null);
+		$this->memory->remember(30, new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC, self::TEAM));
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_B, self::OTHER_TEAM),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+
+		$this->imports->expects($this->never())->method('adopt');
+		$this->client->expects($this->once())->method('moveFiles')
+			->with(self::PROJECT_B, [self::PENPOT_ID]);
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * The identity goes back onto the file, and the DESTINATION's team with it.
+	 *
+	 * Both halves matter and they are written at different moments: the restore
+	 * has to happen before the project comparison can mean anything, and the team
+	 * only after Penpot accepted the move (§6.18 rule 3). A restore that stamped
+	 * the old team would leave the workspace deep link (§C6.7) opening the team
+	 * the design just left.
+	 */
+	public function testTheRestoredFileEndsUpStampedWithTheTeamItMovedInto(): void {
+		$writes = [];
+		$this->metadata->method('readFile')->willReturn(null);
+		$this->metadata->method('writeFile')->willReturnCallback(
+			function (int $fileId, array $values) use (&$writes): void {
+				$writes[] = $values;
+			},
+		);
+		$this->memory->remember(30, new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC, self::TEAM));
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_B, self::OTHER_TEAM),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+
+		$this->motion->onMove($this->source(), $this->target());
+
+		self::assertSame(self::PENPOT_ID, $writes[0][PenpotMetadata::KEY_ID] ?? null, 'the id goes back on first');
+		self::assertSame(self::TEAM, $writes[0][PenpotMetadata::KEY_TEAM_ID] ?? null, 'restored as it was');
+		self::assertSame(
+			self::OTHER_TEAM,
+			$writes[1][PenpotMetadata::KEY_TEAM_ID] ?? null,
+			'and then re-stamped with the team it moved into, after Penpot took the move',
+		);
+	}
+
+	/**
+	 * NOTHING REMEMBERED IS STILL AN IMPORT, and this is the guard on the whole
+	 * mechanism. A `.penpot` genuinely uploaded into a mapping — or dragged in
+	 * from unmapped space — has no note against it, and §6.33 must still adopt it
+	 * as its own design. The memory recovers identity; it never invents one.
+	 */
+	public function testAnArrivalWithNothingRememberedIsStillImported(): void {
+		$this->metadata->method('readFile')->willReturn(null);
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_B, self::OTHER_TEAM),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+
+		$this->client->expects($this->never())->method('moveFiles');
+		$this->imports->expects($this->once())->method('adopt')
+			->with($this->anything(), self::PROJECT_B, self::OTHER_TEAM)
+			// The id the import mints. This branch reports what it did, so a stub
+			// answering null would read as "the import failed" rather than "the
+			// import happened" — a green assertion for the wrong reason.
+			->willReturn('a5c1e0d2-9f47-4b3a-8e21-6d0c7b4f9a13');
+
+		self::assertTrue($this->motion->onMove($this->source(), $this->target()));
+	}
+
+	/**
+	 * THE NOTE IS CONSUMED. A second gesture on the same file id must not be able
+	 * to reach for an identity that belonged to the first — that is how one design
+	 * would end up claimed by two files, which is the state nothing downstream can
+	 * separate again.
+	 */
+	public function testTheRememberedIdentityIsUsedOnceAndOnlyOnce(): void {
+		$this->metadata->method('readFile')->willReturn(null);
+		$this->memory->remember(30, new PenpotFileMetadata(self::PENPOT_ID, '5@x', Mapping::MODE_SYNC, self::TEAM));
+		$this->givenMembership([
+			'target' => new Membership(self::PROJECT_B, self::OTHER_TEAM),
+			'oldParent' => new Membership(self::PROJECT_A, self::TEAM),
+		]);
+
+		$this->motion->onMove($this->source(), $this->target());
+
+		self::assertNull($this->memory->recall(30), 'the note is spent');
 	}
 
 	/**

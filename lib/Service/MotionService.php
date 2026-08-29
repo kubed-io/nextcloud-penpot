@@ -85,15 +85,31 @@ use Psr\Log\LoggerInterface;
  * easier to get right against the resolver alone than retrofitted alongside an
  * archive download. A mapping made in `sync` mode is what wakes it up.
  *
- * ## SCOPE — SAME-STORAGE MOVES ONLY (inherited from both siblings)
+ * ## A CROSS-STORAGE MOVE REACHES HERE — AND ARRIVES WITH NO IDENTITY
  *
- * Nextcloud fires `NodeRenamedEvent` for a move *within one storage*. A move that
- * crosses a storage boundary — notably into or out of a **Team Folder**, a
- * groupfolders mount — is a copy+delete underneath and fires
- * `NodeDeletedEvent` + a create on the far side, never `NodeRenamedEvent`, so it
- * never reaches this service. That path belongs to Course 5's delete/create
- * lifecycle. The consequence is benign here: an unseen move is a move we did not
- * push, and the next pull reconciles it.
+ * This section used to say the opposite, inherited from both siblings: that a
+ * move into or out of a **Team Folder** is a copy+delete underneath, fires
+ * `NodeDeletedEvent` + a create rather than `NodeRenamedEvent`, and so never
+ * reaches this service at all — benign, because an unseen move is one we did not
+ * push and the next pull reconciles it.
+ *
+ * Every clause of that is wrong for a FILE, and the consequence is the opposite
+ * of benign. The event arrives. The file id is even PRESERVED. What Nextcloud
+ * destroys is the METADATA: removing the source cache entries raises
+ * `CacheEntriesRemovedEvent` and core's own `MetadataDelete` listener drops the
+ * `files_metadata` rows — measured live, with a same-storage rename as the
+ * control. So the design lands here looking like a stranger, and the §6.33 branch
+ * imports it as a BRAND NEW DESIGN: the user asked for a move and got a duplicate
+ * with a new id and no history.
+ *
+ * {@see recoverAcrossStorages()} is the answer, and {@see MoveMemory} is where the
+ * identity waits. A cross-team move is exactly this gesture — the two teams a
+ * mapping can reach never share a storage — which is why `designs/move.feature`'s
+ * cross-team scenario stood `@blocked` until the mechanism was named rather than
+ * re-read.
+ *
+ * A cross-storage move of a FOLDER is still unhandled, and still for the original
+ * reason: neither half of core routes it (saga Ch3, "the fourth scenario").
  *
  * ## ON FAILURE, THE LOCAL STATE STANDS (saga §6.18 rule 3)
  *
@@ -119,6 +135,7 @@ final class MotionService {
 		private readonly PersonalTokenService $personalTokens,
 		private readonly ProjectTags $tags,
 		private readonly SyncGuard $guard,
+		private readonly MoveMemory $memory,
 		private readonly ImportService $imports,
 		private readonly ArchiveService $archives,
 		private readonly MappingService $mappings,
@@ -149,7 +166,7 @@ final class MotionService {
 			return false;
 		}
 
-		$meta = $this->metadata->readFile($target->getId());
+		$meta = $this->metadata->readFile($target->getId()) ?? $this->recoverAcrossStorages($source, $target);
 		if ($meta === null || !$meta->isManaged()) {
 			// A `.penpot` WE DO NOT TRACK, dragged somewhere. If it landed inside a
 			// mapping and holds an archive, that is the §6.33 import — the same act
@@ -408,6 +425,74 @@ final class MotionService {
 	 *
 	 * @throws PenpotApiException
 	 */
+	/**
+	 * Recover the identity a design lost by crossing a storage boundary.
+	 *
+	 * ## THE GESTURE THIS MAKES POSSIBLE (`designs/move.feature`, "Move a design into another team")
+	 *
+	 * Dragging a mirror from a home folder into a Team Folder is an ordinary
+	 * cross-team move, and Penpot does it in ONE call — `move-files` carries the
+	 * destination team with it (saga §6.27/§6.34). Nextcloud is the half that
+	 * could not express it: crossing a storage boundary destroys the file's
+	 * `files_metadata`, so the design arrived here carrying no `penpot_id` and the
+	 * §6.33 branch above imported it as a brand-new design. The user asked for a
+	 * move and got a duplicate with no history — the one outcome the scenario says
+	 * must never happen, and why it stood `@blocked`.
+	 *
+	 * {@see MoveMemory} holds what the file was carrying a moment earlier, read on
+	 * `BeforeNodeRenamedEvent` while the record still existed. Re-stamping it here
+	 * puts the file back in the state the rest of this method already handles: the
+	 * project comparison, the `move-files`, and the team re-stamp at the end all
+	 * work unchanged, because from this line on nothing can tell the difference
+	 * between a design that crossed a storage and one that did not.
+	 *
+	 * ## THE FILE ID IS THE SAME ONE, WHICH IS THE SURPRISE
+	 *
+	 * A cross-storage move looks like a copy-and-delete, so the natural assumption
+	 * is a new file id — and it is wrong. Measured live: the id is preserved and
+	 * the METADATA is what goes, because removing the source cache entries raises
+	 * `CacheEntriesRemovedEvent` and core's own listener drops the rows. Both ids
+	 * are tried anyway: they agree today, and a recovery that quietly depended on
+	 * them agreeing would be a very quiet thing to get wrong later.
+	 *
+	 * ## AN EMPTY VALUE IS NOT WRITTEN
+	 *
+	 * The record was deleted outright, so this is a create rather than an update,
+	 * and stamping `penpot_revision => ''` would leave a key that reads as "known
+	 * to be empty" where "never stamped" is the truth. Only what the file actually
+	 * carried is put back.
+	 */
+	private function recoverAcrossStorages(Node $source, File $target): ?PenpotFileMetadata {
+		$remembered = $this->memory->recall($source->getId()) ?? $this->memory->recall($target->getId());
+		if ($remembered === null) {
+			return null;
+		}
+
+		$this->memory->forget($source->getId());
+		$this->memory->forget($target->getId());
+
+		$stamp = [PenpotMetadata::KEY_ID => $remembered->penpotId];
+		if ($remembered->revision !== '') {
+			$stamp[PenpotMetadata::KEY_REVISION] = $remembered->revision;
+		}
+		if ($remembered->mode !== '') {
+			$stamp[PenpotMetadata::KEY_MODE] = $remembered->mode;
+		}
+		if ($remembered->teamId !== '') {
+			$stamp[PenpotMetadata::KEY_TEAM_ID] = $remembered->teamId;
+		}
+
+		$this->metadata->writeFile($target->getId(), $stamp);
+		$this->logger->info('penpot_sync writeback: a design crossed a storage boundary; restored the identity Nextcloud dropped', [
+			'app' => Application::APP_ID,
+			'penpotId' => $remembered->penpotId,
+			'fileId' => $target->getId(),
+			'path' => $target->getPath(),
+		]);
+
+		return $remembered;
+	}
+
 	private function fileInto(string $project, string $penpotId): bool {
 		try {
 			$this->client->moveFiles($project, [$penpotId], $this->personalTokens->tokenForActor());

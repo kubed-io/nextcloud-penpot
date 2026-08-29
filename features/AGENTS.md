@@ -2355,26 +2355,60 @@ storage**, so every cross-team drag is also a cross-storage one.
 What that costs is not what `MotionService`'s docblock says it costs. That warns
 that a cross-storage move fires `NodeDeletedEvent` + a create rather than
 `NodeRenamedEvent`, so the service never sees it. The log says otherwise — the event
-DOES arrive. What does not arrive is the file's METADATA: properties do not travel
-across a storage boundary, so the node that lands is a `.penpot` carrying no
-`penpot_id` at all. `onMove()` reads it as untracked and takes the §6.33 import
-branch, which is visible in the run as *"a design arrived, so the folder is a
-project"* followed by *"adopted an archive as a Penpot design"* — a NEW design with a
-new id, which is exactly what the scenario asserts must not happen.
+DOES arrive. What does not arrive is the file's METADATA: the node that lands is a
+`.penpot` carrying no `penpot_id` at all. `onMove()` reads it as untracked and takes
+the §6.33 import branch, which is visible in the run as *"a design arrived, so the
+folder is a project"* followed by *"adopted an archive as a Penpot design"* — a NEW
+design with a new id, which is exactly what the scenario asserts must not happen.
 
-So the wall is real, it is Nextcloud's, and it has nothing to do with personal
-tokens:
+#### And then it was measured properly, on a live instance, in about two minutes
 
-- `Move a design into another team` is `@blocked`. Both rows cross the boundary, and
-  there is no third mapping to write a same-storage pair with.
-- `Move a design out of every mapping` LOST its `Shared/Let Go` row and is a plain
-  Scenario now. The claim was *"from either storage kind, because leaving is
-  leaving"*, and leaving a Team Folder for unmapped space strips the stamp the
-  scenario exists to assert. One honest row beats two where one cannot pass.
+The paragraph above says *"properties do not travel across a storage boundary"*,
+which sounded like a complete explanation and was not one. A probe on the live
+Nextcloud — a plain `.txt` stamped with `penpot_id`, moved from a home folder into a
+groupfolder mount, **with a same-storage rename as the control in the same script and
+the same run** — gave this:
 
-The behaviour itself is very probably right — nothing suggests the app mishandles a
-cross-team move it can actually see. It is unprovable here, which is a different
-thing, and the tag now says which.
+| | file id | `penpot_id` afterwards |
+|---|---|---|
+| same-storage rename | preserved | **survives** |
+| cross-storage move | **preserved** | **gone** |
+
+**The file id is preserved.** That is the fact the whole diagnosis had been missing.
+A cross-storage move looks like a copy-and-delete, so everyone's first assumption —
+including this file's — is that the target is a new file with a new id and the old
+metadata is simply orphaned. It is not. The id survives and the METADATA is
+deliberately destroyed: removing the source cache entries raises
+`CacheEntriesRemovedEvent`, and core's own `MetadataDelete` listener (bound in
+`FilesMetadataManager`) drops every `files_metadata` row for those ids.
+
+So there was nothing to look up and nothing to repair after the fact. The last moment
+the record exists is `BeforeNodeRenamedEvent`.
+
+#### The fix, and why it is a memory rather than a lookup
+
+`MoveMemoryListener` reads the identity on the before-event and parks it in
+`MoveMemory`, an in-process map with the same lifetime argument as `SyncGuard`: both
+halves of one gesture run in one request. `MotionService::onMove()` consults it only
+when the arriving file has no metadata at all, re-stamps what it finds, and from that
+line on nothing downstream can tell the difference between a design that crossed a
+storage and one that did not — the project comparison, the `move-files`, and the team
+re-stamp at the end all work unchanged.
+
+Penpot never needed anything: `move-files` has carried the destination team in one
+call since saga §6.27/§6.34. Nextcloud was the half that could not express it.
+
+- `Move a design into another team` is LIVE. Both rows cross the boundary, and both
+  are the gesture the memory exists for.
+- `Move a design out of every mapping` still LOST its `Shared/Let Go` row, and that
+  row is now reachable — leaving a Team Folder for unmapped space is the same
+  crossing, and `park()` runs on the recovered identity. Restoring it is a gherkin
+  change, so it is proposed rather than taken.
+
+**PROMOTING THE SCENARIO IS HOW THE WALL GOT FOUND, and running the probe is how it
+got named.** Four CI rounds established *that* metadata was lost; two minutes against
+a live instance established *what* deleted it and that the id survived — which is the
+difference between a tag saying "cannot" and a listener saying "here".
 
 ### A design name is a scenario's own, because Penpot's trash is forever
 

@@ -426,6 +426,10 @@ final class StorageService {
 						$this->clearPoisonedTransaction();
 					}
 				}
+				// Re-run on an existing share too: a mapping made before this
+				// method accepted anything left every member pending, and the
+				// folder invisible to all of them until someone edited the groups.
+				$this->acceptForMembers($folder, $gid);
 				continue;
 			}
 			try {
@@ -436,6 +440,7 @@ final class StorageService {
 				$share->setSharedBy($ownerUid);
 				$share->setPermissions(self::CONTENT_PERMISSIONS);
 				$this->shareManager->createShare($share);
+				$this->acceptForMembers($folder, $gid);
 			} catch (\Throwable $e) {
 				// Most likely the group does not exist (admin-managed / LDAP). Log
 				// and carry on — a missing content group must not fail the pull.
@@ -445,6 +450,62 @@ final class StorageService {
 					'exception' => $e,
 				]);
 				$this->clearPoisonedTransaction();
+			}
+		}
+	}
+
+	/**
+	 * Make a group share VISIBLE to the group, which creating it does not do.
+	 *
+	 * ## WHY THIS EXISTS AT ALL
+	 *
+	 * `DefaultShareProvider::create()` writes `accepted = STATUS_PENDING` for
+	 * every share it makes, unconditionally — there is no auto-accept flag to set
+	 * and no argument to `createShare()` that changes it. `Files_Sharing`'s mount
+	 * provider then builds the super-share for that pending group share and
+	 * declines to mount it. So the folder a mapping provisions is correct, shared,
+	 * and carries the right permissions — and is invisible to every member of the
+	 * group, with nothing to click, because a group share raises no acceptance
+	 * prompt the way a user share does.
+	 *
+	 * MEASURED ON A LIVE INSTANCE, not reasoned about: the mount provider returned
+	 * the super-share at status 0 and produced no mount; accepting the four pending
+	 * shares and asking it again produced the mount, with nothing else changed.
+	 *
+	 * ## A REJECTION IS LEFT ALONE
+	 *
+	 * Someone who removed the folder from their own Files view holds a share at
+	 * STATUS_REJECTED, and re-accepting that on their behalf would put it back
+	 * every time an admin so much as re-saved the mapping's groups. Only PENDING is
+	 * accepted — the state in which nobody has expressed an opinion yet.
+	 */
+	private function acceptForMembers(Folder $folder, string $gid): void {
+		$group = $this->groupManager->get($gid);
+		if ($group === null) {
+			return;
+		}
+
+		foreach ($group->getUsers() as $user) {
+			$uid = $user->getUID();
+			foreach ($this->shareManager->getSharedWith($uid, IShare::TYPE_GROUP, $folder, -1) as $share) {
+				if ($share->getStatus() !== IShare::STATUS_PENDING) {
+					continue;
+				}
+				try {
+					$this->shareManager->acceptShare($share, $uid);
+				} catch (\Throwable $e) {
+					// NEVER FATAL TO PROVISIONING. The share itself exists and is
+					// correct; the member can still accept it by hand. Losing the
+					// whole mapped folder over one unacceptable share would be the
+					// worse trade by a distance.
+					$this->logger->warning('penpot_sync: failed to accept a group share for a member', [
+						'app' => Application::APP_ID,
+						'group' => $gid,
+						'user' => $uid,
+						'exception' => $e,
+					]);
+					$this->clearPoisonedTransaction();
+				}
 			}
 		}
 	}

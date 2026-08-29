@@ -36,9 +36,15 @@ default:
   # the behaviour. `behat --tags @todo` is the rest of the queue; a scenario earns
   # its real status back on the PR that runs it.
   #
-  # THREE OF THE FOUR TAGS HAVE MEMBERS: 11 @blocked (no browser, no app removal, no
+  # THREE OF THE FOUR TAGS HAVE MEMBERS: 10 @blocked (no browser, no app removal, no
   # way to author a design's content) and 11 @unbuilt (places the app disagrees with
   # the spec, each naming what the code owes). @decision is empty.
+  #
+  # ONE CAME OFF @blocked BY BEING MEASURED RATHER THAN RE-READ. `Move a design into
+  # another team` was blocked on "a file's metadata does not survive a cross-storage
+  # move", which was true and not the whole truth: the FILE ID survives and core
+  # deletes the metadata deliberately. Naming the mechanism turned a wall into a
+  # listener. See features/AGENTS.md#a-cross-team-move-always-crosses-a-storage-boundary.
   #
   # THE PROJECT LEG NEARLY DOUBLED THIS ROUND (7 → 13), and not by writing tests:
   # §C6.38 was a rule REVERSING. A project folder was pinned inside its team folder,

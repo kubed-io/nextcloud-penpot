@@ -18,6 +18,7 @@ use OCA\PenpotSync\Listener\CreateListener;
 use OCA\PenpotSync\Listener\DeleteListener;
 use OCA\PenpotSync\Listener\LoadFilesScriptListener;
 use OCA\PenpotSync\Listener\MoveGuardListener;
+use OCA\PenpotSync\Listener\MoveMemoryListener;
 use OCA\PenpotSync\Listener\NodeRenamedListener;
 use OCA\PenpotSync\Listener\ProjectTagListener;
 use OCA\PenpotSync\Listener\RegisterDavPluginsListener;
@@ -140,6 +141,16 @@ final class Application extends App implements IBootstrap {
 		// Penpot never asked for. Aborting the event is the only hook that reaches
 		// every route; the readable half is LinkWriteGuardPlugin on method:MOVE.
 		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveGuardListener::class);
+
+		// AND THE MEMORY, on the same event, because this is the last moment a
+		// moving design's metadata still exists. Nextcloud deletes a file's
+		// `files_metadata` when it crosses a storage boundary — the file id
+		// survives, the record does not — so a design dragged between two mappings
+		// on different storages would otherwise reach MotionService looking like a
+		// stranger and be imported as a new design. See MoveMemory for the
+		// measurement; `designs/move.feature`'s cross-team scenario is what it
+		// unblocks.
+		$context->registerEventListener(BeforeNodeRenamedEvent::class, MoveMemoryListener::class);
 
 		// A LINK IS READ-ONLY ON DISK, and here that needs saying out loud: a link
 		// mirror is a ZERO-BYTE file, so nothing about it stops a desktop client, a
