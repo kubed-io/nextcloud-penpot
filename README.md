@@ -9,6 +9,17 @@
 [![Nextcloud](https://img.shields.io/badge/Nextcloud-32--34-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com)
 [![PHP](https://img.shields.io/badge/PHP-%E2%89%A58.1-777bb4?logo=php&logoColor=white)](composer.json)
 
+<table>
+<tr>
+<td width="38%" valign="top"><img src="screenshots/penpot-projects.png" alt="A Penpot team showing the projects Brand/2026, Drafts, Cool Designs and Bubbles, each with its design thumbnails"></td>
+<td width="62%" valign="top"><img src="screenshots/penpot-files.png" alt="The same team in the Nextcloud Files app: Brand, Bubbles and Cool Designs as folders, and the two Drafts designs as .penpot files at the folder root"></td>
+</tr>
+<tr>
+<td valign="top"><em>One Penpot team. <code>Brand/2026</code>, <code>Cool Designs</code>, <code>Bubbles</code> — and <strong>Drafts</strong>, which is where an unfiled design goes.</em></td>
+<td valign="top"><em>The same team, mirrored. Each project is a folder; <code>Brand/2026</code> spells two of them. The two <strong>Drafts</strong> designs sit at the root, because that <em>is</em> Drafts.</em></td>
+</tr>
+</table>
+
 ---
 
 ## The whole idea, in one breath
@@ -173,9 +184,15 @@ There's a third state you don't configure: **unmapped**. That's what a sync file
 
 **1. Point it at Penpot.** Base URL and an access token, stored encrypted and never echoed back. That is the whole connection. Each user can add their own token too, so the changes they make from Nextcloud are attributed to them in Penpot's history rather than to the app.
 
+![The Penpot Sync admin settings showing the Instance card with a base URL and service-account token, and the Sync Settings card with the scheduled pull and its interval](screenshots/connection.png)
+
 **2. Map a team to a folder.** Pick the Penpot team, name the folder, choose the mode, and pick which groups get to see it. Backed by a Team Folder or an admin-owned shared folder, your call. The team's projects come along automatically — there is no project-level mapping to configure and nothing that can drift from what Penpot actually contains.
 
+![The Team mappings admin panel showing one mapping card: the Penpot team, the Nextcloud folder, the mode, the Team Folder flag and the group checkboxes](screenshots/team2folder-mapping.png)
+
 **3. Sync it.** Scheduled pulls on whatever interval you like, plus one-shot **Sync from Penpot** and **Sync to Penpot** buttons whenever you're impatient — and "Test connection" so you're never guessing whether it works.
+
+![The Sync Actions admin panel with Sync to Penpot, Sync from Penpot and Test connection buttons, each reporting when it last ran](screenshots/admin-actions.png)
 
 🔌 [`connection/admin.feature`](features/connection/admin.feature) · 🗂️ [`mapping/create.feature`](features/mapping/create.feature) · 🔄 [`connection/sync-now.feature`](features/connection/sync-now.feature)
 

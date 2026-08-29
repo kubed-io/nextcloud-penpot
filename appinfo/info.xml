@@ -7,45 +7,68 @@
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
   <id>penpot_sync</id>
   <name>Penpot Sync</name>
-  <summary>Your Penpot design files as native, read-only, backed-up Nextcloud files</summary>
+  <summary>Your Penpot designs as native, organisable, backed-up Nextcloud files</summary>
   <description><![CDATA[
-Penpot Sync mirrors your Penpot design files into Nextcloud as native files. A
-scheduled pull walks your mapped Penpot teams/projects and every design file
-appears in Nextcloud as a `.penpot` file — a real file icon, a deep link back to
-the live design in Penpot, and a local backup of the exported archive.
+Penpot Sync turns a Nextcloud folder into a live mirror of a Penpot team.
 
-Unlike this app's sibling integrations for n8n and Grafana, Penpot Sync **never
-edits a design Penpot already has**: there is no "Edit as text" action and no
-content writeback. A `.penpot` export is an opaque archive of nested design data
-— editing it outside Penpot wouldn't produce anything sane to re-import. Design
-happens in Penpot; Nextcloud holds the backup and the click-through.
+Map a Penpot **team** to a folder and everything in it shows up: projects become folders, designs become real `.penpot` files with the Penpot icon. Click one and the live design opens in Penpot.
 
-The one thing that does travel upward is a `.penpot` Penpot has never seen. Drop
-one into a mapped folder, or press **Sync to Penpot**, and it becomes a new
-design in the project its folder spells. Nothing existing is touched.
+Nothing is matched on filename. Every file carries its design's id, so renaming, moving, copying, trashing and restoring never break the link — and re-running a sync never duplicates anything.
 
-Your Nextcloud gestures are mirrored where Penpot has somewhere to put them:
-renaming a file renames the design, moving one between folders moves it between
-projects, deleting one sends it to Penpot's trash, and restoring it brings it
-back. A folder becomes a project once a design lands in it — an empty one is
-yours alone.
+## ✨ What you can do
 
-⚠️ **Early development.** The sync engine, file actions and both sync
-directions work, and every control has an `occ` twin — but the app has not yet
-been run in anger anywhere but its authors' homelab. See the project's `saga/`
-design narrative for what's confirmed, what's locked, and what's still an open
-question.
+- 📁 **File your designs however you like** — the folder a design lands in becomes its Penpot project, at any depth
+- 🚚 **Move** a design between projects, or into another team — same design, same history
+- 🍝 **Copy** one, and get a real new design in Penpot
+- 🗑️ **Trash, restore and purge**, mirrored into Penpot's own trash
+- ➕ **Create** a design from the Files app, or drop a `.penpot` archive in to import it
+- 🖱️ **Open in Penpot** with a click
+- ⌨️ **Script all of it** — every admin action has an `occ` command
 
-The `enable-access-tokens` Penpot instance flag is required to mint the token;
-it is off by default upstream.
+## 🗂️ The folder *is* the project
 
-This is a community integration and is not affiliated with, endorsed by, or
-sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are
-trademarks of their respective owner, used here only to identify the service
-this app integrates with.
+Penpot's hierarchy is rigid: team, then project, then design, with no sub-projects. Nextcloud is a file manager. So rather than force Penpot's flatness onto your folders, this teaches Penpot yours — a folder becomes a project the moment a design lands in it, and the path spells the name. A project called `Brand/2026` arrives here as two nested folders.
+
+**Drafts is a state, not a folder.** A design that belongs to a team but no project simply sits at the root of the mapped folder. Filing it is a drag; un-filing it is a drag back.
+
+## 🖌 It never edits a design Penpot already has
+
+A `.penpot` export is an opaque archive of nested design data, so there is no "Edit as text" action and no content writeback. Design happens in Penpot; Nextcloud holds the archive and the click-through.
+
+The one thing that travels upward is an archive Penpot has **never seen**: drop a `.penpot` into a mapped folder, or press **Sync to Penpot**, and it becomes a new design. Nothing existing is touched.
+
+## 🗑️ Two trashes, and only one irreversible gesture
+
+Penpot has a trash of its own, so trashing a design in Nextcloud is reversible on both sides — restore the file and the design comes back with its id, revision and history intact. Delete a design in Penpot and its mirror lands in your Nextcloud trash, never a hard delete.
+
+Only emptying your Nextcloud trash destroys anything, and even then only a design still sitting in Penpot's trash.
+
+## 🧭 Sync or Link — the folder decides
+
+| Mode | The file holds | Keeps a copy? |
+|---|---|---|
+| **Link** *(default)* | A pointer — zero bytes | No — clicking it opens Penpot |
+| **Sync** | The real `.penpot` archive | Yes — yours to open offline |
+
+The mode decides whether the bytes live on your Nextcloud, never whether the design can be opened. A `sync` mapping is therefore also a real backup: every design in the team, exported and versioned by Nextcloud.
+
+## 🎨 Honest icons, honest dates
+
+Designs register their own mimetype, so they wear the real Penpot icon instead of a generic archive glyph. And each file carries **the design's** created and modified dates rather than the sync's — so Recent, Popular files and sorting a folder by date all tell you the truth about your work.
+
+📖 **[Full documentation, screenshots and the `occ` reference on GitHub](https://github.com/kubed-io/nextcloud-penpot#readme)**
+
+Requires the `enable-access-tokens` flag on your Penpot instance — it is off by default upstream. This app is in early development: it works end to end and is covered by tests against a real Penpot, but has not yet been run widely.
+
+---
+
+This is a community integration and is not affiliated with, endorsed by, or sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are trademarks of their respective owner, used here only to identify the service this app integrates with.
   ]]></description>
   <version>0.1.0</version>
-  <licence>agpl</licence>
+  <!-- SPDX identifier, not the `agpl` shorthand. The store's XSD still accepts the
+       shorthand but marks it deprecated, and its docs scope it to apps targeting
+       Nextcloud 30 or lower. This app requires 32. -->
+  <licence>AGPL-3.0-or-later</licence>
   <author>kubed-io</author>
   <namespace>PenpotSync</namespace>
   <category>integration</category>
@@ -73,9 +96,22 @@ this app integrates with.
   <types>
     <filesystem/>
   </types>
+  <documentation>
+    <user>https://github.com/kubed-io/nextcloud-penpot#readme</user>
+    <admin>https://github.com/kubed-io/nextcloud-penpot#-setup-in-three-moves</admin>
+    <developer>https://github.com/kubed-io/nextcloud-penpot/blob/main/CONTRIBUTING.md</developer>
+  </documentation>
   <website>https://github.com/kubed-io/nextcloud-penpot</website>
   <bugs>https://github.com/kubed-io/nextcloud-penpot/issues</bugs>
   <repository type="git">https://github.com/kubed-io/nextcloud-penpot.git</repository>
+  <!-- Order is the store's carousel order: the payoff first, the admin surface last.
+       Every file here must exist in screenshots/ on main — the store fetches them by
+       raw URL, so a rename that misses this list shows the listing a broken image. -->
+  <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/penpot-files.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/penpot-files.png</screenshot>
+  <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/penpot-projects.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/penpot-projects.png</screenshot>
+  <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/team2folder-mapping.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/team2folder-mapping.png</screenshot>
+  <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/connection.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/connection.png</screenshot>
+  <screenshot small-thumbnail="https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/thumbnails/admin-actions.png">https://raw.githubusercontent.com/kubed-io/nextcloud-penpot/main/screenshots/admin-actions.png</screenshot>
   <dependencies>
     <!-- 32, not 30, since the project-folder opt-in landed: `OCP\SystemTag\TagAssignedEvent`
          is @since 32.0.0, and on 30/31 the listener would simply never fire — the tag
@@ -148,7 +184,7 @@ this app integrates with.
       <!-- Mirror image of RegisterMimetype: reverts the core-tree mimetype/icon
            registration so removing the app leaves core as it found it. Never
            touches the user's .penpot files, their metadata, or Penpot.
-           See lib/Migration/UnregisterMimetype.php + uninstall.feature. -->
+           See lib/Migration/UnregisterMimetype.php + lifecycle.feature. -->
       <step>OCA\PenpotSync\Migration\UnregisterMimetype</step>
     </uninstall>
   </repair-steps>
