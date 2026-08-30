@@ -889,6 +889,36 @@ for it from inside this app.
 > that dissolves once you ask which way the news is travelling — and thirty seconds
 > in a pod was cheaper than either reading.
 
+**Then CI destroyed the round's headline, and a live Penpot said why.** The purge ran,
+the hook fired, the log said *"permanently deleted a trashed project's designs"* — and
+the designs were still sitting in Penpot's trash. Twice, once per row.
+
+Measured rather than reasoned about, three runs and a control: Penpot will not
+permanently delete a file whose PROJECT is deleted. On a live project the destroy
+works and the file is unrecoverable; on a deleted one the RPC reports success and does
+nothing at all, and the file is still restorable afterwards — restoring it revives the
+project too. Ordering does not save it either: `delete-file` first, so the file has a
+`deleted_at` of its own, then destroy, is still a no-op.
+
+And trashing the folder is what deleted the project. `onFolderTrashed()` calls
+`delete-project`, never `delete-file` per design, so there is no ordering of Nextcloud
+gestures that reaches a destroyable state. The folder-purge branch was written,
+shipped to a live instance, and taken out again: in every path it had, the id it sent
+was one Penpot would ignore, while logging a successful destroy.
+
+> **A log line is not a measurement.** I had "verified" this branch on the live pod an
+> hour earlier and reported it working — by reading the app's own success line and
+> never asking Penpot. §C6.11 has said *"success is not proof of success on these
+> commands"* since Chapter 2. Two of this round's three failures were believed log
+> lines, and one of them was mine twice over.
+
+All three purge scenarios are `@blocked` now, and that is the accurate tag rather than
+a softer one: the behaviour is real and it does arrive — Penpot's collector takes the
+deleted project and everything in it on its own schedule — but the harness cannot age
+a deletion by a week to watch it, which is one of the four things `@blocked` exists to
+say. The Penpot→Nextcloud half stays: built, unit-tested, and unarrangeable only
+because the arrange would have to destroy the designs first.
+
 **And `Rename a project in Penpot` needed no code at all.** Its `@todo` said why in
 its own words — *"the team still holds the New project the scenario above made, so
 the pull adopts the wrong folder"* — which is the leg-wide fixture rule for the third

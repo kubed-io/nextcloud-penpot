@@ -14,7 +14,6 @@ use OCA\PenpotSync\Service\DeletionService;
 use OCA\PenpotSync\Service\PullService;
 use OCA\PenpotSync\Service\SyncGuard;
 use OCP\Files\File;
-use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
@@ -78,21 +77,20 @@ final class TrashPurgeHook {
 		}
 
 		$path = $params['path'] ?? '';
-		if ($path === '') {
+		// Cheap pre-filter. The trashed name carries the deletion time after the
+		// extension, so the extension is not last — `str_contains`, not
+		// `str_ends_with`.
+		//
+		// IT ALSO MAKES THIS HOOK BLIND TO FOLDERS, and that is now deliberate rather
+		// than incidental. A trashed project folder is `Team.d1788059488`, so it never
+		// gets past this line — and there is nothing for it to do if it did: trashing
+		// the folder called `delete-project`, which never gives the designs a
+		// `deleted_at` of their own, and Penpot will not permanently delete a file
+		// whose project is deleted. Measured, see
+		// features/AGENTS.md#a-projects-designs-cannot-be-destroyed-while-the-project-is.
+		if ($path === '' || !str_contains($path, PullService::EXTENSION)) {
 			return;
 		}
-		// NO EXTENSION PRE-FILTER ANY MORE, and losing it is the price of seeing
-		// folders at all. It used to read `str_contains($path, '.penpot')` — cheap,
-		// and correct for a mirror, whose trashed name carries the deletion stamp
-		// AFTER the extension. A trashed project FOLDER is `Team.d1788055907`: no
-		// extension anywhere in it, so the hook returned before it could look, and
-		// emptying the trash on a whole project left every design of it sitting in
-		// Penpot's trash (`projects/purge.feature`).
-		//
-		// A path cannot say whether it names a file or a directory, so the node has
-		// to be resolved before anything can be decided — the same trade
-		// {@see RestoreFromTrashListener} makes on the same kind of gesture, and
-		// affordable for the same reason: emptying a trash is deliberate and rare.
 
 		$uid = $this->userSession->getUser()?->getUID();
 		if ($uid === null || $uid === '') {
@@ -115,18 +113,11 @@ final class TrashPurgeHook {
 		} catch (\Throwable) {
 			return;
 		}
-		try {
-			if ($node instanceof Folder) {
-				// A whole project on its way out. Nothing is announced per child, so
-				// this one hook is the only notice that everything under it is about
-				// to stop existing — {@see DeletionService::onFolderPurged()} walks it.
-				$this->deletions->onFolderPurged($node);
+		if (!$node instanceof File) {
+			return;
+		}
 
-				return;
-			}
-			if (!$node instanceof File || !str_contains($node->getName(), PullService::EXTENSION)) {
-				return;
-			}
+		try {
 			$this->deletions->onPurged($node);
 		} catch (\Throwable $e) {
 			// Log and swallow: a legacy hook cannot cleanly abort the purge, and a

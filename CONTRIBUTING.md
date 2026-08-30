@@ -9,12 +9,12 @@ questions are answered below.
 
 **Where the work is right now.** Chapters 1 (the API survey), 2 (the build) and
 3 (building to the spec) are CLOSED. The app works end to end and is deployed:
-both directions of sync, every design and project verb, 92 live scenarios run
+both directions of sync, every design and project verb, 89 live scenarios run
 against a real Nextcloud and a real Penpot on every push.
 [Chapter 4](saga/Chapter_4_Open_For_Business.md) is open, and it is about the
 outward-facing surfaces rather than the code.
 
-**The queue is named, not hidden** — 13 `@todo`, 4 `@unbuilt`, 5 `@blocked`, each
+**The queue is named, not hidden** — 13 `@todo`, 4 `@unbuilt`, 8 `@blocked`, each
 saying what it wants. Read [features/README.md](features/README.md) for what those
 tags oblige. The one rule: **a scenario stops being `@todo` only on a PR that runs
 it** — and the corollary, learned twice: a tag is a claim somebody made once and

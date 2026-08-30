@@ -3958,6 +3958,44 @@ still worth something — restoring it would bring the project back, which is wh
 `projects/restore` asserts. So the folder goes only when `isGone()`, which answers
 false whenever it cannot tell, is true of all of them.
 
+### A project's designs cannot be destroyed while the project is deleted
+
+**THE WALL THIS WHOLE FEATURE SITS BEHIND, measured on a live Penpot rather than
+inferred.** Three runs, one control:
+
+| the project is | `permanently-delete-team-files` on its file | still restorable |
+|---|---|---|
+| live | the file leaves `get-team-deleted-files` | no — destroyed |
+| deleted | nothing happens, and the RPC reports success | yes — and the restore revives the project too |
+
+Ordering does not save it: `delete-file` first, so the file has a `deleted_at` of its
+own, then destroy — still a no-op. Penpot simply will not permanently delete a file
+whose project is deleted.
+
+**AND TRASHING THE FOLDER IS WHAT DELETED THE PROJECT.** `onFolderTrashed()` calls
+`delete-project`, never `delete-file` per design, so the designs never get a
+`deleted_at` of their own and there is no ordering of Nextcloud gestures that reaches
+a destroyable state. A folder-purge branch was written, shipped to a live instance,
+and removed again once this was measured: in every path it had, the id it sent was one
+Penpot would ignore — while logging a successful destroy. A log line claiming work
+that did not happen is worse than no branch at all.
+
+WHAT ACTUALLY HAPPENS TO THEM: Penpot's own collector takes the deleted project and
+everything in it on its schedule. So this is a WINDOW rather than a divergence — the
+same shape as #emptying-a-team-folders-trash-cannot-reach-penpot-and-says-nothing, and
+the same reason it is an edge case rather than data loss.
+
+WHICH IS WHY ALL THREE SCENARIOS ARE `@blocked` AND NOT `@unbuilt`. The behaviour is
+real and it does arrive; the harness cannot age a deletion by a week to see it, which
+is one of the four things that tag exists to say. The Penpot→Nextcloud half is BUILT
+and unit-tested — a trashed folder whose designs are genuinely gone is reaped — it
+simply cannot be arranged today, because the arrange would have to destroy the designs
+first and that is the very thing Penpot refuses.
+
+<!-- The §C6.11 lesson again, from a third angle: these commands report success
+     without doing the work, so the only proof is re-reading the far side. Two of this
+     round's three failures were believed log lines. -->
+
 ### A purge Penpot cannot be told about still empties the bin
 
 Emptying the Nextcloud trash is not this app's to refuse — that half has already
