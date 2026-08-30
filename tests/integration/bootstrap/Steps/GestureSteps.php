@@ -652,7 +652,7 @@ trait GestureSteps {
 	 * @return list<string>
 	 */
 	private function penpotRecoverableIds(string $teamId): array {
-		$now = (int)(microtime(true) * 1000);
+		$now = (int)(microtime(true) * 1000.0);
 
 		$ids = [];
 		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $teamId]) as $file) {

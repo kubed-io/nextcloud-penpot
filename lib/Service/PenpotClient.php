@@ -433,7 +433,10 @@ final class PenpotClient {
 	 * @throws PenpotApiException
 	 */
 	public function recoverableFileIds(string $teamId): array {
-		$now = (int)(microtime(true) * 1000);
+		// A FLOAT LITERAL, deliberately, for the same reason {@see RestoreService}'s
+		// settle deadline uses one: `microtime(true)` is a float, and Psalm's strict
+		// binary operands mode refuses to mix it with an int.
+		$now = (int)(microtime(true) * 1000.0);
 
 		$ids = [];
 		foreach ($this->deletedFiles($teamId) as $file) {
