@@ -208,7 +208,9 @@ final class TrashControl {
 			$out[] = new TrashedFolder(
 				$fileId,
 				basename($item->getOriginalLocation()),
-				fn (): void => $this->restoreAs($manager, $item, $uid),
+				function () use ($manager, $item, $uid): void {
+					$this->restoreAs($manager, $item, $uid);
+				},
 			);
 		}
 
