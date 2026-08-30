@@ -3667,6 +3667,20 @@ because nothing about them changed — that is a consequence, not a second scena
 
 ### A project renamed in Penpot keeps its folder where it is
 
+**THE OUTLINE HAS NO SELF-NESTING ROW, AND IT USED TO.** `Penpot/Wrapper` renamed to
+`Wrapper/inner` was a fourth row here for as long as the scenario was `@todo`, and it
+failed the moment it ran — on `there is no folder at "<from>"`, which the outline's
+other three rows need and this one makes false. When a project moves INTO a folder
+named after itself the source folder does not go anywhere: it stops being the project
+and becomes the folder the project now sits in, which is exactly what its new name
+says.
+
+So the row was not asking for a different assertion, it was asking for the opposite
+of one the outline already shares. `projects/move` carries that case as a scenario of
+its own — #a-project-moving-into-a-folder-named-after-itself — where the `absent`
+marker on the old folder is the point rather than a contradiction. Two scenarios, not
+one row, because the end states genuinely differ.
+
 Renamed IN PLACE. Nextcloud is authoritative for layout, so the pull renames the
 folder where the user left it and never drags it to a canonical path.
 

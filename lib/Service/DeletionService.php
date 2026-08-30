@@ -325,7 +325,7 @@ final class DeletionService {
 		foreach ($byTeam as $teamId => $ids) {
 			try {
 				$parked = [];
-				foreach ($this->client->deletedFiles((string)$teamId) as $file) {
+				foreach ($this->client->deletedFiles($teamId) as $file) {
 					$id = $file['id'] ?? null;
 					if (is_string($id) && isset($ids[$id])) {
 						$parked[] = $id;
@@ -338,7 +338,7 @@ final class DeletionService {
 					continue;
 				}
 
-				$this->client->permanentlyDeleteFiles((string)$teamId, $parked, $this->personalTokens->tokenForActor());
+				$this->client->permanentlyDeleteFiles($teamId, $parked, $this->personalTokens->tokenForActor());
 				$this->logger->info('penpot_sync purge: permanently deleted a trashed project\'s designs', [
 					'app' => Application::APP_ID,
 					'team_id' => $teamId,

@@ -59,14 +59,10 @@ Feature: Renaming a project
     And there is no folder at "<from>"
 
     Examples: however deep it sits, in either kind of storage
-      | from                | named         | to                   |
-      | Penpot/Upstream     | Renamed       | Penpot/Renamed       |
-      | Penpot/foo/Upstream | foo/Renamed   | Penpot/foo/Renamed   |
-      | Shared/Upstream     | Renamed       | Shared/Renamed       |
-      | Penpot/Wrapper      | Wrapper/inner | Penpot/Wrapper/inner |
-
-    # Every name here is this scenario's own. The names the outline above renames TO
-    # are still standing in the team, and a second project of that name is adopted by id.
+      | from                | named       | to                 |
+      | Penpot/Upstream     | Renamed     | Penpot/Renamed     |
+      | Penpot/foo/Upstream | foo/Renamed | Penpot/foo/Renamed |
+      | Shared/Upstream     | Renamed     | Shared/Renamed     |
 
     # THE FOLDER IS RENAMED, NOT REPLACED. Everything in it comes along, the user's
     # own files included — nothing here is deleted and re-made under the new name.

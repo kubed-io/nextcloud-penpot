@@ -290,8 +290,15 @@ final class TrashControl {
 				continue;
 			}
 
+			// THE ORIGINAL NAME, NEVER `getName()` — the same trap {@see listTrashed()}
+			// spells out twenty lines up and this method walked straight into. The
+			// trash's own spelling carries the deletion stamp AFTER the extension
+			// (`Alpha.penpot.d1788058484`), so `str_ends_with($name, '.penpot')` is
+			// false for every trashed design there has ever been. Every `.penpot` in
+			// here would have been counted as "some other file", which makes the folder
+			// permanently un-purgeable — a silent no-op wearing the shape of caution.
 			$id = $child->getId();
-			if ($id !== null && str_ends_with($child->getName(), PullService::EXTENSION)) {
+			if ($id !== null && str_ends_with(basename($child->getOriginalLocation()), PullService::EXTENSION)) {
 				$designIds[] = $id;
 				continue;
 			}
