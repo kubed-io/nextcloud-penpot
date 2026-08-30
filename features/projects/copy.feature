@@ -22,24 +22,23 @@ Feature: Copying a Penpot project folder
     # ── RULE: a copied project is a new project, holding new designs ──────────
     # notes: ../AGENTS.md#a-copied-project-is-a-new-project
 
-  # @unbuilt — a folder copy tracks nothing: CopyService::onCopy() takes a File and
-  # core fires no per-child event, so every id below the copy comes back absent.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Copy a project within its team
     Given the following items in the mappings:
       | path                            | kind    |
       | /<folder>/My Stuff              | project |
       | /<folder>/My Stuff/Alpha.penpot | design  |
       | /<folder>/My Stuff/Beta.penpot  | design  |
-    When I copy "<folder>/My Stuff" to "<folder>/My Stuff copy"
+    When I copy "<folder>/My Stuff" into "<folder>"
     Then the mappings hold:
-      | path                                 | identity        |
-      | /<folder>/My Stuff                   | the original id |
-      | /<folder>/My Stuff/Alpha.penpot      | the original id |
-      | /<folder>/My Stuff copy              | a new id        |
-      | /<folder>/My Stuff copy/Alpha.penpot | a new id        |
-      | /<folder>/My Stuff copy/Beta.penpot  | a new id        |
-    And the "My Stuff copy" Penpot project holds one design per file, named:
+      | path                                | identity        |
+      | /<folder>/My Stuff                  | the original id |
+      | /<folder>/My Stuff/Alpha.penpot     | the original id |
+      | /<folder>/My Stuff/Beta.penpot      | the original id |
+      | /<folder>/My Stuff (2)              | a new id        |
+      | /<folder>/My Stuff (2)/Alpha.penpot | a new id        |
+      | /<folder>/My Stuff (2)/Beta.penpot  | a new id        |
+    And the "My Stuff (2)" Penpot project holds one design per file, named:
       | Alpha |
       | Beta  |
 
@@ -48,22 +47,46 @@ Feature: Copying a Penpot project folder
       | Penpot |
       | Shared |
 
-    # Penpot has no duplicate-project call, so this is a create followed by one
-    # duplicate per design — which is why every id below the copy is a new one.
+    # It lands beside the original, so core names it — `(2)`, where core's counter
+    # starts, and every id below the copy is a new one.
+
+    # ── RULE: a project duplicated in Penpot arrives as its own folder ────────
+    # notes: ../AGENTS.md#a-project-duplicated-in-penpot-arrives-as-its-own-folder
+
+  @in-penpot @gesture
+  Scenario: Duplicate a project in Penpot
+    Given the following items in the mappings:
+      | path                          | kind    |
+      | /Penpot/My Stuff              | project |
+      | /Penpot/My Stuff/Alpha.penpot | design  |
+      | /Penpot/My Stuff/Beta.penpot  | design  |
+    When someone duplicates that project in Penpot
+    Then the mappings hold:
+      | path                                 | identity        |
+      | /Penpot/My Stuff                     | the original id |
+      | /Penpot/My Stuff/Alpha.penpot        | the original id |
+      | /Penpot/My Stuff (copy)              | a new id        |
+      | /Penpot/My Stuff (copy)/Alpha.penpot | a new id        |
+      | /Penpot/My Stuff (copy)/Beta.penpot  | a new id        |
+    And the "My Stuff (copy)" Penpot project holds one design per file, named:
+      | Alpha |
+      | Beta  |
+
+    # Penpot names this one, so the folder is "(copy)" — Penpot's own suffix, where
+    # a copy made in Nextcloud is "(2)". The name says which side made it.
 
   # notes: ../AGENTS.md#a-project-copied-into-another-team-belongs-to-that-team
-  # @unbuilt — same wall as the copy above: a copied folder is never tracked, so
-  # no project is created in the destination team.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario: Copy a project into another team
     Given the following items in the mappings:
       | path                          | kind    |
       | /Penpot/My Stuff              | project |
       | /Penpot/My Stuff/Alpha.penpot | design  |
-    When I copy "Penpot/My Stuff" to "Shared/My Stuff"
+    When I copy "Penpot/My Stuff" into "Shared"
     Then the mappings hold:
       | path                          | identity        |
       | /Penpot/My Stuff              | the original id |
+      | /Penpot/My Stuff/Alpha.penpot | the original id |
       | /Shared/My Stuff              | a new id        |
       | /Shared/My Stuff/Alpha.penpot | a new id        |
     And the "My Stuff" Penpot project is in the "Second Team" team
@@ -106,10 +129,15 @@ Feature: Copying a Penpot project folder
       | /Penpot/My Stuff/Beta.penpot  | design  |
     When I copy "Penpot/My Stuff" to "Scratch/My Stuff"
     Then the mappings hold:
-      | path                           | identity |
-      | /Scratch/My Stuff              | absent   |
-      | /Scratch/My Stuff/Alpha.penpot | absent   |
-      | /Scratch/My Stuff/Beta.penpot  | absent   |
+      | path                           | identity        |
+      | /Scratch/My Stuff              | absent          |
+      | /Scratch/My Stuff/Alpha.penpot | the original id |
+      | /Scratch/My Stuff/Beta.penpot  | the original id |
+    And "Scratch/My Stuff/Alpha.penpot" holds:
+      | penpot_mode | "unmapped" |
+
+    # The folder is nobody's project, but each design still records where its bytes
+    # came from — the same "unmapped" a design dragged out alone keeps.
 
     # ── RULE: a link is read-only, so a copy neither enters nor leaves one ────
     # notes: ../AGENTS.md#a-copy-never-changes-a-projects-mode

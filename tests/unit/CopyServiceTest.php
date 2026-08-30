@@ -259,6 +259,134 @@ final class CopyServiceTest extends TestCase {
 
 	// ── fixtures ────────────────────────────────────────────────────────────
 
+	// ── a whole project folder ──────────────────────────────────────────────
+
+	/**
+	 * THE WALK IS THE ONLY NEW THING, so it is what these lock.
+	 *
+	 * Core fires `NodeCopiedEvent` once for a folder and never per child —
+	 * measured on a live instance — so `onFolderCopy()` walks the SOURCE and
+	 * pairs each design with the copy at the same relative path. Everything after
+	 * the pairing is `onCopy()`, covered above.
+	 */
+	public function testEveryDesignBelowACopiedFolderIsPaired(): void {
+		$sourceAlpha = $this->namedFile('Alpha.penpot', 91);
+		$sourceBeta = $this->namedFile('Beta.penpot', 92);
+		$copyAlpha = $this->namedFile('Alpha.penpot', 93);
+		$copyBeta = $this->namedFile('Beta.penpot', 94);
+
+		// Two designs in, two duplicate calls out — one per pair.
+		$this->metadata->method('readFile')->willReturnCallback(
+			fn (int $id): ?PenpotFileMetadata => in_array($id, [91, 92], true)
+				? new PenpotFileMetadata('design-' . $id, '5@x', Mapping::MODE_SYNC, self::TEAM)
+				: null,
+		);
+		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT_A, self::TEAM));
+		$this->client->expects($this->exactly(2))->method('duplicateFile')
+			->willReturn(['id' => 'new-id', 'project-id' => self::PROJECT_A]);
+
+		$this->copies->onFolderCopy(
+			$this->treeFolder([$sourceAlpha, $sourceBeta]),
+			$this->treeFolder([$copyAlpha, $copyBeta]),
+		);
+	}
+
+	/**
+	 * A design whose counterpart is missing is DROPPED, not guessed at. Half a
+	 * copy handled wrongly is worse than half a copy left untracked.
+	 */
+	public function testADesignWithNoCounterpartInTheCopyIsSkipped(): void {
+		$this->metadata->method('readFile')->willReturn(
+			new PenpotFileMetadata('design-91', '5@x', Mapping::MODE_SYNC, self::TEAM),
+		);
+		$this->client->expects($this->never())->method('duplicateFile');
+
+		$this->copies->onFolderCopy(
+			$this->treeFolder([$this->namedFile('Alpha.penpot', 91)]),
+			$this->treeFolder([]),
+		);
+	}
+
+	/** Only `.penpot` is a design; the spreadsheet beside it is nobody's business. */
+	public function testAnOrdinaryFileBelowACopiedFolderIsIgnored(): void {
+		$this->metadata->method('readFile')->willReturn(
+			new PenpotFileMetadata('design-91', '5@x', Mapping::MODE_SYNC, self::TEAM),
+		);
+		$this->client->expects($this->never())->method('duplicateFile');
+
+		$this->copies->onFolderCopy(
+			$this->treeFolder([$this->namedFile('Budget.xlsx', 91)]),
+			$this->treeFolder([$this->namedFile('Budget.xlsx', 93)]),
+		);
+	}
+
+	/**
+	 * ONE BAD DESIGN IS ONE UNTRACKED FILE. The Nextcloud copy has already
+	 * happened, so a failure on the first pair must not leave the rest of
+	 * somebody's designs untouched.
+	 */
+	public function testAFailingDesignDoesNotAbandonTheRestOfTheCopy(): void {
+		$this->metadata->method('readFile')->willReturn(
+			new PenpotFileMetadata('design-91', '5@x', Mapping::MODE_SYNC, self::TEAM),
+		);
+		$this->resolver->method('resolve')->willThrowException(new \RuntimeException('boom'));
+
+		// Reaching the second pair at all is the assertion: without per-pair
+		// containment the first exception ends the whole walk.
+		$this->resolver->expects($this->exactly(2))->method('resolve');
+
+		$this->copies->onFolderCopy(
+			$this->treeFolder([$this->namedFile('Alpha.penpot', 91), $this->namedFile('Beta.penpot', 92)]),
+			$this->treeFolder([$this->namedFile('Alpha.penpot', 93), $this->namedFile('Beta.penpot', 94)]),
+		);
+	}
+
+	/** A file copied as a "folder" is not a tree; the walk simply has nothing to do. */
+	public function testAFileSourceIsNotWalked(): void {
+		$this->client->expects($this->never())->method('duplicateFile');
+
+		$this->copies->onFolderCopy($this->source(), $this->treeFolder([]));
+	}
+
+	private function namedFile(string $name, int $id): File {
+		$file = $this->createMock(File::class);
+		$file->method('getName')->willReturn($name);
+		$file->method('getId')->willReturn($id);
+		$file->method('getPath')->willReturn('/dana/files/Penpot/My Stuff/' . $name);
+		// THE PARENT IS NOT OPTIONAL. `DestinationResolver` is the real one here
+		// (§C6.10), and it walks UP from the file to decide where the design
+		// belongs — an unstubbed `getParent()` returns null, which it reads as
+		// "past the storage root" and answers Drafts, so nothing is duplicated
+		// and the test fails on a fixture rather than on the walk it is about.
+		$file->method('getParent')->willReturn($this->parentFolder());
+
+		return $file;
+	}
+
+	/**
+	 * A folder that lists $children and can `get()` any of them by name — which is
+	 * the whole surface {@see CopyService::designPairs()} touches.
+	 *
+	 * @param list<File> $children
+	 */
+	private function treeFolder(array $children): Folder {
+		$byName = [];
+		foreach ($children as $child) {
+			$byName[$child->getName()] = $child;
+		}
+
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getDirectoryListing')->willReturn($children);
+		$folder->method('nodeExists')->willReturnCallback(
+			fn (string $name): bool => isset($byName[$name]),
+		);
+		$folder->method('get')->willReturnCallback(
+			fn (string $name): File => $byName[$name] ?? throw new \RuntimeException("no {$name}"),
+		);
+
+		return $folder;
+	}
+
 	private function givenSource(string $mode): void {
 		$this->metadata->method('readFile')
 			->willReturn(new PenpotFileMetadata(self::SOURCE_ID, '5@t1', $mode, self::TEAM));

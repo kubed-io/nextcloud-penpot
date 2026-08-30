@@ -763,6 +763,31 @@ the same claim designs/copy makes one level down.
 Storage is a row rather than a scenario: an admin folder and a Team Folder differ in
 where Nextcloud puts the bytes and in nothing this app decides.
 
+### A project duplicated in Penpot arrives as its own folder
+
+The mirror of `Copy a project within its team`, and the cheaper half: the pull
+already mirrors any project the team holds, so a duplicate is simply a project
+the team did not have before. No new mechanism, and no per-child anything —
+this side never had the wall the Nextcloud side did.
+
+**THE SUFFIX BELONGS TO WHICHEVER SIDE MADE THE COPY**, and the two do not
+agree:
+
+| made in | named by | first copy of `My Stuff` |
+|---|---|---|
+| Nextcloud | core's `Folder::getNonExistingName()` | `My Stuff (2)` |
+| Penpot | the dashboard's `dashboard.copy-suffix` | `My Stuff (copy)` |
+
+Neither is this app's choice and neither should be normalised into the other.
+The folder takes the project's name because a project's name IS its path
+(§C6.38), so `(copy)` reaching Nextcloud is the rule working, not a leak.
+
+**`duplicate-project` DOES NOT NAME THE COPY.** Called bare it returns a project
+with the same name as the original — Penpot allows two projects to share one
+(§31) — and the `(copy)` a user sees is appended by the frontend before the
+call. Measured in the bundle and against a live instance, which is why the
+harness passes the name rather than expecting Penpot to invent it.
+
 ### A project copied into another team belongs to that team
 
 The destination decides, exactly as it does for a design. The copy is created in the

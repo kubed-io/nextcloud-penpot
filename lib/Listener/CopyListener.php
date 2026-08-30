@@ -17,6 +17,7 @@ use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -54,10 +55,30 @@ final class CopyListener implements IEventListener {
 		}
 
 		$target = $event->getTarget();
+
+		// A FOLDER COPY IS ONE EVENT AND NO CHILDREN, measured on a live instance:
+		// copying a project folder fires this once for the folder and nothing at
+		// all per design, so the copies land with no `penpot_id`, no mode and no
+		// revision. Filtering to `File` here is what made a copied project a pile
+		// of inert files — `projects/copy.feature` was @unbuilt on exactly that.
+		//
+		// The folder branch walks the SOURCE's designs itself for that reason:
+		// there is no per-child event to wait for.
+		if ($target instanceof Folder) {
+			try {
+				$this->copies->onFolderCopy($event->getSource(), $target);
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync: folder copy handling failed; the copy is untracked', [
+					'app' => Application::APP_ID,
+					'folder' => $target->getName(),
+					'exception' => $e,
+				]);
+			}
+
+			return;
+		}
+
 		if (!$target instanceof File) {
-			// Copying a project FOLDER is refused before it happens, by
-			// MoveGuardListener's sibling rule (projects/create.feature) — not
-			// something to half-handle here.
 			return;
 		}
 		if (!str_ends_with($target->getName(), PullService::EXTENSION)) {

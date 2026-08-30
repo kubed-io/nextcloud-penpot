@@ -37,6 +37,9 @@ use Behat\Gherkin\Node\TableNode;
  * "the file" and mean the right one.
  */
 trait CopySteps {
+	/** The one extension this harness copies, and the only one it splits off a name. */
+	private const DESIGN_EXTENSION = '.penpot';
+
 	/** The copy this scenario made: its path, and the id it ended up carrying. */
 	private string $copyPath = '';
 
@@ -78,13 +81,48 @@ trait CopySteps {
 		// feature — so the harness must not pick one. A COPY onto an existing path
 		// would overwrite; the free name is resolved the way core does it and the
 		// scenario's `filename` row then asserts the answer.
-		$this->copyPath = $this->davExists($target) ? $this->freeCopyName($folder, basename($source)) : $target;
+		$this->copyPath = $this->davExists($target) ? $this->freeCopyPath($folder, basename($source)) : $target;
 		$this->davCopy($source, $this->copyPath);
 
 		// The archive lands with the bytes, but the REVISION is the pull's stamp —
 		// `CopyService` says so: "no revision is stamped, the copy has never been
 		// pulled". Collapsing that wait here is the harness's job, exactly as it is
 		// after a create; the scenario describes the state the person ends up in.
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * A project duplicated in PENPOT, and the sync that carries the news.
+	 *
+	 * ## THE SUFFIX IS PENPOT'S, AND IT COMES FROM THE FRONTEND
+	 *
+	 * `duplicate-project` does NOT name the copy — called bare it returns a
+	 * project with the SAME name as the original, which Penpot allows (§31).
+	 * The `(copy)` a user sees is built by Penpot's dashboard, which reads
+	 * `dashboard.copy-suffix` (`"(copy)"`) and appends it before calling.
+	 * Verified twice: in the frontend bundle, and by duplicating a project on a
+	 * live instance.
+	 *
+	 * So the name is passed here for the same reason the free name is computed in
+	 * {@see iCopyTheFileInto()} — the harness reproduces what the gesture does
+	 * rather than inventing its own, and the scenario then asserts the answer.
+	 *
+	 * "That project" is the one the arrange most recently put on stage, the same
+	 * referent the rename and move steps use.
+	 *
+	 * @When /^someone duplicates that project in Penpot$/
+	 */
+	public function someoneDuplicatesThatProjectInPenpot(): void {
+		$folder = $this->lastDeclaredProject;
+		$id = $this->declaredProjectIds[$folder] ?? '';
+		if ($id === '') {
+			throw new \RuntimeException('no project is on stage to duplicate in Penpot');
+		}
+
+		$this->penpotRpc('duplicate-project', [
+			'project-id' => $id,
+			'name' => basename($folder) . ' (copy)',
+		]);
 		$this->theAdminRunsAPull();
 	}
 
@@ -479,33 +517,46 @@ trait CopySteps {
 	}
 
 	/**
-	 * The name core would pick for a collision: `Original (1).penpot`, then `(2)`.
+	 * The name core would give a copy landing beside something of the same name —
+	 * for a FILE or a FOLDER.
 	 *
 	 * NOT a port of {@see \OCA\PenpotSync\Service\PullService::freeName()} — that one
 	 * resolves a collision the PULL hit, and its numbering is its own. This mirrors
-	 * what the FILES APP does when you copy a file onto its own folder, because
+	 * what the FILES APP does when you copy something onto its own folder, because
 	 * that is the gesture the scenario describes and the `filename` row asserts the
 	 * answer. A COPY over WebDAV adds no suffix by itself; it overwrites. So the
 	 * harness has to place the copy where a person's client would have, and any
-	 * drift between this and core's naming shows up as a failed `filename` row
-	 * rather than being hidden.
+	 * drift between this and core's naming shows up as a failed row rather than
+	 * being hidden.
+	 *
+	 * Generalised from the `.penpot`-only version when project folders started
+	 * being copied: a folder has no extension, and hard-coding one produced
+	 * `My Stuff (2).penpot` for a directory.
+	 *
+	 * FROM 2, BECAUSE THAT IS WHERE CORE STARTS — `Folder::getNonExistingName()`
+	 * sets `$counter = 2` for the first collision, read out of the running server
+	 * rather than remembered. Starting at 1 makes the harness pick a name core
+	 * never would, and the scenario then asserts the harness's own choice.
 	 */
-	private function freeCopyName(string $folder, string $filename): string {
-		$base = preg_replace('/\.penpot$/', '', $filename) ?? $filename;
-		// FROM 2, BECAUSE THAT IS WHERE CORE STARTS. `Folder::getNonExistingName()`
-		// sets `$counter = 2` for the first collision — read out of the running
-		// server, not remembered — so the first copy of `Original.penpot` is
-		// `Original (2).penpot`. Starting at 1 made this helper pick a name core
-		// never would, and the scenario then asserted the harness's own choice.
+	private function freeCopyPath(string $folder, string $name): string {
+		// ONLY `.penpot` COUNTS AS AN EXTENSION, and splitting on the last dot
+		// instead was wrong for exactly the things this method was generalised
+		// for: a folder named `My.Stuff` became `My (2).Stuff`, and `.config`
+		// became ` (2).config`. `.penpot` is the only extension the harness ever
+		// copies, so it is the only one worth knowing about.
+		$ext = str_ends_with($name, self::DESIGN_EXTENSION) ? self::DESIGN_EXTENSION : '';
+		$stem = $ext === '' ? $name : substr($name, 0, -strlen($ext));
+
 		for ($n = 2; $n < 100; $n++) {
-			$candidate = sprintf('%s/%s (%d).penpot', $folder, $base, $n);
+			$candidate = sprintf('%s/%s (%d)%s', $folder, $stem, $n, $ext);
 			if (!$this->davExists($candidate)) {
 				return $candidate;
 			}
 		}
 
-		throw new \RuntimeException("could not find a free name for a copy of '{$filename}' in '{$folder}'");
+		throw new \RuntimeException("could not find a free name for a copy of '{$name}' in '{$folder}'");
 	}
+
 	/**
 	 * When Penpot says a design was created, by id.
 	 *
