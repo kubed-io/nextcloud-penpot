@@ -4032,7 +4032,7 @@ whose far side came BACK, had no scenario asking for it and so was left open. It
 one now, and the pull answers it: before provisioning a folder for a project it has
 no folder for, it looks in the trash for the folder that project already had.
 
-AT THE FOLDER LEVEL, DELIBERATELY. Trashing `Penpot/Doomed` puts ONE thing in the
+AT THE FOLDER LEVEL, DELIBERATELY. Trashing `Penpot/Revived` puts ONE thing in the
 trash — the folder — and the designs under it are nested inside that item rather than
 beside it, which is why `TrashControl` refuses to descend and why there is no trashed
 `Alpha.penpot` for a design-level revive to find. The folder comes back whole, which
@@ -4045,6 +4045,16 @@ The REMAINING half of §6.37 is a single design whose mirror was trashed on its 
 and whose design then came back. That mirror is still re-created beside the trashed
 one rather than matched to it by `penpot_id`. Untidy, not lossy, and no scenario asks
 for it yet.
+
+**THE PROJECT IS CALLED `Revived` AND IT MAY NEVER BE CALLED `Doomed` AGAIN.** This is
+the only scenario in the suite that asserts a path is NOT in the Nextcloud trash, and
+nothing empties that trash between scenarios — so the claim is about the trash of the
+whole LEG, not of this scenario. `projects/delete.feature` runs first in `project-trash`
+and finishes with `Penpot/Doomed` sitting in the trash on purpose (*"is recoverable
+from the Nextcloud trash"*), which the poll here would have found forever. The name is
+the entire fix, and the rule it belongs to is one file wider than the one the Examples
+table taught: **a fixture name is shared across every file in a leg, not just across
+the rows of one table.**
 
 ---
 ## connection/sync-now

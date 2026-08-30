@@ -206,44 +206,64 @@ trait TrashSteps {
 
 	/**
 	 * The team and design id of a design sitting in some mapped team's Penpot
-	 * trash, by NAME.
+	 * trash, for the design the scenario NAMED.
 	 *
-	 * BY NAME AND NOT BY THE CURSOR, because the design's mirror went into the
-	 * trash inside a FOLDER — its path is gone and the cursor points at whatever
-	 * the arrange touched last. The name is what the scenario says, and Penpot's
-	 * own trash listing is the only place it and the id are both still written
-	 * down.
+	 * NOT THE CURSOR, because the design's mirror went into the trash inside a
+	 * FOLDER — its path is gone and the cursor points at whatever the arrange
+	 * touched last. The scenario says which design it means, and the arrange
+	 * already wrote that name's id down.
 	 *
-	 * Every mapped team is searched rather than one guessed, and a name found in
-	 * two of them is a refusal rather than a coin toss — the Backgrounds map three
-	 * teams and deliberately give some of them same-named contents, which is
-	 * exactly how {@see ArrangeSteps::penpotProjectIn()} came to be team-scoped.
+	 * ## THE NAME PICKS THE ID OUT OF THE ARRANGE, IT DOES NOT SEARCH THE TRASH
+	 *
+	 * A trash listing searched by name answers with whatever is in there wearing
+	 * that name, and by the time this runs plenty is. Penpot state accumulates
+	 * across a leg and nothing empties either trash, so every earlier scenario in
+	 * the file has parked its own `Alpha` — the Background alone declares one and
+	 * the next scenario's `emptyMappedFolder()` throws it away. A by-name search
+	 * finds all of them and can only refuse; the first cut of this method did
+	 * exactly that and would have thrown on its own fixture every run.
+	 *
+	 * `declaredDesignIds` is keyed by filename and holds the id the arrange read
+	 * back, which is the one thing that says THIS `Alpha` rather than a leg's worth
+	 * of dead ones. Penpot's listing is then only asked which team holds it, which
+	 * is a question a uuid can answer unambiguously — the same reason
+	 * {@see ArrangeSteps::penpotProjectIn()} is team-scoped, reached from the other
+	 * end.
+	 *
+	 * POLLED, like every other read that follows a mutation here: the design gets
+	 * into Penpot's trash because trashing the FOLDER made the app delete the
+	 * project, and the files of a deleted project are not listed as deleted the
+	 * instant the RPC returns.
 	 *
 	 * @return array{0: string, 1: string} team id, design id
 	 */
 	private function parkedDesignNamed(string $name): array {
-		$found = [];
-		foreach (array_unique($this->mappingTeamIds) as $team) {
-			foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $team]) as $file) {
-				if (($file['name'] ?? null) === $name && ($file['id'] ?? '') !== '') {
-					$found[] = [$team, (string)$file['id']];
+		$id = $this->declaredDesignIds[$name . '.penpot'] ?? '';
+		if ($id === '') {
+			throw new \RuntimeException(
+				"the scenario names the design '{$name}', but no arrange declared one — "
+				. 'say `the following items in the mappings` first so its id is known',
+			);
+		}
+
+		$team = '';
+		$this->until(
+			function () use ($id, &$team): bool {
+				foreach (array_unique($this->mappingTeamIds) as $candidate) {
+					if (in_array($id, $this->penpotTrashIds($candidate), true)) {
+						$team = $candidate;
+
+						return true;
+					}
 				}
-			}
-		}
 
-		if (count($found) > 1) {
-			throw new \RuntimeException(
-				"'{$name}' is in more than one mapped team's Penpot trash, so naming it does not say which one",
-			);
-		}
-		if ($found === []) {
-			throw new \RuntimeException(
-				"no design named '{$name}' is in any mapped team's Penpot trash — "
+				return false;
+			},
+			fn (): string => "the design '{$name}' ({$id}) is in no mapped team's Penpot trash — "
 				. 'trashing its folder was supposed to put it there',
-			);
-		}
+		);
 
-		return $found[0];
+		return [$team, $id];
 	}
 
 	/** The cursor design's team, resolved before the trashing took its path away. */

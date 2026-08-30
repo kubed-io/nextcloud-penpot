@@ -45,14 +45,14 @@ Feature: Restoring a project from the trash
   @in-penpot @gesture
   Scenario: Restore one design of a deleted project in Penpot
     Given the following items in the mappings:
-      | path                        |
-      | /Penpot/Doomed/Alpha.penpot |
-      | /Penpot/Doomed/Beta.penpot  |
-    And "Penpot/Doomed" is in the Nextcloud trash
+      | path                               |
+      | /Penpot/Revived/Alpha.penpot       |
+      | /Penpot/Revived/Left Behind.penpot |
+    And "Penpot/Revived" is in the Nextcloud trash
     When someone restores only "Alpha" in Penpot
-    Then Penpot holds a project named "Doomed"
-    And "Penpot/Doomed" is not in the Nextcloud trash
-    And the design "Beta" is in Penpot's trash
+    Then Penpot holds a project named "Revived"
+    And "Penpot/Revived" is not in the Nextcloud trash
+    And the design "Left Behind" is in Penpot's trash
 
     # Penpot clears a project's deletion when any file inside it comes back, so one
     # design revives the project — and restoring a hundred would say nothing more.

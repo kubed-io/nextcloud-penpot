@@ -774,6 +774,24 @@ the next one.
 > nothing tears it down, so a fixture name is a shared resource. Worth stating once
 > as a rule: **an Examples row may not reuse a name an earlier row leaves standing.**
 
+**And then the rule turned out to be one file too narrow.** Fixing the table left the
+second scenario still calling its project `Doomed` — the name `projects/delete.feature`
+uses, and that file runs FIRST in the same leg and deliberately ends with
+`Penpot/Doomed` sitting in the Nextcloud trash (*"is recoverable from the Nextcloud
+trash"* is its closing assertion). This is the only scenario in the suite that asserts
+a path is NOT in that trash, nothing empties the trash between scenarios, and the
+assertion polls — so it would have hung for its full timeout and failed on a fixture
+every single run, while reading as the revive not working.
+
+Nothing found it but tracing the leg by hand. The three structural guards all passed,
+the unit suite has no view of the trash, and the collision is invisible inside either
+file: each is self-consistent, and the leg is the only place they meet.
+
+> So the rule is wider than two rounds made it look. **A fixture name is shared across
+> every file in a leg, not just across the rows of one table** — and the names that
+> matter most are the ones a scenario asserts the ABSENCE of, because an absence is the
+> one claim another file's leftovers can falsify without touching anything this one did.
+
 ---
 
 ## The plan — reaching the store
