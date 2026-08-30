@@ -39,6 +39,8 @@ isn't one. The build history is in [`saga/`](saga/).
 
 - **A project that comes back in Penpot reclaims its folder** from your Nextcloud trash instead of leaving a second one beside it.
 
+- **Emptying the trash of a project folder destroys its designs in Penpot too**, finishing the delete the way emptying the trash of a single design already did.
+
 
 - **Sync or Link, chosen per mapping.** `sync` keeps the real exported archive, so the folder doubles as a backup you can open offline; `link` keeps a pointer that costs nothing.
 

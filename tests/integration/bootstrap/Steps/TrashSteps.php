@@ -328,8 +328,28 @@ trait TrashSteps {
 	}
 
 	/**
-	 * The purge reached every design the folder held — none of them is recoverable
-	 * from Penpot's trash any more.
+	 * The purge reached every design the folder held — none of them can be brought
+	 * back any more.
+	 *
+	 * ## IT ASKS BY TRYING, BECAUSE THE TRASH LISTING CANNOT ANSWER
+	 *
+	 * The obvious check — "no design it held is left in Penpot's trash" — is not
+	 * writable, and that took a live instance to establish. While the PROJECT is
+	 * deleted, `get-team-deleted-files` lists its files whatever their own state, so
+	 * a design destroyed a second ago sits in that listing beside one that is
+	 * perfectly recoverable. The two are indistinguishable there, and `fileExists()`
+	 * cannot separate them either — `get-file-summary` answers NOT-FOUND for any row
+	 * carrying a `deleted_at`, past or future.
+	 *
+	 * What DOES separate them is whether Penpot will give the design back. So this
+	 * asks it to: one `restore-deleted-team-files` for every id the folder held, and
+	 * then the claim is that none of them became live. A design that was really
+	 * destroyed is a no-op; one that was not comes back AND revives its project,
+	 * which is exactly the failure this is here to catch.
+	 *
+	 * A MUTATING `Then`, named so the reader can see it. Ordinarily that would be a
+	 * gesture smuggled into an assertion; here the mutation IS the question, and the
+	 * step says `can be brought back` rather than `is gone` for that reason.
 	 *
 	 * BY ID, AND EVERY ONE OF THEM. The ids were captured before the folder went
 	 * into the trash ({@see theNamedPathIsInTheNextcloudTrash()}), which is the only
@@ -337,12 +357,9 @@ trait TrashSteps {
 	 * state accumulates across a leg, so an earlier scenario's `Alpha` is sitting in
 	 * the same trash and would answer for this one's.
 	 *
-	 * POLLED, because `permanently-delete-team-files` is a mutate-then-read like
-	 * every other Penpot call here, and the listing it clears is the one being read.
-	 *
-	 * @Then /^no design it held is left in Penpot's trash$/
+	 * @Then /^no design it held can be brought back in Penpot$/
 	 */
-	public function noDesignItHeldIsLeftInPenpotsTrash(): void {
+	public function noDesignItHeldCanBeBroughtBackInPenpot(): void {
 		if ($this->designIdsBeforeGesture === []) {
 			throw new \RuntimeException(
 				'the scenario says "no design it held" but the trash arrange captured none — '
@@ -351,28 +368,22 @@ trait TrashSteps {
 		}
 
 		$team = $this->cursorTeamId();
+		$ids = array_values($this->designIdsBeforeGesture);
+		$this->penpotRpc('restore-deleted-team-files', ['team-id' => $team, 'ids' => $ids]);
+
 		$this->until(
-			function () use ($team): bool {
-				$trashed = $this->penpotTrashIds($team);
-				foreach ($this->designIdsBeforeGesture as $id) {
-					if (in_array($id, $trashed, true)) {
-						return false;
-					}
-				}
-
-				return true;
-			},
-			function () use ($team): string {
-				$trashed = $this->penpotTrashIds($team);
-				$left = [];
+			fn (): bool => array_intersect($ids, $this->penpotLiveDesignIds()) === [],
+			function () use ($ids): string {
+				$back = array_intersect($ids, $this->penpotLiveDesignIds());
+				$named = [];
 				foreach ($this->designIdsBeforeGesture as $path => $id) {
-					if (in_array($id, $trashed, true)) {
-						$left[] = "{$path} ({$id})";
+					if (in_array($id, $back, true)) {
+						$named[] = "{$path} ({$id})";
 					}
 				}
 
-				return 'expected the purge to destroy every design the folder held; still in '
-					. "team {$team}'s trash: " . implode(', ', $left);
+				return 'expected the purge to have destroyed every design the folder held, but '
+					. 'Penpot restored: ' . implode(', ', $named);
 			},
 		);
 	}

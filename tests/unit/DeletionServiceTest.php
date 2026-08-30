@@ -266,6 +266,79 @@ final class DeletionServiceTest extends TestCase {
 		$this->deletions->onPurged($this->file());
 	}
 
+	// ── the folder purge (`projects/purge.feature`) ─────────────────────────
+
+	/**
+	 * Emptying the trash of a whole project finishes the delete for the designs
+	 * that went in with it.
+	 *
+	 * ONE CALL PER TEAM, not one per design: `permanently-delete-team-files` takes
+	 * an array because Penpot expects a set, and reading the trash listing once and
+	 * destroying the intersection IS §C6.11's rule rather than a shortcut past it.
+	 */
+	public function testPurgingAProjectFolderDestroysEveryDesignItHeld(): void {
+		$this->givenStamped();
+		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+
+		$this->client->expects($this->once())->method('permanentlyDeleteFiles')
+			->with(self::TEAM, [self::PENPOT_ID], null);
+
+		$this->deletions->onFolderPurged($this->folder(70, [$this->file()]));
+	}
+
+	/**
+	 * THE DESCENT GOES THROUGH NESTED PROJECTS, because they were purged too.
+	 *
+	 * Core announces one hook for the folder and nothing for anything inside it, so
+	 * a walk that stopped at the first project folder would leave `Team/Sub`'s
+	 * designs in Penpot's trash — the `Penpot/Team/Sub/Deep.penpot` row of the
+	 * scenario, and the reason it is a row at all.
+	 */
+	public function testPurgingAFolderReachesDesignsInNestedProjects(): void {
+		$this->givenStamped();
+		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+
+		$this->client->expects($this->once())->method('permanentlyDeleteFiles')
+			->with(self::TEAM, [self::PENPOT_ID], null);
+
+		$this->deletions->onFolderPurged($this->folder(70, [$this->folder(71, [$this->file()])]));
+	}
+
+	/**
+	 * The same seatbelt the single-file purge has, and it is the entire seatbelt:
+	 * `permanently-delete-team-files` will destroy a LIVE design if handed one
+	 * (§C6.11), so an id absent from the trash listing is an id someone rescued in
+	 * Penpot while the folder sat in the bin.
+	 */
+	public function testPurgingAFolderNeverDestroysADesignThatIsNotInPenpotsTrash(): void {
+		$this->givenStamped();
+		$this->client->method('deletedFiles')->willReturn([]);
+
+		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
+
+		$this->deletions->onFolderPurged($this->folder(70, [$this->file()]));
+	}
+
+	/** A folder of somebody's spreadsheets is a folder Penpot never hears about. */
+	public function testPurgingAFolderOfOrdinaryFilesContactsNobody(): void {
+		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
+
+		$this->deletions->onFolderPurged($this->folder(70, [$this->plainFile()]));
+	}
+
+	/**
+	 * An untracked `.penpot` in there carries no id to destroy, and a purge is the
+	 * one gesture where guessing is unrecoverable.
+	 */
+	public function testPurgingAFolderOfUntrackedDesignsContactsNobody(): void {
+		$this->metadata->method('readFile')->willReturn(null);
+
+		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
+
+		$this->deletions->onFolderPurged($this->folder(70, [$this->file()]));
+	}
+
 	// ── fixtures ────────────────────────────────────────────────────────────
 
 	private function givenStamped(): void {
@@ -281,6 +354,14 @@ final class DeletionServiceTest extends TestCase {
 		return $node;
 	}
 
+	/** Something in the folder that was never Penpot's. */
+	private function plainFile(): File {
+		$node = $this->createMock(File::class);
+		$node->method('getId')->willReturn(31);
+		$node->method('getName')->willReturn('Budget.xlsx');
+
+		return $node;
+	}
 	/**
 	 * Which node ids carry which project id; '' means a plain folder.
 	 *

@@ -912,12 +912,31 @@ was one Penpot would ignore, while logging a successful destroy.
 > commands"* since Chapter 2. Two of this round's three failures were believed log
 > lines, and one of them was mine twice over.
 
-All three purge scenarios are `@blocked` now, and that is the accurate tag rather than
-a softer one: the behaviour is real and it does arrive — Penpot's collector takes the
-deleted project and everything in it on its own schedule — but the harness cannot age
-a deletion by a week to watch it, which is one of the four things `@blocked` exists to
-say. The Penpot→Nextcloud half stays: built, unit-tested, and unarrangeable only
-because the arrange would have to destroy the designs first.
+I blocked all three scenarios on that, and Dr K asked the obvious question — *"you
+just blocked all of those?"* — which was worth asking, because I had measured two
+orderings and not the third.
+
+**The one I skipped is the one that works.** Deleting the DESIGN while its project is
+still live gives it a `deleted_at` of its own, and then the destroy lands and the
+design is unrecoverable. Do it after the project has gone and there is nothing to
+stamp. So the fix is not in the purge at all: `onFolderTrashed()` now calls
+`delete-file` on every design below the folder before `delete-project`, which is also
+the more honest thing for it to have been doing — the designs really are going to
+Penpot's trash, and until now they only LOOKED like it.
+
+> Four runs and a control. The wall was real and it was one call earlier in the
+> gesture than where I went looking for it. Two negative results are not a proof of
+> impossibility, and a question from someone who had not seen the measurements was
+> what turned that over.
+
+**One scenario came back; two stayed blocked, and for a sharper reason.** A destroyed
+design goes on appearing in `get-team-deleted-files` while its project is deleted, so
+the listing shows destroyed and recoverable designs side by side, and `fileExists()`
+cannot separate them either. The gesture scenario can ask by TRYING — issue a restore
+and assert nothing came back, which is a mutating `Then` named so a reader sees it.
+The reap cannot: asking Penpot to restore a design in order to find out whether it is
+gone is not something production may do. So the code is built and unit-tested and its
+two scenarios say `@blocked`, which is the honest place to leave it.
 
 **And `Rename a project in Penpot` needed no code at all.** Its `@todo` said why in
 its own words — *"the team still holds the New project the scenario above made, so

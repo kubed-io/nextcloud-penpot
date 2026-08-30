@@ -195,8 +195,8 @@ All four are excluded from the run, and the distinction is not about whether a
 scenario executes today — it is about **who picks it up**.
 `behat --tags @todo` is the work queue.
 
-Where the suite stands: **114 scenarios, 89 live**, 13 `@todo`, 4 `@unbuilt`,
-8 `@blocked`, 0 `@decision`. That line is orientation and goes stale on any PR
+Where the suite stands: **114 scenarios, 90 live**, 13 `@todo`, 4 `@unbuilt`,
+7 `@blocked`, 0 `@decision`. That line is orientation and goes stale on any PR
 that promotes one — a `grep` over `features/` is the authority.
 
 #### A scenario stops being `@todo` only on a PR that runs it

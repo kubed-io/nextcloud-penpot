@@ -3958,43 +3958,44 @@ still worth something — restoring it would bring the project back, which is wh
 `projects/restore` asserts. So the folder goes only when `isGone()`, which answers
 false whenever it cannot tell, is true of all of them.
 
-### A project's designs cannot be destroyed while the project is deleted
+### A design's own deletion is what makes it destroyable
 
-**THE WALL THIS WHOLE FEATURE SITS BEHIND, measured on a live Penpot rather than
-inferred.** Three runs, one control:
+**THE ORDER OF TWO DELETES DECIDES WHETHER A THIRD ONE WORKS**, measured on a live
+Penpot across four runs:
 
-| the project is | `permanently-delete-team-files` on its file | still restorable |
+| the design got its own `deleted_at` | `permanently-delete-team-files` | restorable after |
 |---|---|---|
-| live | the file leaves `get-team-deleted-files` | no — destroyed |
-| deleted | nothing happens, and the RPC reports success | yes — and the restore revives the project too |
+| never — only its project was deleted | no-op, and the RPC reports success | **yes**, and the restore revives the project |
+| after the project was deleted | no-op, same | **yes** |
+| **before** — while the project was still live | destroys it | **no** |
 
-Ordering does not save it: `delete-file` first, so the file has a `deleted_at` of its
-own, then destroy — still a no-op. Penpot simply will not permanently delete a file
-whose project is deleted.
+So a file is destroyable only if it was deleted in its own right first. That is why
+{@see DeletionService::onFolderTrashed()} now calls `delete-file` on every design
+below the folder BEFORE `delete-project`: deleting the project alone makes its designs
+LOOK deleted — `get-team-deleted-files` lists the files of a deleted project — while
+leaving their own `deleted_at` null, and a file in that state cannot be destroyed
+afterwards by anything.
 
-**AND TRASHING THE FOLDER IS WHAT DELETED THE PROJECT.** `onFolderTrashed()` calls
-`delete-project`, never `delete-file` per design, so the designs never get a
-`deleted_at` of their own and there is no ordering of Nextcloud gestures that reaches
-a destroyable state. A folder-purge branch was written, shipped to a live instance,
-and removed again once this was measured: in every path it had, the id it sent was one
-Penpot would ignore — while logging a successful destroy. A log line claiming work
-that did not happen is worse than no branch at all.
+**AND THE LISTING STILL CANNOT BE READ AS AN ANSWER.** A destroyed design goes on
+appearing in `get-team-deleted-files` for as long as its project is deleted, so the
+trash listing shows destroyed and recoverable designs side by side and
+`fileExists()` cannot separate them either — `get-file-summary` answers NOT-FOUND for
+any row with a `deleted_at`, past or future.
 
-WHAT ACTUALLY HAPPENS TO THEM: Penpot's own collector takes the deleted project and
-everything in it on its schedule. So this is a WINDOW rather than a divergence — the
-same shape as #emptying-a-team-folders-trash-cannot-reach-penpot-and-says-nothing, and
-the same reason it is an edge case rather than data loss.
+Two things follow, and they are the reason this section exists rather than a comment:
 
-WHICH IS WHY ALL THREE SCENARIOS ARE `@blocked` AND NOT `@unbuilt`. The behaviour is
-real and it does arrive; the harness cannot age a deletion by a week to see it, which
-is one of the four things that tag exists to say. The Penpot→Nextcloud half is BUILT
-and unit-tested — a trashed folder whose designs are genuinely gone is reaped — it
-simply cannot be arranged today, because the arrange would have to destroy the designs
-first and that is the very thing Penpot refuses.
+1. **The scenario asks by trying.** `no design it held can be brought back in Penpot`
+   issues a restore and asserts nothing became live, because that is the only
+   observable difference. A mutating `Then`, named so a reader sees it.
+2. **The reap cannot make that call, so its two scenarios stay `@blocked`.** Asking
+   Penpot to restore a design in order to find out whether it is gone is not something
+   production may do, and nothing else distinguishes the two states. The code is built
+   and unit-tested — a trashed folder whose designs are genuinely gone is reaped — it
+   simply cannot decide the question from a deleted project's listing.
 
-<!-- The §C6.11 lesson again, from a third angle: these commands report success
-     without doing the work, so the only proof is re-reading the far side. Two of this
-     round's three failures were believed log lines. -->
+<!-- The §C6.11 lesson from a third angle: these commands report success without doing
+     the work. The first cut of this shipped to a live pod and was reported working on
+     the strength of the app's own log line, with Penpot never asked. -->
 
 ### A purge Penpot cannot be told about still empties the bin
 

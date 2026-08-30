@@ -21,16 +21,14 @@ Feature: Emptying the trash of a project
     # ── RULE: a purge reaches everything the trash gesture put there ──────────
     # notes: ../AGENTS.md#a-purge-reaches-every-project-the-folder-held
 
-  # @blocked — Penpot will not destroy a file whose project is deleted, and trashing
-  # the folder is what deleted it. Measured; the designs go when Penpot's gc runs.
-  @in-nextcloud @gesture @blocked
+  @in-nextcloud @gesture
   Scenario Outline: Purge a trashed project folder
     Given the following items in the mappings:
       | path       |
       | <contents> |
     And "<trashed>" is in the Nextcloud trash
     When I purge "<trashed>" from the trash
-    Then no design it held is left in Penpot's trash
+    Then no design it held can be brought back in Penpot
     And "<trashed>" is gone from the Nextcloud trash
 
     Examples: recursive is recursive — one gesture, however many projects it reached
@@ -41,8 +39,8 @@ Feature: Emptying the trash of a project
     # ── RULE: emptying Penpot's trash finishes the delete from that side ──────
     # notes: ../AGENTS.md#emptying-penpots-trash-reaches-back-into-the-nextcloud-trash
 
-  # @blocked — the arrange cannot destroy the designs for the same reason, so the
-  # pre-state this needs is one no gesture can reach today.
+  # @blocked — with the project deleted, a destroyed design still appears in Penpot's
+  # trash listing, so the reap cannot tell it from a recoverable one. Measured.
   @in-penpot @gesture @blocked
   Scenario: Empty Penpot's trash while a project folder is trashed
     Given the following items in the mappings:
@@ -54,7 +52,7 @@ Feature: Emptying the trash of a project
     Then "Penpot/Emptied" is gone from the Nextcloud trash
 
   # notes: ../AGENTS.md#a-penpot-purge-may-not-destroy-what-was-never-penpots
-  # @blocked — same pre-state, and it would pass for the wrong reason without it:
+  # @blocked — same blind spot, and it would pass for the wrong reason without it:
   # a reap that never runs also leaves the folder standing.
   @in-penpot @gesture @blocked
   Scenario: Empty Penpot's trash where the trashed folder holds other files
