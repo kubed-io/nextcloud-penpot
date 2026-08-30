@@ -9,12 +9,12 @@ questions are answered below.
 
 **Where the work is right now.** Chapters 1 (the API survey), 2 (the build) and
 3 (building to the spec) are CLOSED. The app works end to end and is deployed:
-both directions of sync, every design and project verb, 90 live scenarios run
+both directions of sync, every design and project verb, 87 live scenarios run
 against a real Nextcloud and a real Penpot on every push.
 [Chapter 4](saga/Chapter_4_Open_For_Business.md) is open, and it is about the
 outward-facing surfaces rather than the code.
 
-**The queue is named, not hidden** — 13 `@todo`, 4 `@unbuilt`, 7 `@blocked`, each
+**The queue is named, not hidden** — 13 `@todo`, 4 `@unbuilt`, 10 `@blocked`, each
 saying what it wants. Read [features/README.md](features/README.md) for what those
 tags oblige. The one rule: **a scenario stops being `@todo` only on a PR that runs
 it** — and the corollary, learned twice: a tag is a claim somebody made once and
@@ -37,12 +37,12 @@ itself is the authoritative detail.
 
 | Path | What lives here |
 |---|---|
-| [README.md](README.md) | User-facing docs: what the app is meant to do, the read-only architecture, auth setup. **Start here for "how does it work?"** |
+| [README.md](README.md) | User-facing docs: what the app does, the sync and link modes, auth setup. **Start here for "how does it work?"** |
 | [CHANGELOG.md](CHANGELOG.md) | Keep-a-Changelog format. Every PR adds a line under `## [Unreleased]`. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | This file — process, conventions, dev loop. |
 | [SECURITY.md](SECURITY.md) | How to report vulnerabilities. Read before filing a "security" issue publicly. |
 | [AGENTS.md](AGENTS.md) | Cold-start orientation for AI coding agents. |
-| [saga/](saga/) | Long-form design narrative, and the only place history lives. Ch.1 the API survey and the architecture, Ch.2 the build, Ch.3 the current one. **The "why" behind everything else.** |
+| [saga/](saga/) | Long-form design narrative, and the only place history lives. Ch.1 the API survey and the architecture, Ch.2 the build, Ch.3 the build to spec, Ch.4 the current one. **The "why" behind everything else.** |
 | [features/](features/) | **The specification.** Gherkin, written before the code — see [features/README.md](features/README.md). |
 | [appinfo/](appinfo/) | Nextcloud app metadata — `info.xml` (incl. the mimetype repair steps) and `routes.php`. |
 | [lib/](lib/) | PHP backend (`OCA\PenpotSync`): `Service/` holds the behaviour, `Listener/` the gesture adapters, plus `Command/`, `Controller/`, `Settings/`, `DAV/`, `BackgroundJob/`, `Migration/`. |
@@ -52,13 +52,14 @@ itself is the authoritative detail.
 | [package.json](package.json) | JS deps + scripts (`build`, `dev`, `watch`, `test`). Node version pinned in `.nvmrc`. |
 | [psalm.xml](psalm.xml), [.php-cs-fixer.dist.php](.php-cs-fixer.dist.php) | Static analysis + coding standard config, adapted from the sibling apps. |
 | [.devcontainer/](.devcontainer/) | One-shot dev environment (PHP 8.3 + Node + GH CLI + docker-out-of-docker). |
-| [.github/workflows/](.github/workflows/) | `pr.yml` (PR housekeeping), `tests.yml` (build + unit), `quality.yml` (audit + lint + Psalm), `publish.yml` (release tarball), `package.yml`, `copilot-setup-steps.yml`. |
+| [.github/workflows/](.github/workflows/) | `pr.yml` (PR housekeeping), `tests.yml` (build + unit), `quality.yml` (audit + lint + Psalm), `integration.yml` (the eleven-leg Behat matrix), `publish.yml` (release tarball), `package.yml`, `copilot-setup-steps.yml`. |
 | [vite.config.js](vite.config.js) | Frontend build config, targeting `src/files.js`. |
 
-What is still missing, and roughly in the order it is wanted: personal projects
-(a user's own Penpot team at their home root), the mode pills, and tracking a
-copied project folder. [Chapter 3's close](saga/Chapter_3_Building_To_Plan.md#chapter-3--where-it-stands-closed)
-is the honest inventory.
+What is still missing: personal projects (a user's own Penpot team at their home
+root). Tracking a copied project folder shipped, and the mode pills were cancelled
+rather than deferred (§D4.14). [features/README.md](features/README.md) carries the
+live inventory; [Chapter 3's close](saga/Chapter_3_Building_To_Plan.md#chapter-3--where-it-stands-closed)
+is how it got there — a snapshot of that moment, not a current count.
 
 ---
 
@@ -88,18 +89,24 @@ before inventing.
 
 ### Don't silently resolve an open fork
 
-Several structural questions in [saga/Chapter_1_First_Contact.md](saga/Chapter_1_First_Contact.md)
-are explicitly **raised, not decided** (§6.2, §6.7, §6.9, §6.10). If your work
-touches one of them, say so in the PR description and either keep both options
-open or get explicit sign-off on which one you're picking — don't quietly bake in
-an assumption.
+Some structural questions in [saga/Chapter_1_First_Contact.md](saga/Chapter_1_First_Contact.md)
+are explicitly **raised, not decided**. If your work touches one, say so in the PR
+description and either keep both options open or get explicit sign-off on which
+one you are picking — don't quietly bake in an assumption.
+
+This paragraph used to name §6.2, §6.7, §6.9 and §6.10, and all four have since
+closed — §6.2 by §6.54, §6.9 by §6.18's inline banner, §6.7 and §6.10 by shipping.
+Which is the lesson: [AGENTS.md](AGENTS.md#architectural-non-negotiables) holds the
+current pair (webhook delivery, export weight), and a second copy of a fork list in
+a second document is a fork list that rots.
 
 ### Validate on a real Nextcloud instance
 
 CI green is necessary, not sufficient. **Every change must be tried by a human on
-a real Nextcloud instance with the change applied**, once there's anything
-installable. Until then (pre-`lib/`), this mostly applies to `appinfo/info.xml`
-changes and anything else that could break app installation.
+a real Nextcloud instance with the change applied.** The eleven-leg Behat matrix
+runs against a real Nextcloud and a real Penpot and catches a great deal, but it
+drives WebDAV and `occ` — it has no browser, so nothing it does proves the Files
+UI, the admin panels or the file action still work.
 
 ### When AI writes code, validate harder
 

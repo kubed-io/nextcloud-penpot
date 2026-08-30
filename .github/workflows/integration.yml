@@ -7,23 +7,18 @@ name: 🔗 Integration
 # kubed-io/nextcloud-n8n. Behat's BUILT-IN junit formatter emits JUnit XML, which
 # the same EnricoMi reporter the unit suite uses turns into a sticky PR comment.
 #
-# SCOPE RIGHT NOW: 42 OF 113 SCENARIO HEADERS, 102 executed scenarios — spread
-# over ELEVEN suite legs, split by verb (see behat.dist.yml). The connection, the
-# app lifecycle and the mapping came back first (they had been green before the
-# spec rewrite collapsed everything to @todo); the design and project verbs
-# followed once the arrange spine in tests/integration/bootstrap/Steps/ArrangeSteps.php
-# was built, which is what the rewritten Background needs. The project leg then
-# nearly doubled when §C6.38 reversed the rule that pinned a project folder inside
-# its team folder — those scenarios were @unbuilt, and became code. The design leg
-# then nearly doubled too, on two headers: one was a missing test, and the other
-# was held off the run by a defect in the SPEC rather than the app. `behat --tags
-# @todo` is the remaining queue of 47. See behat.dist.yml for what the other three
-# status tags mean, and the saga's Chapter 3 for the order the queue is worked in.
+# SCOPE: eleven suite legs, split by verb. behat.dist.yml holds the leg list and
+# the live counts; the saga holds how they got that way. Deliberately NOT repeated
+# here — this header carried "42 OF 113 SCENARIO HEADERS, 102 executed" and "a
+# remaining queue of 47" long after all three numbers were wrong, because a count
+# in a fourth file is a count nobody thinks to update. `behat --tags @todo` is the
+# queue; behat.dist.yml says what the other three status tags mean.
 #
 # A ZERO-SCENARIO LEG IS STILL A REPORTING LEG, which is what keeps the guards
 # below honest: Behat fires its suite events even when the filter matches nothing,
 # so the junit formatter writes <testsuite tests="0"/>, the upload's
-# if-no-files-found still has a file, and "Every leg is present" still counts four.
+# if-no-files-found still has a file, and "Every leg is present" still counts every
+# leg (it compares directories against files rather than against a fixed number).
 # So this stays green on an empty suite WITHOUT either guard being loosened — they
 # remain armed for the silent-overwrite bug they were built for. No leg depends on
 # that today; it stays because the next spec-first feature file will empty one.
@@ -134,7 +129,7 @@ jobs:
 
     # ── ONE AXIS THAT DIVIDES, AND A VERSION AXIS THAT REPEATS ───────────────
     #
-    #   suite            DIVIDES the scenarios. Four legs each run a quarter, in
+    #   suite            DIVIDES the scenarios. Eleven legs each run a slice, in
     #                    parallel, so wall time drops.
     #   server-versions  REPEATS them, and is decided by the trigger (above): one
     #                    Nextcloud on a PR, the whole advertised range on main.
@@ -146,10 +141,10 @@ jobs:
     # spec says which folder it wants instead of the run deciding for it.
     #
     # Net effect measured on this repo: ~95s fixed setup + ~320s Behat, so one
-    # leg is ~7m and four are ~95+80 = ~3m.
+    # leg would be ~7m; split eleven ways the slowest is ~95s setup + its own slice.
     #
     # WHY THE SUITE AXIS IS FILENAME-BASED, not tag-based: measured over the live
-    # scenarios, 28 carry no channel tag and 32 no origin tag, so a tag partition
+    # scenarios, 4 carry no channel tag and 17 no origin tag, so a tag partition
     # LEAKS — those scenarios would match no leg and silently stop running, and
     # every leg would still be green. `bin/check-suites.sh` (quality workflow)
     # enforces that features/ is partitioned exactly.
@@ -340,7 +335,7 @@ jobs:
     # WORSE HERE THAN IN EITHER SIBLING, because of the decision directly above.
     # Grafana installs groupfolders only to serve the scenarios that NAME a Team
     # Folder; this suite installs it on every leg unconditionally, so 100% of legs
-    # take the dependency — four on a PR, twelve on a merge to main.
+    # take the dependency — eleven on a PR, thirty-three on a merge to main.
     #
     # AND RIGHT NOW IT BUYS NOTHING AT ALL, which is the sharpest version of the
     # argument: the queue is empty (see the header), so every leg currently reaches
@@ -614,9 +609,9 @@ jobs:
         tail -30 data/nextcloud.log 2>/dev/null || echo "(no log)"
       working-directory: ${{ github.workspace }}
 
-    # ONE RESULT FOR THE WHOLE RUN, NOT SEVEN. Each leg only UPLOADS its JUnit
+    # ONE RESULT FOR THE WHOLE RUN, NOT ELEVEN. Each leg only UPLOADS its JUnit
     # XML; the publish job below collects them and reports once. Publishing per
-    # leg produced seven checks and seven PR comment updates for one test run,
+    # leg produced one check and one PR comment update per leg for one test run,
     # which buries the answer to "did the suite pass?" under the mechanics of how
     # it was split.
     #
@@ -651,7 +646,7 @@ jobs:
     # NO `merge-multiple`, AND THAT IS THE WHOLE FIX.
     #
     # Behat names its report after the SUITE, not the leg — every leg writes
-    # `<suite>.xml`. `merge-multiple: true` flattens all seven artifacts into one
+    # `<suite>.xml`. `merge-multiple: true` flattens all eleven artifacts into one
     # directory, so `design/plain` and `design/team` both land on `design.xml` and
     # the second download silently overwrites the first. Measured on the run that
     # introduced this job: 7 artifacts in, 4 files out, 173 tests reported as 97.
@@ -662,7 +657,7 @@ jobs:
     # reporter must never have.
     #
     # Left off, each artifact lands in `junit/<artifact-name>/`, the names are
-    # unique by construction, and the glob below picks up all seven.
+    # unique by construction, and the glob below picks up all eleven.
     - name: Download every leg's results
       uses: actions/download-artifact@v8
       with:

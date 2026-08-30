@@ -30,7 +30,9 @@ default:
   # across eleven legs (admin 31, motion 22, trash 18, copying 17,
   # project-trash 17, project-motion 17, project-copy 15, projects 14,
   # authoring 10, naming 10, core 4). The queue behind that is 13 @todo,
-  # 4 @unbuilt, 6 @blocked and no @decision.
+  # 4 @unbuilt, 10 @blocked and no @decision — the @blocked count includes the
+  # FEATURE-level tag on designs/open-with.feature, which covers all five of its
+  # scenarios and is what every hand-count of this number has missed.
   #
   # THESE NUMBERS GO STALE AND THE SAGA IS WHERE THEY BELONG. This block carried a
   # paragraph per round for eight rounds — every one of them true when written and
@@ -60,30 +62,6 @@ default:
     filters:
       tags: '~@todo&&~@unbuilt&&~@blocked&&~@decision'
 
-  # FOUR SUITES, AND THEY ARE A PARTITION — every feature file belongs to exactly
-  # one. `bin/check-suites.sh` enforces that mechanically, because the failure
-  # mode of getting it wrong is SILENT: a file in no suite is simply never run,
-  # and a green build says so confidently.
-  #
-  # Running plain `behat` runs all four in sequence, which is exactly today's
-  # coverage — the suites are inert until something selects one. That is
-  # deliberate: it lets CI prove the partition covers everything BEFORE the
-  # workflow starts depending on it (`behat --suite=admin` per matrix leg).
-  #
-  # THE AXIS IS THE FILENAME, NOT A TAG. Tags looked like the obvious split and
-  # are the wrong tool here: measured over the live scenarios, 28 carry no
-  # channel tag and 32 no origin tag, so any tag partition leaks — those
-  # scenarios would match no leg and quietly stop running. A path partition
-  # cannot leak, because `ls features/*.feature` minus the union must be empty
-  # and that is one line to check.
-  #
-  #   admin    the settings panel and everything reached from it. Grouped because
-  #            admin work is a different SESSION from user work, not merely a
-  #            different tag — these never interleave with the gesture suites.
-  #   design   the six verbs, as they apply to a design (a .penpot file).
-  #   project  the same six verbs, as they apply to a project (a folder).
-  #   core     everything that is not a verb on one of those two nouns: the pull
-  #            itself, identity/membership, modes, and the app lifecycle.
   # ── THE SUITE AXIS IS THE VERB, AND IT IS A PARTITION ────────────────────
   #
   # Eleven legs each run a slice of features/, in parallel, and every feature file
