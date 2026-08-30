@@ -794,16 +794,25 @@ The destination decides, exactly as it does for a design. The copy is created in
 destination team and never re-homed afterwards, so there is no window in which it
 belongs to the team it came from.
 
-### Penpot projects do not nest
+### Penpot projects do not nest — but folders do, and the NAME carries it
 
 THE NUANCE THAT DOES NOT PORT FROM THE SIBLINGS. Grafana folders nest; Penpot
-projects are flat under a team. So a project folder copied UNDER another project — or
-under a plain folder — cannot be a project, and arrives as an ordinary folder with no
-project id.
+projects are flat under a team. Nextcloud folders nest and people expect them
+to, so the two are reconciled in the NAME rather than in the structure: a folder
+at `Penpot/foo/bar` is the project *named* `foo/bar`, which is one flat project
+in Penpot and a nested tree here.
 
-Its designs are not lost: they resolve by the same nearest-project-ancestor rule
-create.feature states, so they join the project above, or the team's Drafts when
-there is none.
+**THERE IS NO "CANNOT HOLD A PROJECT" PLACE inside a mapping.** A folder below a
+project is promoted like any other — see *A folder is a project when a design is
+in it*, which spells out that there is no "only a folder with no project above
+it" carve-out, and why: two folders a user cannot tell apart must not behave
+differently on a marker nobody can see.
+
+<!-- That carve-out existed, shipped, and was reported by a live instance;
+     §C6.38 reversed it. `Copy a project under something that cannot hold one`
+     outlived the reversal asserting the removed behaviour, and was deleted
+     rather than rewritten — its Drafts row could only be true under the rule
+     that had gone. -->
 
 ### A copy never changes a project's mode
 

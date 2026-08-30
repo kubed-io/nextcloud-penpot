@@ -274,26 +274,6 @@ trait ProjectFolderSteps {
 	}
 
 	/**
-	 * Where a design ended up, named rather than cursored.
-	 *
-	 * The `Drafts` row is the point of the scenario using this: a design whose
-	 * folder cannot be a project still has to land somewhere, and Drafts is where.
-	 *
-	 * @Then /^the design "([^"]*)" is in the "([^"]*)" Penpot project$/
-	 */
-	public function theDesignIsInThePenpotProject(string $design, string $project): void {
-		$this->until(
-			fn (): bool => in_array($design, $this->penpotFileNamesIn($project), true),
-			fn (): string => sprintf(
-				"expected the design '%s' in the Penpot project '%s'; it holds: %s",
-				$design,
-				$project,
-				implode(', ', $this->penpotFileNamesIn($project)) ?: '(nothing)',
-			),
-		);
-	}
-
-	/**
 	 * Where THE design — the cursor's — ended up, asserted by id.
 	 *
 	 * The named sibling above matches on NAME, which is right for a scenario that

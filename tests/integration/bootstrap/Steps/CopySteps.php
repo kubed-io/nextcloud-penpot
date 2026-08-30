@@ -283,6 +283,26 @@ trait CopySteps {
 	}
 
 	/**
+	 * The folder twin of {@see iTryToCopyTheFileInto()} — a copy expected to be
+	 * REFUSED, named by its destination folder.
+	 *
+	 * NO FREE-NAME SEARCH, unlike {@see \OCA\PenpotSync\Tests\Integration\Steps\GestureSteps::iCopyInto()}:
+	 * a refusal never lands, so there is nothing to collide with, and resolving a
+	 * name here would have the harness assert a path the gesture was never going
+	 * to create.
+	 *
+	 * @When /^I try to copy "([^"]*)" into "([^"]*)"$/
+	 */
+	public function iTryToCopyInto(string $path, string $folder): void {
+		$folder = trim($folder, '/');
+		$this->childrenBeforeCopy = $this->davChildren($folder);
+
+		$result = $this->davCopyResult($path, $folder . '/' . basename($path));
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+	}
+
+	/**
 	 * @Then /^the copy is refused with a message$/
 	 */
 	public function theCopyIsRefusedWithAMessage(): void {

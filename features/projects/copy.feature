@@ -91,33 +91,6 @@ Feature: Copying a Penpot project folder
       | /Shared/My Stuff/Alpha.penpot | a new id        |
     And the "My Stuff" Penpot project is in the "Second Team" team
 
-    # ── RULE: a project has no project above it ──────────────────────────────
-    # notes: ../AGENTS.md#penpot-projects-do-not-nest
-
-  # @unbuilt — same wall again: the arriving designs carry no ids, so nothing
-  # decides which project they land in.
-  @in-nextcloud @gesture @unbuilt
-  Scenario Outline: Copy a project under something that cannot hold one
-    Given the following items in the mappings:
-      | path                          | kind    |
-      | /Penpot/Landing               | project |
-      | /Penpot/My Stuff              | project |
-      | /Penpot/My Stuff/Alpha.penpot | design  |
-    When I copy "Penpot/My Stuff" to "<destination>/My Stuff"
-    Then the mappings hold:
-      | path                                 | identity |
-      | /<destination>/My Stuff              | absent   |
-      | /<destination>/My Stuff/Alpha.penpot | a new id |
-    And the design "Alpha" is in the "<lands in>" Penpot project
-
-    Examples: Penpot has no sub-project, so the nearest project above decides
-      | destination    | lands in |
-      | Penpot/Landing | Landing  |
-      | Penpot/Clients | Drafts   |
-
-    # The folder arrives as a plain folder because there is nowhere in Penpot to put
-    # a project inside a project. Its designs still land somewhere, by the usual rule.
-
     # ── RULE: a copy outside every mapping is an ordinary folder ──────────────
 
   @in-nextcloud @gesture
@@ -142,15 +115,15 @@ Feature: Copying a Penpot project folder
     # ── RULE: a link is read-only, so a copy neither enters nor leaves one ────
     # notes: ../AGENTS.md#a-copy-never-changes-a-projects-mode
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Copying a link project, or into a link team, is refused
     Given the following items in the mappings:
       | path                            | kind    |
       | /<source>/My Stuff              | project |
       | /<source>/My Stuff/Alpha.penpot | design  |
-    When I try to copy "<source>/My Stuff" to "<destination>/My Stuff copy"
+    When I try to copy "<source>/My Stuff" into "<destination>"
     Then the copy is refused with a message
-    And there is no folder at "<destination>/My Stuff copy"
+    And there is no folder at "<destination>/My Stuff"
 
     Examples: a link project is read-only in Nextcloud, and there is nowhere it may go
       | source   | destination |
