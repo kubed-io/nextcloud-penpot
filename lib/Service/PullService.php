@@ -570,11 +570,16 @@ final class PullService {
 	 * simply falls through to making a new folder, as it always did.
 	 */
 	private function revivedProjectFolder(string $projectId, Folder $root): ?Folder {
-		$trashed = $this->trashedProjectFolders()[$projectId] ?? null;
+		$index = $this->trashedProjectFolders();
+		$trashed = $index[$projectId] ?? null;
 		if ($trashed === null) {
 			return null;
 		}
-		unset($this->trashedProjectFolders[$projectId]);
+		// SPENT, whether or not the restore below works: a second project must not be
+		// handed the same folder. Written back through the local rather than unset on
+		// the property, which Psalm reads as nullable at this point and is right to.
+		unset($index[$projectId]);
+		$this->trashedProjectFolders = $index;
 
 		try {
 			$trashed->restore();

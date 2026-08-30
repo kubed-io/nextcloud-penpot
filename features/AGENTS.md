@@ -4005,11 +4005,26 @@ stranded in the old one. The mapping root is carved out for the same reason
 `onFolderTrashed()` carves it out: a walk that started there would reach every
 project in the team at once.
 
-EVERY EXAMPLES ROW NAMES ITS OWN PROJECT — `Parked`, `Purged`, `Empty` — and that is
-not decoration. Penpot state accumulates across a leg, so a row that left a project
+EVERY EXAMPLES ROW NAMES ITS OWN PROJECT — `Parked` and `Empty` — and that is not
+decoration. Penpot state accumulates across a leg, so a row that left a project
 standing would hand the next row a folder that is not in the state its `held` clause
-claims. The `no designs at all` row is the one that would have broken: the row above
-it finishes by importing a design into the very folder it names.
+claims.
+
+**THERE IS NO `Penpot has purged` ROW, AND THE REASON IS §C6.11's.** It was written,
+it ran, and it failed — the folder came back wearing its ORIGINAL id, because the
+design the arrange had destroyed was recoverable again by the time the restore
+happened. Destroying a design only stamps `deleted_at` to now and leaves the row
+(#penpots-destroy-leaves-the-row-behind), so the `delete-project` that trashing the
+folder triggers re-stamps it a week out and puts it straight back in
+`get-team-deleted-files`. The app then restored it, which revived the project, which
+is the correct answer to the state Penpot was actually in.
+
+So the row asked for something the gesture under test destroys on its way past: the
+purge has to precede the trash, and the trash undoes the purge. It is the same wall
+`Trash a design that is already gone from Penpot` sits behind as `@blocked` — *there
+is no id Penpot will report as gone rather than deleted* — and the rule loses
+nothing, because `no designs at all` reaches the same end state by a road that holds
+still.
 
 ### Restoring one design brings its project with it
 

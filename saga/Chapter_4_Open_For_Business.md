@@ -792,6 +792,42 @@ file: each is self-consistent, and the leg is the only place they meet.
 > matter most are the ones a scenario asserts the ABSENCE of, because an absence is the
 > one claim another file's leftovers can falsify without touching anything this one did.
 
+**Then CI found the two things reading could not.** Both legs of the feature failed,
+and the app's own log said why in one line each — which is the argument for logging
+the decision rather than only the outcome.
+
+**A restore needs somebody to be logged in, and a pull is nobody.** `Trashbin::restore()`
+opens with `OC_User::getUser()` and throws *"Tried to restore a file while not logged
+in"* when it answers false, and that reads the `user_id` SESSION key, which nothing
+sets under `occ`. Everything else in the revive worked perfectly — the pull saw the
+project come back, found the trashed folder by its project id, and called restore —
+and then the one call that mattered threw. The fallback caught it and made a new
+folder, exactly as designed, so the failure surfaced as *"the folder is still in the
+trash"* rather than as an exception.
+
+> Every other trash operation in this app got away without a session: listing and
+> `removeItem()` take the user or the item as arguments. Only the restore reaches for
+> ambient state, and only from the one caller that has none.
+
+**And a design Penpot has "permanently deleted" is restorable again the moment
+anything touches it.** The `Penpot has purged` Examples row failed with the folder
+wearing its ORIGINAL id, and the log said `restore: the design came back on a second
+call` — layer 2, on a design the arrange had destroyed. §C6.11 already recorded the
+mechanism from the other side: `permanently-delete-team-files` stamps `deleted_at` to
+now and leaves the row, so anything that re-stamps it puts the design back in the
+trash listing. Here the thing that re-stamps it is `delete-project` — which is what
+trashing the folder makes the app do, and therefore part of the gesture under test.
+
+> The purge has to happen before the trash, and the trash undoes the purge. The state
+> cannot be held still, which is the same wall `Trash a design that is already gone
+> from Penpot` sits behind as `@blocked`. The row is gone; `no designs at all` proves
+> the same branch by a road that holds still.
+
+Three status tags wrong in three rounds, and now two spec rows describing states the
+system will not hold. The common thread is the same one: **a claim written down once
+and never re-measured**, whether it is a tag, an Examples row, or an API's docstring
+promising an immediate delete.
+
 ---
 
 ## The plan — reaching the store

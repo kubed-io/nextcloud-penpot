@@ -33,7 +33,6 @@ Feature: Restoring a project from the trash
       | folder | project | held                                    | identity        |
       | Penpot | Parked  | holding designs still in Penpot's trash | the original id |
       | Shared | Parked  | holding designs still in Penpot's trash | the original id |
-      | Penpot | Purged  | holding designs Penpot has purged       | a new id        |
       | Penpot | Empty   | holding no designs at all               | a new id        |
 
     # A project comes back only through a design of its own — Penpot has no

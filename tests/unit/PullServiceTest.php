@@ -26,6 +26,7 @@ use OCA\PenpotSync\Service\TrashReconcileService;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\IUserManager;
+use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Log\NullLogger;
@@ -123,6 +124,7 @@ final class PullServiceTest extends TestCase {
 			new TrashControl(
 				$this->createStub(ContainerInterface::class),
 				$this->createStub(IUserManager::class),
+				$this->createStub(IUserSession::class),
 				new NullLogger(),
 			),
 			// The trash pass is covered on its own in TrashReconcileServiceTest; here

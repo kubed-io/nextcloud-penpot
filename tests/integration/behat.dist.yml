@@ -26,9 +26,9 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 88 OF 114 SCENARIO HEADERS RUN — 176 executed once Examples rows are counted,
+  # 88 OF 114 SCENARIO HEADERS RUN — 175 executed once Examples rows are counted,
   # across eleven legs (admin 31, motion 22, trash 18, copying 17, project-motion
-  # 17, projects 14, project-trash 14, project-copy 12, core 11, authoring 10,
+  # 17, projects 14, project-trash 13, project-copy 12, core 11, authoring 10,
   # naming 10). The queue behind that is 17 @todo, 4 @unbuilt, 5 @blocked and
   # no @decision.
   #

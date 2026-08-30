@@ -326,23 +326,26 @@ trait ProjectFolderSteps {
 	private string $createdProjectTeam = '';
 
 	/**
-	 * A project folder standing in a mapping, in one of the three states that
-	 * decide whether Penpot can ever give its project back
-	 * (`projects/restore.feature`).
+	 * A project folder standing in a mapping, in one of the two states that decide
+	 * whether Penpot can ever give its project back (`projects/restore.feature`).
 	 *
-	 * ## THE THREE STATES ARE ABOUT PENPOT'S TRASH, NOT NEXTCLOUD'S
+	 * ## THE STATE IS ABOUT PENPOT'S TRASH, NOT NEXTCLOUD'S
 	 *
 	 * Penpot has no `restore-project` (§C6.19), so a deleted project only comes
 	 * back through a design of its own being restored. What is in the team's trash
-	 * at the moment of the restore is therefore the whole question, and these are
-	 * the three answers:
+	 * at the moment of the restore is therefore the whole question:
 	 *
 	 *   still in Penpot's trash  a design exists and is recoverable → the project
 	 *                            comes back wearing the id it always had
-	 *   Penpot has purged        a design exists in Nextcloud but nothing in Penpot
-	 *                            answers to it → nothing can revive the project
 	 *   no designs at all        the mirror of an EMPTY Penpot project, which is a
 	 *                            real and ordinary thing to throw away
+	 *
+	 * A THIRD STATE WAS SPECIFIED AND CANNOT BE REACHED: a folder whose designs
+	 * Penpot has PURGED. Destroying a design only stamps `deleted_at` to now and
+	 * leaves the row (features/AGENTS.md#penpots-destroy-leaves-the-row-behind), so
+	 * the `delete-project` that trashing the folder triggers re-stamps it a week out
+	 * and the "purged" design is restorable again. Measured in CI: the folder came
+	 * back through it, wearing its original id.
 	 *
 	 * Note what this step does NOT do: it never deletes the project. The `is in the
 	 * Nextcloud trash` line after it does that, by trashing the folder and letting
@@ -357,11 +360,11 @@ trait ProjectFolderSteps {
 	 * The Examples give every row its own project name anyway — see the feature —
 	 * but a `Given` that only works once is a trap for the next scenario.
 	 *
-	 * ONE PATTERN, THREE SENTENCES, and the clause is captured rather than split
-	 * across three definitions: the three states differ only in how the fixture is
-	 * seeded, and reading them side by side is the point.
+	 * ONE PATTERN, TWO SENTENCES, and the clause is captured rather than split
+	 * across two definitions: the states differ only in how the fixture is seeded,
+	 * and reading them side by side is the point.
 	 *
-	 * @Given /^a project folder "([^"]*)" (holding designs still in Penpot's trash|holding designs Penpot has purged|holding no designs at all)$/
+	 * @Given /^a project folder "([^"]*)" (holding designs still in Penpot's trash|holding no designs at all)$/
 	 */
 	public function aProjectFolderHolding(string $path, string $held): void {
 		$path = ltrim($path, '/');
@@ -376,12 +379,7 @@ trait ProjectFolderSteps {
 			return;
 		}
 
-		$design = $path . '/Sketch.penpot';
-		$this->declareDesign($design);
-
-		if ($held === 'holding designs Penpot has purged') {
-			$this->purgeInPenpot($path, $design);
-		}
+		$this->declareDesign($path . '/Sketch.penpot');
 	}
 
 	/**
@@ -401,43 +399,6 @@ trait ProjectFolderSteps {
 				implode(', ', array_map('basename', $held)),
 			));
 		}
-	}
-
-	/**
-	 * Destroy the design in Penpot while its mirror stays where it is.
-	 *
-	 * TWO CALLS, BECAUSE PENPOT'S TRASH IS THE ONLY DOOR to a permanent delete:
-	 * `permanently-delete-team-files` operates on what is already deleted. No pull
-	 * runs between them and none may — a pull here would see a design Penpot no
-	 * longer names and prune the mirror, arranging away the very file whose
-	 * archive the restore is supposed to import.
-	 */
-	private function purgeInPenpot(string $folder, string $design): void {
-		$team = $this->teamIdForPath($folder);
-		$id = $this->davReadMetadata($design, 'penpot_id') ?? '';
-		if ($id === '' || $team === '') {
-			throw new \RuntimeException("cannot purge '{$design}' in Penpot: no design id or no team for it");
-		}
-
-		$this->penpotRpc('delete-file', ['id' => $id]);
-		$this->until(
-			fn (): bool => in_array($id, $this->penpotTrashIds($team), true),
-			fn (): string => "the design {$id} never reached team {$team}'s trash, so it cannot be destroyed from there",
-		);
-
-		// TWICE IF NEED BE, AND CONFIRMED BY RE-READING — §6.49's shape, and the
-		// same loop {@see TrashSteps::someonePermanentlyDeletesTheCursoredDesignInPenpot()}
-		// runs. Success is not proof of success on these commands.
-		for ($attempt = 0; $attempt < 3; $attempt++) {
-			$this->penpotRpc('permanently-delete-team-files', ['team-id' => $team, 'ids' => [$id]]);
-			if (!in_array($id, $this->penpotTrashIds($team), true)) {
-				return;
-			}
-		}
-
-		throw new \RuntimeException(
-			"Penpot accepted permanently-delete-team-files for {$id} three times and it is still in team {$team}'s trash",
-		);
 	}
 
 	/**
