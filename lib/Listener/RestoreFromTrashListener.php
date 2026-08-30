@@ -17,13 +17,16 @@ use OCA\PenpotSync\Service\SyncGuard;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
 /**
- * Routes a mirror coming back out of the Nextcloud trash to
- * {@see RestoreService} (`designs/delete.feature`).
+ * Routes a mirror — or a whole project folder — coming back out of the Nextcloud
+ * trash to {@see RestoreService} (`designs/delete.feature`,
+ * `projects/restore.feature`).
  *
  * ## THIS ONE *IS* A TYPED EVENT — UNLIKE ITS OPPOSITE NUMBER
  *
@@ -59,6 +62,12 @@ final class RestoreFromTrashListener implements IEventListener {
 	 * Recording in both paths and skipping a repeat makes the pair idempotent
 	 * regardless of which arrives first — and the order is not ours to rely on.
 	 *
+	 * Folders share the map with files. Their ids come from the same sequence, so
+	 * they cannot collide, and a restored folder is dispatched twice for exactly
+	 * the same reason a file is — while costing far more to handle twice, since the
+	 * second pass would make a duplicate project for every folder Penpot could not
+	 * revive.
+	 *
 	 * @var array<int, true>
 	 */
 	private array $restored = [];
@@ -75,10 +84,10 @@ final class RestoreFromTrashListener implements IEventListener {
 	}
 
 	/**
-	 * True when this file was already restored in this request — and records it
+	 * True when this node was already restored in this request — and records it
 	 * when it was not. See {@see $restored} for why one gesture can arrive twice.
 	 */
-	private function alreadyRestored(File $node): bool {
+	private function alreadyRestored(Node $node): bool {
 		$id = $node->getId();
 		if (isset($this->restored[$id])) {
 			return true;
@@ -86,6 +95,31 @@ final class RestoreFromTrashListener implements IEventListener {
 		$this->restored[$id] = true;
 
 		return false;
+	}
+
+	/**
+	 * Hand a restored node to whichever half of {@see RestoreService} owns it.
+	 *
+	 * A FOLDER is not filtered by name the way a mirror is. There is no `.penpot`
+	 * to test and no cheap way to tell a project folder from any other folder the
+	 * user happens to have trashed — the answer is in its metadata, and reading
+	 * that is the service's job, behind guards that return in one step for a folder
+	 * outside every mapping.
+	 */
+	private function route(Node $node): void {
+		if ($node instanceof Folder) {
+			if (!$this->alreadyRestored($node)) {
+				$this->restores->onFolderRestored($node);
+			}
+
+			return;
+		}
+		if (!$node instanceof File || !str_ends_with($node->getName(), PullService::EXTENSION)) {
+			return;
+		}
+		if (!$this->alreadyRestored($node)) {
+			$this->restores->onRestored($node);
+		}
 	}
 
 	/**
@@ -114,7 +148,7 @@ final class RestoreFromTrashListener implements IEventListener {
 			return;
 		}
 		$path = $params['filePath'] ?? '';
-		if ($path === '' || !str_ends_with($path, PullService::EXTENSION)) {
+		if ($path === '') {
 			return;
 		}
 		try {
@@ -122,10 +156,12 @@ final class RestoreFromTrashListener implements IEventListener {
 			if ($uid === null) {
 				return;
 			}
-			$node = $this->rootFolder->getUserFolder($uid)->get(ltrim($path, '/'));
-			if ($node instanceof File && !$this->alreadyRestored($node)) {
-				$this->restores->onRestored($node);
-			}
+			// NO EXTENSION TEST BEFORE THE LOOKUP ANY MORE. It used to stand here and
+			// cost nothing, and it also made this door blind to folders — a path is the
+			// one thing that cannot say whether it names a file or a directory. A
+			// restore is a deliberate, occasional gesture, so it can afford the lookup;
+			// the filtering happens in {@see route()} where the node's type is known.
+			$this->route($this->rootFolder->getUserFolder($uid)->get(ltrim($path, '/')));
 		} catch (\Throwable $e) {
 			// Same contract as handle(): a remote problem must never break the
 			// local restore the user just performed.
@@ -150,19 +186,9 @@ final class RestoreFromTrashListener implements IEventListener {
 		}
 
 		$node = $event->getTarget();
-		if (!$node instanceof File) {
-			return;
-		}
-		if (!str_ends_with($node->getName(), PullService::EXTENSION)) {
-			return;
-		}
-
-		if ($this->alreadyRestored($node)) {
-			return;
-		}
 
 		try {
-			$this->restores->onRestored($node);
+			$this->route($node);
 		} catch (\Throwable $e) {
 			// Belt and braces: the service swallows its own failures, and this is
 			// here so a bug in that promise cannot surface as a failed restore.

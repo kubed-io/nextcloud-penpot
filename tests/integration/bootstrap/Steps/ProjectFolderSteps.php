@@ -326,6 +326,82 @@ trait ProjectFolderSteps {
 	private string $createdProjectTeam = '';
 
 	/**
+	 * A project folder standing in a mapping, in one of the two states that decide
+	 * whether Penpot can ever give its project back (`projects/restore.feature`).
+	 *
+	 * ## THE STATE IS ABOUT PENPOT'S TRASH, NOT NEXTCLOUD'S
+	 *
+	 * Penpot has no `restore-project` (§C6.19), so a deleted project only comes
+	 * back through a design of its own being restored. What is in the team's trash
+	 * at the moment of the restore is therefore the whole question:
+	 *
+	 *   still in Penpot's trash  a design exists and is recoverable → the project
+	 *                            comes back wearing the id it always had
+	 *   no designs at all        the mirror of an EMPTY Penpot project, which is a
+	 *                            real and ordinary thing to throw away
+	 *
+	 * A THIRD STATE WAS SPECIFIED AND CANNOT BE REACHED: a folder whose designs
+	 * Penpot has PURGED. Destroying a design only stamps `deleted_at` to now and
+	 * leaves the row (features/AGENTS.md#penpots-destroy-leaves-the-row-behind), so
+	 * the `delete-project` that trashing the folder triggers re-stamps it a week out
+	 * and the "purged" design is restorable again. Measured in CI: the folder came
+	 * back through it, wearing its original id.
+	 *
+	 * Note what this step does NOT do: it never deletes the project. The `is in the
+	 * Nextcloud trash` line after it does that, by trashing the folder and letting
+	 * the app delete the project — which is the gesture under test, and arranging
+	 * it here would prove the restore against a state no user can reach.
+	 *
+	 * ## IDEMPOTENT, BECAUSE PENPOT STATE ACCUMULATES ACROSS A LEG
+	 *
+	 * {@see ArrangeSteps::ensureProjectFolder()} and
+	 * {@see ArrangeSteps::declareDesign()} both stop when what they describe is
+	 * already true, so a re-run of a row is a no-op rather than a second project.
+	 * The Examples give every row its own project name anyway — see the feature —
+	 * but a `Given` that only works once is a trap for the next scenario.
+	 *
+	 * ONE PATTERN, TWO SENTENCES, and the clause is captured rather than split
+	 * across two definitions: the states differ only in how the fixture is seeded,
+	 * and reading them side by side is the point.
+	 *
+	 * @Given /^a project folder "([^"]*)" (holding designs still in Penpot's trash|holding no designs at all)$/
+	 */
+	public function aProjectFolderHolding(string $path, string $held): void {
+		$path = ltrim($path, '/');
+		$this->ensureProjectFolder($path);
+		// THE ORIGINAL ID, recorded before anything can change it. `the original id`
+		// and `a new id` are both answered against this.
+		$this->rememberProject($path);
+
+		if ($held === 'holding no designs at all') {
+			$this->aProjectFolderHoldsNoDesigns($path);
+
+			return;
+		}
+
+		$this->declareDesign($path . '/Sketch.penpot');
+	}
+
+	/**
+	 * Nothing may be in here, and saying so is the arrange.
+	 *
+	 * An earlier scenario cannot have left a design behind — every row names its
+	 * own project — so this is a guard against the fixture drifting rather than a
+	 * cleanup. Failing here says "the arrange is wrong"; letting it through would
+	 * say "the app is wrong", several steps later.
+	 */
+	private function aProjectFolderHoldsNoDesigns(string $path): void {
+		$held = $this->davChildren($path);
+		if ($held !== []) {
+			throw new \RuntimeException(sprintf(
+				"'%s' is supposed to hold no designs at all, and it holds: %s",
+				$path,
+				implode(', ', array_map('basename', $held)),
+			));
+		}
+	}
+
+	/**
 	 * A path in the acting user's files, as the ROOT-relative form `occ` wants.
 	 *
 	 * `FileUtils::getNode()` takes either a numeric fileid or an absolute path

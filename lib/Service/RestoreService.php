@@ -12,6 +12,7 @@ namespace OCA\PenpotSync\Service;
 use OCA\PenpotSync\AppInfo\Application;
 use OCA\PenpotSync\Exception\PenpotApiException;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -150,6 +151,17 @@ final class RestoreService {
 	 */
 	private const SETTLE_POLL_MICROSECONDS = 250_000;
 
+	/**
+	 * How far below a restored folder to walk.
+	 *
+	 * The same number, for the same reason, as {@see DeletionService}'s: a ceiling
+	 * on a recursion over user-shaped data, not a limit anybody should ever reach.
+	 * The two walks are inverses of each other and would be a matched pair of bugs
+	 * if they disagreed — a delete that reached deeper than the restore would leave
+	 * projects nothing could bring back.
+	 */
+	private const MAX_DEPTH = 100;
+
 	public function __construct(
 		private readonly PenpotClient $client,
 		private readonly PenpotMetadata $metadata,
@@ -221,6 +233,327 @@ final class RestoreService {
 				'file' => $node->getName(),
 				'exception' => $e,
 			]);
+		}
+	}
+
+	/**
+	 * A project FOLDER just came back out of the Nextcloud trash. Bring the
+	 * projects underneath it back too (`projects/restore.feature`).
+	 *
+	 * Never throws, for the same reason {@see onRestored()} does not.
+	 *
+	 * ## CORE FIRES NOTHING PER CHILD, SO THE WALK IS OURS
+	 *
+	 * Restoring a folder is ONE move, and the trash app announces ONE node for it.
+	 * Nothing inside ever arrives anywhere the app can hear, which is the same wall
+	 * {@see DeletionService::onFolderTrashed()} meets going the other way — and the
+	 * reason that method walks its children by hand. This is that walk, inverted.
+	 *
+	 * ## A PROJECT COMES BACK ONLY THROUGH A DESIGN, AND SOMETIMES THERE IS NONE
+	 *
+	 * Penpot has no `restore-project` — the RPC does not exist and answers 404
+	 * (§C6.19, measured). The only route back is `restore-deleted-team-files` on a
+	 * FILE, which clears the containing project's `deleted_at` as a side effect. So
+	 * what Penpot can still give back decides which id the folder ends up wearing:
+	 *
+	 *   a design still in Penpot's trash  →  it revives the project on its way back
+	 *                                        and the id is the ORIGINAL one, so the
+	 *                                        stamp the folder returned with was
+	 *                                        right all along and is left alone
+	 *   its designs purged, or none ever  →  nothing exists to come back through, so
+	 *                                        the project is MADE AGAIN and the folder
+	 *                                        is re-stamped with a NEW id
+	 *
+	 * The second is not an exotic case. A project created in Penpot mirrors as a
+	 * folder whether or not it holds a single design, so trashing that folder
+	 * deletes a project no file can revive — and an empty folder is the likeliest
+	 * one for someone to trash by mistake.
+	 *
+	 * ## THE PROJECTS ARE SETTLED BEFORE THE DESIGNS, AND THAT ORDER IS LOAD-BEARING
+	 *
+	 * A purged design comes back by layer 3 — an IMPORT into the project its folder
+	 * names. Until the re-stamp above has happened that is a project Penpot has
+	 * deleted, so the import would either fail or land somewhere unreachable. One
+	 * pass to make sure every folder names a live project, then one pass to bring
+	 * the designs home through the ordinary door.
+	 */
+	public function onFolderRestored(Folder $node): void {
+		if ($this->metadata->readFolder($node->getId())->hasTeam()) {
+			// THE MAPPING ROOT, and the same carve-out as
+			// {@see DeletionService::onFolderTrashed()}: the root carries a team
+			// marker and no project of its own, so a walk that started here would
+			// reach every project in the team at once.
+			return;
+		}
+
+		$teamId = $this->resolver->resolve($node)->teamId ?? '';
+		if ($teamId === '') {
+			// Restored outside every mapping, or into one this app no longer knows.
+			// The folder is the user's and Penpot is not involved.
+			return;
+		}
+
+		$this->settleProjects($node, $teamId);
+
+		foreach ($this->designsBelow($node, 0) as $design) {
+			// EACH ONE THROUGH THE ORDINARY DOOR, so that a folder restore and a file
+			// restore cannot drift apart: layer 2 brings back what Penpot still holds,
+			// layer 3 imports the archive of what it does not, and both get the
+			// double-confirmation this class exists for.
+			$this->onRestored($design);
+		}
+	}
+
+	/**
+	 * Make sure every project folder below $node names a project Penpot will still
+	 * answer for, making the ones it will not over again.
+	 */
+	private function settleProjects(Folder $node, string $teamId): void {
+		// THE RESTORED FOLDER ITSELF COUNTS, AND IT IS THE COMMON CASE. Someone who
+		// throws a project away throws away the project's own folder — the nested
+		// ones below it are the rarer shape, and a walk that only looked at children
+		// would leave the one folder the gesture was actually about pointing at a
+		// dead project forever.
+		$folders = $this->metadata->readFolder($node->getId())->hasProject() ? [$node] : [];
+		foreach ($this->projectFoldersBelow($node, 0) as $nested) {
+			$folders[] = $nested;
+		}
+		if ($folders === []) {
+			return;
+		}
+
+		$parked = $this->parkedIds($teamId);
+		if ($parked === null) {
+			// A TRASH LISTING WE COULD NOT READ MAKES NOTHING AGAIN. "No design can
+			// revive this project" is exactly what an unreadable listing looks like,
+			// and acting on it would create a SECOND project beside one that was
+			// about to come back on its own — with the folder stamped to the new one
+			// and the user's history stranded in the old. Same asymmetry as
+			// {@see TrashReconcileService::reap()}: when it cannot tell, it does the
+			// thing that can be undone.
+			$this->logger->warning('penpot_sync restore: could not read Penpot\'s trash, so no project was made again', [
+				'app' => Application::APP_ID,
+				'team_id' => $teamId,
+				'folder' => $node->getPath(),
+				'projects' => count($folders),
+			]);
+
+			return;
+		}
+
+		foreach ($folders as $folder) {
+			if ($this->revivableThroughADesign($folder, $parked)) {
+				continue;
+			}
+
+			$this->remakeProject($folder, $teamId);
+		}
+	}
+
+	/**
+	 * Can any design of $folder's own project bring that project back with it?
+	 *
+	 * The descent stops at any subfolder carrying its own project id — a design in
+	 * a NESTED project revives that project, not this one, and counting it here
+	 * would leave this folder pointing at a dead id forever. Read downwards this is
+	 * {@see MembershipResolver::resolve()}, and the two have to agree.
+	 *
+	 * @param array<string, true> $parked every design id in the team's Penpot trash
+	 */
+	private function revivableThroughADesign(Folder $folder, array $parked): bool {
+		foreach ($this->designsOfProject($folder, 0) as $design) {
+			$stamped = $this->metadata->readFile($design->getId());
+			if ($stamped === null || $stamped->penpotId === '') {
+				continue;
+			}
+			if (isset($parked[$stamped->penpotId])) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Nothing can revive $folder's project, so make it again and point the folder
+	 * at the new one.
+	 *
+	 * NOT {@see ProjectFolderService::adoptForContent()}, which is the same shape
+	 * and refuses this case on purpose: it short-circuits on a folder that already
+	 * carries a project id, and a folder back from the trash always does. That
+	 * guard is what stops an ordinary design arriving in a project folder from
+	 * making a second project, and it is not one to relax for this.
+	 */
+	private function remakeProject(Folder $folder, string $teamId): void {
+		$name = trim((string)$this->resolver->pathBelowMapping($folder));
+		if ($name === '' || mb_strlen($name) > 250) {
+			// Nothing Penpot would take: the mapping root itself, which is Drafts and
+			// never a project (§6.35), or a path past the 250-character limit (§6.4).
+			return;
+		}
+
+		try {
+			$created = $this->client->createProject($teamId, $name, $this->personalTokens->tokenForActor());
+			$projectId = (string)($created['id'] ?? '');
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync restore: could not make the project again; the folder is back on its own', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'team_id' => $teamId,
+				'name' => $name,
+				'exception' => $e,
+			]);
+
+			return;
+		}
+
+		if ($projectId === '') {
+			return;
+		}
+
+		// THE STAMP IS REPLACED, NOT WRITTEN. The folder came back carrying the id of
+		// the project that was deleted — an id Penpot will never list again — and
+		// every later lookup reads this key. Leaving it would make the folder claim a
+		// project the pull cannot find, which is the exact state the prune reads as
+		// "everything in here is gone".
+		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
+
+		$this->logger->info('penpot_sync restore: nothing could revive the project, so it was made again', [
+			'app' => Application::APP_ID,
+			'folder' => $folder->getPath(),
+			'team_id' => $teamId,
+			'name' => $name,
+			'project' => $projectId,
+		]);
+	}
+
+	/**
+	 * Every design id in $teamId's Penpot trash, as a set — or null when the
+	 * listing could not be read at all, which is a different answer from "empty"
+	 * and is treated as one by every caller.
+	 *
+	 * @return array<string, true>|null
+	 */
+	private function parkedIds(string $teamId): ?array {
+		try {
+			$parked = [];
+			foreach ($this->client->deletedFiles($teamId) as $entry) {
+				$id = $entry['id'] ?? null;
+				if (is_string($id) && $id !== '') {
+					$parked[$id] = true;
+				}
+			}
+
+			return $parked;
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync restore: could not read Penpot\'s trash', [
+				'app' => Application::APP_ID,
+				'team_id' => $teamId,
+				'exception' => $e,
+			]);
+
+			return null;
+		}
+	}
+
+	/**
+	 * Every `.penpot` below $folder, through project folders and all — the restore
+	 * pass wants the whole subtree, because a folder that went into the trash took
+	 * every project under it along.
+	 *
+	 * @return list<File>
+	 */
+	private function designsBelow(Folder $folder, int $depth): array {
+		return $this->descend($folder, $depth, false);
+	}
+
+	/**
+	 * Every `.penpot` whose NEAREST project ancestor is $folder.
+	 *
+	 * @return list<File>
+	 */
+	private function designsOfProject(Folder $folder, int $depth): array {
+		return $this->descend($folder, $depth, true);
+	}
+
+	/**
+	 * @param bool $stopAtProjects stop descending into subfolders that carry a
+	 *                             project id of their own
+	 *
+	 * @return list<File>
+	 */
+	private function descend(Folder $folder, int $depth, bool $stopAtProjects): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		$out = [];
+		foreach ($this->children($folder) as $child) {
+			if ($child instanceof Folder) {
+				if ($stopAtProjects && $this->metadata->readFolder($child->getId())->hasProject()) {
+					continue;
+				}
+				foreach ($this->descend($child, $depth + 1, $stopAtProjects) as $design) {
+					$out[] = $design;
+				}
+				continue;
+			}
+			if ($child instanceof File && str_ends_with($child->getName(), PullService::EXTENSION)) {
+				$out[] = $child;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Every folder below $node carrying a project id, deepest LAST.
+	 *
+	 * Order does not matter to {@see settleProjects()} — each folder's decision is
+	 * about its own designs and nothing else — but the walk descends THROUGH
+	 * project folders rather than stopping at them, because a project nested inside
+	 * another one went into the trash with it and has the same claim to come back.
+	 *
+	 * @return list<Folder>
+	 */
+	private function projectFoldersBelow(Folder $node, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		$out = [];
+		foreach ($this->children($node) as $child) {
+			if (!$child instanceof Folder) {
+				continue;
+			}
+			if ($this->metadata->readFolder($child->getId())->hasProject()) {
+				$out[] = $child;
+			}
+			foreach ($this->projectFoldersBelow($child, $depth + 1) as $nested) {
+				$out[] = $nested;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * A directory listing that cannot fail the gesture. A folder this app cannot
+	 * read is a folder it leaves alone.
+	 *
+	 * @return list<\OCP\Files\Node>
+	 */
+	private function children(Folder $folder): array {
+		try {
+			return array_values($folder->getDirectoryListing());
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync restore: could not read a restored folder', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'exception' => $e,
+			]);
+
+			return [];
 		}
 	}
 

@@ -115,6 +115,175 @@ trait TrashSteps {
 		$this->iMoveItToTheTrash();
 	}
 
+	/**
+	 * A NAMED path is in the Nextcloud trash — by being put there.
+	 *
+	 * The same sentence as the cursored form above and the same reasoning: a
+	 * `Given` states what is true, and a folder gets into the trash exactly one
+	 * way. It takes a path because the subject is a FOLDER, and the cursor is a
+	 * design's — there is nothing for it to point at here.
+	 *
+	 * ## WHAT HAPPENS IN PENPOT IS THE APP'S DOING, AND IS NOT ARRANGED HERE
+	 *
+	 * Trashing a project folder makes the app delete the project
+	 * ({@see \OCA\PenpotSync\Service\DeletionService::onFolderTrashed()}), which
+	 * soft-deletes it and parks its designs in the team's trash. That is the state
+	 * every scenario after this line depends on, and it is deliberately NOT set up
+	 * by hand: an arrange that deleted the project itself would prove the restore
+	 * against a state no gesture can produce, and would go green on a build where
+	 * trashing a folder had stopped reaching Penpot at all.
+	 *
+	 * @Given /^"([^"]*)" is in the Nextcloud trash$/
+	 */
+	public function theNamedPathIsInTheNextcloudTrash(string $path): void {
+		$path = ltrim($path, '/');
+		if (!$this->davExists($path)) {
+			throw new \RuntimeException("'{$path}' is not there to be trashed");
+		}
+
+		$this->davDelete($path);
+
+		// POLLED, because the entry appears through the trashbin's own machinery
+		// after the DELETE returns — the same race {@see GestureSteps::theFileIsNotInTheNextcloudTrash()}
+		// documents from the other side, and on a Team Folder it is a second storage
+		// catching up rather than an app doing anything.
+		$this->until(
+			fn (): bool => $this->trashbinPathFor($path) !== null,
+			fn (): string => "'{$path}' was deleted but never appeared in the Nextcloud trash",
+		);
+	}
+
+	/**
+	 * It is NOT in the Nextcloud trash — because something took it back out.
+	 *
+	 * The assertion the revive exists for: the pull found the project alive in
+	 * Penpot again and lifted its folder out of the trash rather than building a
+	 * second one beside it ({@see \OCA\PenpotSync\Service\PullService::revivedProjectFolder()}).
+	 *
+	 * "Not in the trash" and "back where it was" are the same claim HERE and only
+	 * here, because a restore has no other destination — Nextcloud puts a trashed
+	 * node back where it came from and offers no say in the matter.
+	 *
+	 * @Then /^"([^"]*)" is not in the Nextcloud trash$/
+	 */
+	public function theNamedPathIsNotInTheNextcloudTrash(string $path): void {
+		$this->theFileIsNotInTheNextcloudTrash(ltrim($path, '/'));
+	}
+
+	/**
+	 * Someone restores ONE design of a deleted project in Penpot.
+	 *
+	 * ## "ONLY" IS THE WHOLE POINT OF THE SENTENCE
+	 *
+	 * The claim under test is that a project needs just one of its designs back to
+	 * come back itself — Penpot clears the PROJECT's `deleted_at` as a side effect
+	 * of clearing the file's. Restoring both designs would make the scenario pass
+	 * for a reason that proves nothing, so the step names one and the assertion
+	 * that its sibling is still in the trash guards the difference.
+	 *
+	 * ## CONFIRMED AGAINST THE PROJECT LISTING, NEVER AGAINST THE TRASH
+	 *
+	 * The two disagree, and §6.49 is the whole reason
+	 * {@see \OCA\PenpotSync\Service\RestoreService} exists in the shape it does:
+	 * the restore's SSE returns before Penpot's transaction settles, so the design
+	 * leaves `get-team-deleted-files` while its project is still deleted. A second
+	 * call settles it — the app logs *"the design came back on a second call"* doing
+	 * exactly this.
+	 *
+	 * The first cut of this step confirmed against the TRASH, returned after one
+	 * call, and pulled into that window. The pull then saw no such project, so it
+	 * never looked for its folder, and the failure surfaced two steps later as
+	 * "Penpot holds no project named …". `RestoreServiceTest` has a test pinning
+	 * this exact distinction for the app; the harness owed it the same discipline.
+	 *
+	 * `penpotLiveDesignIds()` is the right oracle because the probe prints designs
+	 * UNDER their projects: a design whose project is still deleted is not in it, so
+	 * one check answers "the design is back" and "its project is back" together.
+	 *
+	 * Then a pull, because reviving the folder is the PULL's work, not the RPC's.
+	 *
+	 * @When /^someone restores only "([^"]*)" in Penpot$/
+	 */
+	public function someoneRestoresOnlyInPenpot(string $name): void {
+		[$team, $id] = $this->parkedDesignNamed($name);
+
+		for ($attempt = 0; $attempt < 3; $attempt++) {
+			$this->penpotRpc('restore-deleted-team-files', ['team-id' => $team, 'ids' => [$id]]);
+			if (in_array($id, $this->penpotLiveDesignIds(), true)) {
+				$this->theAdminRunsAPull();
+
+				return;
+			}
+		}
+
+		throw new \RuntimeException(
+			"Penpot accepted restore-deleted-team-files for {$id} three times and '{$name}' is still not "
+			. "listed in a live project of team {$team}",
+		);
+	}
+
+	/**
+	 * The team and design id of a design sitting in some mapped team's Penpot
+	 * trash, for the design the scenario NAMED.
+	 *
+	 * NOT THE CURSOR, because the design's mirror went into the trash inside a
+	 * FOLDER — its path is gone and the cursor points at whatever the arrange
+	 * touched last. The scenario says which design it means, and the arrange
+	 * already wrote that name's id down.
+	 *
+	 * ## THE NAME PICKS THE ID OUT OF THE ARRANGE, IT DOES NOT SEARCH THE TRASH
+	 *
+	 * A trash listing searched by name answers with whatever is in there wearing
+	 * that name, and by the time this runs plenty is. Penpot state accumulates
+	 * across a leg and nothing empties either trash, so every earlier scenario in
+	 * the file has parked its own `Alpha` — the Background alone declares one and
+	 * the next scenario's `emptyMappedFolder()` throws it away. A by-name search
+	 * finds all of them and can only refuse; the first cut of this method did
+	 * exactly that and would have thrown on its own fixture every run.
+	 *
+	 * `declaredDesignIds` is keyed by filename and holds the id the arrange read
+	 * back, which is the one thing that says THIS `Alpha` rather than a leg's worth
+	 * of dead ones. Penpot's listing is then only asked which team holds it, which
+	 * is a question a uuid can answer unambiguously — the same reason
+	 * {@see ArrangeSteps::penpotProjectIn()} is team-scoped, reached from the other
+	 * end.
+	 *
+	 * POLLED, like every other read that follows a mutation here: the design gets
+	 * into Penpot's trash because trashing the FOLDER made the app delete the
+	 * project, and the files of a deleted project are not listed as deleted the
+	 * instant the RPC returns.
+	 *
+	 * @return array{0: string, 1: string} team id, design id
+	 */
+	private function parkedDesignNamed(string $name): array {
+		$id = $this->declaredDesignIds[$name . '.penpot'] ?? '';
+		if ($id === '') {
+			throw new \RuntimeException(
+				"the scenario names the design '{$name}', but no arrange declared one — "
+				. 'say `the following items in the mappings` first so its id is known',
+			);
+		}
+
+		$team = '';
+		$this->until(
+			function () use ($id, &$team): bool {
+				foreach (array_unique($this->mappingTeamIds) as $candidate) {
+					if (in_array($id, $this->penpotTrashIds($candidate), true)) {
+						$team = $candidate;
+
+						return true;
+					}
+				}
+
+				return false;
+			},
+			fn (): string => "the design '{$name}' ({$id}) is in no mapped team's Penpot trash — "
+				. 'trashing its folder was supposed to put it there',
+		);
+
+		return [$team, $id];
+	}
+
 	/** The cursor design's team, resolved before the trashing took its path away. */
 	private function cursorTeamId(): string {
 		return $this->teamBeforeTrashing !== '' ? $this->teamBeforeTrashing : $this->teamId();

@@ -724,6 +724,128 @@ scenario changes status only on a PR that runs it.
 
 ---
 
+### Round 10 — the same tag, wrong the other way
+
+`projects/restore.feature` was next in the queue: two scenarios, both `@todo`, which
+should have meant two step definitions and a green leg. Reading `lib/` first — the
+habit Round 9 was supposed to teach — said otherwise in three places at once.
+`RestoreFromTrashListener` opened with `if (!$node instanceof File) { return; }` on
+both of its doors, so a restored FOLDER reached nothing. `RestoreService` had no
+folder entry point to reach. And `TrashControl` could list a trashed file and destroy
+it, but had no verb for taking anything back out.
+
+> So Round 9 found two scenarios tagged `@unbuilt` that were runnable, and Round 10
+> found two tagged `@todo` that were not built at all. Three rounds running, the tag
+> has been the thing that was wrong. It is a queue, not an inventory.
+
+**Neither scenario was a small test to write, and one of them closed an open fork.**
+
+The folder half needed a walk. Core announces ONE node when a folder comes out of the
+trash and nothing for the designs inside it — the same wall `DeletionService` meets
+going the other way, which is why *it* hand-walks its children — so the restore had to
+grow the inverse walk. The hard part was not the walk but the ORDER. Penpot has no
+`restore-project` (§C6.19), so a deleted project only comes back through a design of
+its own being restored; when nothing is left to come back through, the project has to
+be made again and the folder re-stamped. That re-stamp has to happen BEFORE the
+designs are handled, because a purged design comes back by import *into the project
+its folder names*, and until the stamp is replaced that is a project Penpot deleted.
+
+The Penpot half was §6.37 — the fork `PullService` had carried since the trash became
+readable. The reconcile REAPS: it destroys a trashed mirror whose design Penpot
+destroyed. The mirror image of that — a trashed mirror whose far side came *back* —
+had no scenario asking for it, so it was documented and left. This slice is the
+scenario, and the answer turned out to belong at the FOLDER level rather than the
+file level, for a reason the trash itself dictates: trashing `Penpot/Doomed` puts one
+item in the trash, and the designs beneath it are nested inside it rather than beside
+it. There is no trashed `Alpha.penpot` to find. So the pull now looks for the
+project's folder in the trash before provisioning a new one, and the folder comes back
+whole — which is the only shape Nextcloud offers and the only one that cannot hand
+somebody a half-restore.
+
+**And the Examples table carried Round 9's defect again, in a new costume.** All four
+rows named the same project, `Doomed`. Row 3 finishes by importing a design into that
+folder; row 4 then claims the folder holds *no designs at all*. Deterministically
+false, and it would have read as the restore inventing a design. Every row names its
+own project now — `Parked`, `Purged`, `Empty` — which is the same fix as Round 9's
+four characters, arrived at the same way: by tracing what each row leaves behind for
+the next one.
+
+> Two rounds, two Examples tables, one bug. Penpot state accumulates across a leg and
+> nothing tears it down, so a fixture name is a shared resource. Worth stating once
+> as a rule: **an Examples row may not reuse a name an earlier row leaves standing.**
+
+**And then the rule turned out to be one file too narrow.** Fixing the table left the
+second scenario still calling its project `Doomed` — the name `projects/delete.feature`
+uses, and that file runs FIRST in the same leg and deliberately ends with
+`Penpot/Doomed` sitting in the Nextcloud trash (*"is recoverable from the Nextcloud
+trash"* is its closing assertion). This is the only scenario in the suite that asserts
+a path is NOT in that trash, nothing empties the trash between scenarios, and the
+assertion polls — so it would have hung for its full timeout and failed on a fixture
+every single run, while reading as the revive not working.
+
+Nothing found it but tracing the leg by hand. The three structural guards all passed,
+the unit suite has no view of the trash, and the collision is invisible inside either
+file: each is self-consistent, and the leg is the only place they meet.
+
+> So the rule is wider than two rounds made it look. **A fixture name is shared across
+> every file in a leg, not just across the rows of one table** — and the names that
+> matter most are the ones a scenario asserts the ABSENCE of, because an absence is the
+> one claim another file's leftovers can falsify without touching anything this one did.
+
+**Then CI found the two things reading could not.** Both legs of the feature failed,
+and the app's own log said why in one line each — which is the argument for logging
+the decision rather than only the outcome.
+
+**A restore needs somebody to be logged in, and a pull is nobody.** `Trashbin::restore()`
+opens with `OC_User::getUser()` and throws *"Tried to restore a file while not logged
+in"* when it answers false, and that reads the `user_id` SESSION key, which nothing
+sets under `occ`. Everything else in the revive worked perfectly — the pull saw the
+project come back, found the trashed folder by its project id, and called restore —
+and then the one call that mattered threw. The fallback caught it and made a new
+folder, exactly as designed, so the failure surfaced as *"the folder is still in the
+trash"* rather than as an exception.
+
+> Every other trash operation in this app got away without a session: listing and
+> `removeItem()` take the user or the item as arguments. Only the restore reaches for
+> ambient state, and only from the one caller that has none.
+
+**And a design Penpot has "permanently deleted" is restorable again the moment
+anything touches it.** The `Penpot has purged` Examples row failed with the folder
+wearing its ORIGINAL id, and the log said `restore: the design came back on a second
+call` — layer 2, on a design the arrange had destroyed. §C6.11 already recorded the
+mechanism from the other side: `permanently-delete-team-files` stamps `deleted_at` to
+now and leaves the row, so anything that re-stamps it puts the design back in the
+trash listing. Here the thing that re-stamps it is `delete-project` — which is what
+trashing the folder makes the app do, and therefore part of the gesture under test.
+
+> The purge has to happen before the trash, and the trash undoes the purge. The state
+> cannot be held still, which is the same wall `Trash a design that is already gone
+> from Penpot` sits behind as `@blocked`. The row is gone; `no designs at all` proves
+> the same branch by a road that holds still.
+
+Three status tags wrong in three rounds, and now two spec rows describing states the
+system will not hold. The common thread is the same one: **a claim written down once
+and never re-measured**, whether it is a tag, an Examples row, or an API's docstring
+promising an immediate delete.
+
+**And then §6.49 collected its toll a third time, from the harness.** With the fixture
+names unique, `Penpot holds a project named "Revived"` failed — and had only ever
+passed because `Doomed` was a name the leg had several of. The new step confirmed its
+restore against the TRASH listing and pulled the instant the design left it, which is
+inside the window where Penpot's transaction has not settled and the project is still
+deleted. The pull saw no such project, so it never looked for its folder.
+
+> `RestoreServiceTest` has a test whose whole subject is this distinction — *"success
+> is measured against the project listing, not the trash"* — written after the same
+> window failed the suite's headline scenario about half the time. The app has obeyed
+> it since. The harness, written months later by someone who had read that docblock in
+> the same sitting, did not.
+
+A rule the production code follows is not a rule the test code inherits, and the test
+code is where it is easiest to get away with breaking.
+
+---
+
 ## The plan — reaching the store
 
 The store's requirement is that **every release is signed by a certificate

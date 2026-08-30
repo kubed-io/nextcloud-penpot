@@ -506,7 +506,7 @@ trait GestureSteps {
 	 * entry and mean opposite things. "Gone from" reads for the destroyed case.
 	 *
 	 * NOT A STEP ANY MORE — no scenario in the suite says this sentence. It
-	 * stays as the plain helper 3 other steps call.
+	 * stays as the plain helper 4 other steps call.
 	 */
 	public function theFileIsNotInTheNextcloudTrash(string $path): void {
 		// POLLS, for the reason the four Penpot assertions below poll — this is a

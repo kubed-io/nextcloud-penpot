@@ -3911,19 +3911,25 @@ Those designs were the only route the project had back — there is no `restore-
 call, measured — so once they are gone the trashed folder has nothing left to be
 restored to, and it goes too.
 
-**@unbuilt, AND THE WALL IS THIS APP'S REACH, NOT PENPOT'S.** Emptying Penpot's
-trash is arrangeable and the pull sees the result perfectly well. What no code here
-can do is remove an ENTRY FROM THE NEXTCLOUD TRASH. Nothing in `lib/` reads that
-trash at all: `TrashControl` only pauses it, and the listeners react to gestures
-someone else made. `PullService`'s own docblock has carried the deferral since it
-was written — *"adopting a mirror out of the Nextcloud trash (§6.37) … needs
-`files_trashbin` and is its own slice"* — and this scenario is the other half of
-exactly that slice.
+**@unbuilt, AND THE WALL HAS MOVED — IT IS NOW A SMALL ONE.** Emptying Penpot's
+trash is arrangeable and the pull sees the result perfectly well. What was missing
+was any reach into the NEXTCLOUD trash at all. That is no longer true: `TrashControl`
+lists trashed files and destroys them (the reap), and since `projects/restore` it
+lists trashed FOLDERS and puts them back. `PullService`'s docblock has carried the
+deferral since it was written — *"adopting a mirror out of the Nextcloud trash
+(§6.37) … needs `files_trashbin` and is its own slice"* — and that slice is now half
+built.
+
+What this scenario still needs is the one verb neither half provides: DESTROYING a
+trashed folder. `TrashedFolder` carries a `restore` closure and no `purge` one,
+because nothing had a reason to destroy a folder and a purge reachable by accident
+is a purge that happens by accident. So the behaviour is still absent, which is what
+`@unbuilt` means — but it is a bounded piece of work now rather than an unopened
+door.
 
 Worth separating from the walls it sits beside. It is not a harness limit: the
 suite can empty Penpot's trash and can read Nextcloud's. It is not a reporting
-gap either. The behaviour is simply absent, which is what `@unbuilt` means, and
-building it means giving this app a reason to open the trash for the first time.
+gap either.
 
 ### A Penpot purge may not destroy what was never Penpot's
 
@@ -3973,6 +3979,53 @@ folder whether or not it holds designs, so trashing that folder deletes a projec
 file can revive. It reaches the same end state by a different road, which is exactly
 what an Examples row is for.
 
+**BOTH SCENARIOS HERE WERE TAGGED `@todo`, AND NEITHER HAD ANY CODE BEHIND IT.**
+`@todo` means "the behaviour exists, only the test is missing", and this file was
+five lines of `lib/` short of that in both directions: `RestoreFromTrashListener`
+returned early on anything that was not a `File`, `RestoreService` had no folder
+entry point, and `TrashControl` could list and purge a trashed file but had no way
+to take one back out. They were `@unbuilt` and nobody had re-read them since. This
+is the third round in a row where a status tag turned out to be wrong in one
+direction or the other — see the saga.
+
+HOW IT WORKS, in the order it has to happen. Core announces ONE node for a folder
+restore and nothing at all for the designs inside it, which is the same wall
+`DeletionService::onFolderTrashed()` meets going the other way, so the walk is the
+app's own. It settles every project folder FIRST — asking Penpot's trash once per
+tree whether any design of that project is still recoverable, and making the project
+again only when none is — and only then hands each design to the ordinary
+`onRestored()`. That order is load-bearing: a purged design comes back by IMPORT
+into the project its folder names, and until the folder has been re-stamped that is
+a project Penpot has deleted.
+
+An unreadable Penpot trash makes NOTHING again. "No design can revive this project"
+is exactly what a failed listing looks like, and acting on it would stand a second
+project beside one that was about to come back on its own, with the user's history
+stranded in the old one. The mapping root is carved out for the same reason
+`onFolderTrashed()` carves it out: a walk that started there would reach every
+project in the team at once.
+
+EVERY EXAMPLES ROW NAMES ITS OWN PROJECT — `Parked` and `Empty` — and that is not
+decoration. Penpot state accumulates across a leg, so a row that left a project
+standing would hand the next row a folder that is not in the state its `held` clause
+claims.
+
+**THERE IS NO `Penpot has purged` ROW, AND THE REASON IS §C6.11's.** It was written,
+it ran, and it failed — the folder came back wearing its ORIGINAL id, because the
+design the arrange had destroyed was recoverable again by the time the restore
+happened. Destroying a design only stamps `deleted_at` to now and leaves the row
+(#penpots-destroy-leaves-the-row-behind), so the `delete-project` that trashing the
+folder triggers re-stamps it a week out and puts it straight back in
+`get-team-deleted-files`. The app then restored it, which revived the project, which
+is the correct answer to the state Penpot was actually in.
+
+So the row asked for something the gesture under test destroys on its way past: the
+purge has to precede the trash, and the trash undoes the purge. It is the same wall
+`Trash a design that is already gone from Penpot` sits behind as `@blocked` — *there
+is no id Penpot will report as gone rather than deleted* — and the rule loses
+nothing, because `no designs at all` reaches the same end state by a road that holds
+still.
+
 ### Restoring one design brings its project with it
 
 Penpot clears a project's deletion when any file inside it comes back, so restoring
@@ -3986,6 +4039,46 @@ NOT A SCENARIO — *a trashed project's designs come back with the folder, sprea
 included*. True, but it is Nextcloud's doing rather than this app's, and it is the same
 restore as any other. If it earns a scenario anywhere it is `designs/restore`, where a
 single design coming back is the subject.
+
+**THE HARNESS OWES THIS ONE §6.49's DISCIPLINE, AND FIRST IT DIDN'T.** Restoring a
+design in Penpot revives its project — but the restore's SSE returns before the
+transaction settles, so the design leaves `get-team-deleted-files` while the project
+is still deleted, and a second call is what settles it. The step confirmed against
+the TRASH, returned after one call, and pulled into that window; the pull saw no such
+project, never looked for its folder, and the failure read as the revive not working.
+It confirms against the PROJECT listing now, which is the oracle `RestoreService`
+already uses and `RestoreServiceTest` already pins for the app.
+
+**THIS SCENARIO CLOSES HALF OF §6.37**, the fork `PullService` has carried since the
+Nextcloud trash became readable. `TrashReconcileService` REAPS — it destroys a trashed
+mirror whose design Penpot has destroyed — and the symmetrical case, a trashed mirror
+whose far side came BACK, had no scenario asking for it and so was left open. It has
+one now, and the pull answers it: before provisioning a folder for a project it has
+no folder for, it looks in the trash for the folder that project already had.
+
+AT THE FOLDER LEVEL, DELIBERATELY. Trashing `Penpot/Revived` puts ONE thing in the
+trash — the folder — and the designs under it are nested inside that item rather than
+beside it, which is why `TrashControl` refuses to descend and why there is no trashed
+`Alpha.penpot` for a design-level revive to find. The folder comes back whole, which
+is the only way Nextcloud offers and the only way that cannot hand somebody a partial
+restore. A design whose SIBLINGS are still deleted needs nothing special: their
+mirrors return with the folder and the same pull's prune trashes them again, which is
+the truthful answer.
+
+The REMAINING half of §6.37 is a single design whose mirror was trashed on its own
+and whose design then came back. That mirror is still re-created beside the trashed
+one rather than matched to it by `penpot_id`. Untidy, not lossy, and no scenario asks
+for it yet.
+
+**THE PROJECT IS CALLED `Revived` AND IT MAY NEVER BE CALLED `Doomed` AGAIN.** This is
+the only scenario in the suite that asserts a path is NOT in the Nextcloud trash, and
+nothing empties that trash between scenarios — so the claim is about the trash of the
+whole LEG, not of this scenario. `projects/delete.feature` runs first in `project-trash`
+and finishes with `Penpot/Doomed` sitting in the trash on purpose (*"is recoverable
+from the Nextcloud trash"*), which the poll here would have found forever. The name is
+the entire fix, and the rule it belongs to is one file wider than the one the Examples
+table taught: **a fixture name is shared across every file in a leg, not just across
+the rows of one table.**
 
 ---
 ## connection/sync-now
