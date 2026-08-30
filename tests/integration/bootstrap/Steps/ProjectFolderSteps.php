@@ -57,6 +57,145 @@ trait ProjectFolderSteps {
 		$this->davMkcol($path);
 	}
 
+	/**
+	 * SOMEONE MADE A PROJECT IN PENPOT, and the pull is the app noticing.
+	 *
+	 * The Penpot-origin twin of `a design file named … in …`: the gesture happens
+	 * upstream, possibly by someone else, and the event this app is responsible for
+	 * is the sync seeing it. The pull is collapsed in here for the same reason
+	 * {@see ArrangeSteps::declareDesign()} collapses it — a scheduled job is not a
+	 * step a person performs, and a `When the admin syncs` wedged between the two
+	 * `Then`s would be an admin's button in a story about somebody drawing.
+	 *
+	 * THE TEAM IS NAMED, NEVER "THAT TEAM". Every Background here maps three teams
+	 * and the outline creates a project in each in turn, so the cursor form would
+	 * make the row's own team column decorative. {@see ArrangeSteps::teamIdNamed()}
+	 * resolves it from the mappings table, which is the only place a team's name and
+	 * its id are both known.
+	 *
+	 * The id is kept because it is what the folder has to carry: `the project's id`
+	 * in a `holds:` table means THIS project, not merely some project.
+	 *
+	 * @When /^someone creates the "([^"]*)" project in the "([^"]*)" Penpot team$/
+	 */
+	public function someoneCreatesTheProjectInThePenpotTeam(string $name, string $team): void {
+		$this->penpotRpc('create-project', [
+			'team-id' => $this->teamIdNamed($team),
+			'name' => $name,
+		]);
+
+		// READ BACK RATHER THAN TRUSTED: `create-project` answers, but the id the
+		// assertions need is the one the probe channel reports, and the two channels
+		// cross-checking each other is the whole point of the split.
+		$id = $this->penpotProjectIdInTeam($name, $team);
+		if ($id === null) {
+			throw new \RuntimeException(
+				"created the project '{$name}' in the team '{$team}' but Penpot does not list it",
+			);
+		}
+
+		$this->createdProjectId = $id;
+		$this->createdProjectName = $name;
+		$this->createdProjectTeam = $team;
+
+		$this->theAdminRunsAPull();
+	}
+
+	/**
+	 * A project made in Penpot ARRIVED, as a folder carrying its id.
+	 *
+	 * NOT `"…" holds:`, though it ends in the same assertion. That step reports a
+	 * missing path by listing what the PARENT holds, which is the right answer for
+	 * a gesture made in Nextcloud and the wrong one here — the parent is a folder
+	 * the same pull was supposed to create, so when this fails there is frequently
+	 * nothing at either end and "the parent holds nothing" says nothing. What a
+	 * reader needs is whether Penpot lists the project at all, which separates "the
+	 * pull did not mirror it" from "the create never landed".
+	 *
+	 * NO POLLING, unlike the Penpot-side assertions above.
+	 * {@see someoneCreatesTheProjectInThePenpotTeam()} reads the project back and
+	 * then runs the pull to completion, so by the time this sentence is read the
+	 * folder either exists or the pull declined to make it. Waiting would turn a
+	 * decision into a ten-second timeout.
+	 *
+	 * @Then /^"([^"]*)" exists in Nextcloud, holding:$/
+	 */
+	public function existsInNextcloudHolding(string $path, TableNode $table): void {
+		$path = trim($path, '/');
+
+		if (!$this->davExists($path)) {
+			throw new \RuntimeException(sprintf(
+				"the project '%s' was created in the '%s' Penpot team, and nothing stands at '%s'. "
+				. 'Penpot holds the projects: %s',
+				$this->createdProjectName,
+				$this->createdProjectTeam,
+				$path,
+				implode(', ', $this->penpotProjectNames()) ?: '(none)',
+			));
+		}
+
+		$this->holds($path, $table);
+	}
+
+	/**
+	 * The scaffolding a project's name spelled on the way down carries no project
+	 * id — it is a folder like any the user might have made (§C6.38).
+	 *
+	 * READS THE NAME, NOT THE PATH THE PREVIOUS STEP ASSERTED. The claim is about
+	 * what the NAME spelled, so deriving the chain from the name is the claim
+	 * itself rather than a restatement of the row's `folder` column — and it keeps
+	 * this step honest if the two ever disagree.
+	 *
+	 * A ONE-SEGMENT NAME SPELLS NOTHING, so this checks nothing for `Team` and
+	 * `Pinned` — correct rather than lax: those rows are in the outline to prove a
+	 * flat name still arrives, and there is no scaffolding for them to have. The
+	 * referent guard below is what stops that being indistinguishable from a step
+	 * that quietly derived an empty chain for every row.
+	 *
+	 * @Then /^the folders its name spelled on the way down hold:$/
+	 */
+	public function theFoldersItsNameSpelledHold(TableNode $table): void {
+		if ($this->createdProjectName === '') {
+			throw new \RuntimeException(
+				'"the folders its name spelled" has no project to talk about — nothing in this '
+				. 'scenario created one in Penpot.',
+			);
+		}
+
+		$root = $this->mappedFolderForTeam($this->createdProjectTeam);
+		$segments = array_values(array_filter(
+			explode('/', trim($this->createdProjectName, '/')),
+			static fn (string $segment): bool => $segment !== '',
+		));
+		array_pop($segments); // the last one is the project folder, not scaffolding
+
+		$path = $root;
+		foreach ($segments as $segment) {
+			$path .= '/' . $segment;
+			$this->holds($path, $table);
+		}
+	}
+
+	/**
+	 * The folder a team's mapping is rooted at, by the team's NAME.
+	 *
+	 * The reverse of {@see ArrangeSteps::teamIdNamed()}, and it reads the same
+	 * array for the same reason: the mappings table is the only place a team name
+	 * and its folder are both known, and asking Penpot would match by name across
+	 * every team the account can see.
+	 */
+	private function mappedFolderForTeam(string $team): string {
+		foreach ($this->mappingTeamNames as $folder => $name) {
+			if ($name === $team) {
+				return $folder;
+			}
+		}
+
+		throw new \RuntimeException(
+			"no mapping declares a team named '{$team}' — the Background has to map it before a step can name it",
+		);
+	}
+
 	// ── what the APP believes ───────────────────────────────────────────────
 
 	// ── what PENPOT actually holds ──────────────────────────────────────────
@@ -172,6 +311,19 @@ trait ProjectFolderSteps {
 	 * split across two lines, and the second one carries no path of its own.
 	 */
 	private string $assertedFolder = '';
+
+	/**
+	 * The project {@see someoneCreatesTheProjectInThePenpotTeam()} made, so the
+	 * assertions after it can say "the project's id" and "its name".
+	 *
+	 * Three fields rather than one because the two claims need different halves:
+	 * the id is what the leaf folder must carry, and the name is what spelled the
+	 * folders above it — in the team whose mapping decides where the whole path
+	 * starts.
+	 */
+	private string $createdProjectId = '';
+	private string $createdProjectName = '';
+	private string $createdProjectTeam = '';
 
 	/**
 	 * A path in the acting user's files, as the ROOT-relative form `occ` wants.

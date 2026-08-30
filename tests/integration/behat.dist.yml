@@ -26,54 +26,31 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 42 OF 113 SCENARIO HEADERS RUN — 102 executed, across eleven legs (admin 25,
-  # copying 17, authoring 10, motion 10, naming 10, project-motion 8, projects 5,
-  # trash 5, core 4, project-copy 4, project-trash 4). The spec was rewritten — the
-  # noun became the folder and the verb the file — and rather than re-triage 116
-  # scenarios inside that PR, the suite was collapsed to ONE flat @todo queue for
-  # each later PR to draw from. Chapter 3 Round 1 drew the first nine: the ones
-  # green in CI the moment before the collapse, which prove the HARNESS rather than
-  # the behaviour. `behat --tags @todo` is the rest of the queue; a scenario earns
-  # its real status back on the PR that runs it.
+  # 86 OF 114 SCENARIO HEADERS RUN — 171 executed once Examples rows are counted,
+  # across eleven legs (admin 31, motion 22, trash 18, copying 17, project-motion
+  # 17, projects 14, project-copy 12, core 11, authoring 10, naming 10,
+  # project-trash 9). The queue behind that is 19 @todo, 4 @unbuilt, 5 @blocked and
+  # no @decision.
   #
-  # THREE OF THE FOUR TAGS HAVE MEMBERS: 10 @blocked (no browser, no app removal, no
-  # way to author a design's content) and 11 @unbuilt (places the app disagrees with
-  # the spec, each naming what the code owes). @decision is empty.
+  # THESE NUMBERS GO STALE AND THE SAGA IS WHERE THEY BELONG. This block carried a
+  # paragraph per round for eight rounds — every one of them true when written and
+  # describing a suite that had since moved. They are in
+  # saga/Chapter_4_Open_For_Business.md now, which is the only place history lives
+  # (AGENTS.md). Recount rather than trust the line above:
   #
-  # ONE CAME OFF @blocked BY BEING MEASURED RATHER THAN RE-READ. `Move a design into
-  # another team` was blocked on "a file's metadata does not survive a cross-storage
-  # move", which was true and not the whole truth: the FILE ID survives and core
-  # deletes the metadata deliberately. Naming the mechanism turned a wall into a
-  # listener. See features/AGENTS.md#a-cross-team-move-always-crosses-a-storage-boundary.
+  #   behat --dry-run -f progress          # what actually runs
+  #   grep -rho '@todo\|@unbuilt\|@blocked\|@decision' ../../features --include='*.feature'
   #
-  # THE PROJECT LEG NEARLY DOUBLED THIS ROUND (7 → 13), and not by writing tests:
-  # §C6.38 was a rule REVERSING. A project folder was pinned inside its team folder,
-  # which turned out to be guarding a limit Penpot does not have — so two @unbuilt
-  # scenarios became code, and the guard that refused them now refuses something
-  # else (a `link` mapping's edge) instead.
+  # THE ONE LESSON WORTH KEEPING IN THE CONFIG: a status tag is a claim somebody
+  # made once, and nothing re-checks it. Two scenarios came off the queue in Round 9
+  # having been runnable for two rounds, and a @todo in the delete round turned out
+  # to be sitting on behaviour that did not exist at all. `behat --tags @todo` is a
+  # QUEUE, not an inventory — read the scenario against the code before believing
+  # its tag, and change the tag only on a PR that runs it.
   #
-  # THE THIRD ONE FAILED, and is @unbuilt again for a wall neither the rule nor the
-  # API: a move into a Team Folder crosses a storage boundary, which fires no
-  # NodeRenamedEvent at all. Measured, not assumed — see projects/move.feature.
-  #
-  # THEN THE DELETE ROUND took the project leg to 17. One of the four it promoted
-  # was tagged @todo — "the code EXISTS, only the test is missing" — and nothing
-  # deleted a project at all: no folder branch, no `delete-project`. A tag nobody
-  # had checked, which is the failure mode this vocabulary exists to prevent and
-  # the reason `behat --tags @todo` is a queue rather than an inventory.
-  #
-  # THE DESIGN LEG THEN NEARLY DOUBLED (10 → 19) on two headers, and only ONE of
-  # them was a missing test. `Move a design between projects` was held off the run
-  # by a defect in the SPEC: its shared Then demanded an archive of both Examples
-  # blocks, and the second moves a link, which holds zero bytes on purpose.
-  #
-  # SIX MORE IN THAT FILE WERE MISTAGGED, which is the round's real yield — four
-  # @unbuilt and two @blocked, none of them a test anyone could have written. The
-  # @todo queue is 8 shorter and not one line of it became a passing scenario.
-  #
-  # THE FILTER STILL NAMES ALL FOUR, so re-triage is a tag edit and never a config
-  # change. Do not "tidy" the empty two out — the collapse is the anomaly here,
-  # not the vocabulary. What each tag means is unchanged (features/README.md).
+  # THE FILTER NAMES ALL FOUR even though @decision is empty, so re-triage is a tag
+  # edit and never a config change. Do not "tidy" the empty one out. What each tag
+  # means is unchanged (features/README.md).
   #
   # EVERY LEG REPORTS TESTS NOW. The zero-test exemption in the workflow is no
   # longer load-bearing for any of them — it stays because it self-heals in both

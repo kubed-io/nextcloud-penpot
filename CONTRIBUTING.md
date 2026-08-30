@@ -9,15 +9,19 @@ questions are answered below.
 
 **Where the work is right now.** Chapters 1 (the API survey), 2 (the build) and
 3 (building to the spec) are CLOSED. The app works end to end and is deployed:
-both directions of sync, every design and project verb, 73 live scenarios run
+both directions of sync, every design and project verb, 86 live scenarios run
 against a real Nextcloud and a real Penpot on every push.
 [Chapter 4](saga/Chapter_4_Open_For_Business.md) is open, and it is about the
 outward-facing surfaces rather than the code.
 
-**The queue Chapter 3 left is named, not hidden** — 24 `@todo`, 9 `@unbuilt`,
-4 `@blocked`, each saying what it wants. Read
-[features/README.md](features/README.md) for what those tags oblige. The one
-rule: **a scenario stops being `@todo` only on a PR that runs it.**
+**The queue is named, not hidden** — 19 `@todo`, 4 `@unbuilt`, 5 `@blocked`, each
+saying what it wants. Read [features/README.md](features/README.md) for what those
+tags oblige. The one rule: **a scenario stops being `@todo` only on a PR that runs
+it** — and the corollary, learned twice: a tag is a claim somebody made once and
+nothing re-checks it, so read the scenario against the code before believing it.
+
+> Both counts drift with every PR. `behat --dry-run` and a `grep` over
+> `features/` are the authority; these numbers are orientation.
 
 If you only have time for one paragraph: **prefer opening an issue first so the
 work can be scoped and approved, then open a PR with tests and a clear changelog
@@ -238,7 +242,7 @@ You'll need PHP 8.4 (matches prod/CI), Composer, Node from `.nvmrc`. Then:
 ```sh
 composer install
 npm ci
-npm run build   # currently has no src/files.js to bundle — see AGENTS.md
+npm run build   # bundles src/files.js to dist/penpot_sync-files.js
 ```
 
 ---
@@ -357,15 +361,13 @@ Workflows on PRs into `main` (and where it makes sense, on push to `main`):
 | `CodeQL` (default setup) | PR + push to `main` | GitHub-managed JS/TS code scanning | yes |
 | [`publish.yml`](.github/workflows/publish.yml) (🧬 Publish) | manual `workflow_dispatch` | release tarball | n/a |
 
-**Honest note on current state:** because `lib/` and `tests/` don't exist yet,
-several of these jobs currently have nothing to lint, build, or test — they pass
-trivially rather than being stubbed out. This is intentional per the scaffolding
-brief: the pipelines are structurally complete and correct, ready for Chapter 2's
-code to land into them, rather than being placeholder no-op workflows. As `lib/`
-and `src/` are added, these same jobs start actually exercising real code with no
-workflow changes required.
+**What the jobs actually exercise.** All of them run against real code now — `lib/`,
+`src/`, both test suites and the eleven-leg Behat matrix. The pipelines were
+scaffolded complete and correct before there was anything to point them at, so no
+workflow changed as the code landed into them; the only jobs that still pass
+trivially are the ones whose input is genuinely optional.
 
-What the workflows look for from your PR regardless of code-repo maturity:
+What the workflows look for from your PR:
 
 - **`CHANGELOG.md` has a new entry** under `## [Unreleased]`
   (`tarides/changelog-check-action`). The PR author is auto-assigned
@@ -451,9 +453,9 @@ Manual, intentional, not on every merge.
 4. **Second run with `push: true`** to actually commit the bump, tag, and create
    the GitHub Release.
 
-The app is pre-1.0 and pre-code — there is nothing meaningful to release yet.
-This section documents the mechanism the sibling apps use, ready for when there
-is.
+The app is pre-1.0 and has not been released yet. The mechanism is the one both
+sibling apps use, and reaching the Nextcloud app store with it is what
+[Chapter 4](saga/Chapter_4_Open_For_Business.md) is about.
 
 ---
 
