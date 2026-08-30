@@ -122,22 +122,8 @@ final class TrashControl {
 	 * metadata before spending anything on what comes back.
 	 *
 	 * Answers `[]` for an unknown user, or when there is no trash app at all: an
-	 * instance without `files_trashbin` cannot have a trashed mirror to reap.
-	 *
-	 * ## THE FILESYSTEM HAS TO BE SET UP FIRST, OR A TEAM FOLDER'S TRASH IS INVISIBLE
-	 *
-	 * `listTrashRoot()` reads nothing from the Team Folders backend until the user's
-	 * mounts exist — and it answers an EMPTY LIST rather than failing, which is the
-	 * worst possible shape for a bug: the reconcile then decides there is nothing to
-	 * reap, reports zero, and looks like it is working. The n8n sibling measured this
-	 * on a live instance, where the same trash answered 0 entries without the setup
-	 * and 4 with it, while every scenario stayed green in CI — because all of them
-	 * ran against the plain admin folder.
-	 *
-	 * The pull happens to satisfy it already ({@see StorageService::ensureRoot()}
-	 * sets the actor's filesystem up first), but a feature standing on a side effect
-	 * of an unrelated call is a regression waiting for the day that call moves. It is
-	 * idempotent and it is one line, so it is stated here rather than assumed.
+	 * instance without `files_trashbin` cannot have a trashed mirror to reap. The
+	 * filesystem setup a Team Folder's trash silently depends on is {@see roots()}'.
 	 *
 	 * @return list<TrashedFile>
 	 */
@@ -146,28 +132,9 @@ final class TrashControl {
 		if ($manager === null) {
 			return [];
 		}
-		$user = $this->userManager->get($uid);
-		if ($user === null) {
-			return [];
-		}
-		\OC_Util::setupFS($uid);
-
-		try {
-			$items = $manager->listTrashRoot($user);
-		} catch (\Throwable $e) {
-			// A trash we cannot read is not a reason to fail the pull that asked. The
-			// reconcile finds nothing this time round and runs again next tick.
-			$this->logger->warning('penpot_sync: could not list the trash', [
-				'app' => Application::APP_ID,
-				'user' => $uid,
-				'exception' => $e,
-			]);
-
-			return [];
-		}
 
 		$out = [];
-		foreach ($items as $item) {
+		foreach ($this->roots($manager, $uid) as $item) {
 			if (!$item instanceof ITrashItem || $item->getType() !== FileInfo::TYPE_FILE) {
 				continue;
 			}
@@ -193,6 +160,103 @@ final class TrashControl {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Every FOLDER in the root of $uid's trash — the same listing {@see listTrashed()}
+	 * reads, filtered the other way.
+	 *
+	 * ## WHY THE TYPE THAT LISTING SKIPS IS THE ONLY TYPE THIS ONE WANTS
+	 *
+	 * A trashed folder is where a whole project went. Trashing `Penpot/Doomed` puts
+	 * ONE item in the trash — the folder — and the designs inside it are nested in
+	 * that item, not beside it. So the reap, which destroys single mirrors, must never
+	 * see them; and the revive, which brings a project's folder back when Penpot lists
+	 * the project again, can see nothing else. Same listing, opposite halves, and
+	 * neither can reach the other's entries by accident.
+	 *
+	 * Root-only for the same reason as {@see listTrashed()}, and here it needs no
+	 * argument at all: a folder nested inside a trashed parent came back the moment
+	 * the parent did.
+	 *
+	 * The filesystem setup, the unreadable-trash answer, and the `basename()` of the
+	 * original location are all {@see listTrashed()}'s — read {@see roots()}.
+	 *
+	 * @return list<TrashedFolder>
+	 */
+	public function listTrashedFolders(string $uid): array {
+		$manager = $this->trashManager();
+		if ($manager === null) {
+			return [];
+		}
+
+		$out = [];
+		foreach ($this->roots($manager, $uid) as $item) {
+			if (!$item instanceof ITrashItem || $item->getType() !== FileInfo::TYPE_FOLDER) {
+				continue;
+			}
+			// No id, no metadata, no way to know whose folder this is — and a folder
+			// this app cannot identify is never a folder it may move.
+			$fileId = $item->getId();
+			if ($fileId === null) {
+				continue;
+			}
+
+			$out[] = new TrashedFolder(
+				$fileId,
+				basename($item->getOriginalLocation()),
+				static function () use ($manager, $item): void {
+					$manager->restoreItem($item);
+				},
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * The raw root entries of $uid's trash, across every registered backend.
+	 *
+	 * Holds the three things both listings need and neither should restate: the
+	 * unknown-user answer, the decision that a trash we cannot read is not a reason
+	 * to fail the pull that asked, and the filesystem setup below.
+	 *
+	 * ## THE FILESYSTEM HAS TO BE SET UP FIRST, OR A TEAM FOLDER'S TRASH IS INVISIBLE
+	 *
+	 * `listTrashRoot()` reads nothing from the Team Folders backend until the user's
+	 * mounts exist — and it answers an EMPTY LIST rather than failing, which is the
+	 * worst possible shape for a bug: the reconcile then decides there is nothing to
+	 * reap, reports zero, and looks like it is working. The n8n sibling measured this
+	 * on a live instance, where the same trash answered 0 entries without the setup
+	 * and 4 with it, while every scenario stayed green in CI — because all of them
+	 * ran against the plain admin folder.
+	 *
+	 * The pull happens to satisfy it already ({@see StorageService::ensureRoot()}
+	 * sets the actor's filesystem up first), but a feature standing on a side effect
+	 * of an unrelated call is a regression waiting for the day that call moves. It is
+	 * idempotent and it is one line, so it is stated here rather than assumed.
+	 *
+	 * @return list<mixed> whatever the backends answered, unfiltered; the callers
+	 *                     narrow to `ITrashItem` and to the type they want
+	 */
+	private function roots(ITrashManager $manager, string $uid): array {
+		$user = $this->userManager->get($uid);
+		if ($user === null) {
+			return [];
+		}
+		\OC_Util::setupFS($uid);
+
+		try {
+			return array_values($manager->listTrashRoot($user));
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync: could not list the trash', [
+				'app' => Application::APP_ID,
+				'user' => $uid,
+				'exception' => $e,
+			]);
+
+			return [];
+		}
 	}
 
 	private function trashManager(): ?ITrashManager {

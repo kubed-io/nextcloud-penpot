@@ -724,6 +724,58 @@ scenario changes status only on a PR that runs it.
 
 ---
 
+### Round 10 — the same tag, wrong the other way
+
+`projects/restore.feature` was next in the queue: two scenarios, both `@todo`, which
+should have meant two step definitions and a green leg. Reading `lib/` first — the
+habit Round 9 was supposed to teach — said otherwise in three places at once.
+`RestoreFromTrashListener` opened with `if (!$node instanceof File) { return; }` on
+both of its doors, so a restored FOLDER reached nothing. `RestoreService` had no
+folder entry point to reach. And `TrashControl` could list a trashed file and destroy
+it, but had no verb for taking anything back out.
+
+> So Round 9 found two scenarios tagged `@unbuilt` that were runnable, and Round 10
+> found two tagged `@todo` that were not built at all. Three rounds running, the tag
+> has been the thing that was wrong. It is a queue, not an inventory.
+
+**Neither scenario was a small test to write, and one of them closed an open fork.**
+
+The folder half needed a walk. Core announces ONE node when a folder comes out of the
+trash and nothing for the designs inside it — the same wall `DeletionService` meets
+going the other way, which is why *it* hand-walks its children — so the restore had to
+grow the inverse walk. The hard part was not the walk but the ORDER. Penpot has no
+`restore-project` (§C6.19), so a deleted project only comes back through a design of
+its own being restored; when nothing is left to come back through, the project has to
+be made again and the folder re-stamped. That re-stamp has to happen BEFORE the
+designs are handled, because a purged design comes back by import *into the project
+its folder names*, and until the stamp is replaced that is a project Penpot deleted.
+
+The Penpot half was §6.37 — the fork `PullService` had carried since the trash became
+readable. The reconcile REAPS: it destroys a trashed mirror whose design Penpot
+destroyed. The mirror image of that — a trashed mirror whose far side came *back* —
+had no scenario asking for it, so it was documented and left. This slice is the
+scenario, and the answer turned out to belong at the FOLDER level rather than the
+file level, for a reason the trash itself dictates: trashing `Penpot/Doomed` puts one
+item in the trash, and the designs beneath it are nested inside it rather than beside
+it. There is no trashed `Alpha.penpot` to find. So the pull now looks for the
+project's folder in the trash before provisioning a new one, and the folder comes back
+whole — which is the only shape Nextcloud offers and the only one that cannot hand
+somebody a half-restore.
+
+**And the Examples table carried Round 9's defect again, in a new costume.** All four
+rows named the same project, `Doomed`. Row 3 finishes by importing a design into that
+folder; row 4 then claims the folder holds *no designs at all*. Deterministically
+false, and it would have read as the restore inventing a design. Every row names its
+own project now — `Parked`, `Purged`, `Empty` — which is the same fix as Round 9's
+four characters, arrived at the same way: by tracing what each row leaves behind for
+the next one.
+
+> Two rounds, two Examples tables, one bug. Penpot state accumulates across a leg and
+> nothing tears it down, so a fixture name is a shared resource. Worth stating once
+> as a rule: **an Examples row may not reuse a name an earlier row leaves standing.**
+
+---
+
 ## The plan — reaching the store
 
 The store's requirement is that **every release is signed by a certificate

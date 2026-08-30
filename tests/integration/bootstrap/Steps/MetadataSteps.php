@@ -159,6 +159,19 @@ trait MetadataSteps {
 			return null;
 		}
 
+		// AN IDENTITY CLAIM ABOUT A PROJECT IS THE SAME CLAIM `the mappings hold:`
+		// MAKES, so it is answered by the same code rather than by a second copy of
+		// it here. `a new id` in particular is not "any id" — it means an id that is
+		// none of the ones the arrange declared, and only
+		// {@see ArrangeSteps::checkIdentity()} knows what those were.
+		//
+		// Both sentences exist because they read differently and both read well: a
+		// table of paths when several projects are on stage, and this one when a
+		// single folder is the subject and the other rows are about its metadata.
+		if ($property === 'penpot_project_id' && in_array($expected, ['the original id', 'a new id'], true)) {
+			return $this->checkIdentity($path, false, $expected, (string)$actual);
+		}
+
 		// THE WIRE VALUE FOR `link` IS `reference`, because the literal string
 		// "link" is is_callable() and crashes core's PROPFIND. That quirk is spelt
 		// out once, in view-design.feature, where the DAV surface IS the subject.

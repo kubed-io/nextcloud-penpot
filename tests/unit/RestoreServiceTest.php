@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\PenpotSync\Tests\Unit;
 
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\ImportService;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\Membership;
@@ -20,6 +21,7 @@ use OCA\PenpotSync\Service\PersonalTokenService;
 use OCA\PenpotSync\Service\RestoreService;
 use OCA\PenpotSync\Service\SyncNotifier;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -475,6 +477,101 @@ final class RestoreServiceTest extends TestCase {
 		$this->restores->onRestored($this->file());
 	}
 
+	// ── the folder step (`projects/restore.feature`) ────────────────────────
+
+	/**
+	 * THE RESTORED FOLDER IS ITSELF THE PROJECT, and this is the common shape:
+	 * someone throws a project away by throwing away its folder.
+	 *
+	 * A walk that only looked at CHILDREN passes every other test in this section
+	 * and leaves the one folder the gesture was about pointing at a dead project
+	 * forever. Written after exactly that bug, found by tracing the Examples.
+	 */
+	public function testARestoredProjectFolderIsSettledEvenWithNothingBelowIt(): void {
+		$this->givenTeam();
+		$this->givenMarkers([70 => 'project-doomed']);
+		$this->client->method('deletedFiles')->willReturn([]);
+
+		$this->client->expects($this->once())->method('createProject')
+			->willReturn(['id' => 'project-remade']);
+		$this->metadata->expects($this->once())->method('writeFolder')
+			->with(70, [PenpotMetadata::KEY_PROJECT_ID => 'project-remade']);
+
+		$this->restores->onFolderRestored($this->folder(70));
+	}
+
+	/**
+	 * A design still in Penpot's trash brings its project back with it, so nothing
+	 * is made again and the folder keeps the id it returned with.
+	 *
+	 * Penpot has no `restore-project` (§C6.19) — the restore of the FILE is what
+	 * clears the project's `deleted_at`, which is why layer 2 alone is the whole
+	 * fix for this row and a `createProject` here would be a duplicate.
+	 */
+	public function testAProjectWithADesignInPenpotsTrashIsNotMadeAgain(): void {
+		$this->givenMarkers([70 => 'project-doomed']);
+		$this->givenStamped();
+		$this->givenInPenpotTrash();
+		$this->givenResolvesToProject();
+		$this->givenProjectHolds([self::PENPOT_ID]);
+
+		$this->client->expects($this->never())->method('createProject');
+		$this->client->expects($this->once())->method('restoreDeletedFiles')
+			->willReturn([self::PENPOT_ID]);
+
+		$this->restores->onFolderRestored($this->folder(70, [$this->file()]));
+	}
+
+	/**
+	 * THE MAPPING ROOT IS NEVER WALKED. It carries a team marker and no project of
+	 * its own, and a walk that started there would reach every project in the team
+	 * at once — the same carve-out, and the same reason, as
+	 * {@see \OCA\PenpotSync\Service\DeletionService::onFolderTrashed()}.
+	 */
+	public function testRestoringTheMappedRootContactsNobody(): void {
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => new FolderMarkers('', self::TEAM),
+		);
+
+		$this->client->expects($this->never())->method('createProject');
+		$this->client->expects($this->never())->method('deletedFiles');
+
+		$this->restores->onFolderRestored($this->folder(70, [$this->folder(71)]));
+	}
+
+	/**
+	 * A TRASH LISTING WE COULD NOT READ MAKES NOTHING AGAIN.
+	 *
+	 * "No design can revive this project" is exactly what an unreadable listing
+	 * looks like, and acting on it would create a second project beside one that
+	 * was about to come back on its own — with the folder stamped to the new one
+	 * and the user's history stranded in the old. The same asymmetry
+	 * {@see \OCA\PenpotSync\Service\TrashReconcileService::reap()} has, pointing
+	 * the other way: when it cannot tell, it does the thing that can be undone.
+	 */
+	public function testAnUnreadablePenpotTrashMakesNoProjectAgain(): void {
+		$this->givenTeam();
+		$this->givenMarkers([70 => 'project-doomed']);
+		$this->client->method('deletedFiles')->willThrowException(
+			new \OCA\PenpotSync\Exception\PenpotApiException('get-team-deleted-files failed'),
+		);
+
+		$this->client->expects($this->never())->method('createProject');
+
+		$this->restores->onFolderRestored($this->folder(70));
+	}
+
+	/** A plain folder below no mapping is the user's, and Penpot never hears of it. */
+	public function testRestoringAFolderOutsideEveryMappingContactsNobody(): void {
+		$this->givenMarkers([]);
+		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
+
+		$this->client->expects($this->never())->method('createProject');
+		$this->client->expects($this->never())->method('deletedFiles');
+
+		$this->restores->onFolderRestored($this->folder(70));
+	}
+
 	// ── fixtures ────────────────────────────────────────────────────────────
 
 	/** The actor's own token, which these tests never exercise. */
@@ -516,5 +613,41 @@ final class RestoreServiceTest extends TestCase {
 		$node->method('getName')->willReturn(self::FILE_NAME);
 
 		return $node;
+	}
+
+	/**
+	 * The folder tree resolves into a mapped team, and its path below the mapping
+	 * is the name a remade project would take.
+	 *
+	 * BOTH, because they are two questions with one answer between them: a folder
+	 * with a team but no name is a folder Penpot would refuse (§6.4's 1-to-250
+	 * rule), and a stub that gave only the team would make every "it is made again"
+	 * test pass for having no name rather than for the rule under test.
+	 */
+	private function givenTeam(): void {
+		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
+		$this->resolver->method('pathBelowMapping')->willReturn('Doomed');
+	}
+
+	/**
+	 * Which node ids carry which project id; a missing id is a plain folder.
+	 *
+	 * @param array<int, string> $byId
+	 */
+	private function givenMarkers(array $byId): void {
+		$this->metadata->method('readFolder')->willReturnCallback(
+			static fn (int $id): FolderMarkers => new FolderMarkers($byId[$id] ?? '', ''),
+		);
+	}
+
+	/** @param list<\OCP\Files\Node> $children */
+	private function folder(int $id, array $children = []): Folder {
+		$folder = $this->createMock(Folder::class);
+		$folder->method('getId')->willReturn($id);
+		$folder->method('getName')->willReturn('Doomed');
+		$folder->method('getPath')->willReturn('/admin/files/Penpot/Doomed');
+		$folder->method('getDirectoryListing')->willReturn($children);
+
+		return $folder;
 	}
 }

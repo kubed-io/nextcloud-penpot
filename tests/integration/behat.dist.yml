@@ -26,10 +26,10 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 86 OF 114 SCENARIO HEADERS RUN — 171 executed once Examples rows are counted,
+  # 88 OF 114 SCENARIO HEADERS RUN — 176 executed once Examples rows are counted,
   # across eleven legs (admin 31, motion 22, trash 18, copying 17, project-motion
-  # 17, projects 14, project-copy 12, core 11, authoring 10, naming 10,
-  # project-trash 9). The queue behind that is 19 @todo, 4 @unbuilt, 5 @blocked and
+  # 17, projects 14, project-trash 14, project-copy 12, core 11, authoring 10,
+  # naming 10). The queue behind that is 17 @todo, 4 @unbuilt, 5 @blocked and
   # no @decision.
   #
   # THESE NUMBERS GO STALE AND THE SAGA IS WHERE THEY BELONG. This block carried a
@@ -43,10 +43,11 @@ default:
   #
   # THE ONE LESSON WORTH KEEPING IN THE CONFIG: a status tag is a claim somebody
   # made once, and nothing re-checks it. Two scenarios came off the queue in Round 9
-  # having been runnable for two rounds, and a @todo in the delete round turned out
-  # to be sitting on behaviour that did not exist at all. `behat --tags @todo` is a
-  # QUEUE, not an inventory — read the scenario against the code before believing
-  # its tag, and change the tag only on a PR that runs it.
+  # having been runnable for two rounds; the two that came off in Round 10 were the
+  # opposite mistake, tagged @todo over behaviour that did not exist at all, and a
+  # @todo in the delete round was the same. `behat --tags @todo` is a QUEUE, not an
+  # inventory — read the scenario against the code before believing its tag, and
+  # change the tag only on a PR that runs it.
   #
   # THE FILTER NAMES ALL FOUR even though @decision is empty, so re-triage is a tag
   # edit and never a config change. Do not "tidy" the empty one out. What each tag

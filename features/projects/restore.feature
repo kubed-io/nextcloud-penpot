@@ -20,21 +20,21 @@ Feature: Restoring a project from the trash
     # ── RULE: the project comes back; what Penpot kept decides which id ───────
     # notes: ../AGENTS.md#restoring-a-project-folder-brings-the-project-back
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Restore a project folder from the Nextcloud trash
-    Given a project folder "<folder>/Doomed" <held>
-    And "<folder>/Doomed" is in the Nextcloud trash
-    When I restore "<folder>/Doomed" from the Nextcloud trash
-    Then Penpot holds a project named "Doomed"
-    And "<folder>/Doomed" holds:
+    Given a project folder "<folder>/<project>" <held>
+    And "<folder>/<project>" is in the Nextcloud trash
+    When I restore "<folder>/<project>" from the Nextcloud trash
+    Then Penpot holds a project named "<project>"
+    And "<folder>/<project>" holds:
       | penpot_project_id | <identity> |
 
     Examples: what Penpot can still give back decides which id comes home
-      | folder | held                                    | identity        |
-      | Penpot | holding designs still in Penpot's trash | the original id |
-      | Shared | holding designs still in Penpot's trash | the original id |
-      | Penpot | holding designs Penpot has purged       | a new id        |
-      | Penpot | holding no designs at all               | a new id        |
+      | folder | project | held                                    | identity        |
+      | Penpot | Parked  | holding designs still in Penpot's trash | the original id |
+      | Shared | Parked  | holding designs still in Penpot's trash | the original id |
+      | Penpot | Purged  | holding designs Penpot has purged       | a new id        |
+      | Penpot | Empty   | holding no designs at all               | a new id        |
 
     # A project comes back only through a design of its own — Penpot has no
     # restore-project call. With nothing to come back through, it is made again.
@@ -42,7 +42,7 @@ Feature: Restoring a project from the trash
     # ── RULE: a design coming back in Penpot brings its project with it ───────
     # notes: ../AGENTS.md#restoring-one-design-brings-its-project-with-it
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Restore one design of a deleted project in Penpot
     Given the following items in the mappings:
       | path                        |

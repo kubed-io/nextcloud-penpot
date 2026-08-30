@@ -51,11 +51,12 @@ use Psr\Log\LoggerInterface;
  *   - **The project-folder visible tag** (§6.32) — WITHDRAWN, not deferred. See
  *     {@see ensureProjectFolder()}: the pull marks a project folder with metadata
  *     and nothing else.
- *   - **Adopting a mirror out of the Nextcloud trash** (§6.37) — a design that
- *     comes back is still re-created beside its trashed mirror rather than matched
- *     to it by `penpot_id`. The trash is READABLE now ({@see TrashControl}), so
- *     this is a fork rather than a wall: the n8n sibling's reconcile restores as
- *     well as reaps, and no scenario asks for the other half yet. Untidy, not lossy.
+ *   - **Adopting a mirror out of the Nextcloud trash** (§6.37) — HALF CLOSED. A
+ *     whole project folder that comes back in Penpot is now taken back out of the
+ *     trash rather than re-created beside it ({@see revivedProjectFolder()}). A
+ *     single DESIGN whose mirror was trashed on its own is still re-created beside
+ *     that mirror rather than matched to it by `penpot_id`, and no scenario asks
+ *     for that half yet. Untidy, not lossy.
  *   - **The `/` guard as a reported skip** (§6.51) — a FILE whose Penpot name
  *     contains `/` is skipped and logged here, and Course 4 turns that into the
  *     user-facing report. A file is ONE node and no amount of nesting can express
@@ -204,6 +205,10 @@ final class PullService {
 				// relocations it enables, so carrying one pull's answers into the next
 				// would hand out folders that have since moved.
 				$this->foreignIndex = null;
+				// Same reasoning, one gesture further: this pull can take folders OUT of
+				// the trash, so an index built by the last one names entries that are no
+				// longer in it.
+				$this->trashedProjectFolders = null;
 				$root = $this->storage->ensureRoot($mapping);
 				// REPAIR, NOT PROVISIONING. `ensureRoot()` marks the root itself now,
 				// so this writes a value that is normally already there — kept because
@@ -488,7 +493,13 @@ final class PullService {
 		//
 		// Looked up only on a miss, and built at most once per pull, because a miss
 		// is otherwise the ordinary "a genuinely new project" path.
-		$existing = $folderIndex[$projectId] ?? $this->foreignProjectFolder($projectId, $mapping);
+		//
+		// A PROJECT WHOSE FOLDER IS IN THE TRASH IS ALSO A MISS, and the last place
+		// worth looking before giving up and making a new one — see
+		// {@see revivedProjectFolder()}.
+		$existing = $folderIndex[$projectId]
+			?? $this->foreignProjectFolder($projectId, $mapping)
+			?? $this->revivedProjectFolder($projectId, $root);
 		if ($existing !== null) {
 			$this->tryMoveProject($existing, $root, $segments, $leaf);
 			$this->metadata->writeFolder($existing->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
@@ -512,6 +523,127 @@ final class PullService {
 		$this->metadata->writeFolder($folder->getId(), [PenpotMetadata::KEY_PROJECT_ID => $projectId]);
 		$this->times->apply($folder, null, MirrorTimes::parse($project['created-at'] ?? null));
 		return $folder;
+	}
+
+	/**
+	 * Every project folder sitting in the sync actor's Nextcloud trash, by project
+	 * id — read at most once per request, and only ever on a miss.
+	 *
+	 * Entries are removed as they are used, so the index stays true after a restore
+	 * without being read again.
+	 *
+	 * @var array<string, TrashedFolder>|null
+	 */
+	private ?array $trashedProjectFolders = null;
+
+	/**
+	 * The project's folder, taken back out of the NEXTCLOUD trash because Penpot is
+	 * listing the project again (`projects/restore.feature`, saga §6.37).
+	 *
+	 * ## THE OTHER HALF OF A FORK THAT HAS BEEN OPEN SINCE THE TRASH BECAME READABLE
+	 *
+	 * §6.37 named this and left it: {@see TrashReconcileService} REAPS — it destroys
+	 * a trashed mirror whose design Penpot has destroyed — and the symmetrical case,
+	 * a trashed mirror whose design came BACK, had no scenario asking for it. It has
+	 * one now, and this is the half that was missing.
+	 *
+	 * ## WHY A FOLDER AND NOT THE DESIGNS INSIDE IT
+	 *
+	 * Trashing `Penpot/Doomed` puts ONE thing in the trash: the folder. The designs
+	 * under it are nested in that item, not beside it, so there is no trashed
+	 * `Alpha.penpot` for a design-level revive to find — which is exactly why
+	 * {@see TrashControl::listTrashed()} refuses to descend, and why the revive is
+	 * written at the level the gesture actually happened at. The folder comes back
+	 * whole, with everything that went in with it.
+	 *
+	 * A design that came back but whose SIBLINGS are still deleted needs nothing
+	 * special here. Their mirrors return with the folder and {@see prune()} trashes
+	 * them again on this same pull, which is the truthful answer: their designs are
+	 * still in Penpot's trash.
+	 *
+	 * ## RESTORING IS NOT DESTROYING, SO THE FAILURE DIRECTION IS THE OTHER WAY UP
+	 *
+	 * The reap refuses to act on anything it cannot prove. This does the opposite
+	 * and it is safe to: the worst outcome of a wrong revive is a folder back in the
+	 * user's tree that they had thrown away, next to a project Penpot is telling us
+	 * exists. Nothing is lost and they can trash it again. A trash we cannot read
+	 * simply falls through to making a new folder, as it always did.
+	 */
+	private function revivedProjectFolder(string $projectId, Folder $root): ?Folder {
+		$trashed = $this->trashedProjectFolders()[$projectId] ?? null;
+		if ($trashed === null) {
+			return null;
+		}
+		unset($this->trashedProjectFolders[$projectId]);
+
+		try {
+			$trashed->restore();
+		} catch (\Throwable $e) {
+			// A backend that refused, a quota, a folder whose original parent is gone.
+			// The caller makes a fresh folder instead, which is what it did before this
+			// method existed — untidy, not lossy.
+			$this->logger->warning('penpot_sync: could not bring a project folder back out of the trash', [
+				'app' => Application::APP_ID,
+				'project' => $projectId,
+				'name' => $trashed->name,
+				'exception' => $e,
+			]);
+
+			return null;
+		}
+
+		// RE-INDEXED RATHER THAN RESOLVED BY PATH. The restore puts the folder back
+		// where it was deleted from, and that path is the trash's business, not ours —
+		// it can differ from the one the project's name spells today. Finding it by
+		// its id is the same lookup every other branch of the caller does, and the
+		// caller then moves it if the name has moved on.
+		$found = $this->indexProjectFolders($root)[$projectId] ?? null;
+		if ($found === null) {
+			// Restored somewhere this mapping cannot see — a Team Folder the actor left,
+			// a mapping that has since moved. The caller makes a new folder.
+			return null;
+		}
+
+		$this->logger->info('penpot_sync: a project came back in Penpot, so its folder came back out of the trash', [
+			'app' => Application::APP_ID,
+			'project' => $projectId,
+			'folder' => $found->getPath(),
+		]);
+
+		return $found;
+	}
+
+	/**
+	 * @return array<string, TrashedFolder> penpot_project_id -> trashed folder
+	 */
+	private function trashedProjectFolders(): array {
+		if ($this->trashedProjectFolders !== null) {
+			return $this->trashedProjectFolders;
+		}
+		$this->trashedProjectFolders = [];
+
+		try {
+			$uid = $this->storage->resolveActorUid();
+		} catch (\Throwable) {
+			// No sync actor, no trash to read. The pull that asked has bigger problems
+			// and will report them itself.
+			return [];
+		}
+
+		foreach ($this->trash->listTrashedFolders($uid) as $folder) {
+			$projectId = $this->metadata->readFolder($folder->fileId)->projectId;
+			if ($projectId === '') {
+				continue;
+			}
+			// A project id is a uuid, so it needs no team check to be unambiguous — and
+			// a trashed folder has no path left to attribute it to a mapping by anyway.
+			// Two trashed folders for one project would mean the same project mirrored
+			// twice and both copies deleted; either is a correct answer, and the loser
+			// stays in the trash for a pull that has somewhere to put it.
+			$this->trashedProjectFolders[$projectId] = $folder;
+		}
+
+		return $this->trashedProjectFolders;
 	}
 
 	/**
