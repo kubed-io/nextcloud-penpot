@@ -284,20 +284,25 @@ trait CopySteps {
 
 	/**
 	 * The folder twin of {@see iTryToCopyTheFileInto()} — a copy expected to be
-	 * REFUSED, named by its destination folder.
+	 * REFUSED, named by its full destination PATH.
 	 *
-	 * NO FREE-NAME SEARCH, unlike {@see \OCA\PenpotSync\Tests\Integration\Steps\GestureSteps::iCopyInto()}:
-	 * a refusal never lands, so there is nothing to collide with, and resolving a
-	 * name here would have the harness assert a path the gesture was never going
-	 * to create.
+	 * ## THE ONE COPY STEP THAT IS NOT `into`, AND ON PURPOSE
 	 *
-	 * @When /^I try to copy "([^"]*)" into "([^"]*)"$/
+	 * `into` exists because core picks the name when a copy lands beside
+	 * something. A refusal never lands, so there is no name to pick — and
+	 * deriving one from the source would aim `Pointers/My Stuff` at
+	 * `Pointers/My Stuff`, a copy onto itself, which DAV answers for reasons of
+	 * its own and never reaches the rule under test.
+	 *
+	 * Naming a destination that cannot already exist is also what lets the
+	 * assertion be the simple one: `there is no folder at …` means the gesture
+	 * created nothing, with no before-and-after bookkeeping and no chance of
+	 * finding what a previous scenario left in an unmapped folder.
+	 *
+	 * @When /^I try to copy "([^"]*)" to "([^"]*)"$/
 	 */
-	public function iTryToCopyInto(string $path, string $folder): void {
-		$folder = trim($folder, '/');
-		$this->childrenBeforeCopy = $this->davChildren($folder);
-
-		$result = $this->davCopyResult($path, $folder . '/' . basename($path));
+	public function iTryToCopyTo(string $path, string $target): void {
+		$result = $this->davCopyResult($path, trim($target, '/'));
 		$this->lastGestureStatus = $result['status'];
 		$this->lastGestureBody = $result['body'];
 	}

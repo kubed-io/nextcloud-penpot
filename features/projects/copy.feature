@@ -121,9 +121,9 @@ Feature: Copying a Penpot project folder
       | path                            | kind    |
       | /<source>/My Stuff              | project |
       | /<source>/My Stuff/Alpha.penpot | design  |
-    When I try to copy "<source>/My Stuff" into "<destination>"
+    When I try to copy "<source>/My Stuff" to "<destination>/My Stuff copy"
     Then the copy is refused with a message
-    And there is no folder at "<destination>/My Stuff"
+    And there is no folder at "<destination>/My Stuff copy"
 
     Examples: a link project is read-only in Nextcloud, and there is nowhere it may go
       | source   | destination |
@@ -134,6 +134,9 @@ Feature: Copying a Penpot project folder
     Examples: and a link team is filled from Penpot, whatever is arriving
       | source | destination |
       | Penpot | Pointers    |
+
+    # The one copy that names its destination: a refusal never lands, so there is
+    # no name for core to pick and nothing to aim at the source's own parent.
 
     # ── RULE: a copy Penpot will not take creates nothing ─────────────────────
 
