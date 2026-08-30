@@ -353,6 +353,12 @@ final class CopyServiceTest extends TestCase {
 		$file->method('getName')->willReturn($name);
 		$file->method('getId')->willReturn($id);
 		$file->method('getPath')->willReturn('/dana/files/Penpot/My Stuff/' . $name);
+		// THE PARENT IS NOT OPTIONAL. `DestinationResolver` is the real one here
+		// (§C6.10), and it walks UP from the file to decide where the design
+		// belongs — an unstubbed `getParent()` returns null, which it reads as
+		// "past the storage root" and answers Drafts, so nothing is duplicated
+		// and the test fails on a fixture rather than on the walk it is about.
+		$file->method('getParent')->willReturn($this->parentFolder());
 
 		return $file;
 	}
