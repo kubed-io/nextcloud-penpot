@@ -828,6 +828,22 @@ system will not hold. The common thread is the same one: **a claim written down 
 and never re-measured**, whether it is a tag, an Examples row, or an API's docstring
 promising an immediate delete.
 
+**And then §6.49 collected its toll a third time, from the harness.** With the fixture
+names unique, `Penpot holds a project named "Revived"` failed — and had only ever
+passed because `Doomed` was a name the leg had several of. The new step confirmed its
+restore against the TRASH listing and pulled the instant the design left it, which is
+inside the window where Penpot's transaction has not settled and the project is still
+deleted. The pull saw no such project, so it never looked for its folder.
+
+> `RestoreServiceTest` has a test whose whole subject is this distinction — *"success
+> is measured against the project listing, not the trash"* — written after the same
+> window failed the suite's headline scenario about half the time. The app has obeyed
+> it since. The harness, written months later by someone who had read that docblock in
+> the same sitting, did not.
+
+A rule the production code follows is not a rule the test code inherits, and the test
+code is where it is easiest to get away with breaking.
+
 ---
 
 ## The plan — reaching the store

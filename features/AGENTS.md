@@ -4040,6 +4040,15 @@ included*. True, but it is Nextcloud's doing rather than this app's, and it is t
 restore as any other. If it earns a scenario anywhere it is `designs/restore`, where a
 single design coming back is the subject.
 
+**THE HARNESS OWES THIS ONE §6.49's DISCIPLINE, AND FIRST IT DIDN'T.** Restoring a
+design in Penpot revives its project — but the restore's SSE returns before the
+transaction settles, so the design leaves `get-team-deleted-files` while the project
+is still deleted, and a second call is what settles it. The step confirmed against
+the TRASH, returned after one call, and pulled into that window; the pull saw no such
+project, never looked for its folder, and the failure read as the revive not working.
+It confirms against the PROJECT listing now, which is the oracle `RestoreService`
+already uses and `RestoreServiceTest` already pins for the app.
+
 **THIS SCENARIO CLOSES HALF OF §6.37**, the fork `PullService` has carried since the
 Nextcloud trash became readable. `TrashReconcileService` REAPS — it destroys a trashed
 mirror whose design Penpot has destroyed — and the symmetrical case, a trashed mirror

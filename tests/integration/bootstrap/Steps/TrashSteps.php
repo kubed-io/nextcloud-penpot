@@ -181,9 +181,26 @@ trait TrashSteps {
 	 * for a reason that proves nothing, so the step names one and the assertion
 	 * that its sibling is still in the trash guards the difference.
 	 *
-	 * Retried and confirmed for §6.49's reason, exactly as
-	 * {@see someoneRestoresTheDesignInPenpot()} is, then followed by a pull —
-	 * because reviving the folder is the PULL's work, not the RPC's.
+	 * ## CONFIRMED AGAINST THE PROJECT LISTING, NEVER AGAINST THE TRASH
+	 *
+	 * The two disagree, and §6.49 is the whole reason
+	 * {@see \OCA\PenpotSync\Service\RestoreService} exists in the shape it does:
+	 * the restore's SSE returns before Penpot's transaction settles, so the design
+	 * leaves `get-team-deleted-files` while its project is still deleted. A second
+	 * call settles it — the app logs *"the design came back on a second call"* doing
+	 * exactly this.
+	 *
+	 * The first cut of this step confirmed against the TRASH, returned after one
+	 * call, and pulled into that window. The pull then saw no such project, so it
+	 * never looked for its folder, and the failure surfaced two steps later as
+	 * "Penpot holds no project named …". `RestoreServiceTest` has a test pinning
+	 * this exact distinction for the app; the harness owed it the same discipline.
+	 *
+	 * `penpotLiveDesignIds()` is the right oracle because the probe prints designs
+	 * UNDER their projects: a design whose project is still deleted is not in it, so
+	 * one check answers "the design is back" and "its project is back" together.
+	 *
+	 * Then a pull, because reviving the folder is the PULL's work, not the RPC's.
 	 *
 	 * @When /^someone restores only "([^"]*)" in Penpot$/
 	 */
@@ -192,7 +209,7 @@ trait TrashSteps {
 
 		for ($attempt = 0; $attempt < 3; $attempt++) {
 			$this->penpotRpc('restore-deleted-team-files', ['team-id' => $team, 'ids' => [$id]]);
-			if (!in_array($id, $this->penpotTrashIds($team), true)) {
+			if (in_array($id, $this->penpotLiveDesignIds(), true)) {
 				$this->theAdminRunsAPull();
 
 				return;
@@ -200,7 +217,8 @@ trait TrashSteps {
 		}
 
 		throw new \RuntimeException(
-			"Penpot accepted restore-deleted-team-files for {$id} three times and '{$name}' is still in team {$team}'s trash",
+			"Penpot accepted restore-deleted-team-files for {$id} three times and '{$name}' is still not "
+			. "listed in a live project of team {$team}",
 		);
 	}
 

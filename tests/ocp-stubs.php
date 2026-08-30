@@ -111,6 +111,12 @@ namespace OCP {
 	if (!interface_exists(IUserSession::class, false)) {
 		interface IUserSession {
 			public function getUser(): ?IUser;
+
+			// TrashControl swaps the session user around a trash restore, because
+			// `Trashbin::restore()` reads it and a pull has none. Declared here or a
+			// double of this interface silently lacks the method, and the first test
+			// that exercises that path fails on the stub rather than on the code.
+			public function setUser(?IUser $user): void;
 		}
 	}
 	// MappingSettings offers a per-mapping group picker, so it needs the list of
