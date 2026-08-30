@@ -51,6 +51,7 @@ trait ProjectFolderSteps {
 	 * @Given /^a folder at "([^"]*)"$/
 	 * @Given /^a folder at "([^"]*)" that is not mapped$/
 	 * @Given /^a folder at "([^"]*)" in the user's home that is not a project$/
+	 * @Given /^a folder "([^"]*)" already exists$/
 	 * @When /^I create the folder "([^"]*)"$/
 	 */
 	public function iCreateAFolderAt(string $path): void {
@@ -399,18 +400,6 @@ trait ProjectFolderSteps {
 				implode(', ', array_map('basename', $held)),
 			));
 		}
-	}
-
-	/**
-	 * A path in the acting user's files, as the ROOT-relative form `occ` wants.
-	 *
-	 * `FileUtils::getNode()` takes either a numeric fileid or an absolute path
-	 * through the storage root — not the DAV-relative path every other step in
-	 * this suite speaks. One place to translate, so the Gherkin stays in the one
-	 * vocabulary a reader already knows.
-	 */
-	private function rootPath(string $path): string {
-		return '/' . $this->ncUser . '/files/' . ltrim($path, '/');
 	}
 
 	/**

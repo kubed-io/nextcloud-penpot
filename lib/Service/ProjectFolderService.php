@@ -113,7 +113,7 @@ final class ProjectFolderService {
 	 * {@see MembershipResolver}'s upward seatbelt. A Nextcloud tree is finite and
 	 * the walk terminates naturally; this only guards a pathological shape.
 	 */
-	private const MAX_DEPTH = 100;
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly PenpotClient $client,

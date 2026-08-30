@@ -68,7 +68,7 @@ final class DeletionService {
 	 * A ceiling on the descent, mirroring the seatbelts in
 	 * {@see MembershipResolver} and {@see PushService}.
 	 */
-	private const MAX_DEPTH = 100;
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly PenpotClient $client,

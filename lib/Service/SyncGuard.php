@@ -43,11 +43,19 @@ namespace OCA\PenpotSync\Service;
 final class SyncGuard {
 	private int $depth = 0;
 
-	public function enter(): void {
+	/**
+	 * PRIVATE, both of them, and nothing outside this class has ever called them.
+	 *
+	 * {@see run()} is the only way to raise the guard because it is the only one
+	 * that lowers it again in a `finally`. A caller that could `enter()` on its own
+	 * could also throw past its own `leave()` and wedge the listener off for the
+	 * rest of the request — the one failure this class must not permit.
+	 */
+	private function enter(): void {
 		$this->depth++;
 	}
 
-	public function leave(): void {
+	private function leave(): void {
 		if ($this->depth > 0) {
 			$this->depth--;
 		}

@@ -66,8 +66,8 @@ use Psr\Log\LoggerInterface;
  * listeners it is imitating.
  */
 final class BulkPushService {
-	/** A ceiling on the descent, mirroring the seatbelts in {@see PullService}. */
-	private const MAX_DEPTH = 100;
+	/** The ceiling every downward walk in this app shares. {@see Walk::MAX_DEPTH} */
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly MappingService $mappings,

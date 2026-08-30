@@ -230,7 +230,7 @@ final class TrashControl {
 	 * The same ceiling every other recursion over user-shaped data in this app uses,
 	 * and for the same reason: a bound on a walk nobody should ever reach the end of.
 	 */
-	private const MAX_DEPTH = 100;
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	/**
 	 * What is inside a trashed folder: every design's file id, and whether anything

@@ -166,17 +166,22 @@ trait TrashSteps {
 	}
 
 	/**
-	 * It is NOT in the Nextcloud trash — because something took it back out.
+	 * A NAMED path is not in the Nextcloud trash — whichever gesture took it out.
 	 *
-	 * The assertion the revive exists for: the pull found the project alive in
-	 * Penpot again and lifted its folder out of the trash rather than building a
-	 * second one beside it ({@see \OCA\PenpotSync\Service\PullService::revivedProjectFolder()}).
+	 * TWO PHRASINGS, ONE CLAIM. "is not in" is the restore reading and "is gone
+	 * from" the purge one; both assert the same absence of the same entry, and a
+	 * scenario picks whichever reads true for the gesture it just made.
 	 *
-	 * "Not in the trash" and "back where it was" are the same claim HERE and only
-	 * here, because a restore has no other destination — Nextcloud puts a trashed
-	 * node back where it came from and offers no say in the matter.
+	 * The restore side carries a meaning the purge side does not: there it is also
+	 * the whole of "back where it was", because a restore has no other destination
+	 * — Nextcloud puts a trashed node back where it came from and offers no say in
+	 * the matter. So a project folder absent here proves the pull found the project
+	 * alive in Penpot again and lifted its folder out of the trash rather than
+	 * building a second one beside it
+	 * ({@see \OCA\PenpotSync\Service\PullService::revivedProjectFolder()}).
 	 *
 	 * @Then /^"([^"]*)" is not in the Nextcloud trash$/
+	 * @Then /^"([^"]*)" is gone from the Nextcloud trash$/
 	 */
 	public function theNamedPathIsNotInTheNextcloudTrash(string $path): void {
 		$this->theFileIsNotInTheNextcloudTrash(ltrim($path, '/'));
@@ -381,15 +386,6 @@ trait TrashSteps {
 					. 'Penpot would still give back: ' . implode(', ', $named);
 			},
 		);
-	}
-
-	/**
-	 * A NAMED path is out of the Nextcloud trash — gone for good.
-	 *
-	 * @Then /^"([^"]*)" is gone from the Nextcloud trash$/
-	 */
-	public function theNamedPathIsGoneFromTheNextcloudTrash(string $path): void {
-		$this->theFileIsNotInTheNextcloudTrash(ltrim($path, '/'));
 	}
 
 	/**

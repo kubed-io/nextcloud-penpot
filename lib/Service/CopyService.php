@@ -59,8 +59,8 @@ use Psr\Log\LoggerInterface;
  * refused, because losing a name's tail is a smaller harm than refusing to copy.
  */
 final class CopyService {
-	/** A seatbelt on the descent, in the same spirit as the other tree walks here. */
-	private const MAX_DEPTH = 100;
+	/** The ceiling every downward walk in this app shares. {@see Walk::MAX_DEPTH} */
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	/** Penpot's schema limit on a file name (`[:string {:max 250}]`, §C6.8). */
 	private const MAX_NAME = 250;
