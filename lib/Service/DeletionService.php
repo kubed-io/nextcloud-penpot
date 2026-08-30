@@ -279,6 +279,125 @@ final class DeletionService {
 		}
 	}
 
+	/**
+	 * A whole project FOLDER was emptied out of the Nextcloud trash, so finish the
+	 * delete for every design that went in with it (`projects/purge.feature`).
+	 *
+	 * Never throws, for the same reason {@see onPurged()} does not: a legacy hook
+	 * cannot cleanly abort a purge, and a design left in Penpot's trash is a leak
+	 * that expires on Penpot's own schedule — never data loss.
+	 *
+	 * ## ONE HOOK FIRES, FOR THE FOLDER, SO THE WALK IS OURS
+	 *
+	 * The same wall as every other folder gesture in this app: nothing is announced
+	 * per child, so `preDelete` on `Penpot/Team.d1788…` is all the notice there is
+	 * that two projects' worth of designs are about to stop existing. This is
+	 * {@see onFolderTrashed()} again, one step further along — that one moves the
+	 * projects to Penpot's trash, this one empties it of what they held.
+	 *
+	 * ## BATCHED PER TEAM, WHICH IS THE ONE PLACE THIS DIVERGES FROM THE FILE PATH
+	 *
+	 * {@see \OCA\PenpotSync\Service\RestoreService::onFolderRestored()} hands each
+	 * design to the ordinary single-file door, and says why. Here that would read
+	 * the same team's trash listing once per design and issue one destroy call per
+	 * design — for a gesture whose whole nature is a set, against an RPC that takes
+	 * an array of ids because Penpot expects sets. So the listing is read once per
+	 * team and the intersection destroyed in one call.
+	 *
+	 * §C6.11'S RULE IS KEPT, and batching is how it is expressed rather than a thing
+	 * it costs: `permanently-delete-team-files` has no safety of its own and will
+	 * destroy a LIVE design if handed one, so every id must come from a real trash
+	 * listing. An intersection IS that check, applied to the whole set at once.
+	 */
+	public function onFolderPurged(Folder $node): void {
+		$byTeam = [];
+		foreach ($this->designsBelow($node, 0) as $design) {
+			$stamped = $this->metadata->readFile($design->getId());
+			if ($stamped === null || $stamped->penpotId === '' || $stamped->teamId === '') {
+				// No stamp, or one from before §C6.7 recorded the team: there is no
+				// mapped ancestor left to resolve it from under files_trashbin, so
+				// nothing can be safely destroyed for it.
+				continue;
+			}
+			$byTeam[$stamped->teamId][$stamped->penpotId] = true;
+		}
+
+		foreach ($byTeam as $teamId => $ids) {
+			try {
+				$parked = [];
+				foreach ($this->client->deletedFiles((string)$teamId) as $file) {
+					$id = $file['id'] ?? null;
+					if (is_string($id) && isset($ids[$id])) {
+						$parked[] = $id;
+					}
+				}
+				if ($parked === []) {
+					// Already destroyed, or restored in Penpot while the folder sat in
+					// the trash. Either way there is nothing here the user just asked
+					// to destroy.
+					continue;
+				}
+
+				$this->client->permanentlyDeleteFiles((string)$teamId, $parked, $this->personalTokens->tokenForActor());
+				$this->logger->info('penpot_sync purge: permanently deleted a trashed project\'s designs', [
+					'app' => Application::APP_ID,
+					'team_id' => $teamId,
+					'designs' => count($parked),
+					'folder' => $node->getName(),
+				]);
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync purge: could not permanently delete a trashed project\'s designs', [
+					'app' => Application::APP_ID,
+					'team_id' => $teamId,
+					'folder' => $node->getName(),
+					'exception' => $e,
+				]);
+			}
+		}
+	}
+
+	/**
+	 * Every `.penpot` below a folder, through nested project folders and all.
+	 *
+	 * THROUGH them, not stopping at them, and that matches {@see projectsBelow()}
+	 * exactly: a project nested inside a purged one is being destroyed too, so its
+	 * designs are as much part of this gesture as the top folder's.
+	 *
+	 * @return list<File>
+	 */
+	private function designsBelow(Folder $folder, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
+		$out = [];
+		try {
+			$children = $folder->getDirectoryListing();
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync purge: could not read a purged folder; a design below it may survive', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'exception' => $e,
+			]);
+
+			return [];
+		}
+
+		foreach ($children as $child) {
+			if ($child instanceof Folder) {
+				foreach ($this->designsBelow($child, $depth + 1) as $design) {
+					$out[] = $design;
+				}
+				continue;
+			}
+			if ($child instanceof File && str_ends_with($child->getName(), PullService::EXTENSION)) {
+				$out[] = $child;
+			}
+		}
+
+		return $out;
+	}
+
 	/** Is this design in the team's Penpot trash right now? */
 	private function isInPenpotTrash(string $teamId, string $penpotId): bool {
 		foreach ($this->client->deletedFiles($teamId) as $file) {

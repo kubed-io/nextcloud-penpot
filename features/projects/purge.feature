@@ -21,7 +21,7 @@ Feature: Emptying the trash of a project
     # ── RULE: a purge reaches everything the trash gesture put there ──────────
     # notes: ../AGENTS.md#a-purge-reaches-every-project-the-folder-held
 
-  @in-nextcloud @gesture @todo
+  @in-nextcloud @gesture
   Scenario Outline: Purge a trashed project folder
     Given the following items in the mappings:
       | path       |
@@ -35,56 +35,41 @@ Feature: Emptying the trash of a project
       | trashed     | contents                     |
       | Penpot/Team | /Penpot/Team/Alpha.penpot    |
       | Penpot/Team | /Penpot/Team/Sub/Deep.penpot |
-      | Shared/Team | /Shared/Team/Alpha.penpot    |
-
-    # Row two is two projects, not one: "Team/Sub" is named through "Team", so the
-    # folder that spelled it takes it along. This is where the bin's promise ends.
-
-    # A link team has no scenario here, deliberately: its project folders cannot be
-    # trashed, so they can never be in the trash to purge — see projects/delete.
 
     # ── RULE: emptying Penpot's trash finishes the delete from that side ──────
     # notes: ../AGENTS.md#emptying-penpots-trash-reaches-back-into-the-nextcloud-trash
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Empty Penpot's trash while a project folder is trashed
     Given the following items in the mappings:
-      | path                        |
-      | /Penpot/Doomed/Alpha.penpot |
-      | /Penpot/Doomed/Beta.penpot  |
-    And "Penpot/Doomed" is in the Nextcloud trash
+      | path                         |
+      | /Penpot/Emptied/Alpha.penpot |
+      | /Penpot/Emptied/Beta.penpot  |
+    And "Penpot/Emptied" is in the Nextcloud trash
     When someone empties Penpot's trash
-    Then "Penpot/Doomed" is gone from the Nextcloud trash
-
-    # Those designs were the only way the project could have come back, so with them
-    # gone the trashed folder has nothing left to be restored to.
+    Then "Penpot/Emptied" is gone from the Nextcloud trash
 
   # notes: ../AGENTS.md#a-penpot-purge-may-not-destroy-what-was-never-penpots
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario: Empty Penpot's trash where the trashed folder holds other files
     Given the following items in the mappings:
       | path                        |
-      | /Penpot/Doomed/Alpha.penpot |
-      | /Penpot/Doomed/Budget.xlsx  |
-    And "Penpot/Doomed" is in the Nextcloud trash
+      | /Penpot/Spared/Alpha.penpot |
+      | /Penpot/Spared/Budget.xlsx  |
+    And "Penpot/Spared" is in the Nextcloud trash
     When someone empties Penpot's trash
-    Then "Penpot/Doomed" is still in the Nextcloud trash, holding "Budget.xlsx"
-
-    # The same restraint the Penpot-side project delete shows: a spreadsheet has no
-    # far side, so nothing that happened in Penpot may destroy it.
+    Then "Penpot/Spared" is still in the Nextcloud trash, holding "Budget.xlsx"
 
     # ── RULE: a purge that cannot reach Penpot destroys nothing there ─────────
+    # notes: ../AGENTS.md#a-purge-penpot-cannot-be-told-about-still-empties-the-bin
 
   @in-nextcloud @gesture @todo
   Scenario: Purge a trashed project folder while Penpot is unreachable
     Given the following items in the mappings:
-      | path                        |
-      | /Penpot/Doomed/Alpha.penpot |
-    And "Penpot/Doomed" is in the Nextcloud trash
+      | path                         |
+      | /Penpot/Offline/Alpha.penpot |
+    And "Penpot/Offline" is in the Nextcloud trash
     And Penpot is unreachable
-    When I purge "Penpot/Doomed" from the trash
+    When I purge "Penpot/Offline" from the trash
     Then no design is deleted in Penpot
-    And "Penpot/Doomed" is gone from the Nextcloud trash
-
-    # Cannot prove what is still in Penpot's trash, so destroy none of it. Emptying
-    # the Nextcloud trash is not ours to refuse — that half already happened.
+    And "Penpot/Offline" is gone from the Nextcloud trash

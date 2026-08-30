@@ -341,12 +341,62 @@ final class RestoreService {
 			return;
 		}
 
+		$live = $this->liveProjectIds($teamId);
+
 		foreach ($folders as $folder) {
 			if ($this->revivableThroughADesign($folder, $parked)) {
 				continue;
 			}
+			// ALREADY BACK, WHICH LOOKS EXACTLY LIKE NOTHING CAN BRING IT BACK.
+			//
+			// "No design of this project is parked" has two causes and only one of
+			// them means the project is dead: it is also true the moment somebody
+			// restores the design in PENPOT, which revives the project and empties the
+			// trash of it. Restore the folder after that and the parked check alone
+			// would remake a project Penpot is already listing — a duplicate, with the
+			// folder re-stamped to the new id and the user's designs left in the old
+			// one. Raised by Copilot on #70; the two states are only separable by
+			// asking what is LIVE.
+			//
+			// A listing we could not read answers `null`, and that spares the folder
+			// for the same reason an unreadable trash does.
+			if ($live === null || isset($live[$this->metadata->readFolder($folder->getId())->projectId])) {
+				continue;
+			}
 
 			$this->remakeProject($folder, $teamId);
+		}
+	}
+
+	/**
+	 * Every project id $teamId still lists as live — or null when the listing could
+	 * not be read, which is a different answer from "none" and treated as one.
+	 *
+	 * @return array<string, true>|null
+	 */
+	private function liveProjectIds(string $teamId): ?array {
+		try {
+			$live = [];
+			// `getAllProjects()` spans every team the token can see, and a project id
+			// is a uuid — but filtering by team anyway keeps this answering the
+			// question it was asked, so a future caller cannot read it as "live
+			// anywhere".
+			foreach ($this->client->getAllProjects() as $project) {
+				$id = $project['id'] ?? null;
+				if (is_string($id) && $id !== '' && ($project['team-id'] ?? null) === $teamId) {
+					$live[$id] = true;
+				}
+			}
+
+			return $live;
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync restore: could not list the team\'s projects, so no project was made again', [
+				'app' => Application::APP_ID,
+				'team_id' => $teamId,
+				'exception' => $e,
+			]);
+
+			return null;
 		}
 	}
 

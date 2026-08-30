@@ -3879,6 +3879,24 @@ A LINK TEAM HAS NO SCENARIO HERE, deliberately. Its project folders cannot be tr
 (`projects/delete`), so they can never be in the trash to purge. Grafana states the
 same absence in the same place, for the same reason.
 
+**AND THERE IS NO TEAM FOLDER ROW EITHER, WHICH IS NOT A CHOICE.** It was written, and
+measured on a live instance rather than in CI: two identical project folders were
+trashed and purged, one under an admin-folder mapping and one under a Team Folder. The
+admin folder's purge destroyed its design and logged doing so; the Team Folder's
+produced NO LOG LINE AT ALL. The hook never fired.
+
+That is #a-team-folders-trash-emits-no-purge-signal happening, and that note called
+this exact shot — *"if the Team Folder row fails and the admin-folder row passes, this
+is why."* groupfolders registers its own `ITrashBackend` whose `removeItem()` unlinks
+and emits nothing: no typed event, no legacy hook, no entry point for any app. There
+is no code that can be written here, so the row is not `@unbuilt` and not `@blocked` —
+it is absent, with the mechanism recorded.
+
+Worth separating from a claim it looks like it contradicts. `designs/purge` DOES run a
+Team Folder row green, and that is the OTHER DIRECTION: emptying Penpot's trash and
+watching the reap reach back. The reap runs inside the pull and needs no hook at all,
+which is exactly why that half works on a backend where this half cannot.
+
 Two scenarios that Grafana carries are also deliberately absent. `while other
 dashboards are parked` asserts that a purge did not reach things it was never given —
 a bystander claim, and the same one already retired from `designs/purge`. Purging a
@@ -3911,25 +3929,32 @@ Those designs were the only route the project had back — there is no `restore-
 call, measured — so once they are gone the trashed folder has nothing left to be
 restored to, and it goes too.
 
-**@unbuilt, AND THE WALL HAS MOVED — IT IS NOW A SMALL ONE.** Emptying Penpot's
-trash is arrangeable and the pull sees the result perfectly well. What was missing
-was any reach into the NEXTCLOUD trash at all. That is no longer true: `TrashControl`
-lists trashed files and destroys them (the reap), and since `projects/restore` it
-lists trashed FOLDERS and puts them back. `PullService`'s docblock has carried the
-deferral since it was written — *"adopting a mirror out of the Nextcloud trash
-(§6.37) … needs `files_trashbin` and is its own slice"* — and that slice is now half
-built.
+IT RUNS NOW, and the last thing it wanted was one verb: DESTROYING a trashed folder.
+`TrashedFolder` shipped with a `restore` closure and no `purge` one, on the argument
+that a purge reachable from the revive path is a purge called by accident. It carries
+both now, and the guard moved to the caller, where the rule was always going to live.
 
-What this scenario still needs is the one verb neither half provides: DESTROYING a
-trashed folder. `TrashedFolder` carries a `restore` closure and no `purge` one,
-because nothing had a reason to destroy a folder and a purge reachable by accident
-is a purge that happens by accident. So the behaviour is still absent, which is what
-`@unbuilt` means — but it is a bounded piece of work now rather than an unopened
-door.
+THE REAP DECIDES, and it decides about the FOLDER because the trash offers no smaller
+unit — a trashed folder's designs are nested inside that one item, not beside it, so
+{@see TrashControl::listTrashed()} never sees them and the file pass cannot reach
+them. `listTrashFolder()` on the item's own backend is the only door that opens.
 
-Worth separating from the walls it sits beside. It is not a harness limit: the
-suite can empty Penpot's trash and can read Nextcloud's. It is not a reporting
-gap either.
+EVERY DESIGN, NOT ANY. One still recoverable in Penpot is one reason the folder is
+still worth something — restoring it would bring the project back, which is what
+`projects/restore` asserts. So the folder goes only when `isGone()`, which answers
+false whenever it cannot tell, is true of all of them.
+
+### A purge Penpot cannot be told about still empties the bin
+
+Emptying the Nextcloud trash is not this app's to refuse — that half has already
+happened by the time anything here runs, and the legacy `preDelete` hook cannot
+cleanly abort it anyway. So an unreachable Penpot costs the far half only: nothing is
+destroyed over there, and the designs stay in Penpot's own trash until it expires
+them on its own schedule.
+
+Which is the safe direction, and the same one every other "Penpot is unreachable" row
+takes. A purge that guessed would be guessing about the one irreversible thing this
+app can cause.
 
 ### A Penpot purge may not destroy what was never Penpot's
 
