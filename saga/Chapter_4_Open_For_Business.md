@@ -846,6 +846,56 @@ code is where it is easiest to get away with breaking.
 
 ---
 
+### Round 11 — the tag was wrong again, and a live pod settled a contradiction
+
+`projects/purge.feature` had four scenarios and three of them runnable, all `@todo`.
+None had any code. `TrashPurgeHook` opened with `str_contains($path, '.penpot')` —
+cheap, correct for a mirror, and blind to the thing the whole feature is about: a
+trashed project folder is `Team.d1788058484`, with no extension anywhere in it. So
+the hook returned before it could look, and emptying the trash on a whole project
+left every design of it sitting in Penpot's trash. Going the other way,
+`TrashReconcileService` only ever listed trashed FILES, so emptying Penpot's trash
+could not reach the folder mirroring the project it destroyed.
+
+> Four rounds, four wrong tags. `behat --tags @todo` is a queue, and the only thing
+> that turns a queue entry into a fact is reading `lib/` before believing it.
+
+**The guard that moved.** `TrashedFolder` shipped one round earlier carrying a
+`restore` closure and no `purge` one, with a docblock arguing the point: *"a purge
+reachable from the revive path is a purge that can be called by accident — the type
+is the guard."* That held for exactly as long as a trashed folder had one thing that
+could happen to it. It carries both verbs now, and the guard moved to the caller,
+which is where it was always really going to live — the reap purges a folder only
+when it has proved the folder holds nothing but designs Penpot no longer has. One
+spreadsheet spares the whole folder, because a trash item cannot be partly purged.
+
+**Two notes in AGENTS.md disagreed, and the pod broke the tie.** One said emptying a
+Team Folder's trash *"cannot reach Penpot"* and was a gap unclosable from here. A
+newer one, three thousand lines away, said the Team Folder purge *"reached Penpot
+exactly like the plain one"*. Both were written from measurements; only one could
+describe the row about to be shipped.
+
+So it was measured rather than argued: two identical project folders on the live
+instance, one under an admin-folder mapping and one under a Team Folder, trashed and
+then purged. The admin folder's purge destroyed its design and said so in the log.
+The Team Folder's produced no log line at all — groupfolders' `removeItem()` unlinks
+and emits nothing, no typed event and no legacy hook. The Team Folder row is gone,
+and it is not `@unbuilt` or `@blocked`, because there is no code anyone could write
+for it from inside this app.
+
+> The two notes were never in conflict. They describe opposite DIRECTIONS: the reap
+> runs inside the pull and needs no hook, which is exactly why `designs/purge` can
+> run a Team Folder row green on a backend where this one cannot. A contradiction
+> that dissolves once you ask which way the news is travelling — and thirty seconds
+> in a pod was cheaper than either reading.
+
+**And `Rename a project in Penpot` needed no code at all.** Its `@todo` said why in
+its own words — *"the team still holds the New project the scenario above made, so
+the pull adopts the wrong folder"* — which is the leg-wide fixture rule for the third
+PR running. Distinct names, and it ran.
+
+---
+
 ## The plan — reaching the store
 
 The store's requirement is that **every release is signed by a certificate
