@@ -943,6 +943,47 @@ its own words — *"the team still holds the New project the scenario above made
 the pull adopts the wrong folder"* — which is the leg-wide fixture rule for the third
 PR running. Distinct names, and it ran.
 
+
+### Round 12 — the answer was a field on a record nobody had read
+
+Round 11 closed by blocking two scenarios on a claim: with a project deleted, Penpot's
+trash listing shows destroyed and recoverable designs side by side and nothing can tell
+them apart. Dr K did not accept the shape of the workaround that came with it — a
+`Then` that issued a restore in order to find out whether a design was gone — and asked
+the question that unpicked the whole thing: *"can't we just determine we no longer need
+to keep a trashed project-folder because it is now empty?"*
+
+**It could, and the discriminator had been in every response all along.**
+`get-team-deleted-files` returns RECORDS, and I had been reading it as a set of ids —
+four rounds of measurement, every one of them asking *is this id present?*
+
+| the record says | what it means | recoverable |
+|---|---|---|
+| no `will-be-deleted-at` | the file itself was never deleted; it is listed because its PROJECT is | yes — restoring it revives the project |
+| a stamp a week out | in the trash proper | yes |
+| a stamp that has PASSED | destroyed; a collector takes the row later | **no** |
+
+Confirmed against the thing itself rather than inferred: a destroyed design was handed
+to `restore-deleted-team-files`, which answered 200, named the id in its `end` payload,
+and left it exactly where it was. Penpot claims that restore succeeds. It does not.
+
+> **"Is it in the list?" and "will you give it back?" are different questions**, and
+> the listing only ever answered the second. Round 11's note said the answer did not
+> exist; it said so twice, in bold, having never looked at a record.
+
+So `PenpotClient::recoverableFileIds()` is that reading, and the reap's `parkedIds()`
+uses it. Both Penpot-side scenarios came off `@blocked`, and the mutating `Then` went
+with them — `no design it held is in Penpot's trash any more` is now an observation,
+which is what a `Then` is for. `PullService::penpotTrashIds()` deliberately keeps the
+raw listing: it drives the prune, where a wider set means more mirrors KEPT.
+
+> Round 11 recorded a question from Dr K turning over a wrong conclusion. This is the
+> same round again, one layer down, and the shared lesson is not about Penpot: **a
+> negative result about a thing I never inspected is a statement about my reading, not
+> about the thing.**
+
+`projects/purge.feature` has no `@blocked` left in it.
+
 ---
 
 ## The plan — reaching the store

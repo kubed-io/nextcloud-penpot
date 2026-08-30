@@ -3965,37 +3965,54 @@ Penpot across four runs:
 
 | the design got its own `deleted_at` | `permanently-delete-team-files` | restorable after |
 |---|---|---|
-| never — only its project was deleted | no-op, and the RPC reports success | **yes**, and the restore revives the project |
-| after the project was deleted | no-op, same | **yes** |
+| never — only its project was deleted | stamps it, but the restore revives both | **yes** |
 | **before** — while the project was still live | destroys it | **no** |
 
-So a file is destroyable only if it was deleted in its own right first. That is why
-{@see DeletionService::onFolderTrashed()} now calls `delete-file` on every design
-below the folder BEFORE `delete-project`: deleting the project alone makes its designs
-LOOK deleted — `get-team-deleted-files` lists the files of a deleted project — while
-leaving their own `deleted_at` null, and a file in that state cannot be destroyed
-afterwards by anything.
+So a file is reliably destroyable only if it was deleted in its own right first. That
+is why {@see DeletionService::onFolderTrashed()} calls `delete-file` on every design
+below the folder BEFORE `delete-project`.
 
-**AND THE LISTING STILL CANNOT BE READ AS AN ANSWER.** A destroyed design goes on
-appearing in `get-team-deleted-files` for as long as its project is deleted, so the
-trash listing shows destroyed and recoverable designs side by side and
-`fileExists()` cannot separate them either — `get-file-summary` answers NOT-FOUND for
-any row with a `deleted_at`, past or future.
+### The trash listing does answer, and the answer is a field
 
-Two things follow, and they are the reason this section exists rather than a comment:
+**`get-team-deleted-files` returns RECORDS, not a set of ids, and one of the fields
+is the whole question.** This was recorded here for two PRs as an unanswerable
+question — a design destroyed while its project is deleted goes on being named in
+that listing, so "is it still there?" cannot separate destroyed from recoverable, and
+`fileExists()` cannot either (`get-file-summary` answers NOT-FOUND for any row with a
+`deleted_at`, past or future). All true. All beside the point, because nothing had
+looked at the record.
 
-1. **The scenario asks by trying.** `no design it held can be brought back in Penpot`
-   issues a restore and asserts nothing became live, because that is the only
-   observable difference. A mutating `Then`, named so a reader sees it.
-2. **The reap cannot make that call, so its two scenarios stay `@blocked`.** Asking
-   Penpot to restore a design in order to find out whether it is gone is not something
-   production may do, and nothing else distinguishes the two states. The code is built
-   and unit-tested — a trashed folder whose designs are genuinely gone is reaped — it
-   simply cannot decide the question from a deleted project's listing.
+`will-be-deleted-at` is three-valued, and measured live:
 
-<!-- The §C6.11 lesson from a third angle: these commands report success without doing
-     the work. The first cut of this shipped to a live pod and was reported working on
-     the strength of the app's own log line, with Penpot never asked. -->
+| the record says | what it means | recoverable |
+|---|---|---|
+| no such key | the file itself was never deleted; it is listed because its PROJECT is | **yes** — and restoring it revives the project |
+| a stamp a week out | in the trash proper | **yes** |
+| a stamp that has PASSED | destroyed: the destroy sets the clock to now and a collector takes the row later | **no** |
+
+The third row is not a guess. A destroyed design was handed to
+`restore-deleted-team-files`, which reported success, named the id in its `end`
+payload, and left it exactly where it was — still listed, still stamped in the past,
+never live again.
+
+So {@see PenpotClient::recoverableFileIds()} is that reading, and it is what every
+caller asking "will Penpot give this back?" now uses. {@see TrashReconcileService}
+counted ids instead, which is why it spared a folder whose designs were every one of
+them gone, for ever, since nothing about that state changes on its own.
+
+ONE CALLER DELIBERATELY KEEPS THE RAW LISTING: {@see PullService::penpotTrashIds()},
+which drives the prune. A wider set there means more mirrors KEPT, which is the
+direction that method already fails in, and narrowing it would have the prune start
+deleting mirrors on a rule `designs/purge` owns.
+
+A CLOCK THAT DISAGREES SPARES THE DESIGN. The comparison is against this host's
+clock and Penpot's may differ; a destroyed design carries Penpot's own "now", so a
+host running behind reads it as future and spares a mirror rather than destroying
+one. No grace period corrects a skew that already fails safe.
+
+<!-- Both Penpot-side scenarios in `projects/purge.feature` were `@blocked` on the
+     claim that this could not be decided. Four rounds of measurement, every one of
+     them asking whether an id was present, and the answer was one field away. -->
 
 ### A purge Penpot cannot be told about still empties the bin
 

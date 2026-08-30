@@ -205,13 +205,13 @@ final class TrashControl {
 				continue;
 			}
 
-			[$designIds, $holdsOtherFiles] = $this->inspect($item, 0);
-
 			$out[] = new TrashedFolder(
 				$fileId,
 				basename($item->getOriginalLocation()),
-				$designIds,
-				$holdsOtherFiles,
+				// DEFERRED. The pull asks for this listing every five minutes and wants
+				// nothing but the folder's own project marker; only the reap needs to
+				// know what is inside. See {@see TrashedFolder}.
+				fn (): array => $this->inspect($item, 0),
 				function () use ($manager, $item, $uid): void {
 					$this->restoreAs($manager, $item, $uid);
 				},

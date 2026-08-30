@@ -478,23 +478,21 @@ final class RestoreService {
 	}
 
 	/**
-	 * Every design id in $teamId's Penpot trash, as a set — or null when the
-	 * listing could not be read at all, which is a different answer from "empty"
+	 * Every design id $teamId's Penpot trash will GIVE BACK, as a set — or null when
+	 * the listing could not be read at all, which is a different answer from "empty"
 	 * and is treated as one by every caller.
+	 *
+	 * RECOVERABLE, NOT MERELY LISTED. A destroyed design goes on being named in the
+	 * raw listing while its project is deleted, and offering it to
+	 * `restore-deleted-team-files` gets a claimed success and nothing back. Reading
+	 * {@see PenpotClient::recoverableFileIds()} instead is what sends that case down
+	 * the rebuild-from-the-archive path, where it belongs.
 	 *
 	 * @return array<string, true>|null
 	 */
 	private function parkedIds(string $teamId): ?array {
 		try {
-			$parked = [];
-			foreach ($this->client->deletedFiles($teamId) as $entry) {
-				$id = $entry['id'] ?? null;
-				if (is_string($id) && $id !== '') {
-					$parked[$id] = true;
-				}
-			}
-
-			return $parked;
+			return $this->client->recoverableFileIds($teamId);
 		} catch (\Throwable $e) {
 			$this->logger->warning('penpot_sync restore: could not read Penpot\'s trash', [
 				'app' => Application::APP_ID,
@@ -892,15 +890,9 @@ final class RestoreService {
 		);
 	}
 
-	/** Is this design in the team's Penpot trash right now? */
+	/** Is this design still recoverable from the team's Penpot trash right now? */
 	private function isInPenpotTrash(string $teamId, string $penpotId): bool {
-		foreach ($this->client->deletedFiles($teamId) as $file) {
-			if (($file['id'] ?? null) === $penpotId) {
-				return true;
-			}
-		}
-
-		return false;
+		return isset($this->client->recoverableFileIds($teamId)[$penpotId]);
 	}
 
 	/** Is this design a live file of that project — i.e. never actually gone? */

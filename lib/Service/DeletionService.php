@@ -359,12 +359,16 @@ final class DeletionService {
 			$byTeam[$stamped->teamId][$stamped->penpotId] = true;
 		}
 
+		// ONE TOKEN FOR THE WHOLE PURGE. It is scoped to the actor, not the team, so
+		// fetching it inside the loop was re-reading config and re-running the crypto
+		// once per team for an answer that cannot change between iterations.
+		$actorToken = $this->personalTokens->tokenForActor();
+
 		foreach ($byTeam as $teamId => $ids) {
 			try {
 				$parked = [];
-				foreach ($this->client->deletedFiles($teamId) as $file) {
-					$id = $file['id'] ?? null;
-					if (is_string($id) && isset($ids[$id])) {
+				foreach (array_keys($this->client->recoverableFileIds($teamId)) as $id) {
+					if (isset($ids[$id])) {
 						$parked[] = $id;
 					}
 				}
@@ -375,7 +379,7 @@ final class DeletionService {
 					continue;
 				}
 
-				$this->client->permanentlyDeleteFiles($teamId, $parked, $this->personalTokens->tokenForActor());
+				$this->client->permanentlyDeleteFiles($teamId, $parked, $actorToken);
 				$this->logger->info('penpot_sync purge: permanently deleted a trashed project\'s designs', [
 					'app' => Application::APP_ID,
 					'team_id' => $teamId,
@@ -435,14 +439,8 @@ final class DeletionService {
 		return $out;
 	}
 
-	/** Is this design in the team's Penpot trash right now? */
+	/** Is this design still recoverable from the team's Penpot trash right now? */
 	private function isInPenpotTrash(string $teamId, string $penpotId): bool {
-		foreach ($this->client->deletedFiles($teamId) as $file) {
-			if (($file['id'] ?? null) === $penpotId) {
-				return true;
-			}
-		}
-
-		return false;
+		return isset($this->client->recoverableFileIds($teamId)[$penpotId]);
 	}
 }

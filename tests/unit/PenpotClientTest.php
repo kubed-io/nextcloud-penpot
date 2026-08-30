@@ -87,6 +87,87 @@ final class PenpotClientTest extends TestCase {
 		return $result;
 	}
 
+	/**
+	 * The rule behind {@see PenpotClient::recoverableFileIds()}, reached directly for
+	 * the same reason {@see wireParams()} is: it is pure, consequential, and testing
+	 * it through a mocked HTTP stack would assert on the mock.
+	 *
+	 * @param array<string, mixed> $file
+	 */
+	private function stillRecoverable(array $file, int $now): bool {
+		$method = new \ReflectionMethod(PenpotClient::class, 'stillRecoverable');
+		$method->setAccessible(true);
+
+		return (bool)$method->invoke(null, $file, $now);
+	}
+
+	// ── what Penpot's trash will actually give back ─────────────────────────
+
+	/**
+	 * THE DISTINCTION THE REAP IS BUILT ON, and it cost a live instance to find.
+	 *
+	 * `get-team-deleted-files` names the files of a DELETED PROJECT alongside the
+	 * files deleted in their own right, and it goes on naming a design that has
+	 * already been DESTROYED for as long as its project stays deleted. So presence in
+	 * that listing is not recoverability, and every caller that read it as such was
+	 * asking a question the listing does not answer.
+	 *
+	 * `will-be-deleted-at` is the answer, three-valued, measured live:
+	 * absent means the file itself was never deleted; a future stamp means it is in
+	 * the trash proper; a stamp that has PASSED means {@see PenpotClient::permanentlyDeleteFiles()}
+	 * set the clock to now and a collector will take the row — Penpot then claims a
+	 * restore of that id succeeds and leaves it exactly where it was.
+	 */
+	public function testADestroyedDesignIsNotRecoverableEvenWhileStillListed(): void {
+		$now = 1_788_102_568_000;
+
+		self::assertFalse(
+			$this->stillRecoverable(['id' => 'a', 'will-be-deleted-at' => '1788102567788'], $now),
+			'a stamp that has passed means destroyed',
+		);
+	}
+
+	public function testADesignInTheTrashProperIsRecoverable(): void {
+		$now = 1_788_102_568_000;
+
+		self::assertTrue(
+			$this->stillRecoverable(['id' => 'b', 'will-be-deleted-at' => '1788707367934'], $now),
+			'a week out is the ordinary trashed design',
+		);
+	}
+
+	/**
+	 * Listed only because its PROJECT is deleted — the file itself was never touched,
+	 * so restoring it brings the project back with it. Sparing this is the whole
+	 * reason the absent case cannot be folded in with the past one.
+	 */
+	public function testADesignListedOnlyForItsDeletedProjectIsRecoverable(): void {
+		self::assertTrue(
+			$this->stillRecoverable(['id' => 'c', 'project-id' => 'p'], 1_788_102_568_000),
+			'no stamp means the file itself was never deleted',
+		);
+	}
+
+	/**
+	 * A CLOCK THAT DISAGREES SPARES THE DESIGN. A destroyed design carries Penpot's
+	 * own "now", so a host running slightly behind reads it as future and calls it
+	 * recoverable — which spares a mirror rather than destroying one. That is the
+	 * direction every judgement in the reap leans, so the skew needs no grace period.
+	 */
+	public function testAHostRunningBehindSparesRatherThanDestroys(): void {
+		self::assertTrue(
+			$this->stillRecoverable(['id' => 'd', 'will-be-deleted-at' => '1788102568000'], 1_788_102_567_000),
+		);
+	}
+
+	/** Penpot sends epoch millis as a string; an int must mean the same thing. */
+	public function testTheStampIsReadTheSameWhicheverWayItIsTyped(): void {
+		$now = 1_788_102_568_000;
+
+		self::assertFalse($this->stillRecoverable(['will-be-deleted-at' => 1_788_102_567_788], $now));
+		self::assertTrue($this->stillRecoverable(['will-be-deleted-at' => 1_788_707_367_934], $now));
+	}
+
 	// ── the param table (saga §6.54) ────────────────────────────────────────
 
 	/**
