@@ -271,9 +271,9 @@ final class RestoreServiceTest extends TestCase {
 
 		// One listing only — the pre-check. Reaching a second would mean the empty
 		// set was read as success and the confirming re-read ran.
-		$this->client->expects($this->once())->method('deletedFiles')
+		$this->client->expects($this->once())->method('recoverableFileIds')
 			->with(self::TEAM)
-			->willReturn([['id' => self::PENPOT_ID]]);
+			->willReturn([self::PENPOT_ID => true]);
 		$this->client->method('restoreDeletedFiles')->willReturn([]);
 
 		$this->restores->onRestored($this->file());
@@ -302,7 +302,7 @@ final class RestoreServiceTest extends TestCase {
 	/** Penpot being down never undoes the local restore. */
 	public function testAFailedRestoreNeverThrows(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willThrowException(
+		$this->client->method('recoverableFileIds')->willThrowException(
 			new \OCA\PenpotSync\Exception\PenpotApiException('Penpot is unreachable'),
 		);
 
@@ -320,7 +320,7 @@ final class RestoreServiceTest extends TestCase {
 	 */
 	public function testADesignThatStillExistsIsNeverRestoredIntoPenpot(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
 		$this->client->method('getProjectFiles')->with(self::PROJECT)
 			->willReturn([['id' => self::PENPOT_ID]]);
@@ -339,7 +339,7 @@ final class RestoreServiceTest extends TestCase {
 	 */
 	public function testADraftsDesignThatStillExistsIsRecognisedAsIntact(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
 		$this->client->method('getAllProjects')->willReturn([
 			['id' => self::DRAFTS, 'team-id' => self::TEAM, 'is-default' => true],
@@ -366,7 +366,7 @@ final class RestoreServiceTest extends TestCase {
 	 */
 	public function testADesignThatIsGoneForGoodIsImportedFromTheArchive(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
 		$this->client->method('getProjectFiles')->with(self::PROJECT)->willReturn([]);
 
@@ -392,7 +392,7 @@ final class RestoreServiceTest extends TestCase {
 	 */
 	public function testAMirrorAtTheTeamRootIsImportedIntoDrafts(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->resolver->method('resolve')->willReturn(new Membership(null, self::TEAM));
 		$this->client->method('getAllProjects')->willReturn([
 			['id' => self::DRAFTS, 'team-id' => self::TEAM, 'is-default' => true],
@@ -416,7 +416,7 @@ final class RestoreServiceTest extends TestCase {
 	 */
 	public function testAMirrorWithNoArchiveToImportTellsTheUser(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->resolver->method('resolve')->willReturn(new Membership(self::PROJECT, self::TEAM));
 		$this->client->method('getProjectFiles')->with(self::PROJECT)->willReturn([]);
 		$this->imports->method('adopt')->willReturn(null);
@@ -454,7 +454,7 @@ final class RestoreServiceTest extends TestCase {
 	public function testRestoringAnUntrackedFileNeverContactsPenpot(): void {
 		$this->metadata->method('readFile')->willReturn(null);
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 		$this->client->expects($this->never())->method('restoreDeletedFiles');
 
 		$this->restores->onRestored($this->file());
@@ -471,7 +471,7 @@ final class RestoreServiceTest extends TestCase {
 			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@t1', Mapping::MODE_LINK, ''));
 		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 		$this->client->expects($this->never())->method('restoreDeletedFiles');
 
 		$this->restores->onRestored($this->file());
@@ -490,7 +490,7 @@ final class RestoreServiceTest extends TestCase {
 	public function testARestoredProjectFolderIsSettledEvenWithNothingBelowIt(): void {
 		$this->givenTeam();
 		$this->givenMarkers([70 => 'project-doomed']);
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 
 		$this->client->expects($this->once())->method('createProject')
 			->willReturn(['id' => 'project-remade']);
@@ -534,7 +534,7 @@ final class RestoreServiceTest extends TestCase {
 		);
 
 		$this->client->expects($this->never())->method('createProject');
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 
 		$this->restores->onFolderRestored($this->folder(70, [$this->folder(71)]));
 	}
@@ -552,7 +552,7 @@ final class RestoreServiceTest extends TestCase {
 	public function testAnUnreadablePenpotTrashMakesNoProjectAgain(): void {
 		$this->givenTeam();
 		$this->givenMarkers([70 => 'project-doomed']);
-		$this->client->method('deletedFiles')->willThrowException(
+		$this->client->method('recoverableFileIds')->willThrowException(
 			new \OCA\PenpotSync\Exception\PenpotApiException('get-team-deleted-files failed'),
 		);
 
@@ -567,7 +567,7 @@ final class RestoreServiceTest extends TestCase {
 		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
 
 		$this->client->expects($this->never())->method('createProject');
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 
 		$this->restores->onFolderRestored($this->folder(70));
 	}
@@ -593,7 +593,7 @@ final class RestoreServiceTest extends TestCase {
 
 	/** The design is in the team's trash — which is what selects layer 2. */
 	private function givenInPenpotTrash(): void {
-		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->method('recoverableFileIds')->willReturn([self::PENPOT_ID => true]);
 	}
 
 	/** The mirror sits in a project folder, so membership names that project. */

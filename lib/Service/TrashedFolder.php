@@ -62,10 +62,8 @@ final class TrashedFolder {
 	 *                    here, where the path is long gone
 	 * @param string $name the ORIGINAL basename, not the `.d<timestamp>` spelling the
 	 *                     trash stores it under
-	 * @param \Closure():array{0: list<int>, 1: bool} $contents walk the subtree and
-	 *        answer with the filecache id of every `.penpot` below it at any depth,
-	 *        and whether anything down there is NOT a design. Called at most once,
-	 *        and only by a caller that actually needs the answer
+	 * @param \Closure():array{0: list<int>, 1: bool} $contents the subtree walk, run at
+	 *                                                          most once and only when asked
 	 * @param \Closure():void $restore put this folder back where it came from, through
 	 *                                 whichever trash backend is holding it
 	 * @param \Closure():void $purge destroy it, and everything that went in with it

@@ -638,6 +638,17 @@ trait GestureSteps {
 	 * oracle for the same rule {@see \OCA\PenpotSync\Service\PenpotClient::recoverableFileIds()}
 	 * implements.
 	 *
+	 * ## AND IT SPELLS THE FIELD DIFFERENTLY FROM THE APP, WHICH IS NOT A TYPO
+	 *
+	 * Penpot content-negotiates. {@see penpotRpcRead()} sends `Accept: application/json`
+	 * and gets plain **camelCase** JSON back, so the field is `willBeDeletedAt`; the app
+	 * deliberately omits that header, gets Transit, and reads `will-be-deleted-at`. Same
+	 * field, two wire spellings, and {@see \OCA\PenpotSync\Service\Transit::decode()}
+	 * exists to make confusing them loud rather than silent.
+	 *
+	 * It was silent here. Reading the app's spelling off a JSON body found nothing, so
+	 * every design looked recoverable and the assertion could never pass.
+	 *
 	 * @return list<string>
 	 */
 	private function penpotRecoverableIds(string $teamId): array {
@@ -648,7 +659,7 @@ trait GestureSteps {
 			if (!isset($file['id']) || !is_string($file['id'])) {
 				continue;
 			}
-			$due = $file['will-be-deleted-at'] ?? null;
+			$due = $file['willBeDeletedAt'] ?? $file['will-be-deleted-at'] ?? null;
 			if ((is_string($due) || is_int($due) || is_float($due)) && (int)$due <= $now) {
 				continue;
 			}

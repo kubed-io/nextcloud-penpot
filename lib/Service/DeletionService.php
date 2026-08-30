@@ -366,12 +366,10 @@ final class DeletionService {
 
 		foreach ($byTeam as $teamId => $ids) {
 			try {
-				$parked = [];
-				foreach (array_keys($this->client->recoverableFileIds($teamId)) as $id) {
-					if (isset($ids[$id])) {
-						$parked[] = $id;
-					}
-				}
+				$parked = array_keys(array_intersect_key(
+					$this->client->recoverableFileIds($teamId),
+					$ids,
+				));
 				if ($parked === []) {
 					// Already destroyed, or restored in Penpot while the folder sat in
 					// the trash. Either way there is nothing here the user just asked

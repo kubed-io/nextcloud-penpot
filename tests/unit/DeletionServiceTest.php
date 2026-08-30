@@ -197,7 +197,7 @@ final class DeletionServiceTest extends TestCase {
 	/** In the trash → destroy it. The one irreversible thing this app can cause. */
 	public function testPurgingADesignThatIsInPenpotsTrashDestroysIt(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->method('recoverableFileIds')->willReturn([self::PENPOT_ID => true]);
 
 		$this->client->expects($this->once())
 			->method('permanentlyDeleteFiles')
@@ -214,7 +214,7 @@ final class DeletionServiceTest extends TestCase {
 	 */
 	public function testPurgingNeverDestroysADesignThatIsNotInPenpotsTrash(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([['id' => 'some-other-design']]);
+		$this->client->method('recoverableFileIds')->willReturn(['some-other-design' => true]);
 
 		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
 
@@ -224,7 +224,7 @@ final class DeletionServiceTest extends TestCase {
 	/** An empty trash listing purges nothing at all. */
 	public function testPurgingWithAnEmptyTrashListingDestroysNothing(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 
 		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
 
@@ -238,8 +238,8 @@ final class DeletionServiceTest extends TestCase {
 	 */
 	public function testTheTrashListingIsAlwaysReadBeforePurging(): void {
 		$this->givenStamped();
-		$this->client->expects($this->once())->method('deletedFiles')->with(self::TEAM)
-			->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->expects($this->once())->method('recoverableFileIds')->with(self::TEAM)
+			->willReturn([self::PENPOT_ID => true]);
 
 		$this->deletions->onPurged($this->file());
 	}
@@ -250,7 +250,7 @@ final class DeletionServiceTest extends TestCase {
 			->willReturn(new PenpotFileMetadata(self::PENPOT_ID, '5@t1', Mapping::MODE_LINK, ''));
 		$this->resolver->method('resolve')->willReturn(new Membership(null, null));
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
 
 		$this->deletions->onPurged($this->file());
@@ -260,7 +260,7 @@ final class DeletionServiceTest extends TestCase {
 	public function testPurgingAnUntrackedFileNeverContactsPenpot(): void {
 		$this->metadata->method('readFile')->willReturn(null);
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
 
 		$this->deletions->onPurged($this->file());
@@ -278,7 +278,7 @@ final class DeletionServiceTest extends TestCase {
 	 */
 	public function testPurgingAProjectFolderDestroysEveryDesignItHeld(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->method('recoverableFileIds')->willReturn([self::PENPOT_ID => true]);
 
 		$this->client->expects($this->once())->method('permanentlyDeleteFiles')
 			->with(self::TEAM, [self::PENPOT_ID], null);
@@ -296,7 +296,7 @@ final class DeletionServiceTest extends TestCase {
 	 */
 	public function testPurgingAFolderReachesDesignsInNestedProjects(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->method('recoverableFileIds')->willReturn([self::PENPOT_ID => true]);
 
 		$this->client->expects($this->once())->method('permanentlyDeleteFiles')
 			->with(self::TEAM, [self::PENPOT_ID], null);
@@ -312,7 +312,7 @@ final class DeletionServiceTest extends TestCase {
 	 */
 	public function testPurgingAFolderNeverDestroysADesignThatIsNotInPenpotsTrash(): void {
 		$this->givenStamped();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 
 		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
 
@@ -321,7 +321,7 @@ final class DeletionServiceTest extends TestCase {
 
 	/** A folder of somebody's spreadsheets is a folder Penpot never hears about. */
 	public function testPurgingAFolderOfOrdinaryFilesContactsNobody(): void {
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 		$this->client->expects($this->never())->method('permanentlyDeleteFiles');
 
 		$this->deletions->onFolderPurged($this->folder(70, [$this->plainFile()]));
