@@ -3,17 +3,10 @@
 Thanks for taking the time to look at the security of **Penpot Sync**. This file
 describes how to report vulnerabilities and what to expect after you do.
 
-**This repo is currently pre-code** (see [README.md](README.md) and
-[AGENTS.md](AGENTS.md)) — there is no `lib/` or `src/` yet, so most of the scope
-below is forward-looking, describing the design in
-[saga/Chapter_1_First_Contact.md](saga/Chapter_1_First_Contact.md) rather than
-shipped code. Kept here now so the policy is in place before real code lands.
-
 ## Supported versions
 
-This app is pre-1.0 (currently pre-code) and will ship fixes only on the latest
-release once releases exist. Always update to the newest version before reporting
-an issue — the bug may already be fixed.
+This app is pre-1.0 and ships fixes only on the latest release. Always update to
+the newest version before reporting an issue — the bug may already be fixed.
 
 | Version | Supported |
 |---|---|
@@ -61,7 +54,7 @@ faith.
 
 ## Scope
 
-In scope, once the corresponding code exists:
+In scope:
 
 - The PHP backend in `lib/` (`OCA\PenpotSync\…`).
 - The JS frontend in `src/` and its built bundle in `dist/`.
@@ -87,18 +80,20 @@ Out of scope:
 
 ## Secrets policy
 
-A handful of secrets will be required to operate or release this app once it has
-code. They never live in the repo:
+A handful of secrets are required to operate or release this app. They never live
+in the repo:
 
-- **Penpot personal access token** — per the saga's still-open §6.9 fork, either
-  entered by an admin in the Nextcloud admin section (one instance-wide
-  credential) or entered by each Nextcloud user on their own personal-settings
-  page — whichever design is ratified. Either way, stored encrypted via
-  `OCP\Security\ICrypto`. Never logged.
-- **Penpot webhook validation** — Penpot's `create-webhook` performs a live
-  reachability check at creation time (saga §5.1); no bearer/secret is currently
-  known to be part of that handshake, but this section will be updated once a
-  webhook receiver is designed.
+- **Penpot access token** — §6.9's either/or fork closed in favour of both
+  (superseded by §6.18). An instance-wide credential an admin sets in the
+  Nextcloud admin section is what the sync actually authenticates with; an
+  optional per-user token lets a gesture be attributed to the person who made it.
+  Both are stored encrypted via `OCP\Security\ICrypto` and neither is ever logged.
+  The per-user surface ships **disabled** (§D4.13): the service and its `occ`
+  command exist, and their registrations are commented out.
+- **No webhook secret**, because there is no webhook receiver. Penpot has
+  webhooks and creating one works, but delivery has never been observed, so this
+  app has no event-driven path and no inbound endpoint for Penpot to call. The
+  scheduled pull is the only trigger (§6.17).
 - **GitHub App private key** — used by the release workflow to bypass branch
   protection on the version-bump commit. Stored as the `GH_APP_KEY` repo secret.
   Never echoed.
@@ -119,35 +114,54 @@ If you spot a secret committed to the repo (current or historical), treat it as
 a vulnerability and report it via the private channel above. It will be
 rotated.
 
-## Network egress (deliberate, once the sync engine exists)
+## Network egress (deliberate)
 
-This app is designed to make outbound HTTP requests to **one** destination: the
-Penpot instance an admin (or, per the open §6.9 fork, an individual user)
-configures. Unlike a two-way integration, this app **never writes design content
-back** to that destination (locked, saga §6.1) — its outbound calls are read
-(`export-binfile` and related GETs) plus, if §6.2's rename fork is ever ratified,
-a narrow `rename-file` call. It does not fetch arbitrary user-supplied URLs.
+This app makes outbound HTTP requests to **one** destination: the Penpot instance
+an admin configures. It does not fetch arbitrary user-supplied URLs.
 
-The eventual client is expected to follow the same pattern as the sibling apps
-(`nextcloud-grafana`, `nextcloud-n8n`): Nextcloud's `IClientService` with
-**`allow_local_address => true`**, because the target audience is self-hosters
-whose Penpot instance typically lives at a private, in-cluster address. The same
-trade-off documented in those apps' `SECURITY.md` applies here: setting the base
-URL is an admin (or authenticated-user) action, so this is a trust-boundary
-relaxation, not an unauthenticated SSRF — but it is real and intentional, and
-will be documented precisely once the client code exists.
+**It writes, and considerably more than an earlier draft of this section claimed.**
+That draft said the outbound calls were reads plus perhaps one narrow rename. That
+stopped being true when the sync engine shipped, and understating an app's write
+surface in its own security policy helps nobody assessing it. `PenpotClient`
+speaks these RPC commands, and an ordinary gesture in Nextcloud can reach any of
+them:
+
+| | commands |
+|---|---|
+| read | `get-teams`, `get-all-projects`, `get-project-files`, `get-file-summary`, `get-team-deleted-files`, `export-binfile` |
+| design writes | `create-file`, `rename-file`, `duplicate-file`, `delete-file`, `move-files`, `import-binfile` |
+| project writes | `create-project`, `rename-project`, `delete-project`, `move-project` |
+| trash | `restore-deleted-team-files`, `permanently-delete-team-files` |
+
+What §6.1 locks is narrower than "read-only", and the difference is the whole
+security-relevant point: this app never overwrites the CONTENT of a design Penpot
+already has. It does create, rename, move, trash and destroy designs and projects
+— deleting a mirror in Nextcloud really does trash the design in Penpot, and
+emptying the Nextcloud trash really does destroy it. `import-binfile` writes
+content only for a design being restored or rebuilt from an archive Nextcloud is
+already holding.
+
+**Local addresses.** The client is Nextcloud's `IClientService`, and this app does
+**not** pass `allow_local_address`. It relies instead on the server-wide
+`allow_local_remote_servers` config, which an admin has to turn on when Penpot
+lives at a private, in-cluster address — the common case for the self-hosters this
+is built for. `PenpotClient` names that setting in the error it raises when
+Nextcloud refuses such a connection, and CI sets it for the same reason.
+
+Setting the base URL is an admin action, so this is a trust-boundary relaxation an
+admin opts into rather than an unauthenticated SSRF. It is real and intentional.
 
 ## Security-related CI gates
 
 These run on every PR into `main` and on every push to `main` (see
-[CONTRIBUTING.md](CONTRIBUTING.md) for what each currently has to check, given
-the repo is pre-code):
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full gate list):
 
 - **`composer audit`** — fails on any advisory in PHP deps.
 - **`npm audit --omit=dev --audit-level=high`** — fails on high-or-above JS
   deps.
-- **Psalm** (PHP static analysis) — will upload SARIF to the Security tab once
-  `lib/` exists; new findings block merge.
+- **Psalm** (PHP static analysis) — uploads SARIF to the Security tab and
+  annotates the PR inline; new findings block merge. CodeQL has no PHP support,
+  so Psalm is this app's PHP code-scanning engine.
 - **CodeQL** (JS / TS) — uploads to the Security tab; new findings block merge.
 - **Dependabot** — alerts and version updates active for `composer`, `npm`, and
   `github-actions`.

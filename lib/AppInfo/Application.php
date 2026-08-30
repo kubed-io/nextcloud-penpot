@@ -87,7 +87,7 @@ use OCP\Files\Events\Node\NodeWrittenEvent;
  * projects. Don't scaffold those here ahead of the code that uses them.
  *
  * The admin purge is NOT on that list any more — it was retired rather than
- * deferred (features/AGENTS.md#retired--the-admin-purge), and its disabled button
+ * deferred (saga/Chapter_3_Building_To_Plan.md#retired--the-admin-purge), and its disabled button
  * went with it. Notifications came off the list the other way: they are the
  * channel two `designs/move.feature` scenarios were waiting on.
  */

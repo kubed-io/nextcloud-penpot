@@ -68,7 +68,7 @@ final class MoveRules {
 	 * A ceiling on {@see filledFromPenpot}'s descent, matching the seatbelts in
 	 * {@see MembershipResolver} and {@see DeletionService}.
 	 */
-	private const SCAN_DEPTH = 100;
+	private const SCAN_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly PenpotMetadata $metadata,

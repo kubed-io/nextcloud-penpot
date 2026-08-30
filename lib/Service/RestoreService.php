@@ -160,7 +160,7 @@ final class RestoreService {
 	 * if they disagreed — a delete that reached deeper than the restore would leave
 	 * projects nothing could bring back.
 	 */
-	private const MAX_DEPTH = 100;
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly PenpotClient $client,

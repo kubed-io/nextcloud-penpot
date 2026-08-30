@@ -132,7 +132,7 @@ final class PullService {
 	 * name may have — mirroring the seatbelts in {@see MembershipResolver},
 	 * {@see DeletionService} and {@see PushService}.
 	 */
-	private const MAX_DEPTH = 100;
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly MappingService $mappings,

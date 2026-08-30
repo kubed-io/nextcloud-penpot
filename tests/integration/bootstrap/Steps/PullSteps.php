@@ -230,18 +230,6 @@ trait PullSteps {
 	}
 
 	/**
-	 * A folder somebody made by hand, before anything was mirrored into it.
-	 *
-	 * The path is relative to the actor's root exactly as every other path in the
-	 * suite is, so a scenario names it the same way it later asserts on it.
-	 *
-	 * @Given /^a folder "([^"]*)" already exists$/
-	 */
-	public function aFolderAlreadyExists(string $path): void {
-		$this->davMkcol($path);
-	}
-
-	/**
 	 * The id of a project with this name, or null when the team has none.
 	 *
 	 * Reads Penpot directly rather than `probe --files`: this runs BEFORE the first

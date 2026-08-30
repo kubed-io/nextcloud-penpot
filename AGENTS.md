@@ -22,8 +22,15 @@ Files-app surface are all built. `src/` holds the file action and the New-menu
 entry; `lib/Service/` is where the behaviour lives.
 
 Not built: **personal projects** (a user's own Penpot team mounting at their home
-root), **the mode pills**, and tracking a **copied project folder**. A handful of
-"Penpot went unreachable mid-gesture" paths log rather than notify.
+root). A handful of "Penpot went unreachable mid-gesture" paths log rather than
+notify.
+
+Two entries that used to sit on that list are off it, for opposite reasons. A
+**copied project folder** is tracked — `CopyService::onFolderCopy()`, wired in
+`CopyListener`, and `features/projects/copy.feature` runs five of its six
+scenarios. The **mode pills** are not pending but cancelled: §D4.14 removed the
+`penpot` system tag in full, which is the same fact this file states two hundred
+lines below as "this app puts no tags on anything".
 
 Chapter 1 of the saga is CLOSED and carries a complete architecture — but read
 it before building, because several load-bearing decisions are still open forks

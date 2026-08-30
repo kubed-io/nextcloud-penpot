@@ -34,16 +34,24 @@ use OCP\Util;
  *
  * **Every button in this panel works.** It used to hold one that did not: "Purge
  * Nextcloud files", rendered `disabled`, waiting on a delete machine the spec has
- * since decided never to build (features/AGENTS.md#retired--the-admin-purge). The
+ * since decided never to build (saga/Chapter_3_Building_To_Plan.md#retired--the-admin-purge). The
  * present-but-disabled argument is sound only while somebody still means to enable
  * the thing — the sync button earned it and went live. Once the feature is
  * cancelled the same button is just a promise nobody is keeping, so it is gone
  * rather than greyed out.
  *
- * There is deliberately **no "Sync to Penpot"** button, and there never will be.
- * This app is read-only for file *content* (§6.1) — that is the spine of the
- * design, not a phase-ordering gap, so a disabled push button would imply a
- * feature that is never coming.
+ * ## THIS PARAGRAPH USED TO DENY A BUTTON THIS PANEL RENDERS
+ *
+ * It said there was "deliberately no 'Sync to Penpot' button, and there never
+ * will be", on the grounds that the app is read-only for file content. Both
+ * halves went stale: `templates/sync_settings.php` renders that button, `js/`
+ * drives it, {@see \OCA\PenpotSync\Command\Sync} is its CLI twin, and §6.1 never
+ * said read-only — what it locks is that this app never overwrites the CONTENT of
+ * a design Penpot already has, which is a much narrower claim than "no push".
+ *
+ * `features/README.md` names this exact sentence as its cautionary tale about
+ * decisions that outlive their reasons, which is why it is corrected here in
+ * place rather than quietly deleted.
  */
 final class SyncSettings implements IDelegatedSettings {
 	#[\Override]

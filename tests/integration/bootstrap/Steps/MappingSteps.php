@@ -628,15 +628,6 @@ trait MappingSteps {
 	}
 
 	/**
-	 * Held across steps because `$this->lastOutput` is shared and every later
-	 * step clobbers it — the assertion below runs after a `list-mappings` call
-	 * that would otherwise leave it holding `[]`. Anything asserted about a
-	 * command's output *after* an intervening step has to be captured when it
-	 * happens, not read back later.
-	 */
-	private string $removalOutput = '';
-
-	/**
 	 * Remove one NAMED mapping, which is what a scenario with more than one needs.
 	 *
 	 * "that mapping" above resolves to `mappingIds()[0]` — fine when a scenario
@@ -658,8 +649,6 @@ trait MappingSteps {
 		if ($res['exit'] !== 0) {
 			throw new \RuntimeException("remove-mapping failed:\n{$res['output']}");
 		}
-
-		$this->removalOutput = $res['output'];
 	}
 
 	/**

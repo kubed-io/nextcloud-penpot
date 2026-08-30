@@ -95,10 +95,6 @@ final class FeatureContext implements Context {
 	private string $ncUser;
 	private string $ncPass;
 
-	/** Folders this scenario made over DAV, so teardown can take them away. */
-	/** @var list<string> */
-	private array $createdFolders = [];
-
 	/** Result of the most recent occ command. */
 	private int $lastExit = 0;
 	private string $lastOutput = '';

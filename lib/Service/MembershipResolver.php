@@ -61,7 +61,7 @@ final class MembershipResolver {
 	 * pathological cycle (which a tree cannot produce) — it is a seatbelt, not a
 	 * real limit. No legitimate folder nesting approaches it.
 	 */
-	private const MAX_DEPTH = 100;
+	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
 		private readonly PenpotMetadata $metadata,

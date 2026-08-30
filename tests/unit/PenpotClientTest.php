@@ -322,9 +322,10 @@ final class PenpotClientTest extends TestCase {
 		$method = new \ReflectionMethod(PenpotClient::class, 'assertName');
 		$method->setAccessible(true);
 
+		// The claim is that this does NOT throw: `assertName` must not reject "/",
+		// because folder mode decides that and the name check does not.
+		$this->expectNotToPerformAssertions();
 		$method->invoke($this->client, 'foo/bar');
-
-		self::assertTrue(true, 'assertName must not reject "/" — folder mode decides that.');
 	}
 
 	// ── unconfigured states ─────────────────────────────────────────────────

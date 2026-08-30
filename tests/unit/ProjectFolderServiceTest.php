@@ -283,13 +283,6 @@ final class ProjectFolderServiceTest extends TestCase {
 		self::assertNull($this->projects->adoptForContent($this->folder(20, 'Team')));
 	}
 
-	/** A mapped ROOT: the resolver gives it no path below a mapping. */
-	private function rootFolder(int $id): Folder {
-		$this->pathBelowIsNull = true;
-
-		return $this->folder($id, 'Penpot');
-	}
-
 	/** @param list<Node> $children */
 	private function folder(int $id, string $name, array $children = []): Folder {
 		$node = $this->createMock(Folder::class);

@@ -166,17 +166,9 @@ namespace OCP\Migration {
 	// legal against an untyped declaration and would NOT be against `: mixed`.
 	if (!interface_exists(IOutput::class, false)) {
 		interface IOutput {
-			public function debug(string $message): void;
-
 			public function info($message);
 
 			public function warning($message);
-
-			public function startProgress($max = 0);
-
-			public function advance($step = 1, $description = '');
-
-			public function finishProgress();
 		}
 	}
 	if (!interface_exists(IRepairStep::class, false)) {
@@ -222,8 +214,6 @@ namespace OCP\Http\Client {
 			public function getStatusCode(): int;
 
 			public function getHeader(string $key): string;
-
-			public function getHeaders(): array;
 		}
 	}
 	if (!interface_exists(IClient::class, false)) {
@@ -278,7 +268,6 @@ namespace OCP\Settings {
 			public const URL = 'url';
 			public const PASSWORD = 'password';
 			public const CHECKBOX = 'checkbox';
-			public const RADIO = 'radio';
 		}
 	}
 	// AdminSection implements IIconSection (which extends ISection upstream —
@@ -392,9 +381,6 @@ namespace OCP\Files {
 			public function newFolder(string $path): Folder;
 
 			public function newFile(string $path, mixed $content = null): File;
-
-			/** @since NC 29. Resolve a node by id when only the id is known. */
-			public function getFirstNodeById(int $id): ?Node;
 		}
 	}
 	// A mirrored `.penpot` file. It is written whole (a link body), read back a
