@@ -986,6 +986,171 @@ raw listing: it drives the prune, where a wider set means more mirrors KEPT.
 
 ---
 
+### Round 13 — the chapter that was not going to touch the code
+
+This chapter opens by saying what it is not: *"Not a rewrite of the app. No
+behaviour changes. If a round here changes `lib/`, it is because a comment was
+false."* Chapter 3 had closed. The app **worked end to end and was deployed**. What
+remained was the shopfront.
+
+Five rounds later that sentence is not true, and it is worth saying plainly why
+rather than quietly amending it.
+
+#### What actually happened after Chapter 3 closed
+
+| Round | The tag said | The code said |
+|-------|--------------|---------------|
+| 9  | two scenarios needed work | both were already runnable; the walls came down in Chapter 3 |
+| 10 | two `@todo`, so two step definitions | **no code at all** — `RestoreFromTrashListener` returned on any folder |
+| 11 | three runnable `@todo` | **no code at all** — `TrashPurgeHook` matched on `.penpot`, and a trashed project folder is `Team.d1788058484` |
+| 12 | two `@blocked` on a real wall | the wall was a field on a record nobody had read |
+
+Four consecutive rounds, and **the tag was wrong every single time** — in both
+directions. Round 9 found work already done. Rounds 10 and 11 found `@todo` sitting
+over behaviour that did not exist, which is the failure mode that matters: `@todo`
+means *"the code EXISTS; only the test is missing"*, so a `@todo` over nothing is a
+claim the app does something it cannot do.
+
+That is what Chapter 3 was closed on. Not on a measurement — on an inventory of
+tags, each of which was a claim somebody made once, and none of which anything
+re-checked. `behat.dist.yml` had already written the lesson down: *"a status tag is
+a claim somebody made once, and nothing re-checks it… `behat --tags @todo` is a
+QUEUE, not an inventory."* It was in the config, correct, while the chapter above it
+closed on exactly that mistake.
+
+#### The lesson, stated so it survives this chapter
+
+**A chapter closed on a count of tags is closed on a guess.** "The app works end to
+end" was true of every gesture anybody had run, and false of three gestures nobody
+had — restoring a project folder, purging one, and telling a destroyed design from a
+recoverable one. The deploy was real; the confidence behind it was borrowed from a
+tally.
+
+The cheap correction is the one Round 9 was supposed to teach and Rounds 10 and 11
+had to learn again: **read `lib/` before believing a tag**, and change a tag only on
+a PR that runs it. The expensive correction is structural, and it is the one worth
+carrying to the sibling apps: a chapter should close on a suite that ran, not on a
+queue that was counted.
+
+#### The cleanup itself
+
+With the queue's release-blocking work finished, one PR took the tidy-up that had
+accumulated across twelve rounds. No behaviour changed anywhere in it.
+
+**The depth ceiling was declared fourteen times.** Thirteen `private const
+MAX_DEPTH = 100` plus `MoveRules::SCAN_DEPTH`, each carrying a comment saying it was
+"the same ceiling every other recursion uses" — a web of thirteen cross-references
+pointing at each other with no authority anywhere in it. `Walk::MAX_DEPTH` is the
+one now. They have to agree for a reason beyond tidiness, and §C6.20 is that reason:
+several of these walks read the same tree for different halves of one question, and
+a walk stopping shallower than its partner attributes files the partner still
+claims. The symptom is a silent duplicate, not an error.
+
+**Four documents held four different scenario counts**, and every hand-count had
+missed the same thing — a `@blocked` on a `Feature:` covers every scenario beneath
+it, and `designs/open-with.feature` contributes five that way. The true figures are
+114 headers, 87 live, 175 executed rows, 13 `@todo`, 4 `@unbuilt`, 10 `@blocked`.
+`behat.dist.yml` said 6; two other documents said 7 and "90 live".
+
+**`SECURITY.md` was still written for a repo with no code in it** — "there is no
+`lib/` or `src/` yet" — and described this app's egress as reads plus perhaps one
+narrow rename. It ships twelve write commands and can permanently destroy designs
+and projects. A security policy understating its own app's write surface by an order
+of magnitude is the worst single piece of drift this repository has produced, and it
+survived because nobody re-reads a file they are not editing.
+
+**`SyncSettings` promised a button the panel it documents renders.** *"There is
+deliberately no 'Sync to Penpot' button, and there never will be."* `features/README.md`
+already names that exact sentence as its cautionary tale about decisions outliving
+their reasons, which is why it was corrected in place rather than deleted.
+
+#### And a flake that had been reading as a version bug
+
+The same round settled a question that had been costing reruns: legs that passed on
+every PR and failed on `main`. The obvious reading was a Nextcloud version
+incompatibility, since a PR runs `stable34` alone and `main` runs all three.
+
+It is not. The failures hop — `project-trash/stable33`, then `trash/stable32`, then
+`project-trash/stable32` on three different scenarios — and every one goes green on a
+rerun of the same commit with no change. `main` simply rolls the dice thirty-three
+times where a PR rolls eleven. The race is in the harness: the Penpot-restore steps
+confirm by watching a design **leave the deleted-files listing**, then run one `occ`
+pull that reads the project's **live listing**, and those two transitions are not
+atomic. In the gap the pull correctly finds nothing, and the `Then`'s ten-second
+WebDAV poll is dead time against a decision already made.
+
+> A failure that moves between legs, versions and scenarios is not a version
+> incompatibility. **Rerun before you theorise** — one rerun of the identical commit
+> would have answered this the first time it happened.
+
+The fix is confined to the step definitions and is not in this round: confirm on the
+side the pull actually reads, and give the three-attempt loop the backoff it has
+never had.
+
+---
+
+### Round 14 — the request goes in
+
+The certificate request is filed: **[PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213)**,
+`penpot_sync/penpot_sync.csr`, opened from **`kubed-io`** rather than a personal
+account — which is the one thing the n8n request (PR #1103) got wrong and could not
+be corrected afterwards.
+
+Three things the precedent taught, and one it did not:
+
+**Signed, this time on the first push.** §D4.10 records that n8n's CSR commit landed
+unsigned and needed an amend and a force-push. This one carried a valid SSH signature
+before it left the container, checked by reading the raw commit object for its
+`gpgsig` header rather than by trusting `git log --show-signature`, which reports
+"No signature" for a perfectly signed commit whenever `gpg.ssh.allowedSignersFile`
+is unset. Verifying the wrong thing looks identical to the failure.
+
+**The DCO bot wanted a sign-off, and the note about this gotcha did not mention it.**
+Gate 4's guidance named two things easy to miss — the public email and the signing
+setup — and the first push failed on neither. It failed on a missing
+`Signed-off-by:` trailer. The precedent had one; the prose describing the precedent
+did not say so. **Read the artefact, not the description of the artefact** —
+`gh api …/pulls/1103/commits` answered in one call what the paragraph had omitted.
+
+**Gate 7 was open and nobody had noticed.** GCP Secret Manager held `nextcloud-n8n`
+and `nextcloud-store-token` and nothing for penpot, so the only copies of the signing
+key were a working copy in a container and a write-only GitHub secret. It is now
+`nextcloud-penpot`, labelled to match, and verified by comparing the checksum of what
+comes back out against the local file — **a backup nobody read back is not a backup.**
+
+That also settled a duplication that looked like an inconsistency. It is not one:
+
+- **GitHub Actions is what runs the release.** `publish.yml` reads
+  `NEXTCLOUD_STORE_KEY` and `NEXTCLOUD_STORE_TOKEN` from the `nextcloud-store`
+  environment. Both are write-only and can never be read back.
+- **GCP is the retrievable backup**, one secret per app signing key
+  (`nextcloud-<app>`, labelled `purpose=appstore-signing`), plus **one shared**
+  `nextcloud-store-token` — no app suffix, because the store token authenticates the
+  *account* rather than an app, and every sibling app uses the same value.
+
+#### Gate 8 without a release
+
+The token had been set and never exercised, and the dry run cannot exercise it:
+`push=false` skips the release job, which is the only thing that touches the store.
+So it would first have been tested during the release it could break.
+
+It can be proven earlier, without mutating anything, by sending the real token with a
+deliberately empty body and reading which way it fails:
+
+```
+real token,  {}  →  400  {"certificate":["This field is required."],
+                          "signature":["This field is required."]}
+bogus token, {}  →  401  {"detail":"Invalid token."}
+```
+
+The control is the whole trick — a `400` alone proves nothing until a `401` shows what
+rejection looks like. The token authenticates, and the endpoint is asking for exactly
+the two fields gate 9 sends.
+
+**Everything that was ours is done.** Gate 5 is the wait, and nobody here controls it.
+
+---
+
 ## The plan — reaching the store
 
 The store's requirement is that **every release is signed by a certificate
@@ -1011,24 +1176,40 @@ overlaps the wait.
 | 1 | App id `penpot_sync` locked across `info.xml`, `package.json`, namespace | — | ✅ done, long since |
 | 2 | Signing keypair + CSR minted, gitignored, verified | agent | ✅ done this round |
 | 3 | Release pipeline carries sign + upload | agent | ✅ done this round |
-| 4 | **CSR filed** with `nextcloud/app-certificate-requests` | **Dr K** | ⬜ blocked on a human |
+| 4 | **CSR filed** with `nextcloud/app-certificate-requests` | **Dr K** | ✅ [PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213), from `kubed-io` |
 | 5 | **Countersigned `.crt` committed back** to that repo | Nextcloud | ⬜ the wait (~2 days for n8n) |
-| 6 | **Private key into `NEXTCLOUD_STORE_KEY`** | **Dr K** | ⬜ secret exists, value empty |
-| 7 | Durable backup of the private key | **Dr K** | ⬜ see below |
-| 8 | `NEXTCLOUD_STORE_TOKEN` is a valid apps.nextcloud.com token | **Dr K** | ◑ set 2026-08-29, never exercised |
+| 6 | **Private key into `NEXTCLOUD_STORE_KEY`** | **Dr K** | ✅ pasted from the file |
+| 7 | Durable backup of the private key | **Dr K** | ✅ GCP `nextcloud-penpot`, round-trip verified |
+| 8 | `NEXTCLOUD_STORE_TOKEN` is a valid apps.nextcloud.com token | **Dr K** | ✅ proven against the live API — see below |
 | 9 | **Register the app id** on the store (cert + ownership signature) | either | ⬜ needs gate 5 |
-| 10 | Dry run, then cut the release | either | ⬜ needs 6 + 9 |
+| 10 | Dry run, then cut the release | either | ⬜ needs 9 |
 
 ### Gate 4 — what filing the CSR involves
 
 Fork [nextcloud/app-certificate-requests](https://github.com/nextcloud/app-certificate-requests),
 add **`penpot_sync/penpot_sync.csr`** — that exact directory and filename, their
 tooling asserts the structure — and open a PR linking to this repository as the
-public source. Two things their process needs that are easy to miss: the GitHub
-account must **show an email address on its public profile**, and n8n's CSR
-commit landed unsigned because the local signing setup was broken at the time,
-which had to be amended and force-pushed afterwards. Check `git config
-commit.gpgsign` before committing.
+public source. **Done in Round 14** — [PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213),
+from `kubed-io` this time rather than a personal account.
+
+**Three** things their process needs that are easy to miss, not the two this
+paragraph used to list:
+
+1. The GitHub account must **show an email address on its public profile**.
+2. The commit must be **signed**. n8n's landed unsigned because the local signing
+   setup was broken, and had to be amended and force-pushed. Check `git config
+   commit.gpgsign` first — but verify by reading the raw object
+   (`git cat-file -p HEAD | grep gpgsig`), because `git log --show-signature`
+   reports "No signature" on a correctly signed commit when
+   `gpg.ssh.allowedSignersFile` is unset, and that looks exactly like failure.
+3. The commit must carry a **`Signed-off-by:` trailer**, or the DCO bot fails the
+   PR. This list did not mention it and the first push was rejected for it; PR
+   #1103's own commit message had one all along. `git commit -s` adds it, and
+   `git commit --amend -s --no-edit` fixes it without disturbing the signature.
+
+The third is the general lesson: **read the artefact, not the description of the
+artefact.** One `gh api …/pulls/1103/commits` call answered what this paragraph had
+left out.
 
 ### Gate 7 — why a backup is a gate and not a nicety
 
@@ -1036,8 +1217,13 @@ commit.gpgsign` before committing.
 secrets are write-only. `.signing/` is a working copy in a container. If both are
 lost the recovery is a new keypair, a new CSR, a second countersign, and
 re-registering the app id — which **deletes every published release**. n8n keeps
-its key in GCP Secret Manager as the retrievable copy; the same arrangement
-works here.
+its key in GCP Secret Manager as the retrievable copy.
+
+**Done in Round 14**, the same arrangement: GCP secret `nextcloud-penpot`, labelled
+`app=nextcloud-penpot;purpose=appstore-signing` to match `nextcloud-n8n`, and
+verified by reading it back and comparing checksums against `.signing/`. Until that
+round the gate had simply been open, and nothing surfaced it — the GitHub secret was
+set, which *looked* like the key was safe.
 
 ### Gate 9 — registering the app id
 
@@ -1081,23 +1267,32 @@ Both are inherited from the sibling's review and neither is a blocker:
 
 ## What this chapter is not
 
-- **Not a rewrite of the app.** No behaviour changes. If a round here changes
-  `lib/`, it is because a comment was false.
-- **Not a release yet.** The decision to publish has been taken and the
-  pipeline is wired for it (§D4.9), but nothing has been submitted. The plan
-  above names what is still outstanding and who holds it.
+- **~~Not a rewrite of the app.~~ It became one, in part.** This bullet opened the
+  chapter promising no behaviour changes, and Rounds 10, 11 and 12 built real
+  behaviour in `lib/` — folder restore, folder purge, and a three-valued reading of
+  Penpot's trash. Round 13 explains why, and the honest version is: the queue this
+  chapter promised not to touch turned out to be holding work the release needed.
+  The bullet is struck rather than deleted, because a promise this chapter broke is
+  more useful on the page than off it.
+- **Not a release yet — but the request is in.** The CSR is filed
+  ([PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213)) and
+  every gate that was ours is closed. Gate 5 is the countersign, and nothing here
+  moves it.
 - **Not the end of the queue.** Chapter 3 left a named backlog of `@todo`,
-  `@unbuilt` and `@blocked` scenarios; its close is the inventory. This chapter
-  does not touch them, and does not pretend they are gone.
+  `@unbuilt` and `@blocked` scenarios. This chapter worked the part of it the
+  release stood on — the project verbs are down to scattered singles — and the rest
+  is still named, still tagged, and still not to be trusted without reading `lib/`
+  first. 27 scenarios remain unrun; `features/README.md § Status` is the live count.
 
 ---
 
 ## Open questions
 
-1. ~~**When does this publish?**~~ **Answered in Round 5.** The submission is
-   committed to and the pipeline carries it. The remaining question is not
-   *whether* but *when the countersign lands* — gate 5, and the only one nobody
-   here controls.
+1. ~~**When does this publish?**~~ **Answered in Round 5, and filed in Round 14.**
+   The pipeline carries the submission and the CSR is in
+   ([PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213)).
+   Every gate that was ours is closed; what is left is *when the countersign lands*
+   — gate 5, and the only one nobody here controls.
 2. ~~**Does the tag gesture come out?**~~ **Answered in Round 8** — yes, in
    full. The harness now arranges a project folder the way a user gets one:
    the project is made in Penpot and the pull mirrors it.
