@@ -26,11 +26,11 @@ default:
   # It used to be one @todo meaning all four at once, which is why "what is
   # actually built but untested?" needed a hand-analysis every time it was asked.
   #
-  # 88 OF 114 SCENARIO HEADERS RUN — 175 executed once Examples rows are counted,
-  # across eleven legs (admin 31, motion 22, trash 18, copying 17, project-motion
-  # 17, projects 14, project-trash 13, project-copy 12, core 11, authoring 10,
-  # naming 10). The queue behind that is 17 @todo, 4 @unbuilt, 5 @blocked and
-  # no @decision.
+  # 90 OF 114 SCENARIO HEADERS RUN — 180 executed once Examples rows are counted,
+  # across eleven legs (admin 31, motion 22, trash 18, copying 17,
+  # project-motion 17, project-copy 15, project-trash 15, projects 14, core 11,
+  # authoring 10, naming 10). The queue behind that is 13 @todo, 4 @unbuilt,
+  # 7 @blocked and no @decision.
   #
   # THESE NUMBERS GO STALE AND THE SAGA IS WHERE THEY BELONG. This block carried a
   # paragraph per round for eight rounds — every one of them true when written and

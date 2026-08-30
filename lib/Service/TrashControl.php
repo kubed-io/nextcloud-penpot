@@ -205,16 +205,107 @@ final class TrashControl {
 				continue;
 			}
 
+			[$designIds, $holdsOtherFiles] = $this->inspect($item, 0);
+
 			$out[] = new TrashedFolder(
 				$fileId,
 				basename($item->getOriginalLocation()),
+				$designIds,
+				$holdsOtherFiles,
 				function () use ($manager, $item, $uid): void {
 					$this->restoreAs($manager, $item, $uid);
+				},
+				static function () use ($manager, $item): void {
+					$manager->removeItem($item);
 				},
 			);
 		}
 
 		return $out;
+	}
+
+	/**
+	 * How deep to walk inside a trashed folder.
+	 *
+	 * The same ceiling every other recursion over user-shaped data in this app uses,
+	 * and for the same reason: a bound on a walk nobody should ever reach the end of.
+	 */
+	private const MAX_DEPTH = 100;
+
+	/**
+	 * What is inside a trashed folder: every design's file id, and whether anything
+	 * in there is not a design.
+	 *
+	 * ## THE CHILDREN ARE NOT TRASH ENTRIES, AND THE NODE IS NOT RESOLVABLE
+	 *
+	 * Trashing `Penpot/Doomed` puts ONE item in the trash. Its designs are nested
+	 * inside that item rather than beside it, so {@see listTrashed()} cannot see them
+	 * — deliberately, since the reap must never destroy a mirror it was not handed.
+	 * And the folder cannot simply be resolved to a `Node` and listed either: a home
+	 * trash lives under `/<uid>/files_trashbin` while a Team Folder's lives on an
+	 * entirely different mount, so there is no one path that finds both.
+	 *
+	 * `ITrashItem::getTrashBackend()->listTrashFolder()` is the door, and it is the
+	 * right one: the item dispatches on its OWN backend, exactly as `restoreItem()`
+	 * and `removeItem()` do. Every trash type stays on this side of the boundary and
+	 * the caller gets ids and a boolean.
+	 *
+	 * A CHILD WE CANNOT READ COUNTS AS "NOT A DESIGN", which is the safe direction:
+	 * it makes the folder un-purgeable rather than making it look empty of anything
+	 * worth sparing.
+	 *
+	 * @return array{0: list<int>, 1: bool} design file ids, and whether anything else is in there
+	 */
+	private function inspect(ITrashItem $folder, int $depth): array {
+		if ($depth >= self::MAX_DEPTH) {
+			// Past the ceiling nothing is known, so nothing is safe to destroy.
+			return [[], true];
+		}
+
+		try {
+			$children = $folder->getTrashBackend()->listTrashFolder($folder);
+		} catch (\Throwable $e) {
+			$this->logger->warning('penpot_sync: could not look inside a trashed folder', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getName(),
+				'exception' => $e,
+			]);
+
+			return [[], true];
+		}
+
+		$designIds = [];
+		$other = false;
+		foreach ($children as $child) {
+			if (!$child instanceof ITrashItem) {
+				$other = true;
+				continue;
+			}
+			if ($child->getType() === FileInfo::TYPE_FOLDER) {
+				[$nested, $nestedOther] = $this->inspect($child, $depth + 1);
+				foreach ($nested as $id) {
+					$designIds[] = $id;
+				}
+				$other = $other || $nestedOther;
+				continue;
+			}
+
+			// THE ORIGINAL NAME, NEVER `getName()` — the same trap {@see listTrashed()}
+			// spells out twenty lines up and this method walked straight into. The
+			// trash's own spelling carries the deletion stamp AFTER the extension
+			// (`Alpha.penpot.d1788058484`), so `str_ends_with($name, '.penpot')` is
+			// false for every trashed design there has ever been. Every `.penpot` in
+			// here would have been counted as "some other file", which makes the folder
+			// permanently un-purgeable — a silent no-op wearing the shape of caution.
+			$id = $child->getId();
+			if ($id !== null && str_ends_with(basename($child->getOriginalLocation()), PullService::EXTENSION)) {
+				$designIds[] = $id;
+				continue;
+			}
+			$other = true;
+		}
+
+		return [$designIds, $other];
 	}
 
 	/**

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\PenpotSync\Tests\Unit;
 
 use OCA\PenpotSync\Exception\PenpotApiException;
+use OCA\PenpotSync\Service\FolderMarkers;
 use OCA\PenpotSync\Service\Mapping;
 use OCA\PenpotSync\Service\PenpotClient;
 use OCA\PenpotSync\Service\PenpotFileMetadata;
@@ -17,6 +18,7 @@ use OCA\PenpotSync\Service\PenpotMetadata;
 use OCA\PenpotSync\Service\StorageService;
 use OCA\PenpotSync\Service\TrashControl;
 use OCA\PenpotSync\Service\TrashedFile;
+use OCA\PenpotSync\Service\TrashedFolder;
 use OCA\PenpotSync\Service\TrashReconcileService;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -48,6 +50,10 @@ final class TrashReconcileServiceTest extends TestCase {
 	private const PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12134';
 	private const ACTOR = 'dana';
 	private const FILE_ID = 4242;
+	private const OTHER_FILE_ID = 4243;
+	private const OTHER_PENPOT_ID = '61d8ecb9-c430-8120-8008-6225c5b12135';
+	private const FOLDER_ID = 70;
+	private const PROJECT = 'df59d46b-a997-80d9-8008-6452575b0a70';
 
 	private PenpotClient $client;
 	private PenpotMetadata $metadata;
@@ -57,6 +63,9 @@ final class TrashReconcileServiceTest extends TestCase {
 	/** Set by {@see trashHolding()} so a test can assert the entry was destroyed. */
 	private int $purges = 0;
 
+	/** The folder twin of {@see $purges}, set by {@see trashedProject()}. */
+	private int $folderPurges = 0;
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->client = $this->createMock(PenpotClient::class);
@@ -65,6 +74,7 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->storage = $this->createMock(StorageService::class);
 		$this->storage->method('resolveActorUid')->willReturn(self::ACTOR);
 		$this->purges = 0;
+		$this->folderPurges = 0;
 	}
 
 	// ── the one case that destroys something ────────────────────────────────
@@ -327,6 +337,111 @@ final class TrashReconcileServiceTest extends TestCase {
 		self::assertSame(1, $this->purges);
 	}
 
+	// ── the trashed PROJECT FOLDER (`projects/purge.feature`) ───────────────
+
+	/**
+	 * A trashed project whose designs Penpot destroyed has nothing left to be
+	 * restored to, so the folder goes too.
+	 *
+	 * The folder is the unit because the trash offers no smaller one: its designs
+	 * are nested inside that single item, so the file pass above never sees them.
+	 */
+	public function testATrashedProjectWhoseDesignsAreGoneIsPurged(): void {
+		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: false));
+		$this->givenProjectFolder();
+		$this->givenSyncMirror();
+		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('fileExists')->with(self::PENPOT_ID)->willReturn(false);
+
+		self::assertSame(1, $this->reap());
+		self::assertSame(1, $this->folderPurges);
+	}
+
+	/**
+	 * ONE SPREADSHEET SPARES THE WHOLE FOLDER, and that is the point of the scenario
+	 * beside this one. A file with no far side may not be destroyed by something
+	 * that happened in Penpot — and since a trash item cannot be partly purged,
+	 * sparing the file means sparing the folder.
+	 *
+	 * Identical to the test above but for the one flag, which is what makes it a
+	 * claim about the spreadsheet rather than about anything else.
+	 */
+	public function testATrashedProjectHoldingAnyOtherFileIsSpared(): void {
+		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: true));
+		$this->givenProjectFolder();
+		$this->givenSyncMirror();
+		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('fileExists')->willReturn(false);
+
+		self::assertSame(0, $this->reap());
+		self::assertSame(0, $this->folderPurges);
+	}
+
+	/**
+	 * EVERY DESIGN, NOT ANY. One still recoverable in Penpot is one reason the
+	 * folder is still worth something: restoring it would bring the project back,
+	 * which is exactly what `projects/restore` asserts happens.
+	 */
+	public function testATrashedProjectWithOneRecoverableDesignIsSpared(): void {
+		$this->foldersInTrash($this->trashedProject([self::FILE_ID, self::OTHER_FILE_ID], holdsOtherFiles: false));
+		$this->givenProjectFolder();
+		$this->metadata->method('readFile')->willReturnCallback(
+			static fn (int $id): PenpotFileMetadata => new PenpotFileMetadata(
+				$id === self::FILE_ID ? self::PENPOT_ID : self::OTHER_PENPOT_ID,
+				'5@t1',
+				Mapping::MODE_SYNC,
+				self::TEAM,
+			),
+		);
+		// The second one is still in Penpot's trash, so it can still come back.
+		$this->client->method('deletedFiles')->willReturn([['id' => self::OTHER_PENPOT_ID]]);
+		$this->client->method('fileExists')->willReturn(false);
+
+		self::assertSame(0, $this->reap());
+		self::assertSame(0, $this->folderPurges);
+	}
+
+	/**
+	 * A folder this app never marked is somebody's own, whatever is inside it.
+	 *
+	 * `penpot_project_id` is the only thing that ever made a folder a project
+	 * (§C6.38), so its absence is the whole answer — and a trashed folder has no
+	 * path left to resolve any other way.
+	 */
+	public function testATrashedFolderThatWasNeverAProjectIsSpared(): void {
+		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: false));
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
+		$this->givenSyncMirror();
+		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('fileExists')->willReturn(false);
+
+		self::assertSame(0, $this->reap());
+		self::assertSame(0, $this->folderPurges);
+	}
+
+	/** An empty project folder proves nothing about Penpot, so it is left alone. */
+	public function testATrashedProjectHoldingNoDesignsIsSpared(): void {
+		$this->foldersInTrash($this->trashedProject([], holdsOtherFiles: false));
+		$this->givenProjectFolder();
+
+		$this->client->expects($this->never())->method('deletedFiles');
+
+		self::assertSame(0, $this->reap());
+		self::assertSame(0, $this->folderPurges);
+	}
+
+	/** A trashed project of ANOTHER team is not this mapping's to judge. */
+	public function testATrashedProjectFromAnotherTeamIsSpared(): void {
+		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: false));
+		$this->givenProjectFolder();
+		$this->metadata->method('readFile')->willReturn(
+			new PenpotFileMetadata(self::PENPOT_ID, '5@t1', Mapping::MODE_SYNC, self::OTHER_TEAM),
+		);
+
+		self::assertSame(0, $this->reap());
+		self::assertSame(0, $this->folderPurges);
+	}
+
 	// ── fixtures ────────────────────────────────────────────────────────────
 
 	/** @param array<string, bool> $seen */
@@ -365,6 +480,35 @@ final class TrashReconcileServiceTest extends TestCase {
 		return new TrashedFile(self::FILE_ID, 'Erased Upstream.penpot', function (): void {
 			$this->purges++;
 		});
+	}
+
+	private function foldersInTrash(TrashedFolder ...$entries): void {
+		$this->trash->method('listTrashedFolders')->willReturn($entries);
+	}
+
+	/** The folder carries a project id, which is what made it a project at all. */
+	private function givenProjectFolder(): void {
+		$this->metadata->method('readFolder')->willReturn(new FolderMarkers(self::PROJECT, ''));
+	}
+
+	/**
+	 * One trashed project folder whose purge is counted rather than performed.
+	 *
+	 * @param list<int> $designIds
+	 */
+	private function trashedProject(array $designIds, bool $holdsOtherFiles): TrashedFolder {
+		return new TrashedFolder(
+			self::FOLDER_ID,
+			'Emptied',
+			$designIds,
+			$holdsOtherFiles,
+			static function (): void {
+				throw new \LogicException('the reap must never RESTORE a folder');
+			},
+			function (): void {
+				$this->folderPurges++;
+			},
+		);
 	}
 
 	private function givenSyncMirror(): void {

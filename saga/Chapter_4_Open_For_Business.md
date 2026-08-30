@@ -846,6 +846,105 @@ code is where it is easiest to get away with breaking.
 
 ---
 
+### Round 11 — the tag was wrong again, and a live pod settled a contradiction
+
+`projects/purge.feature` had four scenarios and three of them runnable, all `@todo`.
+None had any code. `TrashPurgeHook` opened with `str_contains($path, '.penpot')` —
+cheap, correct for a mirror, and blind to the thing the whole feature is about: a
+trashed project folder is `Team.d1788058484`, with no extension anywhere in it. So
+the hook returned before it could look, and emptying the trash on a whole project
+left every design of it sitting in Penpot's trash. Going the other way,
+`TrashReconcileService` only ever listed trashed FILES, so emptying Penpot's trash
+could not reach the folder mirroring the project it destroyed.
+
+> Four rounds, four wrong tags. `behat --tags @todo` is a queue, and the only thing
+> that turns a queue entry into a fact is reading `lib/` before believing it.
+
+**The guard that moved.** `TrashedFolder` shipped one round earlier carrying a
+`restore` closure and no `purge` one, with a docblock arguing the point: *"a purge
+reachable from the revive path is a purge that can be called by accident — the type
+is the guard."* That held for exactly as long as a trashed folder had one thing that
+could happen to it. It carries both verbs now, and the guard moved to the caller,
+which is where it was always really going to live — the reap purges a folder only
+when it has proved the folder holds nothing but designs Penpot no longer has. One
+spreadsheet spares the whole folder, because a trash item cannot be partly purged.
+
+**Two notes in AGENTS.md disagreed, and the pod broke the tie.** One said emptying a
+Team Folder's trash *"cannot reach Penpot"* and was a gap unclosable from here. A
+newer one, three thousand lines away, said the Team Folder purge *"reached Penpot
+exactly like the plain one"*. Both were written from measurements; only one could
+describe the row about to be shipped.
+
+So it was measured rather than argued: two identical project folders on the live
+instance, one under an admin-folder mapping and one under a Team Folder, trashed and
+then purged. The admin folder's purge destroyed its design and said so in the log.
+The Team Folder's produced no log line at all — groupfolders' `removeItem()` unlinks
+and emits nothing, no typed event and no legacy hook. The Team Folder row is gone,
+and it is not `@unbuilt` or `@blocked`, because there is no code anyone could write
+for it from inside this app.
+
+> The two notes were never in conflict. They describe opposite DIRECTIONS: the reap
+> runs inside the pull and needs no hook, which is exactly why `designs/purge` can
+> run a Team Folder row green on a backend where this one cannot. A contradiction
+> that dissolves once you ask which way the news is travelling — and thirty seconds
+> in a pod was cheaper than either reading.
+
+**Then CI destroyed the round's headline, and a live Penpot said why.** The purge ran,
+the hook fired, the log said *"permanently deleted a trashed project's designs"* — and
+the designs were still sitting in Penpot's trash. Twice, once per row.
+
+Measured rather than reasoned about, three runs and a control: Penpot will not
+permanently delete a file whose PROJECT is deleted. On a live project the destroy
+works and the file is unrecoverable; on a deleted one the RPC reports success and does
+nothing at all, and the file is still restorable afterwards — restoring it revives the
+project too. Ordering does not save it either: `delete-file` first, so the file has a
+`deleted_at` of its own, then destroy, is still a no-op.
+
+And trashing the folder is what deleted the project. `onFolderTrashed()` calls
+`delete-project`, never `delete-file` per design, so there is no ordering of Nextcloud
+gestures that reaches a destroyable state. The folder-purge branch was written,
+shipped to a live instance, and taken out again: in every path it had, the id it sent
+was one Penpot would ignore, while logging a successful destroy.
+
+> **A log line is not a measurement.** I had "verified" this branch on the live pod an
+> hour earlier and reported it working — by reading the app's own success line and
+> never asking Penpot. §C6.11 has said *"success is not proof of success on these
+> commands"* since Chapter 2. Two of this round's three failures were believed log
+> lines, and one of them was mine twice over.
+
+I blocked all three scenarios on that, and Dr K asked the obvious question — *"you
+just blocked all of those?"* — which was worth asking, because I had measured two
+orderings and not the third.
+
+**The one I skipped is the one that works.** Deleting the DESIGN while its project is
+still live gives it a `deleted_at` of its own, and then the destroy lands and the
+design is unrecoverable. Do it after the project has gone and there is nothing to
+stamp. So the fix is not in the purge at all: `onFolderTrashed()` now calls
+`delete-file` on every design below the folder before `delete-project`, which is also
+the more honest thing for it to have been doing — the designs really are going to
+Penpot's trash, and until now they only LOOKED like it.
+
+> Four runs and a control. The wall was real and it was one call earlier in the
+> gesture than where I went looking for it. Two negative results are not a proof of
+> impossibility, and a question from someone who had not seen the measurements was
+> what turned that over.
+
+**One scenario came back; two stayed blocked, and for a sharper reason.** A destroyed
+design goes on appearing in `get-team-deleted-files` while its project is deleted, so
+the listing shows destroyed and recoverable designs side by side, and `fileExists()`
+cannot separate them either. The gesture scenario can ask by TRYING — issue a restore
+and assert nothing came back, which is a mutating `Then` named so a reader sees it.
+The reap cannot: asking Penpot to restore a design in order to find out whether it is
+gone is not something production may do. So the code is built and unit-tested and its
+two scenarios say `@blocked`, which is the honest place to leave it.
+
+**And `Rename a project in Penpot` needed no code at all.** Its `@todo` said why in
+its own words — *"the team still holds the New project the scenario above made, so
+the pull adopts the wrong folder"* — which is the leg-wide fixture rule for the third
+PR running. Distinct names, and it ran.
+
+---
+
 ## The plan — reaching the store
 
 The store's requirement is that **every release is signed by a certificate

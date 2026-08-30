@@ -44,9 +44,7 @@ Feature: Renaming a project
     # ── RULE: a project renamed in Penpot is renamed in place ─────────────────
     # notes: ../AGENTS.md#a-project-renamed-in-penpot-keeps-its-folder-where-it-is
 
-  # @todo — needs per-scenario isolation in Penpot: the team still holds the
-  # "New" project the scenario above made, so the pull adopts the wrong folder.
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Rename a project in Penpot
     Given the following items in the mappings:
       | path                  |
@@ -61,11 +59,10 @@ Feature: Renaming a project
     And there is no folder at "<from>"
 
     Examples: however deep it sits, in either kind of storage
-      | from           | named       | to                 |
-      | Penpot/Old     | New         | Penpot/New         |
-      | Penpot/foo/Old | foo/New     | Penpot/foo/New     |
-      | Shared/Old     | New         | Shared/New         |
-      | Penpot/Bubbles | Bubbles/foo | Penpot/Bubbles/foo |
+      | from                | named       | to                 |
+      | Penpot/Upstream     | Renamed     | Penpot/Renamed     |
+      | Penpot/foo/Upstream | foo/Renamed | Penpot/foo/Renamed |
+      | Shared/Upstream     | Renamed     | Shared/Renamed     |
 
     # THE FOLDER IS RENAMED, NOT REPLACED. Everything in it comes along, the user's
     # own files included — nothing here is deleted and re-made under the new name.

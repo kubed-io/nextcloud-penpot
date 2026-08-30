@@ -148,9 +148,11 @@ final class TrashReconcileService {
 		}
 
 		$mirrors = $this->mirrors($uid, $mapping);
-		if ($mirrors === []) {
+		$folders = $this->trashedProjects($uid, $mapping);
+		if ($mirrors === [] && $folders === []) {
 			// The overwhelmingly common case, and it costs nothing past the listing:
-			// no trashed mirrors means no reason to ask Penpot anything at all.
+			// nothing of this mapping's in the trash means no reason to ask Penpot
+			// anything at all.
 			return 0;
 		}
 
@@ -193,7 +195,119 @@ final class TrashReconcileService {
 			}
 		}
 
+		return $purged + $this->reapProjects($folders, $mapping, $seen, $parked);
+	}
+
+	/**
+	 * A trashed PROJECT FOLDER whose designs Penpot no longer has goes too
+	 * (`projects/purge.feature`).
+	 *
+	 * ## WHY THE FOLDER AND NOT THE MIRRORS INSIDE IT
+	 *
+	 * Trashing `Penpot/Doomed` puts ONE item in the trash; its designs are nested in
+	 * that item rather than beside it, so {@see mirrors()} never sees them and the
+	 * file pass above cannot reach them. The trash offers no way to take part of an
+	 * item out or leave part of it behind either — so the folder is the only unit
+	 * this decision can be made about, and it has to be made about the whole of it.
+	 *
+	 * ## WHICH IS WHY ONE SPREADSHEET SPARES THE WHOLE FOLDER
+	 *
+	 * A `.xlsx` in there has no far side. Nothing that happened in Penpot may destroy
+	 * it, and since the folder cannot be partly purged, the answer is to leave the
+	 * folder alone — the same restraint the Penpot-side project delete already shows
+	 * for a live folder holding files that were never Penpot's. The entry stays
+	 * recoverable, which is the failure direction this class always prefers.
+	 *
+	 * ## EVERY DESIGN, NOT ANY
+	 *
+	 * One design still recoverable in Penpot is one reason the folder is still worth
+	 * something: restoring it would bring the project back, and `projects/restore`
+	 * says so. So the folder goes only when `isGone()` — which answers false whenever
+	 * it cannot tell — is true of every single design under it.
+	 *
+	 * @param array<int, TrashedFolder> $folders
+	 * @param array<string, bool> $seen
+	 * @param array<string, bool> $parked
+	 */
+	private function reapProjects(array $folders, Mapping $mapping, array $seen, array $parked): int {
+		$purged = 0;
+		foreach ($folders as $folder) {
+			$allGone = true;
+			foreach ($folder->designIds as $fileId) {
+				$stamped = $this->metadata->readFile($fileId);
+				if ($stamped === null || $stamped->penpotId === ''
+					|| !$this->isGone($stamped->penpotId, $mapping->teamId, $seen, $parked)) {
+					$allGone = false;
+					break;
+				}
+			}
+			if (!$allGone) {
+				continue;
+			}
+
+			try {
+				$folder->purge();
+				$purged++;
+				$this->logger->info('penpot_sync trash: purged a trashed project whose designs Penpot no longer has', [
+					'app' => Application::APP_ID,
+					'fileId' => $folder->fileId,
+					'name' => $folder->name,
+					'designs' => count($folder->designIds),
+					'mapping' => $mapping->id,
+				]);
+			} catch (\Throwable $e) {
+				$this->logger->warning('penpot_sync trash: could not purge a trashed project folder', [
+					'app' => Application::APP_ID,
+					'fileId' => $folder->fileId,
+					'name' => $folder->name,
+					'exception' => $e,
+				]);
+			}
+		}
+
 		return $purged;
+	}
+
+	/**
+	 * The trashed project folders in $uid's trash that belong to $mapping AND could
+	 * legitimately be destroyed if Penpot says so.
+	 *
+	 * FOUR THINGS HAVE TO BE TRUE, and every one of them is a reason to spare rather
+	 * than a reason to act:
+	 *
+	 *   it carries a project id   a folder this app never marked is somebody's own
+	 *   it holds no other files   see {@see reapProjects()} — one spreadsheet is enough
+	 *   it holds some designs     an empty one proves nothing about Penpot either way
+	 *   every design is this
+	 *   mapping's, and is `sync`  a trashed folder has no path left, so its designs'
+	 *                             stamps are the only link back to a mapping (§C6.7)
+	 *
+	 * @return array<int, TrashedFolder>
+	 */
+	private function trashedProjects(string $uid, Mapping $mapping): array {
+		$out = [];
+		foreach ($this->trash->listTrashedFolders($uid) as $folder) {
+			if (!$this->metadata->readFolder($folder->fileId)->hasProject()) {
+				continue;
+			}
+			if ($folder->holdsOtherFiles || $folder->designIds === []) {
+				continue;
+			}
+
+			$mine = true;
+			foreach ($folder->designIds as $fileId) {
+				$stamped = $this->metadata->readFile($fileId);
+				if ($stamped === null || !$stamped->isSync() || $stamped->teamId !== $mapping->teamId) {
+					$mine = false;
+					break;
+				}
+			}
+			if ($mine) {
+				$out[$folder->fileId] = $folder;
+			}
+		}
+
+		return $out;
 	}
 
 	/**

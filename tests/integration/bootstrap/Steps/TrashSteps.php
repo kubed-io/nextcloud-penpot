@@ -141,6 +141,18 @@ trait TrashSteps {
 			throw new \RuntimeException("'{$path}' is not there to be trashed");
 		}
 
+		// BEFORE the delete, because afterwards there is nothing left to read them
+		// off — the same capture {@see GestureSteps::iMoveToTheTrash()} makes, and for
+		// the same reason: `no design it held is left in Penpot's trash` has no other
+		// referent once the folder is in the trash and its paths are gone.
+		$this->designIdsBeforeGesture = $this->designIdsBelow($path, 0);
+		// AND THE TEAM, for the same reason. `cursorTeamId()` falls back to the
+		// `Penpot` mapping, which is right for these scenarios by luck rather than by
+		// construction; a folder trashed out of `Shared` would have quietly asked the
+		// wrong team.
+		$this->teamBeforeTrashing = $this->teamId(explode('/', $path)[0]);
+		$this->gestureTarget = $path;
+
 		$this->davDelete($path);
 
 		// POLLED, because the entry appears through the trashbin's own machinery
@@ -282,6 +294,184 @@ trait TrashSteps {
 		);
 
 		return [$team, $id];
+	}
+
+	/**
+	 * Empty a NAMED path out of the Nextcloud trash, for good.
+	 *
+	 * The path twin of {@see iPurgeItFromTheTrash()}, and it exists for the same
+	 * reason the trash-arrange above does: the subject here is a FOLDER, and the
+	 * cursor is a design's.
+	 *
+	 * EVERY ENTRY FOR THE PATH, exactly as the cursor form does — see its comment
+	 * for why one deletion is not one entry. And it REFUSES an empty trash rather
+	 * than passing: "I purge X" that found nothing to purge is a fixture that did
+	 * not arrange what it said, and the assertions after it would all be trivially
+	 * true.
+	 *
+	 * @When /^I purge "([^"]*)" from the trash$/
+	 */
+	public function iPurgeTheNamedPathFromTheTrash(string $path): void {
+		$path = ltrim($path, '/');
+		$purged = 0;
+		while ($this->trashbinPathFor($path) !== null) {
+			$this->iPurgeFromTheNextcloudTrash($path);
+			if (++$purged > 10) {
+				throw new \RuntimeException("the trashbin keeps producing entries for '{$path}'");
+			}
+		}
+
+		if ($purged === 0) {
+			throw new \RuntimeException("'{$path}' is not in the Nextcloud trash, so there was nothing to purge");
+		}
+		$this->gestureTarget = $path;
+	}
+
+	/**
+	 * The purge reached every design the folder held — none of them can be brought
+	 * back any more.
+	 *
+	 * ## IT ASKS BY TRYING, BECAUSE THE TRASH LISTING CANNOT ANSWER
+	 *
+	 * The obvious check — "no design it held is left in Penpot's trash" — is not
+	 * writable, and that took a live instance to establish. While the PROJECT is
+	 * deleted, `get-team-deleted-files` lists its files whatever their own state, so
+	 * a design destroyed a second ago sits in that listing beside one that is
+	 * perfectly recoverable. The two are indistinguishable there, and `fileExists()`
+	 * cannot separate them either — `get-file-summary` answers NOT-FOUND for any row
+	 * carrying a `deleted_at`, past or future.
+	 *
+	 * What DOES separate them is whether Penpot will give the design back. So this
+	 * asks it to: one `restore-deleted-team-files` for every id the folder held, and
+	 * then the claim is that none of them became live. A design that was really
+	 * destroyed is a no-op; one that was not comes back AND revives its project,
+	 * which is exactly the failure this is here to catch.
+	 *
+	 * A MUTATING `Then`, named so the reader can see it. Ordinarily that would be a
+	 * gesture smuggled into an assertion; here the mutation IS the question, and the
+	 * step says `can be brought back` rather than `is gone` for that reason.
+	 *
+	 * BY ID, AND EVERY ONE OF THEM. The ids were captured before the folder went
+	 * into the trash ({@see theNamedPathIsInTheNextcloudTrash()}), which is the only
+	 * moment they were readable. A name check could not do this job at all: Penpot
+	 * state accumulates across a leg, so an earlier scenario's `Alpha` is sitting in
+	 * the same trash and would answer for this one's.
+	 *
+	 * @Then /^no design it held can be brought back in Penpot$/
+	 */
+	public function noDesignItHeldCanBeBroughtBackInPenpot(): void {
+		if ($this->designIdsBeforeGesture === []) {
+			throw new \RuntimeException(
+				'the scenario says "no design it held" but the trash arrange captured none — '
+				. 'nothing under the folder carried a penpot_id.',
+			);
+		}
+
+		$team = $this->cursorTeamId();
+		$ids = array_values($this->designIdsBeforeGesture);
+		$this->penpotRpc('restore-deleted-team-files', ['team-id' => $team, 'ids' => $ids]);
+
+		$this->until(
+			fn (): bool => array_intersect($ids, $this->penpotLiveDesignIds()) === [],
+			function () use ($ids): string {
+				$back = array_intersect($ids, $this->penpotLiveDesignIds());
+				$named = [];
+				foreach ($this->designIdsBeforeGesture as $path => $id) {
+					if (in_array($id, $back, true)) {
+						$named[] = "{$path} ({$id})";
+					}
+				}
+
+				return 'expected the purge to have destroyed every design the folder held, but '
+					. 'Penpot restored: ' . implode(', ', $named);
+			},
+		);
+	}
+
+	/**
+	 * A NAMED path is out of the Nextcloud trash — gone for good.
+	 *
+	 * @Then /^"([^"]*)" is gone from the Nextcloud trash$/
+	 */
+	public function theNamedPathIsGoneFromTheNextcloudTrash(string $path): void {
+		$this->theFileIsNotInTheNextcloudTrash(ltrim($path, '/'));
+	}
+
+	/**
+	 * The trash entry is still there, and it still holds the thing that spared it.
+	 *
+	 * ## BOTH HALVES, BECAUSE EITHER ALONE PASSES FOR THE WRONG REASON
+	 *
+	 * "Still in the trash" alone would pass on a folder the reap had emptied of
+	 * everything and left standing, which is precisely the outcome this scenario
+	 * exists to rule out — a spreadsheet destroyed because a project it happened to
+	 * sit beside was purged in Penpot. Naming the survivor is the claim.
+	 *
+	 * NOT POLLED, and that is deliberate rather than an oversight. The reap runs
+	 * inside the pull that the `When` already ran and returned from, so the decision
+	 * is made by the time this reads. Polling a "still" claim only re-reads a state
+	 * that is already true and would hide nothing — while a poll that waited for it
+	 * to BECOME true would be asserting the opposite of the sentence.
+	 *
+	 * @Then /^"([^"]*)" is still in the Nextcloud trash, holding "([^"]*)"$/
+	 */
+	public function theNamedPathIsStillInTheNextcloudTrashHolding(string $path, string $child): void {
+		$path = ltrim($path, '/');
+		$entry = $this->trashbinPathFor($path);
+		if ($entry === null) {
+			throw new \RuntimeException(
+				"'{$path}' was supposed to stay in the Nextcloud trash, and there is no entry for it — "
+				. 'something purged a folder that still held a file Penpot never had.',
+			);
+		}
+
+		$held = $this->trashbinChildren($entry);
+		if (!in_array($child, $held, true)) {
+			throw new \RuntimeException(sprintf(
+				"'%s' is still in the trash but no longer holds '%s'; it holds: %s",
+				$path,
+				$child,
+				implode(', ', $held) ?: '(nothing)',
+			));
+		}
+	}
+
+	/**
+	 * The names directly inside one trash entry.
+	 *
+	 * A trashed folder is browsable over the trashbin DAV endpoint exactly like any
+	 * collection, which is the only way to see inside one from out here — its
+	 * children are not trash entries of their own, so they never appear in a listing
+	 * of the trash root.
+	 *
+	 * @return list<string>
+	 */
+	private function trashbinChildren(string $entry): array {
+		$res = $this->davClient()->request('PROPFIND', $this->trashHref($entry), [
+			'headers' => ['Depth' => '1', 'Content-Type' => 'application/xml'],
+			'body' => '<?xml version="1.0"?><d:propfind xmlns:d="DAV:" xmlns:nc="http://nextcloud.org/ns">'
+				. '<d:prop><nc:trashbin-filename/></d:prop></d:propfind>',
+		]);
+		$this->assertStatus($res, [207], "trashbin PROPFIND {$entry}");
+
+		$doc = new \SimpleXMLElement((string)$res->getBody());
+		$doc->registerXPathNamespace('d', 'DAV:');
+		$doc->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
+
+		$names = [];
+		foreach ($doc->xpath('//d:response') ?: [] as $resp) {
+			$resp->registerXPathNamespace('d', 'DAV:');
+			$resp->registerXPathNamespace('nc', 'http://nextcloud.org/ns');
+			$href = rawurldecode(trim((string)(($resp->xpath('d:href') ?: [])[0] ?? '')));
+			$name = basename(rtrim($href, '/'));
+			// The collection answers for ITSELF as well as its children at Depth 1.
+			if ($name === '' || $name === $entry) {
+				continue;
+			}
+			$names[] = $name;
+		}
+
+		return $names;
 	}
 
 	/** The cursor design's team, resolved before the trashing took its path away. */
