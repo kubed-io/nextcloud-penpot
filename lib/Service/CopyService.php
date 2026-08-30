@@ -112,7 +112,23 @@ final class CopyService {
 		}
 
 		foreach ($this->designPairs($source, $target, 0) as [$sourceFile, $targetFile]) {
-			$this->onCopy($sourceFile, $targetFile);
+			try {
+				$this->onCopy($sourceFile, $targetFile);
+			} catch (\Throwable $e) {
+				// ONE BAD DESIGN IS ONE UNTRACKED FILE, NOT AN ABANDONED COPY. The
+				// Nextcloud copy has already happened and every design below it is
+				// somebody's file; letting the first failure out would leave the
+				// designs after it untouched while the listener logged one line about
+				// "the copy" as though the whole thing were untracked. Each pair is
+				// independent — `onCopy()` contains its own Penpot failures (§6.18
+				// rule 3) — so the only thing reaching here is unexpected, and the
+				// useful response is to name the child and carry on.
+				$this->logger->warning('penpot_sync copy: a design below a copied folder could not be handled; it is untracked', [
+					'app' => Application::APP_ID,
+					'file' => $targetFile->getPath(),
+					'exception' => $e,
+				]);
+			}
 		}
 	}
 

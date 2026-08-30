@@ -81,7 +81,7 @@ trait CopySteps {
 		// feature — so the harness must not pick one. A COPY onto an existing path
 		// would overwrite; the free name is resolved the way core does it and the
 		// scenario's `filename` row then asserts the answer.
-		$this->copyPath = $this->davExists($target) ? $this->freeCopyName($folder, basename($source)) : $target;
+		$this->copyPath = $this->davExists($target) ? $this->freeCopyPath($folder, basename($source)) : $target;
 		$this->davCopy($source, $this->copyPath);
 
 		// The archive lands with the bytes, but the REVISION is the pull's stamp —
@@ -517,24 +517,17 @@ trait CopySteps {
 	}
 
 	/**
-	 * The name core would pick for a collision: `Original (1).penpot`, then `(2)`.
+	 * The name core would give a copy landing beside something of the same name —
+	 * for a FILE or a FOLDER.
 	 *
 	 * NOT a port of {@see \OCA\PenpotSync\Service\PullService::freeName()} — that one
 	 * resolves a collision the PULL hit, and its numbering is its own. This mirrors
-	 * what the FILES APP does when you copy a file onto its own folder, because
+	 * what the FILES APP does when you copy something onto its own folder, because
 	 * that is the gesture the scenario describes and the `filename` row asserts the
 	 * answer. A COPY over WebDAV adds no suffix by itself; it overwrites. So the
 	 * harness has to place the copy where a person's client would have, and any
-	 * drift between this and core's naming shows up as a failed `filename` row
-	 * rather than being hidden.
-	 */
-	private function freeCopyName(string $folder, string $filename): string {
-		return $this->freeCopyPath($folder, $filename);
-	}
-
-	/**
-	 * The name core would give a copy landing beside something of the same name —
-	 * for a FILE or a FOLDER.
+	 * drift between this and core's naming shows up as a failed row rather than
+	 * being hidden.
 	 *
 	 * Generalised from the `.penpot`-only version when project folders started
 	 * being copied: a folder has no extension, and hard-coding one produced
