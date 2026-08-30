@@ -36,7 +36,7 @@ namespace OCA\PenpotSync\Service;
  * {@see TrashedFile} still carries `purge()` alone, because a trashed mirror is
  * still only ever reached in order to destroy it.
  *
- * ## WHY THE CONTENTS COME WITH IT
+ * ## WHY THE CONTENTS COME WITH IT, AND WHY THEY ARE NOT READ YET
  *
  * Deciding a folder's fate needs to know what is inside, and the answer is not
  * reachable from outside {@see TrashControl}: a trashed folder's children are not
@@ -45,6 +45,15 @@ namespace OCA\PenpotSync\Service;
  * `ITrashItem::getTrashBackend()->listTrashFolder()`, which is the trash app's own
  * type dispatching on its own backend — exactly what this class exists to keep at
  * that boundary. So the walk happens there and the ANSWERS travel here.
+ *
+ * DEFERRED, because only one of the two callers wants them. {@see TrashReconcileService}
+ * needs to know what is inside before it may destroy anything; {@see PullService}'s
+ * revive path only wants the `penpot_project_id` off the folder itself, and it asks
+ * on EVERY PULL. Walking a whole trashed subtree eagerly made the cheap caller pay
+ * the expensive caller's bill, once every five minutes, for an answer it discards.
+ *
+ * So the walk arrives as a closure and runs at most once, on first ask. Raised by
+ * Copilot on #71.
  */
 final class TrashedFolder {
 	/**
@@ -53,12 +62,8 @@ final class TrashedFolder {
 	 *                    here, where the path is long gone
 	 * @param string $name the ORIGINAL basename, not the `.d<timestamp>` spelling the
 	 *                     trash stores it under
-	 * @param list<int> $designIds the filecache id of every `.penpot` below it, at any
-	 *                             depth — what the caller reads each design's stamp from
-	 * @param bool $holdsOtherFiles whether anything down there is NOT a design. One
-	 *                              spreadsheet is enough, and it makes the folder
-	 *                              un-purgeable: a file with no far side may not be
-	 *                              destroyed by something that happened in Penpot
+	 * @param \Closure():array{0: list<int>, 1: bool} $contents the subtree walk, run at
+	 *                                                          most once and only when asked
 	 * @param \Closure():void $restore put this folder back where it came from, through
 	 *                                 whichever trash backend is holding it
 	 * @param \Closure():void $purge destroy it, and everything that went in with it
@@ -66,11 +71,38 @@ final class TrashedFolder {
 	public function __construct(
 		public readonly int $fileId,
 		public readonly string $name,
-		public readonly array $designIds,
-		public readonly bool $holdsOtherFiles,
+		private readonly \Closure $contents,
 		private readonly \Closure $restore,
 		private readonly \Closure $purge,
 	) {
+	}
+
+	/** @var array{0: list<int>, 1: bool}|null memoised: the walk runs at most once */
+	private ?array $inspected = null;
+
+	/**
+	 * The filecache id of every design below this folder, at any depth — what the
+	 * caller reads each design's Penpot stamp from.
+	 *
+	 * @return list<int>
+	 */
+	public function designIds(): array {
+		return $this->inspect()[0];
+	}
+
+	/**
+	 * Is anything under this folder NOT a design?
+	 *
+	 * One spreadsheet is enough, and it makes the folder un-purgeable: a file with no
+	 * far side may not be destroyed by something that happened in Penpot.
+	 */
+	public function holdsOtherFiles(): bool {
+		return $this->inspect()[1];
+	}
+
+	/** @return array{0: list<int>, 1: bool} */
+	private function inspect(): array {
+		return $this->inspected ??= ($this->contents)();
 	}
 
 	/**
@@ -90,7 +122,7 @@ final class TrashedFolder {
 	 *
 	 * WHOLE, for the same reason {@see restore()} is: a folder went into the trash as
 	 * one item, and the trash offers no way to take part of it out or leave part of
-	 * it behind. That is why {@see $holdsOtherFiles} exists — the caller cannot spare
+	 * it behind. That is why {@see holdsOtherFiles()} exists — the caller cannot spare
 	 * the spreadsheet, so it has to spare the folder.
 	 */
 	public function purge(): void {

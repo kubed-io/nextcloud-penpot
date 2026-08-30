@@ -1236,6 +1236,12 @@ final class PullService {
 	 * @return list<string>|null null when the answer cannot be trusted
 	 */
 	private function penpotTrashIds(string $teamId): ?array {
+		// THE RAW LISTING ON PURPOSE, not {@see PenpotClient::recoverableFileIds()}.
+		// That reading tells a destroyed design from a recoverable one, and the reap
+		// needs it; the prune does not. Here a wider set means MORE mirrors kept, and
+		// a mirror kept is the direction this method already fails in. Narrowing it
+		// would make the prune start deleting mirrors on a rule `designs/purge` owns,
+		// which is a different feature's decision to change.
 		if ($teamId === '') {
 			return null;
 		}

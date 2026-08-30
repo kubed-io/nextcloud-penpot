@@ -233,7 +233,7 @@ final class TrashReconcileService {
 		$purged = 0;
 		foreach ($folders as $folder) {
 			$allGone = true;
-			foreach ($folder->designIds as $fileId) {
+			foreach ($folder->designIds() as $fileId) {
 				$stamped = $this->metadata->readFile($fileId);
 				if ($stamped === null || $stamped->penpotId === ''
 					|| !$this->isGone($stamped->penpotId, $mapping->teamId, $seen, $parked)) {
@@ -252,7 +252,7 @@ final class TrashReconcileService {
 					'app' => Application::APP_ID,
 					'fileId' => $folder->fileId,
 					'name' => $folder->name,
-					'designs' => count($folder->designIds),
+					'designs' => count($folder->designIds()),
 					'mapping' => $mapping->id,
 				]);
 			} catch (\Throwable $e) {
@@ -290,12 +290,12 @@ final class TrashReconcileService {
 			if (!$this->metadata->readFolder($folder->fileId)->hasProject()) {
 				continue;
 			}
-			if ($folder->holdsOtherFiles || $folder->designIds === []) {
+			if ($folder->holdsOtherFiles() || $folder->designIds() === []) {
 				continue;
 			}
 
 			$mine = true;
-			foreach ($folder->designIds as $fileId) {
+			foreach ($folder->designIds() as $fileId) {
 				$stamped = $this->metadata->readFile($fileId);
 				if ($stamped === null || !$stamped->isSync() || $stamped->teamId !== $mapping->teamId) {
 					$mine = false;
@@ -362,8 +362,8 @@ final class TrashReconcileService {
 	 *
 	 *   1. **`$seen`** — the pull just listed every project in this team. In it means
 	 *      the design is live, which is the "someone restored it in Penpot" case.
-	 *   2. **the team's trash listing** — in it means Penpot still holds the design
-	 *      recoverably, so the mirror is still a mirror of something.
+	 *   2. **{@see PenpotClient::recoverableFileIds()}** — in it means Penpot will
+	 *      still give the design back, so the mirror is a mirror of something.
 	 *   3. **{@see PenpotClient::fileExists()}** — for an id in neither. This is the
 	 *      call that separates DESTROYED from MOVED-TO-AN-UNMAPPED-TEAM, and it is
 	 *      three-valued on purpose: `null` means the probe could not tell, and that
@@ -373,9 +373,14 @@ final class TrashReconcileService {
 	 * `get-file-summary` answers NOT-FOUND for a design that is merely in the trash
 	 * — `db/get` drops any row with a `deleted-at` on it, past or future — so on its
 	 * own it reads a perfectly recoverable design as gone. Step 2 is what makes step
-	 * 3 safe to believe, and step 2 works because `get-team-deleted-files` filters
-	 * `deleted_at > now`: a destroyed design leaves that listing at once, a trashed
-	 * one stays for the week.
+	 * 3 safe to believe.
+	 *
+	 * AND STEP 2 IS A READING, NOT A MEMBERSHIP TEST. `get-team-deleted-files` names
+	 * the files of a deleted PROJECT as well as the files deleted in their own right,
+	 * and goes on naming a destroyed design for as long as its project stays deleted.
+	 * Counting ids there made this method answer "recoverable" about designs that were
+	 * gone for good. `will-be-deleted-at` is what separates them — see
+	 * {@see PenpotClient::recoverableFileIds()}.
 	 *
 	 * ## AND THEN IT ASKS AGAIN, because all three can be wrong together
 	 *
@@ -384,7 +389,7 @@ final class TrashReconcileService {
 	 * that is really gone.
 	 *
 	 * @param array<string, bool> $seen ids Penpot named for this mapping's projects
-	 * @param array<string, bool> $parked ids in this team's Penpot trash
+	 * @param array<string, bool> $parked ids this team's Penpot trash will give back
 	 */
 	private function isGone(string $penpotId, string $teamId, array $seen, array $parked): bool {
 		if (isset($seen[$penpotId]) || isset($parked[$penpotId])) {
@@ -412,22 +417,26 @@ final class TrashReconcileService {
 	}
 
 	/**
-	 * Every id in this team's Penpot trash, or null when the listing could not be
-	 * read — which is a different answer from "the trash is empty" and must stay so.
+	 * Every design this team's trash will GIVE BACK, or null when the listing could
+	 * not be read — which is a different answer from "the trash is empty" and must
+	 * stay so.
+	 *
+	 * ## RECOVERABLE, NOT MERELY LISTED, AND THAT IS THE WHOLE REAP
+	 *
+	 * This asked {@see PenpotClient::deletedFiles()} for every id it named, and that
+	 * read the listing as a question it does not answer. A design DESTROYED while its
+	 * project is deleted goes on being named there, so `isGone()` saw it, called it
+	 * parked, and spared a folder whose designs were every one of them gone — for
+	 * ever, since nothing about that state changes on its own.
+	 *
+	 * {@see PenpotClient::recoverableFileIds()} is the same listing read properly, and
+	 * it is what makes `projects/purge.feature`'s Penpot-side scenarios decidable.
 	 *
 	 * @return array<string, bool>|null
 	 */
 	private function parkedIds(string $teamId): ?array {
 		try {
-			$ids = [];
-			foreach ($this->client->deletedFiles($teamId) as $file) {
-				$id = $file['id'] ?? null;
-				if (is_string($id) && $id !== '') {
-					$ids[$id] = true;
-				}
-			}
-
-			return $ids;
+			return $this->client->recoverableFileIds($teamId);
 		} catch (\Throwable $e) {
 			$this->logger->warning('penpot_sync trash: could not read Penpot\'s trash; sparing every trashed mirror', [
 				'app' => Application::APP_ID,

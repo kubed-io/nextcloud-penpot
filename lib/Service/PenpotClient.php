@@ -399,6 +399,77 @@ final class PenpotClient {
 	}
 
 	/**
+	 * The designs a team's trash will actually GIVE BACK, as a set of ids.
+	 *
+	 * ## WHY THE RAW LISTING IS NOT THAT SET (measured live)
+	 *
+	 * `get-team-deleted-files` answers with the files of a deleted PROJECT as well as
+	 * the files that were deleted in their own right, and it goes on naming a design
+	 * that has already been DESTROYED for as long as its project stays deleted. So
+	 * presence in that listing means "Penpot has something to say about this file",
+	 * not "you can have it back" — and every caller that read it as the second was
+	 * asking a question the listing does not answer.
+	 *
+	 * `will-be-deleted-at` is what answers it, and it is three-valued:
+	 *
+	 *   absent         the file itself was never deleted; it is listed because its
+	 *                  PROJECT is. Recoverable — restoring it revives the project.
+	 *   in the future  in the trash proper, a week out. Recoverable.
+	 *   in the past    destroyed: {@see permanentlyDeleteFiles()} set the clock to now
+	 *                  and a collector will take the row. NOT recoverable —
+	 *                  `restore-deleted-team-files` claims success on such an id and
+	 *                  leaves it exactly where it was.
+	 *
+	 * ## A CLOCK THAT DISAGREES SPARES THE DESIGN
+	 *
+	 * The comparison is against THIS host's clock, and Penpot's may differ. A destroyed
+	 * design carries a `will-be-deleted-at` of Penpot's own "now", so a host running
+	 * slightly behind reads it as future and calls it recoverable — which spares a
+	 * mirror rather than destroying one. That is the direction every judgement in this
+	 * app leans, so the skew needs no grace period to correct it.
+	 *
+	 * @return array<string, true>
+	 *
+	 * @throws PenpotApiException
+	 */
+	public function recoverableFileIds(string $teamId): array {
+		// A FLOAT LITERAL, deliberately, for the same reason {@see RestoreService}'s
+		// settle deadline uses one: `microtime(true)` is a float, and Psalm's strict
+		// binary operands mode refuses to mix it with an int.
+		$now = (int)(microtime(true) * 1000.0);
+
+		$ids = [];
+		foreach ($this->deletedFiles($teamId) as $file) {
+			$id = $file['id'] ?? null;
+			if (!is_string($id) || $id === '' || !self::stillRecoverable($file, $now)) {
+				continue;
+			}
+
+			$ids[$id] = true;
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * The rule of {@see recoverableFileIds()}, kept pure so it can be tested without
+	 * a wire: will Penpot give this listing entry back?
+	 *
+	 * @param array<string, mixed> $file one record from `get-team-deleted-files`
+	 * @param int $now epoch milliseconds
+	 */
+	private static function stillRecoverable(array $file, int $now): bool {
+		$due = $file['will-be-deleted-at'] ?? null;
+		if (!is_string($due) && !is_int($due) && !is_float($due)) {
+			// No stamp at all: the file itself was never deleted and is listed only
+			// because its PROJECT was. Restoring it revives both.
+			return true;
+		}
+
+		return (int)$due > $now;
+	}
+
+	/**
 	 * DESTROY designs. The one irreversible call in this app.
 	 *
 	 * ## IT DOES NOT CHECK THAT THEY ARE IN THE TRASH (saga §C6.11)

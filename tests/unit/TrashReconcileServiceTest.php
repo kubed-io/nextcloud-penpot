@@ -66,6 +66,9 @@ final class TrashReconcileServiceTest extends TestCase {
 	/** The folder twin of {@see $purges}, set by {@see trashedProject()}. */
 	private int $folderPurges = 0;
 
+	/** How many times a trashed folder's subtree walk was actually run. */
+	private int $folderWalks = 0;
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->client = $this->createMock(PenpotClient::class);
@@ -75,6 +78,7 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->storage->method('resolveActorUid')->willReturn(self::ACTOR);
 		$this->purges = 0;
 		$this->folderPurges = 0;
+		$this->folderWalks = 0;
 	}
 
 	// ── the one case that destroys something ────────────────────────────────
@@ -86,7 +90,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testAMirrorWhoseDesignIsGoneIsPurged(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->with(self::PENPOT_ID)->willReturn(false);
 
 		self::assertSame(1, $this->reap());
@@ -102,7 +106,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testALiveDesignSparesItsTrashedMirror(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 
 		$this->client->expects($this->never())->method('fileExists');
 
@@ -118,7 +122,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testADesignStillInPenpotsTrashSparesItsMirror(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([['id' => self::PENPOT_ID]]);
+		$this->client->method('recoverableFileIds')->willReturn([self::PENPOT_ID => true]);
 
 		$this->client->expects($this->never())->method('fileExists');
 
@@ -135,7 +139,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testADesignThatExistsElsewhereSparesItsMirror(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->willReturn(true);
 
 		self::assertSame(0, $this->reap());
@@ -151,7 +155,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testAProbeThatCannotTellSparesTheMirror(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->willReturn(null);
 
 		self::assertSame(0, $this->reap());
@@ -167,7 +171,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testAnUnreadableTrashListingSparesEveryMirror(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willThrowException(new PenpotApiException('Penpot is unreachable'));
+		$this->client->method('recoverableFileIds')->willThrowException(new PenpotApiException('Penpot is unreachable'));
 
 		$this->client->expects($this->never())->method('fileExists');
 
@@ -194,9 +198,9 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->givenSyncMirror();
 		// Absent on the first look — the settling restore — and named again on the
 		// second, because by then the transaction has landed.
-		$this->client->method('deletedFiles')->willReturnOnConsecutiveCalls(
+		$this->client->method('recoverableFileIds')->willReturnOnConsecutiveCalls(
 			[],
-			[['id' => self::PENPOT_ID]],
+			[self::PENPOT_ID => true],
 		);
 		$this->client->method('fileExists')->willReturn(false);
 
@@ -208,7 +212,7 @@ final class TrashReconcileServiceTest extends TestCase {
 	public function testAProbeThatChangesItsMindBetweenTheTwoLooksSparesTheMirror(): void {
 		$this->trashHolding($this->mirror());
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->willReturnOnConsecutiveCalls(false, true);
 
 		self::assertSame(0, $this->reap());
@@ -233,7 +237,7 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->trashHolding($this->mirror());
 		$this->metadata->method('readFile')->willReturn(null);
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 
 		self::assertSame(0, $this->reap());
 		self::assertSame(0, $this->purges);
@@ -250,7 +254,7 @@ final class TrashReconcileServiceTest extends TestCase {
 			new PenpotFileMetadata(self::PENPOT_ID, '5@t1', Mapping::MODE_SYNC, self::OTHER_TEAM),
 		);
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 
 		self::assertSame(0, $this->reap());
 		self::assertSame(0, $this->purges);
@@ -330,7 +334,7 @@ final class TrashReconcileServiceTest extends TestCase {
 				self::TEAM,
 			),
 		);
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->willReturn(false);
 
 		self::assertSame(1, $this->reap());
@@ -350,7 +354,7 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: false));
 		$this->givenProjectFolder();
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->with(self::PENPOT_ID)->willReturn(false);
 
 		self::assertSame(1, $this->reap());
@@ -370,7 +374,7 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: true));
 		$this->givenProjectFolder();
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->willReturn(false);
 
 		self::assertSame(0, $this->reap());
@@ -394,7 +398,7 @@ final class TrashReconcileServiceTest extends TestCase {
 			),
 		);
 		// The second one is still in Penpot's trash, so it can still come back.
-		$this->client->method('deletedFiles')->willReturn([['id' => self::OTHER_PENPOT_ID]]);
+		$this->client->method('recoverableFileIds')->willReturn([self::OTHER_PENPOT_ID => true]);
 		$this->client->method('fileExists')->willReturn(false);
 
 		self::assertSame(0, $this->reap());
@@ -412,11 +416,16 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->foldersInTrash($this->trashedProject([self::FILE_ID], holdsOtherFiles: false));
 		$this->metadata->method('readFolder')->willReturn(new FolderMarkers('', ''));
 		$this->givenSyncMirror();
-		$this->client->method('deletedFiles')->willReturn([]);
+		$this->client->method('recoverableFileIds')->willReturn([]);
 		$this->client->method('fileExists')->willReturn(false);
 
 		self::assertSame(0, $this->reap());
 		self::assertSame(0, $this->folderPurges);
+		// AND IT WAS NEVER OPENED. Reading `penpot_project_id` off the folder is a
+		// metadata lookup; walking its subtree is a recursive trip through a trash
+		// backend. The cheap question has to be asked first, because the pull asks
+		// this same listing every five minutes and wants nothing else from it.
+		self::assertSame(0, $this->folderWalks, 'a folder with no project marker must not be walked');
 	}
 
 	/** An empty project folder proves nothing about Penpot, so it is left alone. */
@@ -424,7 +433,7 @@ final class TrashReconcileServiceTest extends TestCase {
 		$this->foldersInTrash($this->trashedProject([], holdsOtherFiles: false));
 		$this->givenProjectFolder();
 
-		$this->client->expects($this->never())->method('deletedFiles');
+		$this->client->expects($this->never())->method('recoverableFileIds');
 
 		self::assertSame(0, $this->reap());
 		self::assertSame(0, $this->folderPurges);
@@ -494,14 +503,21 @@ final class TrashReconcileServiceTest extends TestCase {
 	/**
 	 * One trashed project folder whose purge is counted rather than performed.
 	 *
+	 * The contents arrive as a closure and {@see $folderWalks} counts the calls, so a
+	 * caller that walks a subtree it did not need is a test failure rather than a
+	 * silent cost.
+	 *
 	 * @param list<int> $designIds
 	 */
 	private function trashedProject(array $designIds, bool $holdsOtherFiles): TrashedFolder {
 		return new TrashedFolder(
 			self::FOLDER_ID,
 			'Emptied',
-			$designIds,
-			$holdsOtherFiles,
+			function () use ($designIds, $holdsOtherFiles): array {
+				$this->folderWalks++;
+
+				return [$designIds, $holdsOtherFiles];
+			},
 			static function (): void {
 				throw new \LogicException('the reap must never RESTORE a folder');
 			},

@@ -328,28 +328,24 @@ trait TrashSteps {
 	}
 
 	/**
-	 * The purge reached every design the folder held — none of them can be brought
-	 * back any more.
+	 * The purge reached every design the folder held — Penpot's trash has nothing
+	 * left to give back for any of them.
 	 *
-	 * ## IT ASKS BY TRYING, BECAUSE THE TRASH LISTING CANNOT ANSWER
+	 * ## PRESENCE IN THE LISTING IS NOT THE QUESTION
 	 *
-	 * The obvious check — "no design it held is left in Penpot's trash" — is not
-	 * writable, and that took a live instance to establish. While the PROJECT is
-	 * deleted, `get-team-deleted-files` lists its files whatever their own state, so
-	 * a design destroyed a second ago sits in that listing beside one that is
-	 * perfectly recoverable. The two are indistinguishable there, and `fileExists()`
-	 * cannot separate them either — `get-file-summary` answers NOT-FOUND for any row
-	 * carrying a `deleted_at`, past or future.
+	 * While the PROJECT is deleted, `get-team-deleted-files` names its files whatever
+	 * their own state, so a design destroyed a second ago sits in that listing beside
+	 * one that is perfectly recoverable. Reading the listing as a set of ids cannot
+	 * tell them apart, and `fileExists()` cannot either — `get-file-summary` answers
+	 * NOT-FOUND for any row carrying a `deleted_at`, past or future.
 	 *
-	 * What DOES separate them is whether Penpot will give the design back. So this
-	 * asks it to: one `restore-deleted-team-files` for every id the folder held, and
-	 * then the claim is that none of them became live. A design that was really
-	 * destroyed is a no-op; one that was not comes back AND revives its project,
-	 * which is exactly the failure this is here to catch.
+	 * `will-be-deleted-at` is what tells them apart, and {@see penpotRecoverableIds()}
+	 * is that reading. A destroyed design carries a stamp that has already passed;
+	 * Penpot claims a restore of it succeeds and then leaves it exactly where it was.
 	 *
-	 * A MUTATING `Then`, named so the reader can see it. Ordinarily that would be a
-	 * gesture smuggled into an assertion; here the mutation IS the question, and the
-	 * step says `can be brought back` rather than `is gone` for that reason.
+	 * THIS ASSERTS, IT DOES NOT ACT. The first cut of this step issued a restore and
+	 * checked what came back — a gesture smuggled into a `Then`, and only ever a
+	 * workaround for a discriminator that was there all along.
 	 *
 	 * BY ID, AND EVERY ONE OF THEM. The ids were captured before the folder went
 	 * into the trash ({@see theNamedPathIsInTheNextcloudTrash()}), which is the only
@@ -357,9 +353,9 @@ trait TrashSteps {
 	 * state accumulates across a leg, so an earlier scenario's `Alpha` is sitting in
 	 * the same trash and would answer for this one's.
 	 *
-	 * @Then /^no design it held can be brought back in Penpot$/
+	 * @Then /^no design it held is in Penpot's trash any more$/
 	 */
-	public function noDesignItHeldCanBeBroughtBackInPenpot(): void {
+	public function noDesignItHeldIsInPenpotsTrashAnyMore(): void {
 		if ($this->designIdsBeforeGesture === []) {
 			throw new \RuntimeException(
 				'the scenario says "no design it held" but the trash arrange captured none — '
@@ -369,21 +365,20 @@ trait TrashSteps {
 
 		$team = $this->cursorTeamId();
 		$ids = array_values($this->designIdsBeforeGesture);
-		$this->penpotRpc('restore-deleted-team-files', ['team-id' => $team, 'ids' => $ids]);
 
 		$this->until(
-			fn (): bool => array_intersect($ids, $this->penpotLiveDesignIds()) === [],
-			function () use ($ids): string {
-				$back = array_intersect($ids, $this->penpotLiveDesignIds());
+			fn (): bool => array_intersect($ids, $this->penpotRecoverableIds($team)) === [],
+			function () use ($ids, $team): string {
+				$left = array_intersect($ids, $this->penpotRecoverableIds($team));
 				$named = [];
 				foreach ($this->designIdsBeforeGesture as $path => $id) {
-					if (in_array($id, $back, true)) {
+					if (in_array($id, $left, true)) {
 						$named[] = "{$path} ({$id})";
 					}
 				}
 
 				return 'expected the purge to have destroyed every design the folder held, but '
-					. 'Penpot restored: ' . implode(', ', $named);
+					. 'Penpot would still give back: ' . implode(', ', $named);
 			},
 		);
 	}
@@ -633,9 +628,9 @@ trait TrashSteps {
 	 * under a trashed project folder to go at once — one design going is not that
 	 * claim, and would leave the folder with something left to be restored to.
 	 *
-	 * Its two scenarios are `@todo`, so nothing runs this yet; it exists because a
-	 * step the spec still says has to have a definition, or promoting those rows
-	 * becomes an undefined-step failure rather than a test. Raised in review on #46.
+	 * BOTH ITS SCENARIOS RUN NOW. They were `@blocked` while the reap could not tell
+	 * a destroyed design from a recoverable one in a deleted project's trash listing;
+	 * reading `will-be-deleted-at` instead of counting ids settled that.
 	 *
 	 * EVERY ID IN THE LISTING, which is both what emptying means and what keeps the
 	 * suite to the rule it holds the app to (§C6.11: the destroy command has no

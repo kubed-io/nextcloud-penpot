@@ -620,6 +620,56 @@ trait GestureSteps {
 	}
 
 	/**
+	 * The ids in a team's Penpot trash that Penpot will actually GIVE BACK.
+	 *
+	 * NOT THE SAME SET AS {@see penpotTrashIds()}, and the difference is the whole
+	 * reason `projects/purge.feature`'s Penpot-side scenarios can be asserted at all.
+	 * `get-team-deleted-files` names the files of a DELETED PROJECT as well as the
+	 * files deleted in their own right, and it goes on naming a design that has been
+	 * destroyed for as long as its project stays deleted. Presence there is not
+	 * recoverability.
+	 *
+	 * `will-be-deleted-at` is what separates them — absent means the file itself was
+	 * never deleted, a future stamp means it is in the trash proper, and a stamp that
+	 * has PASSED means it was destroyed and is not coming back. Measured live against
+	 * a restore that Penpot claimed had succeeded and which returned nothing.
+	 *
+	 * This reads Penpot directly rather than asking the app, so it is an independent
+	 * oracle for the same rule {@see \OCA\PenpotSync\Service\PenpotClient::recoverableFileIds()}
+	 * implements.
+	 *
+	 * ## AND IT SPELLS THE FIELD DIFFERENTLY FROM THE APP, WHICH IS NOT A TYPO
+	 *
+	 * Penpot content-negotiates. {@see penpotRpcRead()} sends `Accept: application/json`
+	 * and gets plain **camelCase** JSON back, so the field is `willBeDeletedAt`; the app
+	 * deliberately omits that header, gets Transit, and reads `will-be-deleted-at`. Same
+	 * field, two wire spellings, and {@see \OCA\PenpotSync\Service\Transit::decode()}
+	 * exists to make confusing them loud rather than silent.
+	 *
+	 * It was silent here. Reading the app's spelling off a JSON body found nothing, so
+	 * every design looked recoverable and the assertion could never pass.
+	 *
+	 * @return list<string>
+	 */
+	private function penpotRecoverableIds(string $teamId): array {
+		$now = (int)(microtime(true) * 1000.0);
+
+		$ids = [];
+		foreach ($this->penpotRpcRead('get-team-deleted-files', ['team-id' => $teamId]) as $file) {
+			if (!isset($file['id']) || !is_string($file['id'])) {
+				continue;
+			}
+			$due = $file['willBeDeletedAt'] ?? $file['will-be-deleted-at'] ?? null;
+			if ((is_string($due) || is_int($due) || is_float($due)) && (int)$due <= $now) {
+				continue;
+			}
+			$ids[] = $file['id'];
+		}
+
+		return $ids;
+	}
+
+	/**
 	 * The assertion that separates a soft delete from a destroyed one — and the
 	 * one the purge guard exists to keep honest.
 	 *
