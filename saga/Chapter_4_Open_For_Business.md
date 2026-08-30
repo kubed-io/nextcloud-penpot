@@ -677,6 +677,51 @@ had a caller. The last caller was a test. That is the one that matters:
 no shape rule. That sentence is now true in the code, in the spec, in the notes
 and in the README, which is the first time it has been true in all four at once.
 
+### Round 9 — two scenarios that were waiting on nothing
+
+`projects/create.feature` went from two live scenarios to four: `Move a design
+into a folder Penpot has never seen` came off `@unbuilt`, and `Create a project in
+Penpot` came off `@todo`. **No behaviour was built for either.** Both tags were
+describing walls that Chapter 3 had already taken down and nobody had gone back to
+re-read.
+
+The `@unbuilt` note said three of the outline's four rows wanted capabilities the
+rule did not supply — an untracked archive being imported, and a move seen across a
+storage boundary. Round 7 built the first (§6.33: an arrival is imported as a new
+design whatever id it carries) and the cross-team move built the second (core deletes
+the metadata across a storage boundary, and the file id is what survives). The
+scenario had been runnable for two rounds.
+
+**What the round actually cost was three step definitions**, and only one of them was
+interesting. `someone creates the "…" project in the "…" Penpot team` is the
+Penpot-origin twin of the arrange that seeds a design: the gesture happens upstream,
+so the pull is collapsed into the step rather than wedged into the scenario as an
+admin's button. It reads the new project's id back through the probe rather than
+trusting `create-project`'s answer, which keeps the seed channel and the read channel
+cross-checking each other.
+
+**Then the spec turned out to carry a defect, and it was a naming one.** The
+Penpot-origin outline's first row created a project called `Team` in the Design
+Team — a name the two scenarios above it leave standing in that same team, because
+Penpot state accumulates across a leg and this app has no `delete-project`. Two
+projects in one team may share a name (§31), and `PullService::ensureProjectFolder()`
+adopts a same-named folder **only when it is bare**, precisely so one project cannot
+inherit another's designs. So the second `Team` would have been mirrored to
+`Team (2)`, and the row asserting `penpot_project_id` on `Penpot/Team` would have read
+the *older* project's id off the older folder.
+
+> Deterministically wrong rather than flaky, and it would have read as an app bug: the
+> folder exists, it carries a project id, and the id is simply not the one the
+> scenario means. The fix was four characters of Examples table — but only because
+> the assertion was written to compare an **id** rather than a name. A by-name check
+> would have gone green on the wrong project and stayed green.
+
+**The lesson is the tag, again.** `@todo` claims the code exists and only the test is
+missing; `@unbuilt` claims the opposite. Both are statements about the past written
+by whoever last looked, and neither is re-checked by anything — which is the same
+failure mode as Round 8's mechanism-with-one-test, and the reason the rule is that a
+scenario changes status only on a PR that runs it.
+
 ---
 
 ## The plan — reaching the store

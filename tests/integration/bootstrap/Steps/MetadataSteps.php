@@ -254,6 +254,22 @@ trait MetadataSteps {
 				return $actual === $want
 					? null : "expected the id of the design '{$this->designNameOf($path)}' ({$want}), found '{$actual}'";
 
+			case "the project's id":
+				// THE PROJECT THE SCENARIO JUST MADE UPSTREAM, captured by
+				// {@see ProjectFolderSteps::someoneCreatesTheProjectInThePenpotTeam()}.
+				//
+				// Not resolved from the folder's name, and the Backgrounds are why: they
+				// map three teams at once and two of them may hold a project of the same
+				// name, so a by-name lookup answers with whichever the probe listed first.
+				// The claim `projects/create.feature` is making is that the folder mirrors
+				// THIS project — the one created a moment ago, in the team the row named —
+				// and only the id carries that.
+				if ($this->createdProjectId === '') {
+					return 'no project was created in Penpot for this to refer to';
+				}
+				return $actual === $this->createdProjectId
+					? null : "expected the project it mirrors ({$this->createdProjectId}), found '{$actual}'";
+
 			case "the mapping's team":
 				// The team of the mapping this path sits under — not whichever team
 				// the mappings table happened to name last.

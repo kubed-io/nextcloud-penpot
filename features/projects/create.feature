@@ -45,9 +45,7 @@ Feature: Creating a project
 
   # notes: ../AGENTS.md#the-project-name-is-the-path-below-the-mapping
 
-  # @unbuilt — one row of four works. The rest need capabilities this rule does not
-  # supply: importing an untracked archive (§6.33), and seeing a cross-storage move.
-  @in-nextcloud @gesture @unbuilt
+  @in-nextcloud @gesture
   Scenario Outline: Move a design into a folder Penpot has never seen
     Given a design file named "Travelling.penpot" in "<source>"
     And the folder "<folder>" holding no designs
@@ -61,6 +59,9 @@ Feature: Creating a project
       | Penpot/Existing | Penpot/Team/Deep        | Team/Deep        |
       | Shared/Existing | Penpot/Team             | Team             |
       | Penpot/Existing | Shared/Team/Deep/Deeper | Team/Deep/Deeper |
+
+    # Four arrivals and one rule: tracked or untracked, within one storage or across
+    # the boundary between two, the folder the design lands in becomes the project.
 
     # ── RULE: a folder with no design in it is Nextcloud's alone ──────────────
     # notes: ../AGENTS.md#a-folder-holding-no-designs-is-just-a-folder
@@ -76,7 +77,7 @@ Feature: Creating a project
     # notes: ../AGENTS.md#a-project-name-with-slashes-is-a-path
     # notes: ../AGENTS.md#the-folders-a-project-name-spells-are-not-projects
 
-  @in-penpot @gesture @todo
+  @in-penpot @gesture
   Scenario Outline: Create a project in Penpot
     When someone creates the "<name>" project in the "<team>" Penpot team
     Then "<folder>" exists in Nextcloud, holding:
@@ -86,10 +87,13 @@ Feature: Creating a project
 
     Examples: one name, however many folders it spells, in any team
       | team           | name          | folder               |
-      | Design Team    | Team          | Penpot/Team          |
+      | Design Team    | Fresh         | Penpot/Fresh         |
       | Design Team    | foo/bar       | Penpot/foo/bar       |
       | Second Team    | Deep/Down/Low | Shared/Deep/Down/Low |
       | Reference Team | Pinned        | Pointers/Pinned      |
+
+    # Every name here is one no scenario above leaves standing in that team: a second
+    # project of a name already taken is mirrored beside the first, not into it.
 
     # "foo" is made because "foo/bar" needs somewhere to sit. It holds no design, so
     # it is a folder like any other — and a project named "foo" would later claim it.
@@ -100,7 +104,7 @@ Feature: Creating a project
   @in-penpot @gesture @todo
   Scenario Outline: Create a project in Penpot with a name Nextcloud cannot spell
     When someone creates the "<name>" project in the "Design Team" Penpot team
-    Then no folder is created for it in "Penpot"
+    Then no folder is created for it in Nextcloud
     And the user is notified that the project could not be placed
 
     Examples: every name that survives Penpot's 1-to-250 rule and spells nothing

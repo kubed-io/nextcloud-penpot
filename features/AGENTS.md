@@ -1193,15 +1193,15 @@ fire a per-file event the app can act on. `Create a design in a folder Penpot ha
 never seen` passes on all four rows, plain folder and Team Folder, one level deep
 and three.
 
+`Move a design into a folder Penpot has never seen` passes on all four of its rows
+too, and the four are chosen so that the arrival is a different mechanism each time:
+a source in `Scratch` is an UNTRACKED file and is IMPORTED (§6.33), and the two rows
+between `Penpot` and `Shared` cross a STORAGE boundary, where core deletes the
+metadata and the file id is what survives. Four routes in, one rule out — the folder
+the design lands in becomes the project, and none of the four is a special case of it.
+
 `Move a folder of untracked designs into a team` does not, and it fails on two
 walls at once rather than on this rule:
-
-`Move a design into a folder Penpot has never seen` is `@unbuilt` for the same
-family of reasons, and only one of its four rows works today (`Penpot/Existing` →
-`Penpot/Team/Deep`, both inside one mapping and one storage). The other three want
-capabilities this rule does not supply: a source in `Scratch` is an UNTRACKED file,
-and importing one is the §6.33 carve-out; the two rows that cross between `Penpot`
-and `Shared` cross a STORAGE boundary, which fires no rename event at all.
 
 1. **A folder move fires one event, for the folder.** Core emits nothing per
    child, so no design inside ever arrives anywhere as far as the app can tell —
@@ -1264,6 +1264,14 @@ and that is correct, because there is nothing to distinguish. If a project named
 
 This answers the first of open question #47's three blockers, which asked how an
 inferred folder is told apart from a user folder. It is not, and need not be.
+
+`Create a project in Penpot` is the scenario that reads this back, and it asserts the
+leaf by ID rather than by name — which is what forces every name in its Examples to
+be one no earlier scenario leaves standing in that team. Penpot state accumulates
+across a leg and two projects may share a name, so a second `Team` would be mirrored
+to `Team (2)` beside the first (`PullService::ensureProjectFolder()` adopts only a
+BARE folder), and the row would then read the older project's id off the older folder.
+Deterministically wrong, not flaky, and it reads as an app bug.
 
 ### A project name that spells no path is skipped
 
