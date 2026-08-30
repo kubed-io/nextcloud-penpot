@@ -283,6 +283,31 @@ trait CopySteps {
 	}
 
 	/**
+	 * The folder twin of {@see iTryToCopyTheFileInto()} — a copy expected to be
+	 * REFUSED, named by its full destination PATH.
+	 *
+	 * ## THE ONE COPY STEP THAT IS NOT `into`, AND ON PURPOSE
+	 *
+	 * `into` exists because core picks the name when a copy lands beside
+	 * something. A refusal never lands, so there is no name to pick — and
+	 * deriving one from the source would aim `Pointers/My Stuff` at
+	 * `Pointers/My Stuff`, a copy onto itself, which DAV answers for reasons of
+	 * its own and never reaches the rule under test.
+	 *
+	 * Naming a destination that cannot already exist is also what lets the
+	 * assertion be the simple one: `there is no folder at …` means the gesture
+	 * created nothing, with no before-and-after bookkeeping and no chance of
+	 * finding what a previous scenario left in an unmapped folder.
+	 *
+	 * @When /^I try to copy "([^"]*)" to "([^"]*)"$/
+	 */
+	public function iTryToCopyTo(string $path, string $target): void {
+		$result = $this->davCopyResult($path, trim($target, '/'));
+		$this->lastGestureStatus = $result['status'];
+		$this->lastGestureBody = $result['body'];
+	}
+
+	/**
 	 * @Then /^the copy is refused with a message$/
 	 */
 	public function theCopyIsRefusedWithAMessage(): void {
