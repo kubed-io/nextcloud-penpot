@@ -1197,6 +1197,11 @@ It now throws, logs, and says what to do about it — *"map a folder nearer the 
 or flatten the tree"*. The test builds a folder that is its own child, so the walk
 can only terminate at the ceiling.
 
+The refusal says *"nested `MAX_DEPTH` levels deep"* rather than *"more than"*, which
+is Copilot's catch on this PR and a real off-by-one: the guard is `>=`, so it fires
+on a folder sitting at **exactly** the ceiling — the last rung the walk can still
+see. `nextcloud-grafana` carries the looser wording and should take this back.
+
 #### The distinction is the finding, not the fix
 
 Thirteen classes share `Walk::MAX_DEPTH`, and porting a `throw` into all of them
@@ -1221,9 +1226,11 @@ differ:
 removal is the act the admin asked for and must not fail because one file resisted.
 So it cannot fail closed. What it was doing instead was failing open *silently* — the
 unreadable branch logged and the ceiling branch did not — and the count it hands back
-excluded whatever it never reached. It now says so in the log, and its own docblock
-says what survives. Second-order by the same measure as before: it leaves a file
-behind rather than destroying one.
+is of a sweep that did not finish. It logs the truncation now, and only that:
+**nothing at the ceiling knows whether there are mirrors below it**, which is the
+whole reason the walk stopped, so claiming files were left behind would assert the
+one thing that branch cannot see. Second-order by the same measure as before: at
+worst it leaves a file behind rather than destroying one.
 
 `Walk`'s docblock carries the rule that produced this table, because the number was
 never the interesting part: **the question to ask of a new walk is not "how deep" but

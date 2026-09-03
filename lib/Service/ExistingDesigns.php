@@ -182,10 +182,14 @@ final class ExistingDesigns {
 				'depth' => $depth,
 			]);
 
+			// `%d levels deep`, NOT `more than %d`. The guard is `>=`, so this fires on
+			// a folder sitting at exactly the ceiling — the last rung the walk can
+			// still see. Claiming it is deeper than that is an off-by-one in a
+			// sentence an admin has to act on.
 			throw new \InvalidArgumentException(sprintf(
-				'"%s" is nested more than %d levels deep, so it is not possible to tell whether it '
-				. 'already holds designs. Nothing was changed — map a folder nearer the top, or '
-				. 'flatten the tree.',
+				'"%s" is nested %d levels deep, which is as far as this app scans, so it is not '
+				. 'possible to tell whether it already holds designs. Nothing was changed — map a '
+				. 'folder nearer the top, or flatten the tree.',
 				$folder->getName(),
 				self::MAX_DEPTH,
 			));

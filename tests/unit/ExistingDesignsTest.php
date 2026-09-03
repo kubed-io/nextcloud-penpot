@@ -148,7 +148,7 @@ final class ExistingDesignsTest extends TestCase {
 		$loop->method('getDirectoryListing')->willReturnCallback(static fn (): array => [$loop]);
 
 		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessageMatches('/nested more than \d+ levels deep/');
+		$this->expectExceptionMessageMatches('/nested \d+ levels deep/');
 
 		$this->service($loop)->under($this->mapping());
 	}

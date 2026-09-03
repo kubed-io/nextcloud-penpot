@@ -72,9 +72,9 @@ final class MappingTeardownService {
 	 *
 	 * IT ENDS THE SWEEP RATHER THAN REFUSING IT, unlike {@see ExistingDesigns},
 	 * because this method may not throw — see the `NEVER THROWS` note on
-	 * {@see tearDown()}. A mirror below the ceiling therefore survives a teardown
-	 * that promised to take it, and the only honest thing to do about that is say
-	 * so in the log. {@see mirrorsBelow()}.
+	 * {@see tearDown()}. A mirror below the ceiling would therefore survive a
+	 * teardown that promised to take it, and the only honest thing to do about that
+	 * is log that the sweep was cut short. {@see mirrorsBelow()}.
 	 */
 	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
@@ -151,15 +151,20 @@ final class MappingTeardownService {
 	private function mirrorsBelow(Folder $folder, int $depth): array {
 		if ($depth >= self::MAX_DEPTH) {
 			// A TRUNCATED SWEEP IS NOT AN EMPTY ONE, and `mapping/delete.feature`
-			// states the promise flatly — a link mapping's mirrors all go. Anything
-			// below this rung is left standing, so the admin is told it happened
-			// rather than reading a count that quietly excludes it.
+			// states the promise flatly — a link mapping's mirrors all go. Whatever
+			// is below this rung was never looked at, so the count the admin reads
+			// back is of a sweep that did not finish, and it says so.
 			//
-			// IT CANNOT REFUSE THE WAY {@see ExistingDesigns} DOES. The mapping's
+			// IT REPORTS A TRUNCATION, NOT A SURVIVOR. Nothing here knows whether
+			// there are mirrors down there — that is the whole reason the walk
+			// stopped. Claiming files were left behind would be asserting the one
+			// thing this branch cannot see.
+			//
+			// AND IT CANNOT REFUSE THE WAY {@see ExistingDesigns} DOES. The mapping's
 			// removal is the act the admin asked for and it must not fail, so this
 			// walk stops and logs where that one throws. Second-order by the same
-			// measure: it leaves a file behind rather than destroying one.
-			$this->logger->warning('penpot_sync: a folder tree was too deep to sweep for mirrors; some were left behind', [
+			// measure: at worst it leaves a file behind rather than destroying one.
+			$this->logger->warning('penpot_sync: a folder tree was too deep to sweep for mirrors; anything below it was not reached', [
 				'app' => Application::APP_ID,
 				'folder' => $folder->getPath(),
 				'depth' => $depth,
