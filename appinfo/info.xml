@@ -64,7 +64,7 @@ Requires the `enable-access-tokens` flag on your Penpot instance — it is off b
 
 This is a community integration and is not affiliated with, endorsed by, or sponsored by Penpot (Kaleidos Ventures SL). "Penpot" and the Penpot logo are trademarks of their respective owner, used here only to identify the service this app integrates with.
   ]]></description>
-  <version>0.1.0</version>
+  <version>1.0.0</version>
   <!-- SPDX identifier, not the `agpl` shorthand. The store's XSD still accepts the
        shorthand but marks it deprecated, and its docs scope it to apps targeting
        Nextcloud 30 or lower. This app requires 32. -->

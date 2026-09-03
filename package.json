@@ -1,7 +1,7 @@
 {
   "name": "penpot_sync",
-  "version": "0.1.0",
-  "description": "Penpot Sync \u2014 Nextcloud frontend (Files row icon + Open in Penpot action)",
+  "version": "1.0.0",
+  "description": "Penpot Sync — Nextcloud frontend (Files row icon + Open in Penpot action)",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "comment": "src/files.js registers ONE file action, \"Open in Penpot\", and deliberately no text-editor opener \u2014 a .penpot archive has no coherent hand-edit (saga \u00a76.1). That omission is why this frontend is a fraction of the size of nextcloud-grafana's.",
+  "comment": "src/files.js registers ONE file action, \"Open in Penpot\", and deliberately no text-editor opener — a .penpot archive has no coherent hand-edit (saga §6.1). That omission is why this frontend is a fraction of the size of nextcloud-grafana's.",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",
