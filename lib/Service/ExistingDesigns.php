@@ -66,7 +66,14 @@ use Psr\Log\LoggerInterface;
  * implicitly for every mapped tree without being checked.
  */
 final class ExistingDesigns {
-	/** The ceiling every downward walk in this app shares. {@see Walk::MAX_DEPTH} */
+	/**
+	 * The ceiling every downward walk in this app shares. {@see Walk::MAX_DEPTH}
+	 *
+	 * REACHING IT REFUSES THE MAPPING, it does not quietly end the walk. See
+	 * {@see designsBelow()}: not knowing what is down there is the same answer as
+	 * not being able to read it, and both have to fail closed or this guard has a
+	 * door left open in it.
+	 */
 	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
@@ -92,6 +99,11 @@ final class ExistingDesigns {
 	 * question here.
 	 *
 	 * @return list<File>
+	 *
+	 * @throws \InvalidArgumentException when the tree cannot be scanned to the
+	 *                                   bottom — unreadable, or deeper than the
+	 *                                   ceiling. Not knowing is never `[]` here;
+	 *                                   see {@see MAX_DEPTH}.
 	 */
 	public function under(Mapping $mapping): array {
 		$root = $this->storage->findRoot($mapping);
@@ -153,7 +165,34 @@ final class ExistingDesigns {
 	 */
 	private function designsBelow(Folder $folder, int $depth): array {
 		if ($depth >= self::MAX_DEPTH) {
-			return [];
+			// A FOLDER TOO DEEP TO SCAN IS NOT AN EMPTY FOLDER, which is word for word
+			// the reasoning of the unreadable case below — and this branch answered
+			// `[]` while that one threw, so the class failed closed on one way of not
+			// knowing and open on the other. Copilot caught the same split in the
+			// sibling, in code ported from here.
+			//
+			// `[]` FROM THIS METHOD IS A VERDICT, not a stopping point: it says the
+			// folder holds no designs, so a `link` mapping may be made over it and the
+			// purge has nothing to destroy. Below the ceiling the designs really are
+			// there, and the mapping is created over them — the exact state this class
+			// exists to prevent, reached through the one door left unlocked.
+			$this->logger->error('penpot_sync: a folder tree was too deep to scan for existing designs', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'depth' => $depth,
+			]);
+
+			// `%d levels deep`, NOT `more than %d`. The guard is `>=`, so this fires on
+			// a folder sitting at exactly the ceiling — the last rung the walk can
+			// still see. Claiming it is deeper than that is an off-by-one in a
+			// sentence an admin has to act on.
+			throw new \InvalidArgumentException(sprintf(
+				'"%s" is nested %d levels deep, which is as far as this app scans, so it is not '
+				. 'possible to tell whether it already holds designs. Nothing was changed — map a '
+				. 'folder nearer the top, or flatten the tree.',
+				$folder->getName(),
+				self::MAX_DEPTH,
+			));
 		}
 
 		try {

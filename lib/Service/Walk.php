@@ -38,6 +38,27 @@ namespace OCA\PenpotSync\Service;
  * Each class still names it locally (`private const MAX_DEPTH = Walk::MAX_DEPTH`)
  * so `self::MAX_DEPTH` continues to read naturally at the guard, which is the
  * only place it is ever used.
+ *
+ * ## WHAT REACHING IT MEANS IS NOT THE SAME IN EVERY WALK
+ *
+ * One number, two policies, and the difference is not a detail. In most of these
+ * walks — the pull's two indexes, the copy, the push, the move scan — stopping
+ * here means "we do not go deeper", which is a LIMIT: the answer is short, and a
+ * short answer costs a duplicate or an unswept file that a later pass can still
+ * take. Ending the walk is the right thing, and the empty list means nothing more
+ * than that.
+ *
+ * In a few of them an empty answer DECIDES something, and there it is a VERDICT.
+ * {@see ExistingDesigns} is the case: `[]` says *this folder holds no designs, so
+ * a `link` mapping may be made over it* — and a tree too deep to scan is no more
+ * empty than one too locked to read. That class throws at the ceiling for exactly
+ * the reason it throws on an unreadable folder, and {@see TrashControl} refuses
+ * for the same reason ("past the ceiling nothing is known, so nothing is safe to
+ * destroy"). {@see MappingTeardownService} is the awkward middle: it may not
+ * throw, so it logs and says in its own docblock what it left behind.
+ *
+ * **The question to ask of a new walk is not "how deep" but "what does empty
+ * mean here".** If it permits something, the ceiling has to fail closed.
  */
 final class Walk {
 	/**

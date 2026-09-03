@@ -132,6 +132,27 @@ final class ExistingDesignsTest extends TestCase {
 		$this->service($root)->under($this->mapping());
 	}
 
+	/**
+	 * THE OTHER WAY OF NOT KNOWING, AND IT HAS TO ANSWER THE SAME. A tree deeper
+	 * than the ceiling used to end the walk with `[]` while an unreadable folder
+	 * threw — the class failing closed on one and open on the other, which leaves
+	 * the guard it *is* with a door in it: the designs really are down there, and
+	 * the `link` mapping would be made over them and the purge cleared to run.
+	 * Found in the sibling app, in code ported from here.
+	 */
+	public function testATreeTooDeepToScanRefusesRatherThanReadingAsEmpty(): void {
+		// A folder that is its own child, so the walk can only end at the ceiling.
+		$loop = $this->createStub(Folder::class);
+		$loop->method('getName')->willReturn('Designs');
+		$loop->method('getPath')->willReturn('/admin/files/Designs');
+		$loop->method('getDirectoryListing')->willReturnCallback(static fn (): array => [$loop]);
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessageMatches('/nested \d+ levels deep/');
+
+		$this->service($loop)->under($this->mapping());
+	}
+
 	// ── what must not happen ────────────────────────────────────────────────
 
 	/**

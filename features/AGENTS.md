@@ -386,7 +386,15 @@ so the refusals read as a group.
 
 ### A link mapping may not be made over designs that already exist
 
-@unbuilt — nothing purges on create yet.
+Built, and the scenario runs: `MappingService` reads the count before anything is
+provisioned, `ExistingDesigns` does the walk and the purge, and `occ` and the panel
+share the one refusal.
+
+NOT KNOWING IS A REFUSAL, EITHER WAY. The walk answers "no designs here" only when
+it has actually seen the whole tree. A folder it cannot list, and a tree nested past
+the depth ceiling every walk in this app obeys, are the same answer — *we cannot
+tell* — and both refuse the mapping rather than reading as empty. An empty answer
+from this check permits a purge, so it may only ever mean the thing it says.
 
 THE STATE THIS PREVENTS IS ONE THE APP HAS NO ANSWER FOR. A `link` mirror is a
 zero-byte pointer; a `.penpot` holding an archive inside a link mapping is a
@@ -428,13 +436,6 @@ only case left to handle is the one this scenario names.
 
 SYNC IS UNTOUCHED. Designs already in the tree are adopted and imported when a
 `sync` mapping arrives (§6.33), so nothing is destroyed and nothing is confirmed.
-
-### Removing a mapping deletes nothing
-
-Nothing is removed from Penpot and nothing local is removed either. What
-SHOULD happen to already-mirrored files is Course 5's decision
-(mapping/delete.feature) — until then the safe behaviour is to leave them
-and say so.
 
 ### Two Penpot projects in one team sharing a name is handled, not crashed
 
@@ -893,7 +894,9 @@ auto-open because they ARE the editor; we are not, and `window.open` after an
 await chain is unreliable anyway — popup blockers reject it inconsistently. So
 the file appears, and the user clicks it.
 
-@todo — no lib/ exists yet.
+One scenario here is `@todo`, and only one: creating a design in the user's own
+home. It waits on the personal mapping rather than on anything in this file — see
+*The personal mapping is held until the siblings have one*.
 
 ### create-design: Background
 

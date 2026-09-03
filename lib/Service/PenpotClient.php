@@ -796,45 +796,23 @@ final class PenpotClient {
 		}
 
 		$url = $this->getBaseUrl() . self::RPC_PATH . 'import-binfile';
-		try {
-			$response = $this->clientService->newClient()->post($url, [
-				'headers' => [
-					'Authorization' => 'Token ' . ($actorToken ?? $this->getToken()),
-					// No Content-Type: the client sets the multipart boundary. And
-					// still no Accept — the events are Transit like everything else.
-				],
-				'multipart' => [
-					['name' => 'project-id', 'contents' => $projectId],
-					['name' => 'name', 'contents' => mb_substr($name, 0, 250)],
-					['name' => 'version', 'contents' => '3'],
-					['name' => 'file', 'contents' => $archive, 'filename' => $name . PullService::EXTENSION],
-				],
-				'timeout' => self::EXPORT_TIMEOUT,
-				'http_errors' => false,
-			]);
-		} catch (LocalServerException $e) {
-			throw new PenpotApiException(
-				'Nextcloud refused to connect to a local address. Set `allow_local_remote_servers` '
-				. 'if Penpot is reachable only in-cluster. (' . $e->getMessage() . ')',
-				0,
-				$e,
-				PenpotApiException::KIND_UNREACHABLE,
-			);
-		} catch (\Throwable $e) {
-			throw new PenpotApiException(
-				'Could not reach Penpot at ' . $url . ': ' . $e->getMessage(),
-				0,
-				$e,
-				PenpotApiException::KIND_UNREACHABLE,
-			);
-		}
+		$response = $this->post($url, [
+			'headers' => [
+				'Authorization' => 'Token ' . ($actorToken ?? $this->getToken()),
+				// No Content-Type: the client sets the multipart boundary. And
+				// still no Accept — the events are Transit like everything else.
+			],
+			'multipart' => [
+				['name' => 'project-id', 'contents' => $projectId],
+				['name' => 'name', 'contents' => mb_substr($name, 0, 250)],
+				['name' => 'version', 'contents' => '3'],
+				['name' => 'file', 'contents' => $archive, 'filename' => $name . PullService::EXTENSION],
+			],
+			'timeout' => self::EXPORT_TIMEOUT,
+			'http_errors' => false,
+		]);
 
-		$status = $response->getStatusCode();
-		if ($status < 200 || $status >= 300) {
-			throw $this->errorFor('import-binfile', $status, (string)$response->getBody());
-		}
-
-		return $this->importedIdFrom((string)$response->getBody());
+		return $this->importedIdFrom($this->ok('import-binfile', $response));
 	}
 
 	/**
@@ -910,44 +888,22 @@ final class PenpotClient {
 		$url = $this->getBaseUrl() . self::RPC_PATH . $command;
 		$body = $this->wireParams($command, $args);
 
-		try {
-			$response = $this->clientService->newClient()->post($url, [
-				'headers' => [
-					'Authorization' => 'Token ' . ($actorToken ?? $this->getToken()),
-					'Content-Type' => 'application/json',
-					// Still NO `Accept` header — see call(). The event payloads are
-					// Transit exactly like every other response, and asking for JSON
-					// breaks them the same way.
-				],
-				'body' => json_encode($body, JSON_THROW_ON_ERROR),
-				'timeout' => self::EXPORT_TIMEOUT,
-				'http_errors' => false,
-			]);
-		} catch (LocalServerException $e) {
-			throw new PenpotApiException(
-				'Nextcloud refused to connect to a local address. Set `allow_local_remote_servers` '
-				. 'if Penpot is reachable only in-cluster. (' . $e->getMessage() . ')',
-				0,
-				$e,
-				PenpotApiException::KIND_UNREACHABLE,
-			);
-		} catch (\Throwable $e) {
-			throw new PenpotApiException(
-				'Could not reach Penpot at ' . $url . ': ' . $e->getMessage(),
-				0,
-				$e,
-				PenpotApiException::KIND_UNREACHABLE,
-			);
-		}
+		$response = $this->post($url, [
+			'headers' => [
+				'Authorization' => 'Token ' . ($actorToken ?? $this->getToken()),
+				'Content-Type' => 'application/json',
+				// Still NO `Accept` header — see call(). The event payloads are
+				// Transit exactly like every other response, and asking for JSON
+				// breaks them the same way.
+			],
+			'body' => json_encode($body, JSON_THROW_ON_ERROR),
+			'timeout' => self::EXPORT_TIMEOUT,
+			'http_errors' => false,
+		]);
 
-		$status = $response->getStatusCode();
-		if ($status < 200 || $status >= 300) {
-			// A non-2xx here is an ordinary RPC failure (a bad id, a bad token)
-			// that never reached the streaming stage, so it classifies like one.
-			throw $this->errorFor($command, $status, (string)$response->getBody());
-		}
-
-		return (string)$response->getBody();
+		// A non-2xx here is an ordinary RPC failure (a bad id, a bad token) that
+		// never reached the streaming stage, so it classifies like one.
+		return $this->ok($command, $response);
 	}
 
 	/**
@@ -1266,53 +1222,78 @@ final class PenpotClient {
 		// service account. `$actorToken === null` is the ordinary case.
 		$token = $actorToken ?? $this->getToken();
 
-		try {
-			$response = $this->clientService->newClient()->post($url, [
-				'headers' => [
-					'Authorization' => 'Token ' . $token,
-					'Content-Type' => 'application/json',
-					// DO NOT ADD `Accept: application/json`. It looks like the
-					// obvious, tidy thing to send and it silently breaks every
-					// response. Penpot CONTENT-NEGOTIATES: ask for JSON and it
-					// answers plain camelCase JSON (`teamName`, `isDefault`)
-					// instead of Transit (`~:team-name`, `~:is-default`).
-					//
-					// Two things then go wrong at once, neither of them loudly:
-					//   1. every key lookup in this class misses, because they
-					//      are all kebab-case; and
-					//   2. Transit::decode() mangles the shape — a plain JSON
-					//      object has no `"^ "` map marker, so it is walked as a
-					//      LIST and comes back with numeric keys 0..n.
-					// Verified live: with the header, `$record['team-name']` is
-					// missing and the keys are `0,1,2,…`; without it, they are
-					// `id, team-id, created-at, …` as the decoder expects.
-					//
-					// Transit is not a quirk we tolerate — it is the format this
-					// client is built for, and the only one carrying the type
-					// tags (`~u` uuid, `~m` instant) the decoder relies on.
-				],
-				// THE EMPTY BODY MUST BE `{}`, NEVER `[]`, and it is load-bearing,
-				// not cosmetic. A no-arg command has an empty param array, and
-				// `json_encode([])` renders `[]` — a JSON *array*. Penpot's Clojure
-				// handler tries to conj that into a param map and dies with HTTP 500
-				// `:server-error` / "Vector arg to map conj must be a pair".
-				// Confirmed live: `[]` → 500, `{}` → 200 on `get-teams`. Every no-arg
-				// command (get-teams, get-all-projects) would fail without this,
-				// while every command WITH params would work — so it looks like an
-				// auth or connectivity problem rather than an encoding one.
+		$response = $this->post($url, [
+			'headers' => [
+				'Authorization' => 'Token ' . $token,
+				'Content-Type' => 'application/json',
+				// DO NOT ADD `Accept: application/json`. It looks like the
+				// obvious, tidy thing to send and it silently breaks every
+				// response. Penpot CONTENT-NEGOTIATES: ask for JSON and it
+				// answers plain camelCase JSON (`teamName`, `isDefault`)
+				// instead of Transit (`~:team-name`, `~:is-default`).
 				//
-				// This used to be `JSON_FORCE_OBJECT`, which was correct only while
-				// every param value was a scalar. That flag forces **every** array
-				// in the payload to an object, including a nested one — so
-				// `move-files`' `ids` set would go out as `{"0":"<uuid>"}` instead
-				// of `["<uuid>"]` and Penpot would reject it. Special-casing the
-				// empty body keeps the `{}` guarantee without touching the values.
-				'body' => $body === [] ? '{}' : json_encode($body, JSON_THROW_ON_ERROR),
-				'timeout' => self::TIMEOUT,
-				// Penpot answers 4xx with a body worth reading (it names the
-				// missing param), so never let the HTTP layer throw it away.
-				'http_errors' => false,
-			]);
+				// Two things then go wrong at once, neither of them loudly:
+				//   1. every key lookup in this class misses, because they
+				//      are all kebab-case; and
+				//   2. Transit::decode() mangles the shape — a plain JSON
+				//      object has no `"^ "` map marker, so it is walked as a
+				//      LIST and comes back with numeric keys 0..n.
+				// Verified live: with the header, `$record['team-name']` is
+				// missing and the keys are `0,1,2,…`; without it, they are
+				// `id, team-id, created-at, …` as the decoder expects.
+				//
+				// Transit is not a quirk we tolerate — it is the format this
+				// client is built for, and the only one carrying the type
+				// tags (`~u` uuid, `~m` instant) the decoder relies on.
+			],
+			// THE EMPTY BODY MUST BE `{}`, NEVER `[]`, and it is load-bearing,
+			// not cosmetic. A no-arg command has an empty param array, and
+			// `json_encode([])` renders `[]` — a JSON *array*. Penpot's Clojure
+			// handler tries to conj that into a param map and dies with HTTP 500
+			// `:server-error` / "Vector arg to map conj must be a pair".
+			// Confirmed live: `[]` → 500, `{}` → 200 on `get-teams`. Every no-arg
+			// command (get-teams, get-all-projects) would fail without this,
+			// while every command WITH params would work — so it looks like an
+			// auth or connectivity problem rather than an encoding one.
+			//
+			// This used to be `JSON_FORCE_OBJECT`, which was correct only while
+			// every param value was a scalar. That flag forces **every** array
+			// in the payload to an object, including a nested one — so
+			// `move-files`' `ids` set would go out as `{"0":"<uuid>"}` instead
+			// of `["<uuid>"]` and Penpot would reject it. Special-casing the
+			// empty body keeps the `{}` guarantee without touching the values.
+			'body' => $body === [] ? '{}' : json_encode($body, JSON_THROW_ON_ERROR),
+			'timeout' => self::TIMEOUT,
+			// Penpot answers 4xx with a body worth reading (it names the
+			// missing param), so never let the HTTP layer throw it away.
+			'http_errors' => false,
+		]);
+
+		return $this->decodeResponse($command, $response);
+	}
+
+	/**
+	 * POST it, and turn a transport failure into the typed exception.
+	 *
+	 * ONE DOOR FOR THREE CALLERS. {@see call()}, {@see postStream()} and
+	 * {@see importBinfile()} send wildly different payloads — Transit, an event
+	 * stream, a multipart archive — and answered an unreachable Penpot with the
+	 * identical sixteen lines each, three times over. What is shared is not the
+	 * request but the failure: every one of them is `KIND_UNREACHABLE`, and a
+	 * fourth caller getting that subtly wrong is the drift this closes.
+	 *
+	 * THE OPTIONS ARE THE CALLER'S, verbatim and unexamined — including
+	 * `http_errors => false`, which every caller sets and which is why a non-2xx
+	 * arrives here as a response rather than an exception. {@see ok()} is what
+	 * reads it.
+	 *
+	 * @param array<string, mixed> $options passed straight to the HTTP client
+	 *
+	 * @throws PenpotApiException KIND_UNREACHABLE — Penpot was not spoken to at all
+	 */
+	private function post(string $url, array $options): IResponse {
+		try {
+			return $this->clientService->newClient()->post($url, $options);
 		} catch (LocalServerException $e) {
 			// Nextcloud's own egress guard. Common in a homelab, where Penpot is
 			// reached at an in-cluster address — so name the setting explicitly.
@@ -1331,8 +1312,26 @@ final class PenpotClient {
 				PenpotApiException::KIND_UNREACHABLE,
 			);
 		}
+	}
 
-		return $this->decodeResponse($command, $response);
+	/**
+	 * The body of a 2xx, or the typed exception a non-2xx earns.
+	 *
+	 * The other half of {@see post()}: Penpot answered, and whether that answer is
+	 * a success is a separate question from whether it arrived. {@see errorFor()}
+	 * keeps Penpot's own error code, so a refusal stays readable in the log.
+	 *
+	 * @throws PenpotApiException on any status outside 2xx
+	 */
+	private function ok(string $command, IResponse $response): string {
+		$status = $response->getStatusCode();
+		$body = (string)$response->getBody();
+
+		if ($status < 200 || $status >= 300) {
+			throw $this->errorFor($command, $status, $body);
+		}
+
+		return $body;
 	}
 
 	/**
@@ -1381,19 +1380,14 @@ final class PenpotClient {
 	 * @throws PenpotApiException
 	 */
 	private function decodeResponse(string $command, IResponse $response): mixed {
-		$status = $response->getStatusCode();
-		$body = (string)$response->getBody();
+		// STATUS FIRST, ALWAYS — which is {@see ok()}'s whole job. An earlier
+		// version short-circuited on an empty body before checking the status,
+		// which turned any empty-bodied failure — a 502 from a proxy, a 500 that
+		// logged instead of rendering — into a successful `null`. An empty body
+		// only means "no content" when the status says the request succeeded.
+		$body = $this->ok($command, $response);
 
-		// STATUS FIRST, ALWAYS. An earlier version short-circuited on an empty
-		// body before checking the status, which turned any empty-bodied failure
-		// — a 502 from a proxy, a 500 that logged instead of rendering — into a
-		// successful `null`. An empty body only means "no content" when the
-		// status says the request succeeded.
-		if ($status < 200 || $status >= 300) {
-			throw $this->errorFor($command, $status, $body);
-		}
-
-		if ($status === 204 || $body === '') {
+		if ($response->getStatusCode() === 204 || $body === '') {
 			// `rename-project` answers exactly this way (saga §6.38).
 			return null;
 		}

@@ -1151,12 +1151,160 @@ the two fields gate 9 sends.
 
 ---
 
+### Round 15 — the ceiling that failed open
+
+**The countersign landed** — [PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213)
+merged, so gate 5 is closed and `penpot_sync/penpot_sync.crt` exists in Nextcloud's
+repository. What is left is gate 9 and gate 10, and both are ours. This round is the
+last code before them.
+
+#### A guard that failed open, found in the sibling, in code ported from here
+
+`nextcloud-grafana` PR #73 got a Copilot review of `ExistingDashboards` — a straight
+port of this app's `ExistingDesigns`. The defect went with the port and was still
+here:
+
+```php
+private function designsBelow(Folder $folder, int $depth): array {
+    if ($depth >= self::MAX_DEPTH) {
+        return [];                                  // fails OPEN
+    }
+
+    try {
+        $children = $folder->getDirectoryListing();
+    } catch (\Throwable $e) {
+        // AN UNREADABLE FOLDER IS NOT AN EMPTY ONE...
+        throw new \InvalidArgumentException(...);    // fails CLOSED
+    }
+```
+
+The comment on the second branch is the argument against the first, written eight
+lines away from it and not applied to it. **A folder too deep to scan is not an empty
+folder any more than an unreadable one is.**
+
+Why it matters here and not in most of the other walks: `[]` from this method is not
+"we stopped walking", it is a **verdict** — *this folder holds no designs, so a
+`link` mapping may be made over it and the purge has nothing to destroy.* Below the
+ceiling the designs really are there, the mapping is created `link` over them, and
+the app is back in the state this class exists to prevent: the `sync` → unmapped →
+re-mapped `link` contradiction that `MappingTeardownService` and
+`mapping/delete.feature` answer differently and both correctly. That is not
+hypothetical — a live instance reached it in three steps (mapped `sync`, unmapped,
+re-mapped `link`), which is the reproduction `ExistingDesigns`' own docblock
+carries. Reached through the one door left unlocked.
+
+It now throws, logs, and says what to do about it — *"map a folder nearer the top,
+or flatten the tree"*. The test builds a folder that is its own child, so the walk
+can only terminate at the ceiling.
+
+The refusal says *"nested `MAX_DEPTH` levels deep"* rather than *"more than"*, which
+is Copilot's catch on this PR and a real off-by-one: the guard is `>=`, so it fires
+on a folder sitting at **exactly** the ceiling — the last rung the walk can still
+see. `nextcloud-grafana` carries the looser wording and should take this back.
+
+#### The distinction is the finding, not the fix
+
+Thirteen classes share `Walk::MAX_DEPTH`, and porting a `throw` into all of them
+would be worse than the bug. In most — `PullService`, `CopyService`, `PushService`,
+the move scan — stopping at the ceiling means "we do not go deeper", which is a
+**limit**: the answer is short, and a short answer costs a duplicate or an unswept
+file that the next pass still takes. Ending the walk is right, and `[]` claims
+nothing.
+
+The ones to read differently are the ones where an empty answer **decides**
+something. Three, now, and they answer three different ways because their contracts
+differ:
+
+| Class | What `[]` would permit | What it does now |
+|---|---|---|
+| `ExistingDesigns` | a `link` mapping over real designs, and a purge | **throws** — the mapping is refused |
+| `TrashControl` | destroying something unexamined | **already refused** — *"past the ceiling nothing is known, so nothing is safe to destroy"* |
+| `MappingTeardownService` | a mirror surviving a teardown that promised to take it | **logs and stops** — it may not throw |
+
+`MappingTeardownService` is the awkward one and worth being explicit about. Its
+`tearDown()` is documented **NEVER THROWS**, and for a good reason: the mapping's
+removal is the act the admin asked for and must not fail because one file resisted.
+So it cannot fail closed. What it was doing instead was failing open *silently* — the
+unreadable branch logged and the ceiling branch did not — and the count it hands back
+is of a sweep that did not finish. It logs the truncation now, and only that:
+**nothing at the ceiling knows whether there are mirrors below it**, which is the
+whole reason the walk stopped, so claiming files were left behind would assert the
+one thing that branch cannot see. Second-order by the same measure as before: at
+worst it leaves a file behind rather than destroying one.
+
+`Walk`'s docblock carries the rule that produced this table, because the number was
+never the interesting part: **the question to ask of a new walk is not "how deep" but
+"what does empty mean here".** If it permits something, the ceiling has to fail
+closed.
+
+#### And the two walks that had no ceiling at all
+
+PR #73 noticed in passing that `PullService::collectMirrors()` and
+`indexFilesByPenpotId()` are the only recursive walks in the app with no guard, while
+their siblings in the same class have one, and left them alone because adding one is
+a behaviour change. It is — and it is the right one, because these two are the
+pair `Walk`'s docblock is *about*: the prune's half and the upsert's half of one
+question, whose disagreement about how hard to look is §C6.20 and produces silent
+duplicates. They agreed by both being unbounded. They now agree by both stopping at
+`Walk::MAX_DEPTH`, which is what every other walk over the same tree already does.
+
+Both are limits rather than verdicts, so both simply stop: a short prune under-deletes
+(the direction `collectMirrors()`' docblock already argues for at length), and a
+mirror below the hundredth rung is invisible to both halves, so the pull writes a
+fresh one beside it. A visible duplicate is what the ceiling costs. What it buys is a
+pathological tree not spinning while an admin waits on a form.
+
+#### Three notes in `features/AGENTS.md` that had gone stale
+
+Level 2 of the cascade (§D4.2) holds the reasoning **in the present tense**, and
+three of its notes were describing an app that no longer exists:
+
+- *A link mapping may not be made over designs that already exist* was still
+  labelled **`@unbuilt` — "nothing purges on create yet"**. It purges; the scenario
+  is untagged and runs under `@occ`. It now says so, and carries the rule this round
+  added: an empty answer from that check permits a purge, so it may only ever mean
+  the thing it says.
+- ***Removing a mapping deletes nothing*** — a whole section, sitting under
+  `## mapping/create`, saying the fate of mirrored files was "Course 5's decision".
+  Course 5 decided it, `mapping/delete.feature` states it in two scenarios and
+  `MappingTeardownService` implements it. Nothing pointed at the section; it is gone.
+- *designs/create* ended with **`@todo` — "no `lib/` exists yet"**. There are
+  forty-two files in `lib/Service/` alone. One scenario there is `@todo`, for the
+  personal mapping, and the file already has a section explaining why.
+
+This is the cascade's own rule biting: **a retired decision left in a working
+document is indistinguishable from a live one.** #73 recounted four documents and
+did not audit this file's tag claims; these three are the ones a reader would have
+been misled by, and the rest of the file is still unaudited.
+
+#### One door for three callers
+
+`call()`, `postStream()` and `importBinfile()` send wildly different payloads —
+Transit, an event stream, a multipart archive — and each answered an unreachable
+Penpot with the same sixteen lines: a `LocalServerException` branch naming
+`allow_local_remote_servers`, then a `\Throwable` branch naming the URL, both
+`KIND_UNREACHABLE`. Two of them then repeated the same non-2xx check as
+`decodeResponse()`.
+
+`post()` and `ok()` now hold those, which is the deferred item from #73's own list.
+What is shared is not the request but the **failure** — and a fourth caller
+classifying that subtly differently is exactly the drift worth closing before a first
+release. `fetchAsset()` deliberately keeps its own: its messages name *which half*
+failed (the export succeeded, the download did not), which is §5.3's whole point and
+not a duplicate of anything.
+
+**No changelog line.** Nothing here is visible to somebody running the app — the
+`ExistingDesigns` refusal is reachable only by a hundred-deep tree — and
+`[Unreleased]` is the first release's notes rather than a build log (§D4.8).
+
+---
+
 ## The plan — reaching the store
 
 The store's requirement is that **every release is signed by a certificate
 Nextcloud themselves countersigned**. That countersign is the only step in this
 chapter that is not ours to pace, so it is filed first and everything else
-overlaps the wait.
+overlaps the wait. **It landed on 2026-09-03**, and every remaining gate is ours.
 
 ```
   mint key + CSR ──▶ file CSR PR ──▶ (Nextcloud countersigns — the wait)
@@ -1177,11 +1325,11 @@ overlaps the wait.
 | 2 | Signing keypair + CSR minted, gitignored, verified | agent | ✅ done this round |
 | 3 | Release pipeline carries sign + upload | agent | ✅ done this round |
 | 4 | **CSR filed** with `nextcloud/app-certificate-requests` | **Dr K** | ✅ [PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213), from `kubed-io` |
-| 5 | **Countersigned `.crt` committed back** to that repo | Nextcloud | ⬜ the wait (~2 days for n8n) |
+| 5 | **Countersigned `.crt` committed back** to that repo | Nextcloud | ✅ merged 2026-09-03, four days after filing |
 | 6 | **Private key into `NEXTCLOUD_STORE_KEY`** | **Dr K** | ✅ pasted from the file |
 | 7 | Durable backup of the private key | **Dr K** | ✅ GCP `nextcloud-penpot`, round-trip verified |
 | 8 | `NEXTCLOUD_STORE_TOKEN` is a valid apps.nextcloud.com token | **Dr K** | ✅ proven against the live API — see below |
-| 9 | **Register the app id** on the store (cert + ownership signature) | either | ⬜ needs gate 5 |
+| 9 | **Register the app id** on the store (cert + ownership signature) | either | ⬜ unblocked by gate 5 |
 | 10 | Dry run, then cut the release | either | ⬜ needs 9 |
 
 ### Gate 4 — what filing the CSR involves
@@ -1274,10 +1422,11 @@ Both are inherited from the sibling's review and neither is a blocker:
   chapter promised not to touch turned out to be holding work the release needed.
   The bullet is struck rather than deleted, because a promise this chapter broke is
   more useful on the page than off it.
-- **Not a release yet — but the request is in.** The CSR is filed
-  ([PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213)) and
-  every gate that was ours is closed. Gate 5 is the countersign, and nothing here
-  moves it.
+- **Not a release yet — but nothing is waiting on anyone else.** The CSR is filed
+  and countersigned
+  ([PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213),
+  merged 2026-09-03). Gate 5 was the one step nobody here controlled; what is left
+  is registering the app id and cutting the release, and both are ours.
 - **Not the end of the queue.** Chapter 3 left a named backlog of `@todo`,
   `@unbuilt` and `@blocked` scenarios. This chapter worked the part of it the
   release stood on — the project verbs are down to scattered singles — and the rest
@@ -1288,11 +1437,12 @@ Both are inherited from the sibling's review and neither is a blocker:
 
 ## Open questions
 
-1. ~~**When does this publish?**~~ **Answered in Round 5, and filed in Round 14.**
-   The pipeline carries the submission and the CSR is in
-   ([PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213)).
-   Every gate that was ours is closed; what is left is *when the countersign lands*
-   — gate 5, and the only one nobody here controls.
+1. ~~**When does this publish?**~~ **Answered in Round 5, filed in Round 14, and
+   unblocked in Round 15.** The pipeline carries the submission, the CSR is in and
+   countersigned
+   ([PR #1213](https://github.com/nextcloud/app-certificate-requests/pull/1213),
+   merged 2026-09-03). Nothing is waiting on anybody else: gates 9 and 10 are the
+   whole remainder.
 2. ~~**Does the tag gesture come out?**~~ **Answered in Round 8** — yes, in
    full. The harness now arranges a project folder the way a user gets one:
    the project is made in Penpot and the pull mirrors it.
