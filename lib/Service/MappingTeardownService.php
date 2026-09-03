@@ -67,7 +67,15 @@ use Psr\Log\LoggerInterface;
  * Re-mapping the team walks back into the same tree and adopts it.
  */
 final class MappingTeardownService {
-	/** The ceiling every downward walk in this app shares. {@see Walk::MAX_DEPTH} */
+	/**
+	 * The ceiling every downward walk in this app shares. {@see Walk::MAX_DEPTH}
+	 *
+	 * IT ENDS THE SWEEP RATHER THAN REFUSING IT, unlike {@see ExistingDesigns},
+	 * because this method may not throw — see the `NEVER THROWS` note on
+	 * {@see tearDown()}. A mirror below the ceiling therefore survives a teardown
+	 * that promised to take it, and the only honest thing to do about that is say
+	 * so in the log. {@see mirrorsBelow()}.
+	 */
 	private const MAX_DEPTH = Walk::MAX_DEPTH;
 
 	public function __construct(
@@ -142,6 +150,21 @@ final class MappingTeardownService {
 	 */
 	private function mirrorsBelow(Folder $folder, int $depth): array {
 		if ($depth >= self::MAX_DEPTH) {
+			// A TRUNCATED SWEEP IS NOT AN EMPTY ONE, and `mapping/delete.feature`
+			// states the promise flatly — a link mapping's mirrors all go. Anything
+			// below this rung is left standing, so the admin is told it happened
+			// rather than reading a count that quietly excludes it.
+			//
+			// IT CANNOT REFUSE THE WAY {@see ExistingDesigns} DOES. The mapping's
+			// removal is the act the admin asked for and it must not fail, so this
+			// walk stops and logs where that one throws. Second-order by the same
+			// measure: it leaves a file behind rather than destroying one.
+			$this->logger->warning('penpot_sync: a folder tree was too deep to sweep for mirrors; some were left behind', [
+				'app' => Application::APP_ID,
+				'folder' => $folder->getPath(),
+				'depth' => $depth,
+			]);
+
 			return [];
 		}
 

@@ -215,6 +215,34 @@ final class MappingTeardownServiceTest extends TestCase {
 		self::assertSame(['removed' => 1, 'unmapped' => 0], $result);
 	}
 
+	/**
+	 * THE CEILING ENDS THE SWEEP INSTEAD OF SPINNING FOREVER, which is the only
+	 * thing it can do here: {@see MappingTeardownService::tearDown()} may not throw,
+	 * so unlike `ExistingDesigns` it cannot refuse. It logs and stops, and the
+	 * result the admin is shown is the truncated one.
+	 */
+	public function testATreeTooDeepToSweepEndsTheWalkRatherThanRecursingForever(): void {
+		// A folder that is its own child, so the walk can only end at the ceiling.
+		$loop = $this->createStub(Folder::class);
+		$loop->method('getPath')->willReturn('/admin/files/Design Files');
+		$loop->method('getDirectoryListing')->willReturnCallback(static fn (): array => [$loop]);
+
+		$storage = $this->createStub(StorageService::class);
+		$storage->method('findRoot')->willReturn($loop);
+
+		$service = new MappingTeardownService(
+			$storage,
+			$this->metadata,
+			$this->archives,
+			$this->trash(),
+			$this->guard,
+			new NullLogger(),
+		);
+
+		self::assertSame(['removed' => 0, 'unmapped' => 0], $service->tearDown($this->mapping()));
+		self::assertSame([], $this->deleted);
+	}
+
 	// ── helpers ─────────────────────────────────────────────────────────────
 
 	/**

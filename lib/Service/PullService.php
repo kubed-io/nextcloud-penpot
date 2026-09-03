@@ -1542,13 +1542,26 @@ final class PullService {
 	 * file the next pull will take, while over-deleting is the one mistake this
 	 * whole method is written to avoid.
 	 *
+	 * ## THE CEILING IS A LIMIT HERE, NOT A VERDICT
+	 *
+	 * `[]` from this walk does not permit anything — it prunes less. That is the
+	 * safe direction this method already prefers, so the ceiling can simply end the
+	 * walk, unlike {@see ExistingDesigns} where an empty answer clears a purge.
+	 * What matters is that {@see indexFilesByPenpotId()} stops at the SAME rung:
+	 * the two halves of one question disagreeing about how hard to look is §C6.20,
+	 * and it is the reason both carry the guard rather than neither.
+	 *
 	 * @return array<string, File> penpot_id -> file
 	 */
-	private function collectMirrors(Folder $folder): array {
+	private function collectMirrors(Folder $folder, int $depth = 0): array {
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
 		$found = [];
 		foreach ($folder->getDirectoryListing() as $node) {
 			if ($node instanceof Folder) {
-				$found += $this->collectMirrors($node);
+				$found += $this->collectMirrors($node, $depth + 1);
 				continue;
 			}
 			if (!$node instanceof File) {
@@ -1752,7 +1765,17 @@ final class PullService {
 	 *
 	 * @return array<string, File> penpot_id -> file
 	 */
-	private function indexFilesByPenpotId(Folder $target): array {
+	private function indexFilesByPenpotId(Folder $target, int $depth = 0): array {
+		// THE SAME RUNG {@see collectMirrors()} STOPS AT, and they have to match:
+		// the prune and the upsert are two halves of one question, and a walk that
+		// stopped shallower than its partner would attribute files the partner still
+		// claims (§C6.20). A mirror below the ceiling is invisible to both, so the
+		// upsert writes a fresh one beside it — a visible duplicate, which is what
+		// every other walk in this app already trades an unbounded recursion for.
+		if ($depth >= self::MAX_DEPTH) {
+			return [];
+		}
+
 		$index = [];
 		foreach ($target->getDirectoryListing() as $node) {
 			if ($node instanceof Folder) {
@@ -1768,7 +1791,7 @@ final class PullService {
 				// receive the write. Folding children in with `+=` would silently
 				// invert that for exactly the installs that matter — the ones
 				// carrying duplicates left by the bug this recursion fixes.
-				$index = array_replace($index, $this->indexFilesByPenpotId($node));
+				$index = array_replace($index, $this->indexFilesByPenpotId($node, $depth + 1));
 				continue;
 			}
 			if (!$node instanceof File) {
@@ -1901,12 +1924,14 @@ final class PullService {
 	 *
 	 * ## STRICTLY INSIDE THAT CEILING, NOT LEVEL WITH IT
 	 *
-	 * `>=`, not `>`, and the margin is deliberate. {@see indexProjectFolders()} and
-	 * {@see orphanProjectFolders()} bail at `$depth >= MAX_DEPTH`, and a call at
-	 * depth `d` lists the nodes one below it — so they reach exactly `MAX_DEPTH`
-	 * levels down, and a name of exactly `MAX_DEPTH` segments landed on the last
-	 * rung either could see. It fitted, by an accident of where two independently
-	 * written guards sit rather than by anything either states.
+	 * `>=`, not `>`, and the margin is deliberate. Every downward walk in this class
+	 * — {@see indexProjectFolders()}, {@see orphanProjectFolders()},
+	 * {@see collectMirrors()} and {@see indexFilesByPenpotId()} — bails at
+	 * `$depth >= MAX_DEPTH`, and a call at depth `d` lists the nodes one below it,
+	 * so they reach exactly `MAX_DEPTH` levels down. A name of exactly `MAX_DEPTH`
+	 * segments landed on the last rung any of them could see. It fitted by an
+	 * accident of where independently written guards sit rather than by anything
+	 * any of them states.
 	 *
 	 * That is not a property to leave implicit, because being level with it is one
 	 * `+ 1` away from being past it — and past it the failure is silent and awful:
