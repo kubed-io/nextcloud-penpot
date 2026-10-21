@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Supports Nextcloud 35.
+
 ## [1.0.0] - 2026-09-03
 
 The first release. Everything is new, which is why there is no *Changed* or
