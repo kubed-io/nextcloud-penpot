@@ -32,7 +32,7 @@ final class AdminTest implements IDelegatedSettings {
 	public function getForm(): TemplateResponse {
 		// Never rendered. Returning an empty blank-layout response keeps the
 		// interface satisfied without inventing a panel.
-		return new TemplateResponse(Application::APP_ID, 'admin_test', [], 'blank');
+		return new TemplateResponse(Application::APP_ID, 'admin_test', [], TemplateResponse::RENDER_AS_BLANK);
 	}
 
 	#[\Override]

@@ -115,7 +115,7 @@ final class MappingSettings implements IDelegatedSettings {
 				'team_folders_available' => $this->appManager->isEnabledForUser('groupfolders'),
 				'error' => $error,
 			],
-			'blank',
+			TemplateResponse::RENDER_AS_BLANK,
 		);
 	}
 

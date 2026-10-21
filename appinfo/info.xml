@@ -118,11 +118,11 @@ This is a community integration and is not affiliated with, endorsed by, or spon
          (saga §D4.14) and with it the one API that forced the floor.
 
          32 STAYS ANYWAY, because nothing has been run below it. CI tests the
-         advertised range on main and stable34 on a PR; lowering the floor would
+         advertised range on main and the ceiling on a PR; lowering the floor would
          advertise support for two server versions no leg has ever exercised.
          Widening it is a deliberate change with a matrix line behind it, not a
          side effect of deleting a listener. (Live is 33.) -->
-    <nextcloud min-version="32" max-version="34"/>
+    <nextcloud min-version="32" max-version="35"/>
   </dependencies>
   <settings>
     <!-- Section order (by priority), deliberately identical to nextcloud-n8n and
