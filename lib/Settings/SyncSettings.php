@@ -68,7 +68,7 @@ final class SyncSettings implements IDelegatedSettings {
 		Util::addScript(Application::APP_ID, 'dialogs');
 		Util::addScript(Application::APP_ID, 'sync-settings');
 
-		return new TemplateResponse(Application::APP_ID, 'sync_settings', [], 'blank');
+		return new TemplateResponse(Application::APP_ID, 'sync_settings', [], TemplateResponse::RENDER_AS_BLANK);
 	}
 
 	#[\Override]
