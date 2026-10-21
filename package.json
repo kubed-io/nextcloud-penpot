@@ -1,6 +1,6 @@
 {
   "name": "penpot_sync",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Penpot Sync — Nextcloud frontend (Files row icon + Open in Penpot action)",
   "private": true,
   "license": "AGPL-3.0-or-later",
